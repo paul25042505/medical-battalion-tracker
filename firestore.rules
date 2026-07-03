@@ -57,9 +57,10 @@ service cloud.firestore {
 
     match /tasks/{taskId} {
       allow read: if isStaff() || sameUnit(resource.data.unit);
-      // 一般成員不可建立勤務，僅可回報；建立/編輯限管理員、高勤官、該單位主官管。
+      // 一般成員不可建立勤務，僅可回報；建立限管理員、高勤官、該單位主官管。
       allow create: if isStaff() || (isCommander() && sameUnit(request.resource.data.unit));
-      allow update: if isStaff() || (isCommander() && sameUnit(resource.data.unit));
+      // 高勤官、主官管對勤務只有查看權限，不可編輯內容；僅 admin 可編輯。
+      allow update: if isAdmin();
       allow delete: if isStaff(); // 主官管不可刪除勤務
     }
 
