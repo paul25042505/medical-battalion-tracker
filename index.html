@@ -293,7 +293,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-38-hide-mission-info";
+const BUILD_TAG = "2026-07-03-39-profile-phone";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -645,9 +645,9 @@ function ensureAdminPersonnelSync(p){
   adminPersonnelSyncTried = true;
   fsListCollection("users").then(list => { syncPersonnelFromUsers(list); }).catch(e => console.error("同步人員資料失敗", e));
 }
-async function updateOwnProfile(displayName, rank){
-  await fsSetDoc(`users/${state.user.uid}`, { displayName, rank });
-  state.profile = { ...state.profile, displayName, rank };
+async function updateOwnProfile(displayName, rank, phone){
+  await fsSetDoc(`users/${state.user.uid}`, { displayName, rank, phone });
+  state.profile = { ...state.profile, displayName, rank, phone };
   showToast("個人資料已更新");
 }
 
@@ -1394,6 +1394,7 @@ function viewProfile(){
             ${RANKS.map(r => `<option value="${r}" ${p.rank===r?'selected':''}>${r}</option>`).join("")}
           </select>
         </div>
+        <div class="field"><label>電話</label><input name="phone" type="tel" inputmode="tel" value="${esc(p.phone||'')}" placeholder="例如：0912345678"></div>
         <div class="field"><label>單位</label><input value="${unitLabel(p.unit)}" disabled></div>
         <div class="field"><label>Email</label><input value="${esc(p.email||'—')}" disabled></div>
         <div class="field"><label>角色</label><input value="${ROLE_LABEL[myRole(p)]||p.role}" disabled></div>
@@ -1428,6 +1429,7 @@ function viewProfile(){
     <div class="section-label">帳號資訊</div>
     <div class="profile-card">
       <div class="profile-row"><span class="k">Email</span><span>${esc(p.email||'—')}</span></div>
+      <div class="profile-row"><span class="k">電話</span><span>${esc(p.phone||'未設定')}</span></div>
       <div class="profile-row"><span class="k">單位</span><span>${unitLabel(p.unit)}</span></div>
       <div class="profile-row"><span class="k">角色</span><span>${ROLE_LABEL[myRole(p)]||p.role}</span></div>
     </div>
@@ -1835,7 +1837,7 @@ window.__cancelEditProfile = () => { state.profileEditing = false; render(); };
 window.__saveProfile = (ev) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
-  updateOwnProfile(f.get("displayName"), f.get("rank")).then(() => {
+  updateOwnProfile(f.get("displayName"), f.get("rank"), f.get("phone")).then(() => {
     state.profileEditing = false; render();
   });
 };
