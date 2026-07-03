@@ -176,7 +176,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-05-diag";
+const BUILD_TAG = "2026-07-03-06-writefix";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -233,13 +233,16 @@ function fromFsFields(fields){
   return out;
 }
 
-async function fsFetch(path, options={}){
+async function fsFetch(path, options={}, allow404=false){
   const idToken = await auth.currentUser.getIdToken();
   const res = await fetch(`${FIRESTORE_BASE}/${path}`, {
     ...options,
     headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json", ...(options.headers||{}) }
   });
-  if (!res.ok && res.status !== 404) {
+  // 404 只有在「讀取單一文件、文件不存在」時才是合理狀態；
+  // 寫入（PATCH/POST/DELETE）如果也回傳 404，一定是真的出錯了，
+  // 必須丟出例外，不能被這裡靜默吃掉，否則會誤以為寫入成功。
+  if (!res.ok && !(allow404 && res.status === 404)) {
     let msg = res.statusText;
     try { const j = await res.json(); msg = (Array.isArray(j)?j[0]:j).error?.message || msg; } catch(e){}
     const err = new Error(msg); err.code = res.status;
@@ -248,7 +251,7 @@ async function fsFetch(path, options={}){
   return res;
 }
 async function fsGetDoc(path){
-  const res = await fsFetch(path);
+  const res = await fsFetch(path, {}, true);
   if (res.status === 404) return null;
   const data = await res.json();
   return fromFsFields(data.fields);
