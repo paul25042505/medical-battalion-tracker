@@ -42,6 +42,21 @@
     background:#1A1200; color:#fff; border:none; border-radius:8px; padding:6px 12px; font-size:12.5px; font-weight:700;
   }
 
+  /* ---- 電話號碼 / 撥打確認小視窗 ---- */
+  .phone-link{color:var(--blue); text-decoration:underline;}
+  .modal-overlay{
+    position:fixed; inset:0; z-index:60; background:rgba(0,0,0,0.4);
+    display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  .modal-card{
+    background:var(--panel); border-radius:16px; padding:22px; width:100%; max-width:320px;
+    box-shadow:0 12px 32px rgba(0,0,0,0.3);
+  }
+  .modal-title{font-size:17px; font-weight:700; margin-bottom:8px; color:var(--text);}
+  .modal-body{font-size:15px; color:var(--text); margin-bottom:20px;}
+  .modal-actions{display:flex; gap:10px;}
+  .modal-actions button{flex:1;}
+
   /* ---- top status strip ---- */
   .topbar{
     background:linear-gradient(180deg, var(--panel) 0%, var(--topbar-fade) 100%);
@@ -293,7 +308,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-50-fix-tel-link-block";
+const BUILD_TAG = "2026-07-03-51-call-confirm-modal";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -466,7 +481,8 @@ const state = {
   profileEditing: false,
   baseDataUnit: "", baseDataTab: "personnel", baseDataEditingId: null, // 基礎資料管理頁籤狀態
   createTaskUnit: "", // 建立勤務頁面：admin/高勤官可切換的單位
-  previewActive: false, realRoleUnit: null // 角色權限預覽（僅限 admin）
+  previewActive: false, realRoleUnit: null, // 角色權限預覽（僅限 admin）
+  callConfirmPhone: null // 點擊電話號碼後的撥打確認小視窗
 };
 let tasksPoll = null, eventsPoll = null, profilePoll = null;
 let personnelPoll = null, vehiclesPoll = null, recordersPoll = null;
@@ -946,11 +962,11 @@ function crewLabel(name, unit){
   if (!name) return esc('—');
   const match = findPersonnel(name, unit);
   const phone = (match && match.phone) || "";
-  // 電話連結本身不能掛 onclick——iOS Safari 只要偵測到 tel: 連結上有任何 JS
-  // 事件處理器，就會當成「自動撥號」跳出「已阻擋此網站自動開始通話」的警示，
-  // 就算內容只是 stopPropagation 也一樣。改成讓外層卡片的 onclick 自己判斷
-  // 點擊來源是不是連結，是的話就不要導頁，藉此避免跟卡片本身的點擊衝突。
-  return `${nameWithRank(name, unit)}${phone ? ` <a href="tel:${esc(phone)}" style="color:var(--blue); text-decoration:none;">${esc(phone)}</a>` : ''}`;
+  // 確認過：就算 tel: 連結完全不掛任何 JS，iOS Safari 還是會跳出「已阻擋此網站
+  // 自動開始通話」——這是瀏覽器對所有 tel: 連結的內建保護，網頁端無法繞過。
+  // 改成不用 <a href="tel:">，點擊先跳出我們自己的確認小視窗，使用者按下「撥打」
+  // 後才用 JS 觸發 tel:，避免一點名字旁邊的電話就立刻被瀏覽器攔截跳出系統提示。
+  return `${nameWithRank(name, unit)}${phone ? ` <span class="phone-link" onclick="event.stopPropagation(); window.__confirmCall('${esc(phone)}')">${esc(phone)}</span>` : ''}`;
 }
 function taskCard(t){
   const s = deriveStatus(t.id);
@@ -1833,6 +1849,17 @@ function render(){
           <span class="navicon">${icon(n.iconName,24)}</span><span class="navlabel">${n.label}</span>
         </button>`).join("")}
     </div>
+    ${state.callConfirmPhone ? `
+    <div class="modal-overlay" onclick="window.__cancelCall()">
+      <div class="modal-card" onclick="event.stopPropagation()">
+        <div class="modal-title">撥打電話</div>
+        <div class="modal-body">確定要撥打 ${esc(state.callConfirmPhone)} 嗎？</div>
+        <div class="modal-actions">
+          <button class="btn-ghost" onclick="window.__cancelCall()">取消</button>
+          <button class="btn-primary" style="margin-top:0;" onclick="window.__doCall()">撥打</button>
+        </div>
+      </div>
+    </div>` : ""}
     <div id="toast" class="toast"></div>
   `;
 }
@@ -1846,6 +1873,14 @@ window.__refreshProfile = () => { if (profilePoll) profilePoll.refreshNow(); };
 window.__nav = nav;
 window.__startRolePreview = (role, unit) => startRolePreview(role, unit);
 window.__endRolePreview = () => endRolePreview();
+window.__confirmCall = (phone) => { state.callConfirmPhone = phone; render(); };
+window.__cancelCall = () => { state.callConfirmPhone = null; render(); };
+window.__doCall = () => {
+  const phone = state.callConfirmPhone;
+  state.callConfirmPhone = null;
+  render();
+  if (phone) window.location.href = "tel:" + phone;
+};
 window.__startReport = (taskId, type) => { state.reportDraft = { taskId, type }; render(); };
 window.__cancelReport = () => { state.reportDraft = null; render(); };
 window.__submitReport = (taskId, type) => {
