@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>救護勤務即時回報與調度系統</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0E14;
+    --panel:#121826;
+    --panel-2:#161D2C;
+    --border:#232B3D;
+    --text:#E5E9F0;
+    --muted:#6B7684;
+    --amber:#F5A623;
+    --red:#E5484D;
+    --green:#3DD68C;
+    --blue:#4C9AFF;
+    --gray:#6B7684;
+    --mono:'JetBrains Mono', ui-monospace, monospace;
+    --sans:'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:var(--sans); height:100%;}
+  body{ padding-bottom:env(safe-area-inset-bottom); }
+  #app{min-height:100vh; display:flex; flex-direction:column;}
+
+  /* ---- top status strip ---- */
+  .topbar{
+    position:sticky; top:0; z-index:20;
+    background:linear-gradient(180deg, var(--panel) 0%, rgba(18,24,38,0.92) 100%);
+    backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--border);
+    padding:14px 16px calc(10px + env(safe-area-inset-top)) 16px;
+    padding-top:calc(14px + env(safe-area-inset-top));
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .topbar h1{font-size:15px; font-weight:700; margin:0; letter-spacing:0.02em;}
+  .topbar .live{
+    display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size:11px; color:var(--muted);
+  }
+  .dot-live{width:6px; height:6px; border-radius:50%; background:var(--green); box-shadow:0 0 0 0 rgba(61,214,140,0.6); animation:pulse 2s infinite;}
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(61,214,140,0.5);}
+    70%{box-shadow:0 0 0 6px rgba(61,214,140,0);}
+    100%{box-shadow:0 0 0 0 rgba(61,214,140,0);}
+  }
+
+  main{flex:1; padding:14px 14px 90px 14px; max-width:640px; width:100%; margin:0 auto;}
+
+  /* ---- login ---- */
+  .login-wrap{min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; text-align:center;}
+  .login-mark{font-family:var(--mono); font-size:12px; letter-spacing:0.25em; color:var(--amber); margin-bottom:10px;}
+  .login-title{font-size:26px; font-weight:800; line-height:1.3; margin:0 0 6px 0;}
+  .login-sub{color:var(--muted); font-size:14px; margin-bottom:36px;}
+  .btn-google{
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    background:#fff; color:#1F2937; font-weight:600; font-size:15px;
+    padding:14px 20px; border-radius:12px; border:none; width:100%; max-width:320px;
+  }
+  .pending-box{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:22px; max-width:340px; margin-top:20px;}
+  .pending-box p{color:var(--muted); font-size:13px; line-height:1.7; margin:0;}
+
+  /* ---- cards ---- */
+  .section-label{font-family:var(--mono); font-size:11px; color:var(--muted); letter-spacing:0.12em; text-transform:uppercase; margin:18px 4px 10px 4px;}
+  .task-card{
+    background:var(--panel); border:1px solid var(--border); border-radius:14px;
+    padding:16px; margin-bottom:10px; position:relative; overflow:hidden;
+  }
+  .task-card::before{content:''; position:absolute; left:0; top:0; bottom:0; width:3px;}
+  .task-card.s-pending::before{background:var(--gray);}
+  .task-card.s-dispatch::before{background:var(--red);}
+  .task-card.s-onscene::before{background:var(--amber);}
+  .task-card.s-returning::before{background:var(--blue);}
+  .task-card.s-completed::before{background:var(--green);}
+  .task-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
+  .task-title{font-size:16px; font-weight:700; margin:0 0 3px 0;}
+  .task-meta{color:var(--muted); font-size:12.5px; font-family:var(--mono);}
+  .badge{
+    display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-family:var(--mono); font-weight:600;
+    padding:5px 10px; border-radius:999px; white-space:nowrap;
+  }
+  .badge .bdot{width:6px; height:6px; border-radius:50%;}
+  .badge.pending{background:rgba(107,118,132,0.15); color:var(--gray);}
+  .badge.dispatch{background:rgba(229,72,77,0.15); color:var(--red);}
+  .badge.dispatch .bdot{animation:pulse 1.4s infinite;}
+  .badge.onscene{background:rgba(245,166,35,0.15); color:var(--amber);}
+  .badge.returning{background:rgba(76,154,255,0.15); color:var(--blue);}
+  .badge.completed{background:rgba(61,214,140,0.15); color:var(--green);}
+  .task-foot{display:flex; justify-content:space-between; align-items:center; margin-top:12px; font-size:12px; color:var(--muted);}
+  .empty{color:var(--muted); font-size:13px; text-align:center; padding:40px 20px; border:1px dashed var(--border); border-radius:14px;}
+
+  /* ---- task detail ---- */
+  .back-row{display:flex; align-items:center; gap:8px; margin-bottom:14px; color:var(--muted); font-size:13px;}
+  .back-row button{background:none; border:none; color:var(--muted); font-size:13px; padding:6px 0; font-family:var(--sans);}
+  .detail-head{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:18px; margin-bottom:16px;}
+  .detail-head .task-title{font-size:19px;}
+  .kv{display:grid; grid-template-columns:64px 1fr; gap:6px 10px; margin-top:12px; font-size:13px;}
+  .kv .k{color:var(--muted); font-family:var(--mono); font-size:11px; padding-top:2px;}
+  .kv .v{color:var(--text);}
+
+  .report-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px;}
+  .report-btn{
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+    padding:18px 8px; border-radius:14px; border:1px solid var(--border); background:var(--panel-2);
+    font-family:var(--sans); font-weight:700; font-size:13.5px; color:var(--text);
+  }
+  .report-btn .emoji{font-size:24px;}
+  .report-btn.recommended{border-color:var(--amber); box-shadow:0 0 0 1px var(--amber) inset;}
+  .report-btn:disabled{opacity:0.35;}
+  .no-permission{color:var(--muted); font-size:12.5px; text-align:center; padding:14px; border:1px dashed var(--border); border-radius:12px; margin-bottom:18px;}
+
+  .timeline{position:relative; padding-left:20px;}
+  .timeline::before{content:''; position:absolute; left:5px; top:4px; bottom:4px; width:1px; background:var(--border);}
+  .tl-item{position:relative; padding-bottom:20px;}
+  .tl-item:last-child{padding-bottom:0;}
+  .tl-dot{position:absolute; left:-20px; top:2px; width:11px; height:11px; border-radius:50%; border:2px solid var(--bg);}
+  .tl-dot.dispatch{background:var(--red);} .tl-dot.onscene{background:var(--amber);}
+  .tl-dot.returning{background:var(--blue);} .tl-dot.completed{background:var(--green);}
+  .tl-type{font-weight:700; font-size:13.5px;}
+  .tl-meta{font-family:var(--mono); font-size:11.5px; color:var(--muted); margin-top:2px;}
+
+  /* ---- admin ---- */
+  .field{margin-bottom:12px;}
+  .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:6px; font-family:var(--mono);}
+  .field input, .field select{
+    width:100%; background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+    padding:11px 12px; border-radius:10px; font-size:14px; font-family:var(--sans);
+  }
+  .btn-primary{width:100%; background:var(--amber); color:#1A1200; font-weight:700; border:none; padding:13px; border-radius:10px; font-size:14.5px; margin-top:4px;}
+  .admin-row{display:flex; justify-content:space-between; align-items:center; background:var(--panel); border:1px solid var(--border); padding:12px 14px; border-radius:12px; margin-bottom:8px;}
+  .admin-row .name{font-size:13.5px; font-weight:600;}
+  .admin-row .sub{font-size:11.5px; color:var(--muted); font-family:var(--mono);}
+  .icon-btn{background:none; border:1px solid var(--border); color:var(--muted); border-radius:8px; padding:6px 10px; font-size:12px;}
+  .icon-btn.danger{color:var(--red); border-color:rgba(229,72,77,0.35);}
+  .role-select{background:var(--panel-2); border:1px solid var(--border); color:var(--text); font-size:12px; border-radius:8px; padding:6px 8px; font-family:var(--mono);}
+  .tabs2{display:flex; gap:6px; margin-bottom:16px; background:var(--panel-2); padding:4px; border-radius:12px;}
+  .tab2{flex:1; text-align:center; padding:9px; border-radius:9px; font-size:12.5px; font-weight:600; color:var(--muted);}
+  .tab2.active{background:var(--panel); color:var(--text);}
+
+  /* ---- bottom nav ---- */
+  .bottomnav{
+    position:fixed; left:0; right:0; bottom:0; z-index:30;
+    background:rgba(18,24,38,0.94); backdrop-filter:blur(10px); border-top:1px solid var(--border);
+    display:flex; padding-bottom:env(safe-area-inset-bottom);
+  }
+  .navbtn{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:10px 4px 8px 4px; color:var(--muted); background:none; border:none; font-family:var(--sans);}
+  .navbtn .navicon{font-size:19px;}
+  .navbtn .navlabel{font-size:10.5px; font-weight:600;}
+  .navbtn.active{color:var(--amber);}
+
+  .toast{
+    position:fixed; bottom:86px; left:50%; transform:translateX(-50%); z-index:50;
+    background:var(--panel); border:1px solid var(--border); color:var(--text); font-size:13px;
+    padding:10px 18px; border-radius:999px; box-shadow:0 8px 24px rgba(0,0,0,0.4);
+    opacity:0; pointer-events:none; transition:opacity 0.25s, transform 0.25s;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(-4px);}
+
+  .spinner{width:22px; height:22px; border:2.5px solid var(--border); border-top-color:var(--amber); border-radius:50%; animation:spin 0.8s linear infinite; margin:60px auto;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import {
+  getFirestore, collection, doc, addDoc, setDoc, getDoc, deleteDoc,
+  query, orderBy, onSnapshot, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+/* =========================================================
+   1) Firebase 設定 — 請填入你自己的專案設定
+   Firebase Console → 專案設定 → 一般 → 你的應用程式
+   ========================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
+  authDomain: "medical-battalion-tracker.firebaseapp.com",
+  projectId: "medical-battalion-tracker",
+  storageBucket: "medical-battalion-tracker.firebasestorage.app",
+  messagingSenderId: "442272611220",
+  appId: "1:442272611220:web:88ef96f7789200c27ded81"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const googleProvider = new GoogleAuthProvider();
+
+/* =========================================================
+   2) Event 類型定義（精簡版，不含 ON_SCENE_UPDATE）
+   ========================================================= */
+const EVENT_TYPES = [
+  { type: "DISPATCH",      label: "出勤",     emoji: "🚨", statusKey: "dispatch" },
+  { type: "ARRIVED_SCENE", label: "抵達現場", emoji: "📍", statusKey: "onscene" },
+  { type: "RETURNING",     label: "返營",     emoji: "🚑", statusKey: "returning" },
+  { type: "COMPLETED",     label: "完成",     emoji: "🏁", statusKey: "completed" }
+];
+const STATUS_LABEL = {
+  pending:   "待出勤",
+  dispatch:  "出勤中",
+  onscene:   "已抵達現場",
+  returning: "返營中",
+  completed: "已完成"
+};
+// 順序決定「下一個建議動作」，但不強制封鎖其他按鈕（保留調度彈性）
+const STATUS_ORDER = ["pending","dispatch","onscene","returning","completed"];
+
+const ROLE_LABEL = {
+  admin: "管理員", duty_officer: "高勤官", company_commander: "連級主官管",
+  member: "一般成員", pending: "待審核"
+};
+
+/* =========================================================
+   3) 全域狀態
+   ========================================================= */
+const state = {
+  user: null, profile: null, tasks: [], events: [],
+  route: { name: "dashboard" }, adminTab: "tasks"
+};
+let unsubTasks = null, unsubEvents = null, unsubProfile = null;
+
+/* =========================================================
+   4) 狀態推導（純函式：Event 陣列 → 狀態）
+   ========================================================= */
+function deriveStatus(taskId) {
+  const evs = state.events.filter(e => e.taskId === taskId).sort((a,b) => (a.ts||0) - (b.ts||0));
+  if (evs.length === 0) return "pending";
+  const last = evs[evs.length - 1];
+  const def = EVENT_TYPES.find(t => t.type === last.type);
+  return def ? def.statusKey : "pending";
+}
+function taskEvents(taskId) {
+  return state.events.filter(e => e.taskId === taskId).sort((a,b) => (a.ts||0) - (b.ts||0));
+}
+
+/* =========================================================
+   5) RBAC
+   ========================================================= */
+function canManageUsers(p){ return p && p.role === "admin"; }
+function canManageTasks(p){ return p && (p.role === "admin" || p.role === "duty_officer"); }
+function canSeeAllTasks(p){ return p && (p.role === "admin" || p.role === "duty_officer"); }
+function isAssigned(p, task){
+  if (!p || !task || !task.assignedCrew) return false;
+  return task.assignedCrew.includes(p.email);
+}
+function canReport(p, task){
+  if (!p || !task) return false;
+  return canManageTasks(p) || isAssigned(p, task);
+}
+function visibleTasks(p, tasks){
+  if (!p) return [];
+  if (canSeeAllTasks(p)) return tasks;
+  if (p.role === "company_commander") return tasks.filter(t => t.unit === p.unit);
+  return tasks.filter(t => isAssigned(p, t)); // member
+}
+
+/* =========================================================
+   6) Firestore 動作
+   ========================================================= */
+async function addEvent(taskId, type){
+  await addDoc(collection(db, "events"), {
+    taskId, type,
+    timestamp: serverTimestamp(),
+    userId: state.user.uid,
+    userName: state.profile.displayName || state.user.displayName || state.user.email
+  });
+  showToast(`已回報：${EVENT_TYPES.find(t=>t.type===type).label}`);
+}
+async function createTask(data){
+  await addDoc(collection(db, "tasks"), {
+    ...data, createdAt: serverTimestamp(), createdBy: state.user.uid
+  });
+  showToast("任務已建立");
+}
+async function deleteTask(taskId){
+  await deleteDoc(doc(db, "tasks", taskId));
+  showToast("任務已刪除");
+}
+async function setUserRole(uid, role, unit){
+  await setDoc(doc(db, "users", uid), { role, unit }, { merge: true });
+  showToast("角色已更新");
+}
+
+/* =========================================================
+   7) Auth 流程
+   ========================================================= */
+function doLogin(){ signInWithPopup(auth, googleProvider).catch(e => showToast("登入失敗：" + e.message)); }
+function doLogout(){ signOut(auth); }
+
+onAuthStateChanged(auth, async (user) => {
+  cleanupListeners();
+  state.user = user;
+  if (!user) { state.profile = null; render(); return; }
+
+  const ref = doc(db, "users", user.uid);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    await setDoc(ref, {
+      email: user.email, displayName: user.displayName, role: "pending", unit: "", createdAt: serverTimestamp()
+    });
+  }
+  unsubProfile = onSnapshot(ref, (s) => {
+    state.profile = s.exists() ? { uid: user.uid, ...s.data() } : null;
+    if (state.profile && state.profile.role !== "pending") startDataListeners();
+    render();
+  });
+});
+
+function startDataListeners(){
+  if (unsubTasks || unsubEvents) return;
+  unsubTasks = onSnapshot(query(collection(db, "tasks"), orderBy("createdAt", "desc")), (snap) => {
+    state.tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    render();
+  });
+  unsubEvents = onSnapshot(query(collection(db, "events"), orderBy("timestamp", "asc")), (snap) => {
+    state.events = snap.docs.map(d => {
+      const v = d.data();
+      return { id: d.id, ...v, ts: v.timestamp ? v.timestamp.toMillis() : Date.now() };
+    });
+    render();
+  });
+}
+function cleanupListeners(){
+  if (unsubTasks) unsubTasks(); if (unsubEvents) unsubEvents(); if (unsubProfile) unsubProfile();
+  unsubTasks = unsubEvents = unsubProfile = null;
+  state.tasks = []; state.events = [];
+}
+
+/* =========================================================
+   8) 小工具
+   ========================================================= */
+function timeAgo(ms){
+  if (!ms) return "—";
+  const diff = Math.max(0, Date.now() - ms);
+  const m = Math.floor(diff/60000);
+  if (m < 1) return "剛剛";
+  if (m < 60) return `${m} 分鐘前`;
+  const h = Math.floor(m/60);
+  if (h < 24) return `${h} 小時前`;
+  return `${Math.floor(h/24)} 天前`;
+}
+function fmtTime(ms){
+  if (!ms) return "—";
+  const d = new Date(ms);
+  return d.toLocaleString("zh-TW", { month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", hour12:false });
+}
+function showToast(msg){
+  let t = document.getElementById("toast");
+  if (!t){ t = document.createElement("div"); t.id="toast"; t.className="toast"; document.body.appendChild(t); }
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(showToast._tm);
+  showToast._tm = setTimeout(()=>t.classList.remove("show"), 2200);
+}
+function nav(route){ state.route = route; render(); window.scrollTo(0,0); }
+function esc(s){ return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* =========================================================
+   9) 畫面：登入 / 待審核
+   ========================================================= */
+function viewLogin(){
+  return `
+  <div class="login-wrap">
+    <div class="login-mark">PHOENIX · DISPATCH</div>
+    <h1 class="login-title">救護勤務即時<br>回報與調度系統</h1>
+    <p class="login-sub">Event-driven 任務追蹤 · 即時同步</p>
+    <button class="btn-google" onclick="window.__login()">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.9 32.3 29.4 35 24 35c-6.1 0-11-4.9-11-11s4.9-11 11-11c2.8 0 5.3 1 7.3 2.7l5.7-5.7C33.6 6.5 29 4.5 24 4.5 13.2 4.5 4.5 13.2 4.5 24S13.2 43.5 24 43.5 43.5 34.8 43.5 24c0-1.2-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 16 19 13 24 13c2.8 0 5.3 1 7.3 2.7l5.7-5.7C33.6 6.5 29 4.5 24 4.5c-7.6 0-14.1 4.3-17.7 10.2z"/><path fill="#4CAF50" d="M24 43.5c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 34.6 26.7 35.5 24 35.5c-5.3 0-9.8-3.6-11.4-8.4l-6.5 5C9.7 39.1 16.3 43.5 24 43.5z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.7 2-2 3.7-3.7 5l6.2 5.2C41 34.8 43.5 30 43.5 24c0-1.2-.1-2.3-.4-3.5z"/></svg>
+      使用 Google 帳號登入
+    </button>
+  </div>`;
+}
+function viewPending(){
+  return `
+  <div class="login-wrap">
+    <div class="login-mark">PHOENIX · DISPATCH</div>
+    <h1 class="login-title" style="font-size:20px;">帳號待審核</h1>
+    <div class="pending-box">
+      <p>您的帳號（${esc(state.user.email)}）已建立，但尚未指派角色。<br><br>請聯繫系統管理員開通權限後再登入。</p>
+    </div>
+    <button class="icon-btn" style="margin-top:20px;" onclick="window.__logout()">登出</button>
+  </div>`;
+}
+
+/* =========================================================
+   10) 畫面：Dashboard
+   ========================================================= */
+function statusBadge(statusKey){
+  const cls = { pending:"pending", dispatch:"dispatch", onscene:"onscene", returning:"returning", completed:"completed" }[statusKey];
+  return `<span class="badge ${cls}"><span class="bdot"></span>${STATUS_LABEL[statusKey]}</span>`;
+}
+function taskCardClass(statusKey){
+  return { pending:"s-pending", dispatch:"s-dispatch", onscene:"s-onscene", returning:"s-returning", completed:"s-completed" }[statusKey];
+}
+function viewDashboard(){
+  const p = state.profile;
+  const tasks = visibleTasks(p, state.tasks);
+  const active = tasks.filter(t => deriveStatus(t.id) !== "completed");
+  const done = tasks.filter(t => deriveStatus(t.id) === "completed");
+
+  function card(t){
+    const s = deriveStatus(t.id);
+    const evs = taskEvents(t.id);
+    const last = evs[evs.length-1];
+    return `
+    <div class="task-card ${taskCardClass(s)}" onclick="window.__nav({name:'task', id:'${t.id}'})">
+      <div class="task-top">
+        <div>
+          <p class="task-title">${esc(t.title)}</p>
+          <div class="task-meta">${esc(t.vehicle||'—')} · ${esc(t.location||'—')}</div>
+        </div>
+        ${statusBadge(s)}
+      </div>
+      <div class="task-foot">
+        <span>${last ? '最新：' + esc(EVENT_TYPES.find(e=>e.type===last.type)?.label||'') : '尚無回報'}</span>
+        <span>${last ? timeAgo(last.ts) : ''}</span>
+      </div>
+    </div>`;
+  }
+
+  return `
+    <div class="section-label">進行中任務 · ${active.length}</div>
+    ${active.length ? active.map(card).join("") : `<div class="empty">目前沒有進行中的任務</div>`}
+    ${done.length ? `<div class="section-label">已完成 · ${done.length}</div>${done.slice(0,10).map(card).join("")}` : ""}
+  `;
+}
+
+/* =========================================================
+   11) 畫面：任務詳情
+   ========================================================= */
+function viewTaskDetail(taskId){
+  const t = state.tasks.find(x => x.id === taskId);
+  if (!t) return `<div class="empty">找不到此任務</div>`;
+  const p = state.profile;
+  const s = deriveStatus(taskId);
+  const evs = taskEvents(taskId);
+  const currentIdx = STATUS_ORDER.indexOf(s);
+  const nextRecommended = EVENT_TYPES[currentIdx] ? EVENT_TYPES[currentIdx].type : null;
+
+  const reportSection = canReport(p, t) ? `
+    <div class="report-grid">
+      ${EVENT_TYPES.map(e => `
+        <button class="report-btn ${e.type===nextRecommended?'recommended':''}"
+          onclick="window.__report('${t.id}','${e.type}')">
+          <span class="emoji">${e.emoji}</span>${e.label}
+        </button>`).join("")}
+    </div>
+  ` : `<div class="no-permission">您沒有此任務的回報權限</div>`;
+
+  const timeline = evs.length ? `
+    <div class="timeline">
+      ${evs.slice().reverse().map(e => {
+        const def = EVENT_TYPES.find(d=>d.type===e.type);
+        return `
+        <div class="tl-item">
+          <div class="tl-dot ${def?.statusKey}"></div>
+          <div class="tl-type">${def?.emoji} ${def?.label}</div>
+          <div class="tl-meta">${fmtTime(e.ts)} · ${esc(e.userName||'')}</div>
+        </div>`;
+      }).join("")}
+    </div>` : `<div class="empty">尚無事件紀錄</div>`;
+
+  return `
+    <div class="back-row"><button onclick="window.__nav({name:'dashboard'})">‹ 返回列表</button></div>
+    <div class="detail-head">
+      <div class="task-top">
+        <p class="task-title">${esc(t.title)}</p>
+        ${statusBadge(s)}
+      </div>
+      <div class="kv">
+        <div class="k">車輛</div><div class="v">${esc(t.vehicle||'—')}</div>
+        <div class="k">地點</div><div class="v">${esc(t.location||'—')}</div>
+        <div class="k">單位</div><div class="v">${esc(t.unit||'—')}</div>
+        <div class="k">人員</div><div class="v">${(t.assignedCrew||[]).map(esc).join('、') || '—'}</div>
+      </div>
+    </div>
+    <div class="section-label">回報操作</div>
+    ${reportSection}
+    <div class="section-label">事件時間軸（唯讀，不可修改）</div>
+    ${timeline}
+  `;
+}
+
+/* =========================================================
+   12) 畫面：管理後台
+   ========================================================= */
+function viewAdmin(){
+  const p = state.profile;
+  if (!canManageTasks(p)) return `<div class="empty">您沒有管理權限</div>`;
+
+  const tabs = `
+    <div class="tabs2">
+      <div class="tab2 ${state.adminTab==='tasks'?'active':''}" onclick="window.__setAdminTab('tasks')">任務管理</div>
+      ${canManageUsers(p) ? `<div class="tab2 ${state.adminTab==='users'?'active':''}" onclick="window.__setAdminTab('users')">帳號權限</div>` : ""}
+    </div>`;
+
+  if (state.adminTab === "users" && canManageUsers(p)) {
+    return tabs + viewAdminUsers();
+  }
+  return tabs + viewAdminTasks();
+}
+
+function viewAdminTasks(){
+  return `
+    <div class="section-label">建立新任務</div>
+    <form onsubmit="window.__createTask(event)">
+      <div class="field"><label>任務名稱</label><input name="title" required placeholder="例如：OHCA 患者搶救"></div>
+      <div class="field"><label>車輛</label><input name="vehicle" placeholder="例如：潭子1號救護車"></div>
+      <div class="field"><label>地點</label><input name="location" placeholder="例如：潭子區豐興路一段"></div>
+      <div class="field"><label>單位</label><input name="unit" placeholder="例如：潭子分隊"></div>
+      <div class="field"><label>指派人員（email，以逗號分隔）</label><input name="crew" placeholder="a@example.com, b@example.com"></div>
+      <button class="btn-primary" type="submit">建立任務</button>
+    </form>
+    <div class="section-label">所有任務</div>
+    ${state.tasks.length ? state.tasks.map(t => `
+      <div class="admin-row">
+        <div>
+          <div class="name">${esc(t.title)}</div>
+          <div class="sub">${esc(t.vehicle||'—')} · ${STATUS_LABEL[deriveStatus(t.id)]}</div>
+        </div>
+        <button class="icon-btn danger" onclick="window.__deleteTask('${t.id}')">刪除</button>
+      </div>`).join("") : `<div class="empty">尚無任務</div>`}
+  `;
+}
+
+function viewAdminUsers(){
+  // 使用者清單需即時讀取，這裡用簡易一次性快取（開啟頁籤時抓取）
+  if (!state._usersCache) {
+    state._usersCache = "loading";
+    import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js").then(async (mod) => {
+      const snap = await mod.getDocs(mod.collection(db, "users"));
+      state._usersCache = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+      render();
+    });
+    return `<div class="spinner"></div>`;
+  }
+  if (state._usersCache === "loading") return `<div class="spinner"></div>`;
+
+  const roles = ["pending","member","company_commander","duty_officer","admin"];
+  return `
+    <div class="section-label">帳號權限管理</div>
+    ${state._usersCache.map(u => `
+      <div class="admin-row">
+        <div>
+          <div class="name">${esc(u.displayName||u.email)}</div>
+          <div class="sub">${esc(u.email)} · ${esc(u.unit||'未設定單位')}</div>
+        </div>
+        <select class="role-select" onchange="window.__setRole('${u.uid}', this.value)">
+          ${roles.map(r => `<option value="${r}" ${u.role===r?'selected':''}>${ROLE_LABEL[r]}</option>`).join("")}
+        </select>
+      </div>`).join("")}
+  `;
+}
+
+/* =========================================================
+   13) 主渲染
+   ========================================================= */
+function render(){
+  const app = document.getElementById("app");
+  if (!state.user) { app.innerHTML = viewLogin(); return; }
+  if (!state.profile) { app.innerHTML = `<div class="spinner"></div>`; return; }
+  if (state.profile.role === "pending") { app.innerHTML = viewPending(); return; }
+
+  let body = "";
+  if (state.route.name === "dashboard") body = viewDashboard();
+  else if (state.route.name === "task") body = viewTaskDetail(state.route.id);
+  else if (state.route.name === "admin") body = viewAdmin();
+
+  const p = state.profile;
+  app.innerHTML = `
+    <div class="topbar">
+      <h1>救護勤務調度系統</h1>
+      <div class="live"><span class="dot-live"></span>${ROLE_LABEL[p.role]} · ${esc(p.displayName||p.email).split(' ')[0]}</div>
+    </div>
+    <main>${body}</main>
+    <div class="bottomnav">
+      <button class="navbtn ${state.route.name==='dashboard'?'active':''}" onclick="window.__nav({name:'dashboard'})">
+        <span class="navicon">📡</span><span class="navlabel">戰情總覽</span>
+      </button>
+      ${canManageTasks(p) ? `
+      <button class="navbtn ${state.route.name==='admin'?'active':''}" onclick="window.__nav({name:'admin'})">
+        <span class="navicon">🛠️</span><span class="navlabel">管理</span>
+      </button>` : ""}
+      <button class="navbtn" onclick="window.__logout()">
+        <span class="navicon">🚪</span><span class="navlabel">登出</span>
+      </button>
+    </div>
+    <div id="toast" class="toast"></div>
+  `;
+}
+
+/* =========================================================
+   14) 全域事件掛載（供 inline onclick 使用）
+   ========================================================= */
+window.__login = doLogin;
+window.__logout = doLogout;
+window.__nav = nav;
+window.__report = (taskId, type) => addEvent(taskId, type);
+window.__setAdminTab = (t) => { state.adminTab = t; state._usersCache = null; render(); };
+window.__deleteTask = (id) => { if (confirm("確定刪除此任務？此動作無法復原。")) deleteTask(id); };
+window.__setRole = (uid, role) => setUserRole(uid, role, "");
+window.__createTask = (ev) => {
+  ev.preventDefault();
+  const f = new FormData(ev.target);
+  const crew = (f.get("crew")||"").split(",").map(s=>s.trim()).filter(Boolean);
+  createTask({
+    title: f.get("title"), vehicle: f.get("vehicle"), location: f.get("location"),
+    unit: f.get("unit"), assignedCrew: crew
+  });
+  ev.target.reset();
+};
+
+render();
+</script>
+</body>
+</html>
