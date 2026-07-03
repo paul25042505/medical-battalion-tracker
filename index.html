@@ -293,7 +293,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-40-crew-phone";
+const BUILD_TAG = "2026-07-03-41-profile-save-error";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1852,7 +1852,7 @@ window.__saveProfile = (ev) => {
   const f = new FormData(ev.target);
   updateOwnProfile(f.get("displayName"), f.get("rank"), f.get("phone")).then(() => {
     state.profileEditing = false; render();
-  });
+  }).catch(err => showToast(`個人資料儲存失敗：[${err.code||'?'}] ${err.message||err}`));
 };
 window.__setRecordsFilter = (key, value) => { state.recordsFilter[key] = value; render(); };
 window.__toggleRecordsFilters = () => { state.recordsFiltersExpanded = !state.recordsFiltersExpanded; render(); };
