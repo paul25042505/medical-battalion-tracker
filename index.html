@@ -65,6 +65,7 @@
 
   /* ---- cards ---- */
   .section-label{font-family:var(--mono); font-size:11px; color:var(--muted); letter-spacing:0.12em; text-transform:uppercase; margin:18px 4px 10px 4px;}
+  .section-label:first-child{margin-top:0;}
   .task-card{
     background:var(--panel); border:1px solid var(--border); border-radius:14px;
     padding:16px; margin-bottom:10px; position:relative; overflow:hidden;
@@ -90,18 +91,44 @@
   .badge.returning{background:rgba(76,154,255,0.15); color:var(--blue);}
   .badge.completed{background:rgba(61,214,140,0.15); color:var(--green);}
   .task-foot{display:flex; justify-content:space-between; align-items:center; margin-top:12px; font-size:12px; color:var(--muted);}
+  .task-crew{display:flex; gap:14px; margin-top:8px; font-size:11.5px; color:var(--muted); font-family:var(--mono);}
   .empty{color:var(--muted); font-size:13px; text-align:center; padding:40px 20px; border:1px dashed var(--border); border-radius:14px;}
+
+  /* ---- home ---- */
+  .home-date{font-size:13px; color:var(--muted); font-family:var(--mono); margin-bottom:14px;}
+  .weather-card{
+    display:flex; align-items:center; gap:12px; background:var(--panel); border:1px solid var(--border);
+    border-radius:14px; padding:14px 16px; margin-bottom:16px; color:var(--muted); font-size:12.5px;
+  }
+  .weather-card .emoji{font-size:26px;}
+  .stat-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:6px;}
+  .stat-tile{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:14px 8px; text-align:center;}
+  .stat-tile .num{font-size:22px; font-weight:800; font-family:var(--mono);}
+  .stat-tile .lbl{font-size:11px; color:var(--muted); margin-top:4px;}
+  .current-banner{
+    background:linear-gradient(135deg, rgba(245,166,35,0.16), rgba(229,72,77,0.12));
+    border:1px solid var(--amber); border-radius:16px; padding:16px; margin-bottom:18px; cursor:pointer;
+  }
+  .current-banner .cb-label{font-family:var(--mono); font-size:11px; color:var(--amber); letter-spacing:0.1em; margin-bottom:6px;}
+  .current-banner .task-title{font-size:18px;}
+  .quick-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:10px;}
+  .quick-btn{
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+    background:var(--panel-2); border:1px solid var(--border); border-radius:14px; padding:16px 6px;
+    color:var(--text); font-size:12px; font-weight:600;
+  }
+  .quick-btn .navicon{font-size:22px;}
 
   /* ---- task detail ---- */
   .back-row{display:flex; align-items:center; gap:8px; margin-bottom:14px; color:var(--muted); font-size:13px;}
   .back-row button{background:none; border:none; color:var(--muted); font-size:13px; padding:6px 0; font-family:var(--sans);}
   .detail-head{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:18px; margin-bottom:16px;}
   .detail-head .task-title{font-size:19px;}
-  .kv{display:grid; grid-template-columns:64px 1fr; gap:6px 10px; margin-top:12px; font-size:13px;}
+  .kv{display:grid; grid-template-columns:76px 1fr; gap:6px 10px; margin-top:12px; font-size:13px;}
   .kv .k{color:var(--muted); font-family:var(--mono); font-size:11px; padding-top:2px;}
   .kv .v{color:var(--text);}
 
-  .report-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px;}
+  .report-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;}
   .report-btn{
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
     padding:18px 8px; border-radius:14px; border:1px solid var(--border); background:var(--panel-2);
@@ -111,6 +138,11 @@
   .report-btn.recommended{border-color:var(--amber); box-shadow:0 0 0 1px var(--amber) inset;}
   .report-btn:disabled{opacity:0.35;}
   .no-permission{color:var(--muted); font-size:12.5px; text-align:center; padding:14px; border:1px dashed var(--border); border-radius:12px; margin-bottom:18px;}
+  .report-form{background:var(--panel); border:1px solid var(--amber); border-radius:14px; padding:16px; margin-bottom:18px;}
+  .report-form .title{font-weight:700; font-size:14px; margin-bottom:12px;}
+  .report-form .row{display:flex; gap:8px; margin-top:8px;}
+  .report-form .row button{flex:1;}
+  .btn-ghost{background:none; border:1px solid var(--border); color:var(--muted); border-radius:10px; padding:12px; font-size:13.5px; font-family:var(--sans);}
 
   .timeline{position:relative; padding-left:20px;}
   .timeline::before{content:''; position:absolute; left:5px; top:4px; bottom:4px; width:1px; background:var(--border);}
@@ -121,14 +153,16 @@
   .tl-dot.returning{background:var(--blue);} .tl-dot.completed{background:var(--green);}
   .tl-type{font-weight:700; font-size:13.5px;}
   .tl-meta{font-family:var(--mono); font-size:11.5px; color:var(--muted); margin-top:2px;}
+  .tl-note{font-size:12.5px; color:var(--text); margin-top:4px;}
 
-  /* ---- admin ---- */
+  /* ---- forms / admin ---- */
   .field{margin-bottom:12px;}
   .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:6px; font-family:var(--mono);}
-  .field input, .field select{
+  .field input, .field select, .field textarea{
     width:100%; background:var(--panel-2); border:1px solid var(--border); color:var(--text);
     padding:11px 12px; border-radius:10px; font-size:14px; font-family:var(--sans);
   }
+  .field textarea{resize:vertical; min-height:60px;}
   .btn-primary{width:100%; background:var(--amber); color:#1A1200; font-weight:700; border:none; padding:13px; border-radius:10px; font-size:14.5px; margin-top:4px;}
   .admin-row{display:flex; justify-content:space-between; align-items:center; background:var(--panel); border:1px solid var(--border); padding:12px 14px; border-radius:12px; margin-bottom:8px;}
   .admin-row .name{font-size:13.5px; font-weight:600;}
@@ -139,6 +173,17 @@
   .tabs2{display:flex; gap:6px; margin-bottom:16px; background:var(--panel-2); padding:4px; border-radius:12px;}
   .tab2{flex:1; text-align:center; padding:9px; border-radius:9px; font-size:12.5px; font-weight:600; color:var(--muted);}
   .tab2.active{background:var(--panel); color:var(--text);}
+
+  /* ---- records search ---- */
+  .search-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px;}
+  .search-grid .field{margin-bottom:0;}
+  .search-grid .full{grid-column:1 / -1;}
+
+  /* ---- profile ---- */
+  .profile-card{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:18px; margin-bottom:16px;}
+  .profile-row{display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); font-size:13.5px;}
+  .profile-row:last-child{border-bottom:none;}
+  .profile-row .k{color:var(--muted);}
 
   /* ---- bottom nav ---- */
   .bottomnav{
@@ -176,7 +221,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-07";
+const BUILD_TAG = "2026-07-03-08-corework";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -194,9 +239,8 @@ const googleProvider = new GoogleAuthProvider();
 /* =========================================================
    1b) Firestore REST 用戶端
    部分行動網路環境會干擾 Firestore SDK 預設的長連線/串流協定，
-   導致一直卡在 "client is offline"（即使網域本身連得到）。
-   這裡改用一般的 HTTPS REST 請求存取 Firestore，即時同步則改為
-   定時輪詢，避開長連線相容性問題。
+   導致一直卡在 "client is offline"；這裡改用一般的 HTTPS REST
+   請求存取 Firestore，即時同步則改為定時輪詢。
    ========================================================= */
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents`;
 
@@ -287,13 +331,13 @@ function poll(fn, intervalMs){
 }
 
 /* =========================================================
-   2) Event 類型定義（精簡版，不含 ON_SCENE_UPDATE）
+   2) Event 類型定義
    ========================================================= */
 const EVENT_TYPES = [
   { type: "DISPATCH",      label: "出勤",     emoji: "🚨", statusKey: "dispatch" },
   { type: "ARRIVED_SCENE", label: "抵達現場", emoji: "📍", statusKey: "onscene" },
   { type: "RETURNING",     label: "返營",     emoji: "🚑", statusKey: "returning" },
-  { type: "COMPLETED",     label: "完成",     emoji: "🏁", statusKey: "completed" }
+  { type: "COMPLETED",     label: "抵達營區", emoji: "🏁", statusKey: "completed" }
 ];
 const STATUS_LABEL = {
   pending:   "待出勤",
@@ -315,7 +359,9 @@ const ROLE_LABEL = {
    ========================================================= */
 const state = {
   user: null, profile: null, tasks: [], events: [],
-  route: { name: "dashboard" }, adminTab: "tasks"
+  route: { name: "home" }, adminTab: "tasks",
+  reportDraft: null, // { taskId, type }
+  recordsFilter: { date: "", vehicle: "", title: "", location: "", status: "", person: "" }
 };
 let tasksPoll = null, eventsPoll = null, profilePoll = null;
 
@@ -332,6 +378,21 @@ function deriveStatus(taskId) {
 function taskEvents(taskId) {
   return state.events.filter(e => e.taskId === taskId).sort((a,b) => (a.ts||0) - (b.ts||0));
 }
+function eventByType(taskId, type){
+  return taskEvents(taskId).find(e => e.type === type) || null;
+}
+function isSameDay(ms, ref){
+  if (!ms) return false;
+  const a = new Date(ms), b = ref;
+  return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+}
+function durationLabel(ms){
+  if (ms == null || ms < 0) return "—";
+  const mins = Math.round(ms/60000);
+  if (mins < 60) return `${mins} 分鐘`;
+  const h = Math.floor(mins/60), m = mins%60;
+  return `${h} 小時 ${m} 分鐘`;
+}
 
 /* =========================================================
    5) RBAC
@@ -339,37 +400,33 @@ function taskEvents(taskId) {
 function canManageUsers(p){ return p && p.role === "admin"; }
 function canManageTasks(p){ return p && (p.role === "admin" || p.role === "duty_officer"); }
 function canSeeAllTasks(p){ return p && (p.role === "admin" || p.role === "duty_officer"); }
-function isAssigned(p, task){
-  if (!p || !task || !task.assignedCrew) return false;
-  return task.assignedCrew.includes(p.email);
-}
-function canReport(p, task){
-  if (!p || !task) return false;
-  return canManageTasks(p) || isAssigned(p, task);
-}
+function isActive(p){ return p && p.role !== "pending"; }
+function canCreateTask(p){ return isActive(p); } // 建立勤務（所有成員）
+function canReport(p, task){ return isActive(p); } // 回報開放給所有已審核成員
 function visibleTasks(p, tasks){
   if (!p) return [];
   if (canSeeAllTasks(p)) return tasks;
-  if (p.role === "company_commander") return tasks.filter(t => t.unit === p.unit);
-  return tasks.filter(t => isAssigned(p, t)); // member
+  if (p.role === "company_commander" && p.unit) return tasks.filter(t => t.unit === p.unit);
+  return tasks; // member：任務中心對所有已審核成員開放
 }
 
 /* =========================================================
    6) Firestore 動作
    ========================================================= */
-async function addEvent(taskId, type){
+async function addEvent(taskId, type, extra){
   await fsAddDoc("events", {
     taskId, type,
     timestamp: new Date(),
     userId: state.user.uid,
-    userName: state.profile.displayName || state.user.displayName || state.user.email
+    userName: state.profile.displayName || state.user.displayName || state.user.email,
+    ...extra
   });
   showToast(`已回報：${EVENT_TYPES.find(t=>t.type===type).label}`);
   if (eventsPoll) eventsPoll.refreshNow();
 }
 async function createTask(data){
-  await fsAddDoc("tasks", { ...data, createdAt: new Date(), createdBy: state.user.uid });
-  showToast("任務已建立");
+  await fsAddDoc("tasks", { ...data, createdAt: new Date(), createdBy: state.user.uid, createdByName: state.profile.displayName || state.user.email });
+  showToast("勤務已建立");
   if (tasksPoll) tasksPoll.refreshNow();
 }
 async function deleteTask(taskId){
@@ -459,6 +516,9 @@ function fmtTime(ms){
   const d = new Date(ms);
   return d.toLocaleString("zh-TW", { month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", hour12:false });
 }
+function fmtDate(d){
+  return d.toLocaleDateString("zh-TW", { year:"numeric", month:"long", day:"numeric", weekday:"long" });
+}
 function showToast(msg){
   let t = document.getElementById("toast");
   if (!t){ t = document.createElement("div"); t.id="toast"; t.className="toast"; document.body.appendChild(t); }
@@ -466,7 +526,7 @@ function showToast(msg){
   clearTimeout(showToast._tm);
   showToast._tm = setTimeout(()=>t.classList.remove("show"), 2200);
 }
-function nav(route){ state.route = route; render(); window.scrollTo(0,0); }
+function nav(route){ state.route = route; state.reportDraft = null; render(); window.scrollTo(0,0); }
 function esc(s){ return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* =========================================================
@@ -498,7 +558,7 @@ function viewPending(){
 }
 
 /* =========================================================
-   10) 畫面：Dashboard
+   10) 共用：狀態徽章 / 卡片
    ========================================================= */
 function statusBadge(statusKey){
   const cls = { pending:"pending", dispatch:"dispatch", onscene:"onscene", returning:"returning", completed:"completed" }[statusKey];
@@ -507,41 +567,125 @@ function statusBadge(statusKey){
 function taskCardClass(statusKey){
   return { pending:"s-pending", dispatch:"s-dispatch", onscene:"s-onscene", returning:"s-returning", completed:"s-completed" }[statusKey];
 }
-function viewDashboard(){
+function taskCard(t){
+  const s = deriveStatus(t.id);
+  const evs = taskEvents(t.id);
+  const last = evs[evs.length-1];
+  return `
+  <div class="task-card ${taskCardClass(s)}" onclick="window.__nav({name:'task', id:'${t.id}'})">
+    <div class="task-top">
+      <div>
+        <p class="task-title">${esc(t.title)}</p>
+        <div class="task-meta">${esc(t.vehicle||'—')} · ${esc(t.location||'—')}</div>
+      </div>
+      ${statusBadge(s)}
+    </div>
+    <div class="task-crew">
+      <span>車長：${esc(t.crewLeader||'—')}</span>
+      <span>駕駛：${esc(t.driver||'—')}</span>
+    </div>
+    <div class="task-foot">
+      <span>${last ? '最新：' + esc(EVENT_TYPES.find(e=>e.type===last.type)?.label||'') : '尚無回報'}</span>
+      <span>${last ? timeAgo(last.ts) : ''}</span>
+    </div>
+  </div>`;
+}
+
+/* =========================================================
+   11) 畫面：首頁 Dashboard
+   ========================================================= */
+function viewHome(){
   const p = state.profile;
   const tasks = visibleTasks(p, state.tasks);
-  const active = tasks.filter(t => deriveStatus(t.id) !== "completed");
-  const done = tasks.filter(t => deriveStatus(t.id) === "completed");
+  const today = new Date();
+  const todayTasks = tasks.filter(t => isSameDay(new Date(t.createdAt||0).getTime(), today));
+  const todayDone = todayTasks.filter(t => deriveStatus(t.id) === "completed");
+  const todayActive = todayTasks.filter(t => deriveStatus(t.id) !== "completed");
 
-  function card(t){
-    const s = deriveStatus(t.id);
-    const evs = taskEvents(t.id);
-    const last = evs[evs.length-1];
-    return `
-    <div class="task-card ${taskCardClass(s)}" onclick="window.__nav({name:'task', id:'${t.id}'})">
-      <div class="task-top">
-        <div>
-          <p class="task-title">${esc(t.title)}</p>
-          <div class="task-meta">${esc(t.vehicle||'—')} · ${esc(t.location||'—')}</div>
-        </div>
-        ${statusBadge(s)}
-      </div>
-      <div class="task-foot">
-        <span>${last ? '最新：' + esc(EVENT_TYPES.find(e=>e.type===last.type)?.label||'') : '尚無回報'}</span>
-        <span>${last ? timeAgo(last.ts) : ''}</span>
-      </div>
-    </div>`;
-  }
+  const ongoing = tasks
+    .filter(t => deriveStatus(t.id) !== "completed" && deriveStatus(t.id) !== "pending")
+    .sort((a,b) => {
+      const la = taskEvents(a.id).slice(-1)[0]; const lb = taskEvents(b.id).slice(-1)[0];
+      return (lb?.ts||0) - (la?.ts||0);
+    })[0];
+
+  const banner = ongoing ? `
+    <div class="current-banner" onclick="window.__nav({name:'task', id:'${ongoing.id}'})">
+      <div class="cb-label">🚨 進行中勤務</div>
+      <p class="task-title">${esc(ongoing.title)}</p>
+      <div class="task-meta">${esc(ongoing.vehicle||'—')} · ${esc(ongoing.location||'—')}</div>
+      <div style="margin-top:8px;">${statusBadge(deriveStatus(ongoing.id))}</div>
+    </div>` : "";
+
+  const quick = [
+    { icon:"📋", label:"任務中", route:{name:"tasks"} },
+    { icon:"➕", label:"建立勤務", route:{name:"createTask"}, show: canCreateTask(p) },
+    { icon:"🗂️", label:"勤務紀錄", route:{name:"records"} },
+    { icon:"🔔", label:"通知", route:{name:"notifications"} },
+    { icon:"👤", label:"個人資料", route:{name:"profile"} }
+  ].filter(q => q.show !== false);
 
   return `
-    <div class="section-label">進行中任務 · ${active.length}</div>
-    ${active.length ? active.map(card).join("") : `<div class="empty">目前沒有進行中的任務</div>`}
-    ${done.length ? `<div class="section-label">已完成 · ${done.length}</div>${done.slice(0,10).map(card).join("")}` : ""}
+    <div class="home-date">${fmtDate(today)}</div>
+    <div class="weather-card">
+      <span class="emoji">⛅</span>
+      <div>天氣資訊尚未串接（規劃使用中央氣象署 CWA 開放資料，待提供 API 金鑰）</div>
+    </div>
+    ${banner}
+    <div class="section-label">今日概況</div>
+    <div class="stat-grid">
+      <div class="stat-tile"><div class="num">${todayTasks.length}</div><div class="lbl">今日勤務數</div></div>
+      <div class="stat-tile"><div class="num">${todayActive.length}</div><div class="lbl">進行中</div></div>
+      <div class="stat-tile"><div class="num">${todayDone.length}</div><div class="lbl">已完成</div></div>
+    </div>
+    <div class="section-label">快捷功能</div>
+    <div class="quick-grid">
+      ${quick.map(q => `
+        <button class="quick-btn" onclick='window.__nav(${JSON.stringify(q.route)})'>
+          <span class="navicon">${q.icon}</span>${q.label}
+        </button>`).join("")}
+    </div>
   `;
 }
 
 /* =========================================================
-   11) 畫面：任務詳情
+   12) 畫面：任務中心（所有尚未完成的勤務）
+   ========================================================= */
+function viewTasks(){
+  const p = state.profile;
+  const tasks = visibleTasks(p, state.tasks);
+  const active = tasks.filter(t => deriveStatus(t.id) !== "completed");
+  return `
+    <div class="section-label">進行中勤務 · ${active.length}</div>
+    ${active.length ? active.map(taskCard).join("") : `<div class="empty">目前沒有進行中的勤務</div>`}
+  `;
+}
+
+/* =========================================================
+   13) 畫面：建立勤務
+   ========================================================= */
+function viewCreateTask(){
+  const p = state.profile;
+  if (!canCreateTask(p)) return `<div class="empty">您沒有建立勤務的權限</div>`;
+  return `
+    <div class="section-label">建立勤務</div>
+    <form onsubmit="window.__createTask(event)">
+      <div class="field"><label>任務名稱 *</label><input name="title" required placeholder="例如：OHCA 患者搶救"></div>
+      <div class="field"><label>車號</label><input name="vehicle" placeholder="例如：潭子1號救護車"></div>
+      <div class="field"><label>地點</label><input name="location" placeholder="例如：潭子區豐興路一段"></div>
+      <div class="field"><label>車長</label><input name="crewLeader" placeholder="車長姓名"></div>
+      <div class="field"><label>駕駛</label><input name="driver" placeholder="駕駛姓名"></div>
+      <div class="field"><label>行車紀錄器編號（多組請用逗號分隔）</label><input name="recorders" placeholder="例如：REC-01, REC-02"></div>
+      <div class="field"><label>出發前里程（公里）</label><input name="startMileage" type="number" inputmode="decimal" placeholder="例如：12345"></div>
+      <div class="field"><label>出發前油量</label><input name="startFuel" placeholder="例如：3/4 或 60%"></div>
+      <div class="field"><label>備註（選填）</label><textarea name="notes" placeholder="其他需要註記的事項"></textarea></div>
+      <button class="btn-primary" type="submit">建立勤務</button>
+    </form>
+  `;
+}
+
+/* =========================================================
+   14) 畫面：任務詳情
    ========================================================= */
 function viewTaskDetail(taskId){
   const t = state.tasks.find(x => x.id === taskId);
@@ -550,17 +694,39 @@ function viewTaskDetail(taskId){
   const s = deriveStatus(taskId);
   const evs = taskEvents(taskId);
   const currentIdx = STATUS_ORDER.indexOf(s);
-  const nextRecommended = EVENT_TYPES[currentIdx] ? EVENT_TYPES[currentIdx].type : null;
+  const nextType = EVENT_TYPES[currentIdx] ? EVENT_TYPES[currentIdx].type : null;
 
-  const reportSection = canReport(p, t) ? `
-    <div class="report-grid">
-      ${EVENT_TYPES.map(e => `
-        <button class="report-btn ${e.type===nextRecommended?'recommended':''}"
-          onclick="window.__report('${t.id}','${e.type}')">
-          <span class="emoji">${e.emoji}</span>${e.label}
-        </button>`).join("")}
-    </div>
-  ` : `<div class="no-permission">您沒有此任務的回報權限</div>`;
+  const draft = state.reportDraft && state.reportDraft.taskId === taskId ? state.reportDraft : null;
+
+  let reportSection;
+  if (!canReport(p, t)) {
+    reportSection = `<div class="no-permission">您沒有回報權限</div>`;
+  } else if (s === "completed") {
+    reportSection = `<div class="no-permission">此勤務已完成</div>`;
+  } else if (draft) {
+    const def = EVENT_TYPES.find(e=>e.type===draft.type);
+    const isFinal = draft.type === "COMPLETED";
+    reportSection = `
+      <div class="report-form">
+        <div class="title">${def.emoji} 回報：${def.label}</div>
+        <div class="field"><label>里程（公里）</label><input id="rf-mileage" type="number" inputmode="decimal" placeholder="目前里程"></div>
+        ${isFinal ? `<div class="field"><label>剩餘油量</label><input id="rf-fuel" placeholder="例如：1/2 或 40%"></div>` : ""}
+        <div class="field"><label>備註（選填）</label><input id="rf-note" placeholder="備註"></div>
+        <div class="row">
+          <button class="btn-ghost" onclick="window.__cancelReport()">取消</button>
+          <button class="btn-primary" style="margin-top:0;" onclick="window.__submitReport('${t.id}','${draft.type}')">確認送出</button>
+        </div>
+      </div>`;
+  } else {
+    reportSection = `
+      <div class="report-grid">
+        ${EVENT_TYPES.map(e => `
+          <button class="report-btn ${e.type===nextType?'recommended':''}"
+            onclick="window.__startReport('${t.id}','${e.type}')">
+            <span class="emoji">${e.emoji}</span>${e.label}
+          </button>`).join("")}
+      </div>`;
+  }
 
   const timeline = evs.length ? `
     <div class="timeline">
@@ -570,34 +736,128 @@ function viewTaskDetail(taskId){
         <div class="tl-item">
           <div class="tl-dot ${def?.statusKey}"></div>
           <div class="tl-type">${def?.emoji} ${def?.label}</div>
-          <div class="tl-meta">${fmtTime(e.ts)} · ${esc(e.userName||'')}</div>
+          <div class="tl-meta">${fmtTime(e.ts)} · ${esc(e.userName||'')}${e.mileage!=null ? ' · ' + e.mileage + ' km' : ''}</div>
+          ${e.note ? `<div class="tl-note">${esc(e.note)}</div>` : ""}
         </div>`;
       }).join("")}
     </div>` : `<div class="empty">尚無事件紀錄</div>`;
 
+  // 勤務資訊：出發/抵達/返營/最終里程與油量、自動計算行駛公里數與任務耗時
+  const dispatchEv = eventByType(taskId, "DISPATCH");
+  const arrivedEv = eventByType(taskId, "ARRIVED_SCENE");
+  const returningEv = eventByType(taskId, "RETURNING");
+  const completedEv = eventByType(taskId, "COMPLETED");
+  const startMileage = dispatchEv?.mileage ?? t.startMileage ?? null;
+  const finalMileage = completedEv?.mileage ?? null;
+  const distance = (startMileage != null && finalMileage != null) ? (finalMileage - startMileage) : null;
+  const duration = completedEv ? (completedEv.ts - (dispatchEv?.ts ?? new Date(t.createdAt||0).getTime())) : null;
+
   return `
-    <div class="back-row"><button onclick="window.__nav({name:'dashboard'})">‹ 返回列表</button></div>
+    <div class="back-row"><button onclick="window.__nav({name:'tasks'})">‹ 返回列表</button></div>
     <div class="detail-head">
       <div class="task-top">
         <p class="task-title">${esc(t.title)}</p>
         ${statusBadge(s)}
       </div>
       <div class="kv">
-        <div class="k">車輛</div><div class="v">${esc(t.vehicle||'—')}</div>
+        <div class="k">車號</div><div class="v">${esc(t.vehicle||'—')}</div>
         <div class="k">地點</div><div class="v">${esc(t.location||'—')}</div>
-        <div class="k">單位</div><div class="v">${esc(t.unit||'—')}</div>
-        <div class="k">人員</div><div class="v">${(t.assignedCrew||[]).map(esc).join('、') || '—'}</div>
+        <div class="k">車長</div><div class="v">${esc(t.crewLeader||'—')}</div>
+        <div class="k">駕駛</div><div class="v">${esc(t.driver||'—')}</div>
+        <div class="k">紀錄器</div><div class="v">${esc((t.recorders||[]).join('、') || '—')}</div>
+        <div class="k">建立人</div><div class="v">${esc(t.createdByName||'—')}</div>
+        <div class="k">建立時間</div><div class="v">${fmtTime(new Date(t.createdAt||0).getTime())}</div>
       </div>
     </div>
     <div class="section-label">回報操作</div>
     ${reportSection}
-    <div class="section-label">事件時間軸（唯讀，不可修改）</div>
+    <div class="section-label">勤務資訊</div>
+    <div class="detail-head">
+      <div class="kv">
+        <div class="k">出發里程</div><div class="v">${startMileage!=null ? startMileage+' km' : '—'}</div>
+        <div class="k">抵達里程</div><div class="v">${arrivedEv?.mileage!=null ? arrivedEv.mileage+' km' : '—'}</div>
+        <div class="k">返營里程</div><div class="v">${returningEv?.mileage!=null ? returningEv.mileage+' km' : '—'}</div>
+        <div class="k">最終里程</div><div class="v">${finalMileage!=null ? finalMileage+' km' : '—'}</div>
+        <div class="k">出發油量</div><div class="v">${esc(t.startFuel||'—')}</div>
+        <div class="k">剩餘油量</div><div class="v">${esc(completedEv?.endFuel||'—')}</div>
+        <div class="k">行駛公里</div><div class="v">${distance!=null ? distance+' km' : '—'}</div>
+        <div class="k">任務耗時</div><div class="v">${duration!=null ? durationLabel(duration) : '—'}</div>
+      </div>
+    </div>
+    <div class="section-label">勤務時間軸（唯讀，不可修改）</div>
     ${timeline}
   `;
 }
 
 /* =========================================================
-   12) 畫面：管理後台
+   15) 畫面：勤務紀錄搜尋
+   ========================================================= */
+function viewRecords(){
+  const p = state.profile;
+  const f = state.recordsFilter;
+  let tasks = visibleTasks(p, state.tasks);
+
+  if (f.date) tasks = tasks.filter(t => {
+    const d = new Date(t.createdAt||0);
+    const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    return iso === f.date;
+  });
+  if (f.vehicle) tasks = tasks.filter(t => (t.vehicle||"").toLowerCase().includes(f.vehicle.toLowerCase()));
+  if (f.title) tasks = tasks.filter(t => (t.title||"").toLowerCase().includes(f.title.toLowerCase()));
+  if (f.location) tasks = tasks.filter(t => (t.location||"").toLowerCase().includes(f.location.toLowerCase()));
+  if (f.status) tasks = tasks.filter(t => deriveStatus(t.id) === f.status);
+  if (f.person) tasks = tasks.filter(t => {
+    const q = f.person.toLowerCase();
+    return (t.crewLeader||"").toLowerCase().includes(q) || (t.driver||"").toLowerCase().includes(q);
+  });
+
+  const statusOptions = ["", ...STATUS_ORDER].map(s => `<option value="${s}" ${f.status===s?'selected':''}>${s?STATUS_LABEL[s]:'全部狀態'}</option>`).join("");
+
+  return `
+    <div class="section-label">搜尋條件</div>
+    <div class="search-grid">
+      <div class="field"><label>日期</label><input type="date" value="${f.date}" oninput="window.__setRecordsFilter('date', this.value)"></div>
+      <div class="field"><label>車號</label><input value="${esc(f.vehicle)}" oninput="window.__setRecordsFilter('vehicle', this.value)"></div>
+      <div class="field"><label>任務名稱</label><input value="${esc(f.title)}" oninput="window.__setRecordsFilter('title', this.value)"></div>
+      <div class="field"><label>地點</label><input value="${esc(f.location)}" oninput="window.__setRecordsFilter('location', this.value)"></div>
+      <div class="field"><label>狀態</label><select onchange="window.__setRecordsFilter('status', this.value)">${statusOptions}</select></div>
+      <div class="field"><label>人員（車長/駕駛）</label><input value="${esc(f.person)}" oninput="window.__setRecordsFilter('person', this.value)"></div>
+    </div>
+    <div class="section-label">結果 · ${tasks.length}</div>
+    ${tasks.length ? tasks.map(taskCard).join("") : `<div class="empty">找不到符合條件的勤務紀錄</div>`}
+  `;
+}
+
+/* =========================================================
+   16) 畫面：通知中心（開發中）
+   ========================================================= */
+function viewNotifications(){
+  return `
+    <div class="section-label">通知中心</div>
+    <div class="empty">通知中心開發中，之後將顯示新勤務／完成／系統公告等通知。</div>
+  `;
+}
+
+/* =========================================================
+   17) 畫面：個人資料
+   ========================================================= */
+function viewProfile(){
+  const p = state.profile;
+  return `
+    <div class="section-label">個人資料</div>
+    <div class="profile-card">
+      <div class="profile-row"><span class="k">姓名</span><span>${esc(p.displayName||'—')}</span></div>
+      <div class="profile-row"><span class="k">Email</span><span>${esc(p.email||'—')}</span></div>
+      <div class="profile-row"><span class="k">單位</span><span>${esc(p.unit||'未設定')}</span></div>
+      <div class="profile-row"><span class="k">角色</span><span>${ROLE_LABEL[p.role]||p.role}</span></div>
+    </div>
+    ${canManageTasks(p) ? `<button class="btn-primary" onclick="window.__nav({name:'admin'})">前往管理後台</button>` : ""}
+    <button class="btn-ghost" style="width:100%;margin-top:10px;" onclick="window.__logout()">登出</button>
+  `;
+}
+
+/* =========================================================
+   18) 畫面：管理後台
    ========================================================= */
 function viewAdmin(){
   const p = state.profile;
@@ -617,16 +877,7 @@ function viewAdmin(){
 
 function viewAdminTasks(){
   return `
-    <div class="section-label">建立新任務</div>
-    <form onsubmit="window.__createTask(event)">
-      <div class="field"><label>任務名稱</label><input name="title" required placeholder="例如：OHCA 患者搶救"></div>
-      <div class="field"><label>車輛</label><input name="vehicle" placeholder="例如：潭子1號救護車"></div>
-      <div class="field"><label>地點</label><input name="location" placeholder="例如：潭子區豐興路一段"></div>
-      <div class="field"><label>單位</label><input name="unit" placeholder="例如：潭子分隊"></div>
-      <div class="field"><label>指派人員（email，以逗號分隔）</label><input name="crew" placeholder="a@example.com, b@example.com"></div>
-      <button class="btn-primary" type="submit">建立任務</button>
-    </form>
-    <div class="section-label">所有任務</div>
+    <div class="section-label">所有勤務</div>
     ${state.tasks.length ? state.tasks.map(t => `
       <div class="admin-row">
         <div>
@@ -634,7 +885,7 @@ function viewAdminTasks(){
           <div class="sub">${esc(t.vehicle||'—')} · ${STATUS_LABEL[deriveStatus(t.id)]}</div>
         </div>
         <button class="icon-btn danger" onclick="window.__deleteTask('${t.id}')">刪除</button>
-      </div>`).join("") : `<div class="empty">尚無任務</div>`}
+      </div>`).join("") : `<div class="empty">尚無勤務</div>`}
   `;
 }
 
@@ -672,18 +923,34 @@ function viewAdminUsers(){
 }
 
 /* =========================================================
-   13) 主渲染
+   19) 主渲染
    ========================================================= */
+const ROUTE_VIEWS = {
+  home: viewHome,
+  tasks: viewTasks,
+  createTask: viewCreateTask,
+  task: () => viewTaskDetail(state.route.id),
+  records: viewRecords,
+  notifications: viewNotifications,
+  profile: viewProfile,
+  admin: viewAdmin
+};
+const NAV_ITEMS = [
+  { name:"home", icon:"🏠", label:"首頁" },
+  { name:"tasks", icon:"📋", label:"任務中" },
+  { name:"createTask", icon:"➕", label:"建立" },
+  { name:"records", icon:"🗂️", label:"紀錄" },
+  { name:"profile", icon:"👤", label:"我的" }
+];
+
 function render(){
   const app = document.getElementById("app");
   if (!state.user) { app.innerHTML = viewLogin(); return; }
   if (!state.profile) { app.innerHTML = `<div class="spinner"></div>`; return; }
   if (state.profile.role === "pending") { app.innerHTML = viewPending(); return; }
 
-  let body = "";
-  if (state.route.name === "dashboard") body = viewDashboard();
-  else if (state.route.name === "task") body = viewTaskDetail(state.route.id);
-  else if (state.route.name === "admin") body = viewAdmin();
+  const view = ROUTE_VIEWS[state.route.name] || viewHome;
+  const body = view();
 
   const p = state.profile;
   app.innerHTML = `
@@ -693,40 +960,51 @@ function render(){
     </div>
     <main>${body}</main>
     <div class="bottomnav">
-      <button class="navbtn ${state.route.name==='dashboard'?'active':''}" onclick="window.__nav({name:'dashboard'})">
-        <span class="navicon">📡</span><span class="navlabel">戰情總覽</span>
-      </button>
-      ${canManageTasks(p) ? `
-      <button class="navbtn ${state.route.name==='admin'?'active':''}" onclick="window.__nav({name:'admin'})">
-        <span class="navicon">🛠️</span><span class="navlabel">管理</span>
-      </button>` : ""}
-      <button class="navbtn" onclick="window.__logout()">
-        <span class="navicon">🚪</span><span class="navlabel">登出</span>
-      </button>
+      ${NAV_ITEMS.map(n => `
+        <button class="navbtn ${state.route.name===n.name?'active':''}" onclick="window.__nav({name:'${n.name}'})">
+          <span class="navicon">${n.icon}</span><span class="navlabel">${n.label}</span>
+        </button>`).join("")}
     </div>
     <div id="toast" class="toast"></div>
   `;
 }
 
 /* =========================================================
-   14) 全域事件掛載（供 inline onclick 使用）
+   20) 全域事件掛載（供 inline onclick 使用）
    ========================================================= */
 window.__login = doLogin;
 window.__logout = doLogout;
 window.__nav = nav;
-window.__report = (taskId, type) => addEvent(taskId, type);
+window.__startReport = (taskId, type) => { state.reportDraft = { taskId, type }; render(); };
+window.__cancelReport = () => { state.reportDraft = null; render(); };
+window.__submitReport = (taskId, type) => {
+  const mileageEl = document.getElementById("rf-mileage");
+  const fuelEl = document.getElementById("rf-fuel");
+  const noteEl = document.getElementById("rf-note");
+  const extra = {};
+  if (mileageEl && mileageEl.value !== "") extra.mileage = Number(mileageEl.value);
+  if (noteEl && noteEl.value) extra.note = noteEl.value;
+  if (fuelEl && fuelEl.value) extra.endFuel = fuelEl.value;
+  state.reportDraft = null;
+  addEvent(taskId, type, extra);
+};
 window.__setAdminTab = (t) => { state.adminTab = t; state._usersCache = null; render(); };
 window.__deleteTask = (id) => { if (confirm("確定刪除此任務？此動作無法復原。")) deleteTask(id); };
 window.__setRole = (uid, role) => setUserRole(uid, role, "").then(() => { state._usersCache = null; render(); });
+window.__setRecordsFilter = (key, value) => { state.recordsFilter[key] = value; render(); };
 window.__createTask = (ev) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
-  const crew = (f.get("crew")||"").split(",").map(s=>s.trim()).filter(Boolean);
+  const recorders = (f.get("recorders")||"").split(",").map(s=>s.trim()).filter(Boolean);
+  const startMileage = f.get("startMileage");
   createTask({
     title: f.get("title"), vehicle: f.get("vehicle"), location: f.get("location"),
-    unit: f.get("unit"), assignedCrew: crew
+    crewLeader: f.get("crewLeader"), driver: f.get("driver"), recorders,
+    startMileage: startMileage ? Number(startMileage) : null,
+    startFuel: f.get("startFuel"), notes: f.get("notes")
   });
   ev.target.reset();
+  nav({ name: "tasks" });
 };
 
 render();
