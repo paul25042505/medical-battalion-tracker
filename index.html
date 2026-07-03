@@ -44,8 +44,8 @@
   .topbar-icons{display:flex; align-items:center; gap:16px; flex-shrink:0; align-self:center;}
   .topbar h1{font-size:17px; font-weight:700; margin:0; letter-spacing:0.01em; line-height:1.3; white-space:nowrap;}
   .topbar-en{
-    font-family:var(--mono); font-size:10.5px; font-weight:600; color:var(--amber);
-    letter-spacing:0.16em; text-transform:uppercase; margin-top:3px; white-space:nowrap;
+    font-family:var(--mono); font-size:clamp(6px, 1.7vw, 9.5px); font-weight:600; color:var(--amber);
+    letter-spacing:0.02em; text-transform:none; margin-top:3px; white-space:nowrap;
   }
   .topbar-sub{
     margin-top:9px; color:var(--text);
@@ -285,7 +285,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-21-webfont";
+const BUILD_TAG = "2026-07-03-22-unit-rbac";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -414,32 +414,46 @@ const STATUS_LABEL = {
 const STATUS_ORDER = ["pending","dispatch","onscene","returning","completed"];
 
 const ROLE_LABEL = {
-  admin: "管理員", duty_officer: "高勤官", company_commander: "連級主官管",
+  admin: "管理員", duty_officer: "高勤官", commander: "主官管",
   member: "一般成員", pending: "待審核", disabled: "已停用"
 };
+
+/* =========================================================
+   2b) 單位（Unit）定義
+   目前固定為營部／第一連／第二連三個單位；所有人員、車輛、
+   行車紀錄器、勤務皆綁定 unit 欄位，並依角色＋單位做資料範圍限制。
+   ========================================================= */
+const UNITS = [
+  { code: "hq",  label: "營部" },
+  { code: "co1", label: "第一連" },
+  { code: "co2", label: "第二連" }
+];
+function unitLabel(code){ return (UNITS.find(u => u.code === code) || {}).label || code || "未設定"; }
 
 /* =========================================================
    3) 全域狀態
    ========================================================= */
 const state = {
   user: null, profile: null, tasks: [], events: [],
+  personnel: [], vehicles: [], recorders: [],
   route: { name: "home" }, adminTab: "tasks",
   reportDraft: null, // { taskId, type }
   recordsFilter: { date: "", vehicle: "", title: "", location: "", status: "", person: "" },
   tasksTab: "all",
   statsPeriod: "today",
   reportWizard: { step: 1, taskId: "" }, // 底部導覽「回報」精靈流程狀態
-  profileEditing: false
+  profileEditing: false,
+  baseDataUnit: "", baseDataTab: "personnel", // 基礎資料管理頁籤狀態
+  createTaskUnit: "" // 建立勤務頁面：admin/高勤官可切換的單位
 };
 let tasksPoll = null, eventsPoll = null, profilePoll = null;
-let lastTasksJson = "", lastEventsJson = "", lastProfileJson = "";
+let personnelPoll = null, vehiclesPoll = null, recordersPoll = null;
 // 只有資料真的變動時才重繪畫面，避免每次背景輪詢都整頁重畫造成畫面閃爍/捲動位置跳動。
+const lastJson = {};
 function changedSince(cacheKey, value){
   const json = JSON.stringify(value);
-  const changed = json !== (cacheKey === "tasks" ? lastTasksJson : cacheKey === "events" ? lastEventsJson : lastProfileJson);
-  if (cacheKey === "tasks") lastTasksJson = json;
-  else if (cacheKey === "events") lastEventsJson = json;
-  else lastProfileJson = json;
+  const changed = json !== lastJson[cacheKey];
+  lastJson[cacheKey] = json;
   return changed;
 }
 
@@ -475,25 +489,33 @@ function durationLabel(ms){
 /* =========================================================
    5) RBAC
    ========================================================= */
-function canManageUsers(p){ return p && p.role === "admin"; }
-function canManageTasks(p){ return p && (p.role === "admin" || p.role === "duty_officer"); }
-function canSeeAllTasks(p){ return p && (p.role === "admin" || p.role === "duty_officer"); }
-function isActive(p){ return p && p.role !== "pending" && p.role !== "disabled"; }
-function canCreateTask(p){ return isActive(p); } // 建立勤務（所有成員）
-function canReport(p, task){ return isActive(p); } // 回報開放給所有已審核成員
+// 舊資料相容：早期版本把連級主官管存成 "company_commander"，統一正規化成 "commander"。
+function normalizeRole(role){ return role === "company_commander" ? "commander" : role; }
+function myRole(p){ return p ? normalizeRole(p.role) : ""; }
+function myUnit(p){ return (p && p.unit) || ""; }
+function isActive(p){ const r = myRole(p); return p && r !== "pending" && r !== "disabled"; }
+function canSeeAllUnits(p){ const r = myRole(p); return r === "admin" || r === "duty_officer"; }
+function canManageUsers(p){ return myRole(p) === "admin"; }
+// 任務管理／基礎資料管理：admin、高勤官（全單位），連級主官管（僅自己單位）皆可進入管理後台
+function canManageTasks(p){ const r = myRole(p); return r === "admin" || r === "duty_officer" || r === "commander"; }
+function canManageBaseData(p){ return canManageTasks(p); }
+function canSeeAllTasks(p){ return canSeeAllUnits(p); }
+function canDeleteTask(p){ const r = myRole(p); return r === "admin" || r === "duty_officer"; } // 主官管只能建立/編輯，不可刪除
+function canCreateTask(p){ const r = myRole(p); return r === "admin" || r === "duty_officer" || r === "commander"; } // 一般成員不可建立勤務，僅可回報
+function canReport(p, task){ return isActive(p); } // 回報開放給所有已審核成員（受限於自己單位可見的勤務）
 function visibleTasks(p, tasks){
   if (!p) return [];
-  if (canSeeAllTasks(p)) return tasks;
-  if (p.role === "company_commander" && p.unit) return tasks.filter(t => t.unit === p.unit);
-  return tasks; // member：任務中心對所有已審核成員開放
+  if (canSeeAllUnits(p)) return tasks;
+  return tasks.filter(t => t.unit === myUnit(p));
 }
 
 /* =========================================================
    6) Firestore 動作
    ========================================================= */
 async function addEvent(taskId, type, extra){
+  const task = state.tasks.find(t => t.id === taskId);
   await fsAddDoc("events", {
-    taskId, type,
+    taskId, type, unit: task ? task.unit : "",
     timestamp: new Date(),
     userId: state.user.uid,
     userName: state.profile.displayName || state.user.displayName || state.user.email,
@@ -520,10 +542,37 @@ async function setUserRole(uid, role, unit){
   await fsSetDoc(`users/${uid}`, { role, unit });
   showToast("角色已更新");
 }
-async function updateOwnProfile(displayName, rank, unit){
-  await fsSetDoc(`users/${state.user.uid}`, { displayName, rank, unit });
-  state.profile = { ...state.profile, displayName, rank, unit };
+async function updateOwnProfile(displayName, rank){
+  await fsSetDoc(`users/${state.user.uid}`, { displayName, rank });
+  state.profile = { ...state.profile, displayName, rank };
   showToast("個人資料已更新");
+}
+
+/* ---- 基礎資料管理：人員／車輛／行車紀錄器（依單位分類，供各下拉選單動態讀取） ---- */
+async function addPersonnel(unit, name, title){
+  await fsAddDoc("personnel", { unit, name, title, active: true });
+  showToast("已新增人員"); if (personnelPoll) personnelPoll.refreshNow();
+}
+async function addVehicle(unit, plate, type){
+  await fsAddDoc("vehicles", { unit, plate, type, active: true });
+  showToast("已新增車輛"); if (vehiclesPoll) vehiclesPoll.refreshNow();
+}
+async function addRecorder(unit, code){
+  await fsAddDoc("recorders", { unit, code, active: true });
+  showToast("已新增行車紀錄器"); if (recordersPoll) recordersPoll.refreshNow();
+}
+async function toggleBaseDataActive(coll, id, active){
+  await fsSetDoc(`${coll}/${id}`, { active: !active });
+  if (coll === "personnel" && personnelPoll) personnelPoll.refreshNow();
+  if (coll === "vehicles" && vehiclesPoll) vehiclesPoll.refreshNow();
+  if (coll === "recorders" && recordersPoll) recordersPoll.refreshNow();
+}
+async function deleteBaseData(coll, id){
+  await fsDeleteDoc(`${coll}/${id}`);
+  showToast("已刪除");
+  if (coll === "personnel" && personnelPoll) personnelPoll.refreshNow();
+  if (coll === "vehicles" && vehiclesPoll) vehiclesPoll.refreshNow();
+  if (coll === "recorders" && recordersPoll) recordersPoll.refreshNow();
 }
 /* =========================================================
    7) Auth 流程
@@ -581,12 +630,45 @@ function startDataListeners(){
     state.events = docs;
     if (changed) safeRender();
   }, 6000);
+  personnelPoll = poll(async () => {
+    const docs = await fsListCollection("personnel");
+    const changed = changedSince("personnel", docs);
+    state.personnel = docs;
+    if (changed) safeRender();
+  }, 10000);
+  vehiclesPoll = poll(async () => {
+    const docs = await fsListCollection("vehicles");
+    const changed = changedSince("vehicles", docs);
+    state.vehicles = docs;
+    if (changed) safeRender();
+  }, 10000);
+  recordersPoll = poll(async () => {
+    const docs = await fsListCollection("recorders");
+    const changed = changedSince("recorders", docs);
+    state.recorders = docs;
+    if (changed) safeRender();
+  }, 10000);
+  ensureUnitsSeeded();
 }
 function cleanupListeners(){
-  if (tasksPoll) tasksPoll.stop(); if (eventsPoll) eventsPoll.stop(); if (profilePoll) profilePoll.stop();
-  lastTasksJson = lastEventsJson = lastProfileJson = "";
-  tasksPoll = eventsPoll = profilePoll = null;
-  state.tasks = []; state.events = [];
+  [tasksPoll, eventsPoll, profilePoll, personnelPoll, vehiclesPoll, recordersPoll].forEach(p => p && p.stop());
+  for (const k in lastJson) delete lastJson[k];
+  tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = null;
+  state.tasks = []; state.events = []; state.personnel = []; state.vehicles = []; state.recorders = [];
+}
+// 系統固定為營部／第一連／第二連三個單位；首次啟用時自動補建 units 文件，
+// 供其他集合以 unit_id 建立關聯（不提供 UI 編輯，因為單位編制本身不會變動）。
+let unitsSeeded = false;
+async function ensureUnitsSeeded(){
+  if (unitsSeeded) return;
+  unitsSeeded = true;
+  try {
+    const existing = await fsListCollection("units");
+    const have = new Set(existing.map(u => u.id));
+    for (const u of UNITS) {
+      if (!have.has(u.code)) await fsSetDoc(`units/${u.code}`, { name: u.label, order: UNITS.indexOf(u) });
+    }
+  } catch (e) { console.error("初始化單位資料失敗", e); }
 }
 
 /* =========================================================
@@ -812,15 +894,49 @@ function viewTasks(){
 function viewCreateTask(){
   const p = state.profile;
   if (!canCreateTask(p)) return `<div class="empty">您沒有建立勤務的權限</div>`;
+  const canSwitch = canSeeAllUnits(p);
+  const unit = canSwitch ? (state.createTaskUnit || myUnit(p) || UNITS[0].code) : myUnit(p);
+  if (!unit) return `<div class="empty">您尚未被指派單位，請聯繫管理員。</div>`;
+
+  const personnelOpts = state.personnel.filter(x => x.unit === unit && x.active !== false);
+  const vehicleOpts = state.vehicles.filter(x => x.unit === unit && x.active !== false);
+  const recorderOpts = state.recorders.filter(x => x.unit === unit && x.active !== false);
+
   return `
     <div class="section-label">建立勤務</div>
-    <form onsubmit="window.__createTask(event)">
+    <form onsubmit="window.__createTask(event, '${unit}')">
+      ${canSwitch ? `
+        <div class="field"><label>單位 *</label>
+          <select onchange="window.__setCreateTaskUnit(this.value)">
+            ${UNITS.map(u => `<option value="${u.code}" ${unit===u.code?'selected':''}>${u.label}</option>`).join("")}
+          </select>
+        </div>` : `<div class="field"><label>單位</label><input value="${unitLabel(unit)}" disabled></div>`}
       <div class="field"><label>任務名稱 *</label><input name="title" required placeholder="例如：OHCA 患者搶救"></div>
-      <div class="field"><label>車號</label><input name="vehicle" placeholder="例如：潭子1號救護車"></div>
       <div class="field"><label>地點</label><input name="location" placeholder="例如：潭子區豐興路一段"></div>
-      <div class="field"><label>車長</label><input name="crewLeader" placeholder="車長姓名"></div>
-      <div class="field"><label>駕駛</label><input name="driver" placeholder="駕駛姓名"></div>
-      <div class="field"><label>行車紀錄器編號（多組請用逗號分隔）</label><input name="recorders" placeholder="例如：REC-01, REC-02"></div>
+      <div class="field"><label>車號</label>
+        <select name="vehicle">
+          <option value="">請選擇車輛</option>
+          ${vehicleOpts.map(v => `<option value="${esc(v.plate)}">${esc(v.plate)}${v.type?' · '+esc(v.type):''}</option>`).join("")}
+        </select>
+        ${!vehicleOpts.length ? `<div style="color:var(--muted);font-size:13px;margin-top:6px;">此單位尚未建立車輛資料，請至「基礎資料管理」新增</div>` : ""}
+      </div>
+      <div class="field"><label>車長</label>
+        <select name="crewLeader">
+          <option value="">請選擇車長</option>
+          ${personnelOpts.map(x => `<option value="${esc(x.name)}">${esc(x.name)}${x.title?' · '+esc(x.title):''}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field"><label>駕駛</label>
+        <select name="driver">
+          <option value="">請選擇駕駛</option>
+          ${personnelOpts.map(x => `<option value="${esc(x.name)}">${esc(x.name)}${x.title?' · '+esc(x.title):''}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field"><label>行車紀錄器（可多選）</label>
+        <select name="recorders" multiple size="${Math.min(4, Math.max(2, recorderOpts.length || 2))}">
+          ${recorderOpts.map(x => `<option value="${esc(x.code)}">${esc(x.code)}</option>`).join("")}
+        </select>
+      </div>
       <div class="field"><label>出發前里程（公里）</label><input name="startMileage" type="number" inputmode="decimal" placeholder="例如：12345"></div>
       <div class="field"><label>出發前油量</label><input name="startFuel" placeholder="例如：3/4 或 60%"></div>
       <div class="field"><label>備註（選填）</label><textarea name="notes" placeholder="其他需要註記的事項"></textarea></div>
@@ -1182,9 +1298,10 @@ function viewProfile(){
       <form onsubmit="window.__saveProfile(event)">
         <div class="field"><label>姓名</label><input name="displayName" value="${esc(p.displayName||'')}"></div>
         <div class="field"><label>階級</label><input name="rank" value="${esc(p.rank||'')}" placeholder="例如：上士"></div>
-        <div class="field"><label>單位</label><input name="unit" value="${esc(p.unit||'')}" placeholder="例如：第一連"></div>
+        <div class="field"><label>單位</label><input value="${unitLabel(p.unit)}" disabled></div>
         <div class="field"><label>Email</label><input value="${esc(p.email||'—')}" disabled></div>
-        <div class="field"><label>角色</label><input value="${ROLE_LABEL[p.role]||p.role}" disabled></div>
+        <div class="field"><label>角色</label><input value="${ROLE_LABEL[myRole(p)]||p.role}" disabled></div>
+        <div style="color:var(--muted); font-size:13px; margin:-6px 0 14px 0;">單位與角色由管理員於帳號管理指派，如需變更請聯繫管理員。</div>
         <button class="btn-primary" type="submit">儲存</button>
         <button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__cancelEditProfile()">取消</button>
       </form>
@@ -1195,8 +1312,8 @@ function viewProfile(){
     <div class="profile-card">
       <div class="profile-row"><span class="k">姓名</span><span>${esc(p.displayName||'—')}${p.rank ? ' ' + esc(p.rank) : ''}</span></div>
       <div class="profile-row"><span class="k">Email</span><span>${esc(p.email||'—')}</span></div>
-      <div class="profile-row"><span class="k">單位</span><span>${esc(p.unit||'未設定')}</span></div>
-      <div class="profile-row"><span class="k">角色</span><span>${ROLE_LABEL[p.role]||p.role}</span></div>
+      <div class="profile-row"><span class="k">單位</span><span>${unitLabel(p.unit)}</span></div>
+      <div class="profile-row"><span class="k">角色</span><span>${ROLE_LABEL[myRole(p)]||p.role}</span></div>
     </div>
     <button class="btn-primary" onclick="window.__editProfile()">編輯個人資料</button>
     ${canManageTasks(p) ? `<button class="btn-ghost" style="width:100%;margin-top:10px;" onclick="window.__nav({name:'admin'})">前往管理後台</button>` : ""}
@@ -1212,15 +1329,16 @@ function viewAdmin(){
   if (!canManageTasks(p)) return `<div class="empty">您沒有管理權限</div>`;
 
   const today = new Date();
-  const todayTasks = state.tasks.filter(t => isSameDay(new Date(t.createdAt||0).getTime(), today));
+  const scopedTasks = visibleTasks(p, state.tasks);
+  const todayTasks = scopedTasks.filter(t => isSameDay(new Date(t.createdAt||0).getTime(), today));
   const todayDone = todayTasks.filter(t => deriveStatus(t.id) === "completed");
   const todayActive = todayTasks.filter(t => deriveStatus(t.id) !== "completed");
   const personnelCount = (state._usersCache && Array.isArray(state._usersCache))
-    ? state._usersCache.filter(u => u.role !== "pending" && u.role !== "disabled").length
+    ? state._usersCache.filter(u => u.role !== "pending" && u.role !== "disabled" && (canSeeAllUnits(p) || u.unit === myUnit(p))).length
     : null;
 
   const overview = `
-    <div class="section-label">管理後台總覽</div>
+    <div class="section-label">管理後台總覽${canSeeAllUnits(p) ? '' : ' · ' + unitLabel(myUnit(p))}</div>
     <div class="stat-grid">
       <div class="stat-tile t-blue"><div class="num">${todayTasks.length}</div><div class="lbl">今日勤務</div></div>
       <div class="stat-tile t-orange"><div class="num">${todayActive.length}</div><div class="lbl">今日進行中</div></div>
@@ -1233,11 +1351,15 @@ function viewAdmin(){
   const tabs = `
     <div class="tabs2">
       <div class="tab2 ${state.adminTab==='tasks'?'active':''}" onclick="window.__setAdminTab('tasks')">任務管理</div>
+      ${canManageBaseData(p) ? `<div class="tab2 ${state.adminTab==='basedata'?'active':''}" onclick="window.__setAdminTab('basedata')">基礎資料</div>` : ""}
       ${canManageUsers(p) ? `<div class="tab2 ${state.adminTab==='users'?'active':''}" onclick="window.__setAdminTab('users')">帳號權限</div>` : ""}
     </div>`;
 
   if (state.adminTab === "users" && canManageUsers(p)) {
     return overview + tabs + viewAdminUsers();
+  }
+  if (state.adminTab === "basedata" && canManageBaseData(p)) {
+    return overview + tabs + viewAdminBaseData();
   }
   return overview + tabs + viewAdminTasks();
 }
@@ -1254,7 +1376,7 @@ function taskToCsvRow(t){
 }
 function exportTasksCsv(){
   const header = ["任務名稱","車號","地點","車長","駕駛","狀態","建立時間","出發里程","最終里程","行駛公里"].join(",");
-  const rows = state.tasks.map(taskToCsvRow);
+  const rows = visibleTasks(state.profile, state.tasks).map(taskToCsvRow);
   const csv = "﻿" + [header, ...rows].join("\r\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -1265,24 +1387,105 @@ function exportTasksCsv(){
 }
 
 function viewAdminTasks(){
+  const p = state.profile;
+  const tasks = visibleTasks(p, state.tasks); // 主官管只看得到自己單位的勤務
+  const canDelete = canDeleteTask(p);
   return `
-    <div class="section-label">所有勤務</div>
+    <div class="section-label">${canSeeAllUnits(p) ? '所有勤務' : unitLabel(myUnit(p)) + ' 勤務'}</div>
     <button class="btn-ghost" style="width:100%;margin-bottom:10px;" onclick="window.__exportTasks()">匯出 CSV</button>
-    ${state.tasks.length ? state.tasks.map(t => {
+    ${tasks.length ? tasks.map(t => {
       const s = deriveStatus(t.id);
       return `
       <div class="admin-row">
         <div>
           <div class="name">${esc(t.title)}</div>
-          <div class="sub">${esc(t.vehicle||'—')} · ${STATUS_LABEL[s]}</div>
+          <div class="sub">${esc(t.vehicle||'—')} · ${unitLabel(t.unit)} · ${STATUS_LABEL[s]}</div>
         </div>
         <div style="display:flex; gap:6px;">
           ${s !== "completed" ? `<button class="icon-btn" onclick="window.__forceEndTask('${t.id}')">強制結束</button>` : ""}
-          <button class="icon-btn danger" onclick="window.__deleteTask('${t.id}')">刪除</button>
+          ${canDelete ? `<button class="icon-btn danger" onclick="window.__deleteTask('${t.id}')">刪除</button>` : ""}
         </div>
       </div>`;
     }).join("") : `<div class="empty">尚無勤務</div>`}
   `;
+}
+
+/* =========================================================
+   18b) 畫面：基礎資料管理（人員／車輛／行車紀錄器，依單位分類）
+   ========================================================= */
+const BASEDATA_TABS = [
+  { key:"personnel", label:"人員" },
+  { key:"vehicles", label:"車輛" },
+  { key:"recorders", label:"行車紀錄器" }
+];
+function viewAdminBaseData(){
+  const p = state.profile;
+  const canSwitch = canSeeAllUnits(p);
+  const unit = canSwitch ? (state.baseDataUnit || UNITS[0].code) : myUnit(p);
+
+  if (!unit) return `<div class="empty">您尚未被指派單位，請聯繫管理員。</div>`;
+
+  const unitTabs = canSwitch ? `
+    <div class="tabs2">
+      ${UNITS.map(u => `<div class="tab2 ${unit===u.code?'active':''}" onclick="window.__setBaseDataUnit('${u.code}')">${u.label}</div>`).join("")}
+    </div>` : `<div class="section-label">${unitLabel(unit)}</div>`;
+
+  const subTabs = `
+    <div class="tabs2">
+      ${BASEDATA_TABS.map(t => `<div class="tab2 ${state.baseDataTab===t.key?'active':''}" onclick="window.__setBaseDataTab('${t.key}')">${t.label}</div>`).join("")}
+    </div>`;
+
+  let body = "";
+  if (state.baseDataTab === "personnel") {
+    const rows = state.personnel.filter(x => x.unit === unit);
+    body = `
+      <form onsubmit="window.__addPersonnel(event,'${unit}')" style="display:flex; gap:8px; margin-bottom:16px;">
+        <input name="name" placeholder="姓名" required style="flex:1; background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:12px; font-size:15px;">
+        <input name="title" placeholder="職稱" style="flex:1; background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:12px; font-size:15px;">
+        <button class="icon-btn" type="submit">新增</button>
+      </form>
+      ${rows.length ? rows.map(x => `
+        <div class="admin-row">
+          <div><div class="name">${esc(x.name)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.title||'—')}</div></div>
+          <div style="display:flex; gap:6px;">
+            <button class="icon-btn" onclick="window.__toggleBaseData('personnel','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
+            <button class="icon-btn danger" onclick="window.__deleteBaseData('personnel','${x.id}')">刪除</button>
+          </div>
+        </div>`).join("") : `<div class="empty">尚無人員資料</div>`}`;
+  } else if (state.baseDataTab === "vehicles") {
+    const rows = state.vehicles.filter(x => x.unit === unit);
+    body = `
+      <form onsubmit="window.__addVehicle(event,'${unit}')" style="display:flex; gap:8px; margin-bottom:16px;">
+        <input name="plate" placeholder="車號" required style="flex:1; background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:12px; font-size:15px;">
+        <input name="type" placeholder="車種" style="flex:1; background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:12px; font-size:15px;">
+        <button class="icon-btn" type="submit">新增</button>
+      </form>
+      ${rows.length ? rows.map(x => `
+        <div class="admin-row">
+          <div><div class="name">${esc(x.plate)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.type||'—')}</div></div>
+          <div style="display:flex; gap:6px;">
+            <button class="icon-btn" onclick="window.__toggleBaseData('vehicles','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
+            <button class="icon-btn danger" onclick="window.__deleteBaseData('vehicles','${x.id}')">刪除</button>
+          </div>
+        </div>`).join("") : `<div class="empty">尚無車輛資料</div>`}`;
+  } else {
+    const rows = state.recorders.filter(x => x.unit === unit);
+    body = `
+      <form onsubmit="window.__addRecorder(event,'${unit}')" style="display:flex; gap:8px; margin-bottom:16px;">
+        <input name="code" placeholder="編號" required style="flex:1; background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:12px; font-size:15px;">
+        <button class="icon-btn" type="submit">新增</button>
+      </form>
+      ${rows.length ? rows.map(x => `
+        <div class="admin-row">
+          <div><div class="name">${esc(x.code)}${x.active===false?'（已停用）':''}</div></div>
+          <div style="display:flex; gap:6px;">
+            <button class="icon-btn" onclick="window.__toggleBaseData('recorders','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
+            <button class="icon-btn danger" onclick="window.__deleteBaseData('recorders','${x.id}')">刪除</button>
+          </div>
+        </div>`).join("") : `<div class="empty">尚無行車紀錄器資料</div>`}`;
+  }
+
+  return `${unitTabs}${subTabs}${body}`;
 }
 
 function viewAdminUsers(){
@@ -1302,19 +1505,28 @@ function viewAdminUsers(){
   }
   if (state._usersCache === "loading") return `<div class="spinner"></div>`;
 
-  const roles = ["pending","member","company_commander","duty_officer","admin","disabled"];
+  const roles = ["pending","member","commander","duty_officer","admin","disabled"];
   return `
     <div class="section-label">帳號權限管理</div>
-    ${state._usersCache.map(u => `
+    ${state._usersCache.map(u => {
+      const r = normalizeRole(u.role);
+      return `
       <div class="admin-row">
         <div>
           <div class="name">${esc(u.displayName||u.email)}</div>
-          <div class="sub">${esc(u.email)} · ${esc(u.unit||'未設定單位')}</div>
+          <div class="sub">${esc(u.email)} · ${unitLabel(u.unit)}</div>
         </div>
-        <select class="role-select" onchange="window.__setRole('${u.id}', this.value)">
-          ${roles.map(r => `<option value="${r}" ${u.role===r?'selected':''}>${ROLE_LABEL[r]}</option>`).join("")}
-        </select>
-      </div>`).join("")}
+        <div style="display:flex; gap:6px; flex-shrink:0;">
+          <select id="role-${u.id}" class="role-select" onchange="window.__setRole('${u.id}')">
+            ${roles.map(rr => `<option value="${rr}" ${r===rr?'selected':''}>${ROLE_LABEL[rr]}</option>`).join("")}
+          </select>
+          <select id="unit-${u.id}" class="role-select" onchange="window.__setRole('${u.id}')">
+            <option value="">未指派單位</option>
+            ${UNITS.map(un => `<option value="${un.code}" ${u.unit===un.code?'selected':''}>${un.label}</option>`).join("")}
+          </select>
+        </div>
+      </div>`;
+    }).join("")}
   `;
 }
 
@@ -1367,7 +1579,7 @@ function render(){
       <div class="topbar-top">
         <div class="topbar-titles">
           <h1>衛生營車輛人員動態管制系統</h1>
-          <div class="topbar-en">PHOENIX · DISPATCH</div>
+          <div class="topbar-en">Medical Battalion Vehicle &amp; Personnel Management System</div>
           <div class="topbar-sub">
             <span class="name">${esc(p.displayName||p.email).split(' ')[0]}</span>${p.rank ? `<span class="rank">${esc(p.rank)}</span>` : ''}
           </div>
@@ -1412,13 +1624,36 @@ window.__setAdminTab = (t) => { state.adminTab = t; state._usersCache = null; re
 window.__deleteTask = (id) => { if (confirm("確定刪除此任務？此動作無法復原。")) deleteTask(id); };
 window.__forceEndTask = (id) => { if (confirm("確定強制結束此勤務？此動作無法復原。")) forceEndTask(id); };
 window.__exportTasks = () => exportTasksCsv();
-window.__setRole = (uid, role) => setUserRole(uid, role, "").then(() => { state._usersCache = null; render(); });
+window.__setRole = (uid) => {
+  const role = document.getElementById(`role-${uid}`).value;
+  const unit = document.getElementById(`unit-${uid}`).value;
+  setUserRole(uid, role, unit).then(() => { state._usersCache = null; render(); });
+};
+window.__setBaseDataUnit = (code) => { state.baseDataUnit = code; render(); };
+window.__setBaseDataTab = (key) => { state.baseDataTab = key; render(); };
+window.__addPersonnel = (ev, unit) => {
+  ev.preventDefault();
+  const f = new FormData(ev.target);
+  addPersonnel(unit, f.get("name"), f.get("title")); ev.target.reset();
+};
+window.__addVehicle = (ev, unit) => {
+  ev.preventDefault();
+  const f = new FormData(ev.target);
+  addVehicle(unit, f.get("plate"), f.get("type")); ev.target.reset();
+};
+window.__addRecorder = (ev, unit) => {
+  ev.preventDefault();
+  const f = new FormData(ev.target);
+  addRecorder(unit, f.get("code")); ev.target.reset();
+};
+window.__toggleBaseData = (coll, id, active) => toggleBaseDataActive(coll, id, active);
+window.__deleteBaseData = (coll, id) => { if (confirm("確定刪除此筆資料？此動作無法復原。")) deleteBaseData(coll, id); };
 window.__editProfile = () => { state.profileEditing = true; render(); };
 window.__cancelEditProfile = () => { state.profileEditing = false; render(); };
 window.__saveProfile = (ev) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
-  updateOwnProfile(f.get("displayName"), f.get("rank"), f.get("unit")).then(() => {
+  updateOwnProfile(f.get("displayName"), f.get("rank")).then(() => {
     state.profileEditing = false; render();
   });
 };
@@ -1442,13 +1677,14 @@ window.__submitReportWizard = () => {
   if (locationEl && locationEl.value) extra.reportedLocation = locationEl.value;
   addEvent(w.taskId, w.type, extra).then(() => { state.reportWizard.step = 4; render(); });
 };
-window.__createTask = (ev) => {
+window.__setCreateTaskUnit = (code) => { state.createTaskUnit = code; render(); };
+window.__createTask = (ev, unit) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
-  const recorders = (f.get("recorders")||"").split(",").map(s=>s.trim()).filter(Boolean);
+  const recorders = f.getAll("recorders");
   const startMileage = f.get("startMileage");
   createTask({
-    title: f.get("title"), vehicle: f.get("vehicle"), location: f.get("location"),
+    unit, title: f.get("title"), vehicle: f.get("vehicle"), location: f.get("location"),
     crewLeader: f.get("crewLeader"), driver: f.get("driver"), recorders,
     startMileage: startMileage ? Number(startMileage) : null,
     startFuel: f.get("startFuel"), notes: f.get("notes")
