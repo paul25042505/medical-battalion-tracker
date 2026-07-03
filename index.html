@@ -293,7 +293,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-34-auto-dispatch";
+const BUILD_TAG = "2026-07-03-35-edit-task";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -522,6 +522,8 @@ function canManageBaseData(p){ return canManageTasks(p); }
 function canSeeAllTasks(p){ return canSeeAllUnits(p); }
 function canDeleteTask(p){ const r = myRole(p); return r === "admin" || r === "duty_officer"; } // 主官管只能建立/編輯，不可刪除
 function canCreateTask(p){ const r = myRole(p); return r === "admin" || r === "duty_officer" || r === "commander"; } // 一般成員不可建立勤務，僅可回報
+// 高勤官／admin 可編輯所有單位的勤務；主官管僅能編輯自己單位的勤務（對應 Firestore 規則）
+function canEditTask(p, t){ const r = myRole(p); if (r === "admin" || r === "duty_officer") return true; if (r === "commander") return t.unit === myUnit(p); return false; }
 function canReport(p, task){ return isActive(p); } // 回報開放給所有已審核成員（受限於自己單位可見的勤務）
 function visibleTasks(p, tasks){
   if (!p) return [];
@@ -590,6 +592,11 @@ async function createTask(data){
   showToast("勤務已建立並標記出勤");
   if (tasksPoll) tasksPoll.refreshNow();
   if (eventsPoll) eventsPoll.refreshNow();
+}
+async function updateTask(taskId, fields){
+  await fsSetDoc(`tasks/${taskId}`, fields);
+  showToast("勤務已更新");
+  if (tasksPoll) tasksPoll.refreshNow();
 }
 async function deleteTask(taskId){
   await fsDeleteDoc(`tasks/${taskId}`);
@@ -1031,6 +1038,59 @@ function viewCreateTask(){
 }
 
 /* =========================================================
+   13c) 畫面：編輯勤務
+   ========================================================= */
+function viewEditTask(taskId){
+  const p = state.profile;
+  const t = state.tasks.find(x => x.id === taskId);
+  if (!t) return `<div class="empty">找不到此任務</div>`;
+  if (!canEditTask(p, t)) return `<div class="empty">您沒有編輯此勤務的權限</div>`;
+
+  const unit = t.unit;
+  const personnelOpts = state.personnel.filter(x => x.unit === unit && x.active !== false).slice().sort((a,b) => rankWeight(a.title) - rankWeight(b.title));
+  const vehicleOpts = state.vehicles.filter(x => x.unit === unit && x.active !== false);
+  const recorderOpts = state.recorders.filter(x => x.unit === unit && x.active !== false);
+  const currentRecorders = t.recorders || [];
+
+  return `
+    <div class="back-row"><button onclick="window.__nav({name:'task', id:'${taskId}'})">‹ 返回任務詳情</button></div>
+    <div class="section-label">編輯勤務</div>
+    <form onsubmit="window.__saveTaskEdit(event,'${taskId}')">
+      <div class="field"><label>單位</label><input value="${unitLabel(unit)}" disabled></div>
+      <div class="field"><label>任務名稱 *</label><input name="title" required value="${esc(t.title||'')}"></div>
+      <div class="field"><label>地點</label><input name="location" value="${esc(t.location||'')}"></div>
+      <div class="field"><label>車號</label>
+        <select name="vehicle">
+          <option value="">請選擇車輛</option>
+          ${vehicleOpts.map(v => `<option value="${esc(v.plate)}" ${t.vehicle===v.plate?'selected':''}>${esc(v.plate)}${v.type?' · '+esc(v.type):''}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field"><label>車長</label>
+        <select name="crewLeader">
+          <option value="">請選擇車長</option>
+          ${personnelOpts.map(x => `<option value="${esc(x.name)}" ${t.crewLeader===x.name?'selected':''}>${esc(x.name)}${x.title?' · '+esc(x.title):''}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field"><label>駕駛</label>
+        <select name="driver">
+          <option value="">請選擇駕駛</option>
+          ${personnelOpts.map(x => `<option value="${esc(x.name)}" ${t.driver===x.name?'selected':''}>${esc(x.name)}${x.title?' · '+esc(x.title):''}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field"><label>行車紀錄器（可多選）</label>
+        <select name="recorders" multiple size="${Math.min(4, Math.max(2, recorderOpts.length || 2))}">
+          ${recorderOpts.map(x => `<option value="${esc(x.code)}" ${currentRecorders.includes(x.code)?'selected':''}>${esc(x.code)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field"><label>出發前里程（公里）</label><input name="startMileage" type="number" inputmode="decimal" value="${t.startMileage!=null?t.startMileage:''}"></div>
+      <div class="field"><label>出發前油量</label><input name="startFuel" value="${esc(t.startFuel||'')}"></div>
+      <div class="field"><label>備註（選填）</label><textarea name="notes">${esc(t.notes||'')}</textarea></div>
+      <button class="btn-primary" type="submit">儲存變更</button>
+    </form>
+  `;
+}
+
+/* =========================================================
    14) 畫面：任務詳情
    ========================================================= */
 function viewTaskDetail(taskId){
@@ -1099,7 +1159,10 @@ function viewTaskDetail(taskId){
   const duration = completedEv ? (completedEv.ts - (dispatchEv?.ts ?? new Date(t.createdAt||0).getTime())) : null;
 
   return `
-    <div class="back-row"><button onclick="window.__nav({name:'tasks'})">‹ 返回列表</button></div>
+    <div class="back-row" style="justify-content:space-between;">
+      <button onclick="window.__nav({name:'tasks'})">‹ 返回列表</button>
+      ${canEditTask(p, t) ? `<button class="icon-btn" onclick="window.__nav({name:'editTask', id:'${t.id}'})">編輯勤務</button>` : ""}
+    </div>
     <div class="detail-head">
       <div class="task-top">
         <p class="task-title">${esc(t.title)}</p>
@@ -1468,7 +1531,8 @@ function viewAdminTasks(){
           <div class="name">${esc(t.title)}</div>
           <div class="sub">${esc(t.vehicle||'—')} · ${unitLabel(t.unit)} · ${STATUS_LABEL[s]}</div>
         </div>
-        <div style="display:flex; gap:6px;">
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          ${canEditTask(p, t) ? `<button class="icon-btn" onclick="window.__nav({name:'editTask', id:'${t.id}'})">編輯</button>` : ""}
           ${s !== "completed" ? `<button class="icon-btn" onclick="window.__forceEndTask('${t.id}')">強制結束</button>` : ""}
           ${canDelete ? `<button class="icon-btn danger" onclick="window.__deleteTask('${t.id}')">刪除</button>` : ""}
         </div>
@@ -1628,6 +1692,7 @@ const ROUTE_VIEWS = {
   home: viewHome,
   tasks: viewTasks,
   createTask: viewCreateTask,
+  editTask: () => viewEditTask(state.route.id),
   task: () => viewTaskDetail(state.route.id),
   records: viewRecords,
   stats: viewStats,
@@ -1795,6 +1860,19 @@ window.__createTask = (ev, unit) => {
   });
   ev.target.reset();
   nav({ name: "tasks" });
+};
+window.__saveTaskEdit = (ev, taskId) => {
+  ev.preventDefault();
+  const f = new FormData(ev.target);
+  const recorders = f.getAll("recorders");
+  const startMileage = f.get("startMileage");
+  updateTask(taskId, {
+    title: f.get("title"), vehicle: f.get("vehicle"), location: f.get("location"),
+    crewLeader: f.get("crewLeader"), driver: f.get("driver"), recorders,
+    startMileage: startMileage ? Number(startMileage) : null,
+    startFuel: f.get("startFuel"), notes: f.get("notes")
+  }).then(() => nav({ name: "task", id: taskId }))
+    .catch(err => showToast(`更新失敗：[${err.code||'?'}] ${err.message}`));
 };
 
 render();
