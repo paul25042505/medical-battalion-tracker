@@ -293,7 +293,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-49-rank-everywhere";
+const BUILD_TAG = "2026-07-03-50-fix-tel-link-block";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -946,14 +946,18 @@ function crewLabel(name, unit){
   if (!name) return esc('—');
   const match = findPersonnel(name, unit);
   const phone = (match && match.phone) || "";
-  return `${nameWithRank(name, unit)}${phone ? ` <a href="tel:${esc(phone)}" onclick="event.stopPropagation()" style="color:var(--blue); text-decoration:none;">${esc(phone)}</a>` : ''}`;
+  // 電話連結本身不能掛 onclick——iOS Safari 只要偵測到 tel: 連結上有任何 JS
+  // 事件處理器，就會當成「自動撥號」跳出「已阻擋此網站自動開始通話」的警示，
+  // 就算內容只是 stopPropagation 也一樣。改成讓外層卡片的 onclick 自己判斷
+  // 點擊來源是不是連結，是的話就不要導頁，藉此避免跟卡片本身的點擊衝突。
+  return `${nameWithRank(name, unit)}${phone ? ` <a href="tel:${esc(phone)}" style="color:var(--blue); text-decoration:none;">${esc(phone)}</a>` : ''}`;
 }
 function taskCard(t){
   const s = deriveStatus(t.id);
   const evs = taskEvents(t.id);
   const last = evs[evs.length-1];
   return `
-  <div class="task-card ${taskCardClass(s)}" onclick="window.__nav({name:'task', id:'${t.id}'})">
+  <div class="task-card ${taskCardClass(s)}" onclick="if(!event.target.closest('a')) window.__nav({name:'task', id:'${t.id}'})">
     <div class="task-top">
       <div>
         <p class="task-title">${esc(t.title)}</p>
