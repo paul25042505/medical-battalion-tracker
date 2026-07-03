@@ -52,7 +52,7 @@
     display:flex; align-items:baseline; gap:8px;
   }
   .topbar-sub .name{font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:21px; font-weight:700;}
-  .topbar-sub .rank{font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:14.5px; font-weight:500; color:var(--muted);}
+  .topbar-sub .rank{font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:14.5px; font-weight:500; color:var(--text);}
   .topbar-icon-btn{background:none; border:none; color:var(--text); padding:4px; display:flex; align-items:center; justify-content:center;}
   @keyframes pulse{
     0%{box-shadow:0 0 0 0 rgba(52,199,89,0.5);}
@@ -302,7 +302,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-26-surface-errors";
+const BUILD_TAG = "2026-07-03-27-ux-revamp";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -455,12 +455,12 @@ const state = {
   personnel: [], vehicles: [], recorders: [],
   route: { name: "home" }, adminTab: "tasks",
   reportDraft: null, // { taskId, type }
-  recordsFilter: { date: "", vehicle: "", title: "", location: "", status: "", person: "" },
+  recordsFilter: { period: "all", unit: "", vehicle: "", title: "", location: "", status: "", person: "" },
   tasksTab: "all",
   statsPeriod: "today",
   reportWizard: { step: 1, taskId: "" }, // 底部導覽「回報」精靈流程狀態
   profileEditing: false,
-  baseDataUnit: "", baseDataTab: "personnel", // 基礎資料管理頁籤狀態
+  baseDataUnit: "", baseDataTab: "personnel", baseDataEditingId: null, // 基礎資料管理頁籤狀態
   createTaskUnit: "" // 建立勤務頁面：admin/高勤官可切換的單位
 };
 let tasksPoll = null, eventsPoll = null, profilePoll = null;
@@ -618,6 +618,13 @@ async function toggleBaseDataActive(coll, id, active){
 async function deleteBaseData(coll, id){
   await fsDeleteDoc(`${coll}/${id}`);
   showToast("已刪除");
+  if (coll === "personnel" && personnelPoll) personnelPoll.refreshNow();
+  if (coll === "vehicles" && vehiclesPoll) vehiclesPoll.refreshNow();
+  if (coll === "recorders" && recordersPoll) recordersPoll.refreshNow();
+}
+async function updateBaseData(coll, id, fields){
+  await fsSetDoc(`${coll}/${id}`, fields);
+  showToast("已更新");
   if (coll === "personnel" && personnelPoll) personnelPoll.refreshNow();
   if (coll === "vehicles" && vehiclesPoll) vehiclesPoll.refreshNow();
   if (coll === "recorders" && recordersPoll) recordersPoll.refreshNow();
@@ -876,13 +883,17 @@ function viewHome(){
       <div style="margin-top:8px;">${statusBadge(deriveStatus(ongoing.id))}</div>
     </div>` : "";
 
-  const quick = [
-    { iconName:"tasks", label:"任務中", route:{name:"tasks"}, bg:"#FFF2E0", fg:"#B45F00" },
-    { iconName:"plus", label:"建立勤務", route:{name:"createTask"}, show: canCreateTask(p), bg:"#E6F9EC", fg:"#177A34" },
-    { iconName:"records", label:"勤務紀錄", route:{name:"records"}, bg:"#F2E9FE", fg:"#6B23C7" },
-    { iconName:"bell", label:"通知", route:{name:"notifications"}, bg:"#FFE9E8", fg:"#C62828" },
-    { iconName:"user", label:"個人資料", route:{name:"profile"}, bg:"#E8F1FF", fg:"#0056C7" }
-  ].filter(q => q.show !== false);
+  const scopedVehicles = (canSeeAllUnits(p) ? state.vehicles : state.vehicles.filter(v => v.unit === myUnit(p)))
+    .slice()
+    .sort((a,b) => {
+      const aActive = tasks.some(t => t.vehicle === a.plate && deriveStatus(t.id) !== "completed");
+      const bActive = tasks.some(t => t.vehicle === b.plate && deriveStatus(t.id) !== "completed");
+      if (aActive !== bActive) return aActive ? -1 : 1;
+      return unitLabel(a.unit).localeCompare(unitLabel(b.unit));
+    });
+  const fleetSection = scopedVehicles.length
+    ? scopedVehicles.map(v => vehicleDynamicCard(v, tasks)).join("")
+    : `<div class="empty">尚未建立車輛資料，請至基礎資料管理新增</div>`;
 
   return `
     <div class="home-date">${fmtDate(today)}</div>
@@ -897,14 +908,32 @@ function viewHome(){
       <div class="stat-tile t-orange"><div class="num">${todayActive.length}</div><div class="lbl">進行中</div></div>
       <div class="stat-tile t-green"><div class="num">${todayDone.length}</div><div class="lbl">已完成</div></div>
     </div>
-    <div class="section-label">快捷功能</div>
-    <div class="quick-grid">
-      ${quick.map(q => `
-        <button class="quick-btn" onclick='window.__nav(${JSON.stringify(q.route)})'>
-          <span class="quick-icon-wrap" style="background:${q.bg}; color:${q.fg};">${icon(q.iconName,22)}</span>${q.label}
-        </button>`).join("")}
-    </div>
+    <div class="section-label">所有車輛動態</div>
+    ${fleetSection}
   `;
+}
+function vehicleDynamicCard(v, tasks){
+  const activeTask = tasks.find(t => t.vehicle === v.plate && deriveStatus(t.id) !== "completed");
+  const s = activeTask ? deriveStatus(activeTask.id) : null;
+  const cls = activeTask ? taskCardClass(s) : "s-pending";
+  return `
+  <div class="task-card ${cls}" ${activeTask ? `onclick="window.__nav({name:'task', id:'${activeTask.id}'})"` : ''}>
+    <div class="task-top">
+      <div>
+        <p class="task-title">${esc(v.plate)}${v.type ? ' · ' + esc(v.type) : ''}</p>
+        <div class="task-meta">${unitLabel(v.unit)}${v.active===false ? '（已停用）' : ''}</div>
+      </div>
+      ${activeTask ? statusBadge(s) : `<span class="badge pending"><span class="bdot"></span>待命中</span>`}
+    </div>
+    ${activeTask ? `
+    <div class="task-crew">
+      <span>任務：${esc(activeTask.title)}</span>
+    </div>
+    <div class="task-foot">
+      <span>${esc(activeTask.location||'—')}</span>
+      <span>車長 ${esc(activeTask.crewLeader||'—')} · 駕駛 ${esc(activeTask.driver||'—')}</span>
+    </div>` : ""}
+  </div>`;
 }
 
 /* =========================================================
@@ -930,6 +959,7 @@ function viewTasks(){
     </div>`;
 
   return `
+    <button class="btn-primary" style="display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:18px;" onclick="window.__nav({name:'report'})">${icon('alert',18)} 快速回報</button>
     ${tabs}
     ${shown.length ? shown.map(taskCard).join("") : `<div class="empty">目前沒有符合條件的勤務</div>`}
     ${canCreateTask(p) ? `<button class="fab" onclick="window.__nav({name:'createTask'})">${icon('plus',26)}</button>` : ""}
@@ -1037,6 +1067,7 @@ function viewReport(){
   if (w.step === 1) {
     const t = state.tasks.find(x => x.id === w.taskId);
     return `
+      <div class="back-row"><button onclick="window.__nav({name:'tasks'})">‹ 返回任務</button></div>
       ${stepperHtml(1)}
       <div class="section-label">選擇任務</div>
       ${reportable.length ? `
@@ -1201,36 +1232,50 @@ function viewTaskDetail(taskId){
 /* =========================================================
    15) 畫面：勤務紀錄搜尋
    ========================================================= */
+const RECORDS_PERIODS = [
+  { key:"all", label:"全部" }, { key:"today", label:"本日" }, { key:"week", label:"本週" }, { key:"month", label:"本月" }
+];
 function viewRecords(){
   const p = state.profile;
   const f = state.recordsFilter;
   let tasks = visibleTasks(p, state.tasks);
 
-  if (f.date) tasks = tasks.filter(t => {
-    const d = new Date(t.createdAt||0);
-    const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    return iso === f.date;
-  });
-  if (f.vehicle) tasks = tasks.filter(t => (t.vehicle||"").toLowerCase().includes(f.vehicle.toLowerCase()));
+  tasks = tasksInPeriod(tasks, f.period);
+  if (f.unit) tasks = tasks.filter(t => t.unit === f.unit);
+  if (f.vehicle) tasks = tasks.filter(t => t.vehicle === f.vehicle);
   if (f.title) tasks = tasks.filter(t => (t.title||"").toLowerCase().includes(f.title.toLowerCase()));
   if (f.location) tasks = tasks.filter(t => (t.location||"").toLowerCase().includes(f.location.toLowerCase()));
   if (f.status) tasks = tasks.filter(t => deriveStatus(t.id) === f.status);
-  if (f.person) tasks = tasks.filter(t => {
-    const q = f.person.toLowerCase();
-    return (t.crewLeader||"").toLowerCase().includes(q) || (t.driver||"").toLowerCase().includes(q);
-  });
+  if (f.person) tasks = tasks.filter(t => t.crewLeader === f.person || t.driver === f.person);
 
   const statusOptions = ["", ...STATUS_ORDER].map(s => `<option value="${s}" ${f.status===s?'selected':''}>${s?STATUS_LABEL[s]:'全部狀態'}</option>`).join("");
 
+  // 車號／人員下拉選單：依目前單位篩選（或全部單位）動態列出，不再手打文字搜尋
+  const vehiclePool = (f.unit ? state.vehicles.filter(v => v.unit === f.unit) : state.vehicles);
+  const personPool = (f.unit ? state.personnel.filter(x => x.unit === f.unit) : state.personnel);
+  const vehicleOptions = [`<option value="">全部車號</option>`, ...vehiclePool.map(v => `<option value="${esc(v.plate)}" ${f.vehicle===v.plate?'selected':''}>${esc(v.plate)}</option>`)].join("");
+  const personOptions = [`<option value="">全部人員</option>`, ...personPool.map(x => `<option value="${esc(x.name)}" ${f.person===x.name?'selected':''}>${esc(x.name)}</option>`)].join("");
+
+  const periodTabs = `
+    <div class="tabs2">
+      ${RECORDS_PERIODS.map(pd => `<div class="tab2 ${f.period===pd.key?'active':''}" onclick="window.__setRecordsFilter('period','${pd.key}')">${pd.label}</div>`).join("")}
+    </div>`;
+  const unitTabs = canSeeAllUnits(p) ? `
+    <div class="tabs2">
+      <div class="tab2 ${!f.unit?'active':''}" onclick="window.__setRecordsFilter('unit','')">全部單位</div>
+      ${UNITS.map(u => `<div class="tab2 ${f.unit===u.code?'active':''}" onclick="window.__setRecordsFilter('unit','${u.code}')">${u.label}</div>`).join("")}
+    </div>` : "";
+
   return `
     <div class="section-label">搜尋條件</div>
+    ${periodTabs}
+    ${unitTabs}
     <div class="search-grid">
-      <div class="field"><label>日期</label><input type="date" value="${f.date}" oninput="window.__setRecordsFilter('date', this.value)"></div>
-      <div class="field"><label>車號</label><input value="${esc(f.vehicle)}" oninput="window.__setRecordsFilter('vehicle', this.value)"></div>
-      <div class="field"><label>任務名稱</label><input value="${esc(f.title)}" oninput="window.__setRecordsFilter('title', this.value)"></div>
-      <div class="field"><label>地點</label><input value="${esc(f.location)}" oninput="window.__setRecordsFilter('location', this.value)"></div>
+      <div class="field"><label>車號</label><select onchange="window.__setRecordsFilter('vehicle', this.value)">${vehicleOptions}</select></div>
+      <div class="field"><label>人員（車長/駕駛）</label><select onchange="window.__setRecordsFilter('person', this.value)">${personOptions}</select></div>
       <div class="field"><label>狀態</label><select onchange="window.__setRecordsFilter('status', this.value)">${statusOptions}</select></div>
-      <div class="field"><label>人員（車長/駕駛）</label><input value="${esc(f.person)}" oninput="window.__setRecordsFilter('person', this.value)"></div>
+      <div class="field"><label>任務名稱</label><input value="${esc(f.title)}" oninput="window.__setRecordsFilter('title', this.value)"></div>
+      <div class="field full"><label>地點</label><input value="${esc(f.location)}" oninput="window.__setRecordsFilter('location', this.value)"></div>
     </div>
     <div class="section-label">結果 · ${tasks.length}</div>
     ${tasks.length ? tasks.map(taskCard).join("") : `<div class="empty">找不到符合條件的勤務紀錄</div>`}
@@ -1357,9 +1402,8 @@ function viewProfile(){
       </form>
     `;
   }
-  const avatar = (state.user && state.user.photoURL)
-    ? `<img class="hub-avatar" src="${state.user.photoURL}" alt="" referrerpolicy="no-referrer">`
-    : `<div class="hub-avatar">${icon('user',40)}</div>`;
+  const surname = (p.displayName || p.email || '?').trim().charAt(0) || '?';
+  const avatar = `<div class="hub-avatar" style="background:var(--blue); color:#fff; font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:36px; font-weight:700;">${esc(surname)}</div>`;
 
   const quick = [
     { iconName:"bell", label:"通知", route:{name:"notifications"}, bg:"#FFE9E8", fg:"#C62828" },
@@ -1497,6 +1541,7 @@ function viewAdminBaseData(){
       ${BASEDATA_TABS.map(t => `<div class="tab2 ${state.baseDataTab===t.key?'active':''}" onclick="window.__setBaseDataTab('${t.key}')">${t.label}</div>`).join("")}
     </div>`;
 
+  const editingId = state.baseDataEditingId;
   let body = "";
   if (state.baseDataTab === "personnel") {
     const rows = state.personnel.filter(x => x.unit === unit);
@@ -1506,10 +1551,17 @@ function viewAdminBaseData(){
         <input name="title" placeholder="職稱">
         <button class="icon-btn" type="submit">新增</button>
       </form>
-      ${rows.length ? rows.map(x => `
+      ${rows.length ? rows.map(x => editingId === x.id ? `
+        <form class="quickform" onsubmit="window.__saveBaseData(event,'personnel','${x.id}')">
+          <input name="name" placeholder="姓名" required value="${esc(x.name)}">
+          <input name="title" placeholder="職稱" value="${esc(x.title||'')}">
+          <button class="icon-btn" type="submit">儲存</button>
+          <button class="icon-btn" type="button" onclick="window.__cancelEditBaseData()">取消</button>
+        </form>` : `
         <div class="admin-row">
           <div><div class="name">${esc(x.name)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.title||'—')}</div></div>
-          <div style="display:flex; gap:6px;">
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="icon-btn" onclick="window.__editBaseData('${x.id}')">編輯</button>
             <button class="icon-btn" onclick="window.__toggleBaseData('personnel','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
             <button class="icon-btn danger" onclick="window.__deleteBaseData('personnel','${x.id}')">刪除</button>
           </div>
@@ -1522,10 +1574,17 @@ function viewAdminBaseData(){
         <input name="type" placeholder="車種">
         <button class="icon-btn" type="submit">新增</button>
       </form>
-      ${rows.length ? rows.map(x => `
+      ${rows.length ? rows.map(x => editingId === x.id ? `
+        <form class="quickform" onsubmit="window.__saveBaseData(event,'vehicles','${x.id}')">
+          <input name="plate" placeholder="車號" required value="${esc(x.plate)}">
+          <input name="type" placeholder="車種" value="${esc(x.type||'')}">
+          <button class="icon-btn" type="submit">儲存</button>
+          <button class="icon-btn" type="button" onclick="window.__cancelEditBaseData()">取消</button>
+        </form>` : `
         <div class="admin-row">
           <div><div class="name">${esc(x.plate)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.type||'—')}</div></div>
-          <div style="display:flex; gap:6px;">
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="icon-btn" onclick="window.__editBaseData('${x.id}')">編輯</button>
             <button class="icon-btn" onclick="window.__toggleBaseData('vehicles','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
             <button class="icon-btn danger" onclick="window.__deleteBaseData('vehicles','${x.id}')">刪除</button>
           </div>
@@ -1537,10 +1596,16 @@ function viewAdminBaseData(){
         <input name="code" placeholder="編號" required>
         <button class="icon-btn" type="submit">新增</button>
       </form>
-      ${rows.length ? rows.map(x => `
+      ${rows.length ? rows.map(x => editingId === x.id ? `
+        <form class="quickform" onsubmit="window.__saveBaseData(event,'recorders','${x.id}')">
+          <input name="code" placeholder="編號" required value="${esc(x.code)}">
+          <button class="icon-btn" type="submit">儲存</button>
+          <button class="icon-btn" type="button" onclick="window.__cancelEditBaseData()">取消</button>
+        </form>` : `
         <div class="admin-row">
           <div><div class="name">${esc(x.code)}${x.active===false?'（已停用）':''}</div></div>
-          <div style="display:flex; gap:6px;">
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="icon-btn" onclick="window.__editBaseData('${x.id}')">編輯</button>
             <button class="icon-btn" onclick="window.__toggleBaseData('recorders','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
             <button class="icon-btn danger" onclick="window.__deleteBaseData('recorders','${x.id}')">刪除</button>
           </div>
@@ -1610,8 +1675,7 @@ const ROUTE_VIEWS = {
 };
 const NAV_ITEMS = [
   { name:"home", iconName:"home", label:"首頁", accent:"#007AFF" },
-  { name:"tasks", iconName:"tasks", label:"任務中", accent:"#FF9500" },
-  { name:"report", iconName:"alert", label:"回報", accent:"#FF3B30" },
+  { name:"tasks", iconName:"tasks", label:"任務", accent:"#FF9500" },
   { name:"records", iconName:"records", label:"紀錄", accent:"#6B23C7" },
   { name:"profile", iconName:"user", label:"更多", accent:"#34C759" }
 ];
@@ -1692,8 +1756,8 @@ window.__setRole = (uid) => {
   const unit = document.getElementById(`unit-${uid}`).value;
   setUserRole(uid, role, unit).then(() => { state._usersCache = null; render(); });
 };
-window.__setBaseDataUnit = (code) => { state.baseDataUnit = code; render(); };
-window.__setBaseDataTab = (key) => { state.baseDataTab = key; render(); };
+window.__setBaseDataUnit = (code) => { state.baseDataUnit = code; state.baseDataEditingId = null; render(); };
+window.__setBaseDataTab = (key) => { state.baseDataTab = key; state.baseDataEditingId = null; render(); };
 function baseDataErr(err){ showToast(`操作失敗：[${err.code||'?'}] ${err.message||err}`); console.error("基礎資料操作失敗", err); }
 window.__addPersonnel = (ev, unit) => {
   ev.preventDefault();
@@ -1715,6 +1779,16 @@ window.__addRecorder = (ev, unit) => {
 };
 window.__toggleBaseData = (coll, id, active) => toggleBaseDataActive(coll, id, active).catch(baseDataErr);
 window.__deleteBaseData = (coll, id) => { if (confirm("確定刪除此筆資料？此動作無法復原。")) deleteBaseData(coll, id).catch(baseDataErr); };
+window.__editBaseData = (id) => { state.baseDataEditingId = id; render(); };
+window.__cancelEditBaseData = () => { state.baseDataEditingId = null; render(); };
+window.__saveBaseData = (ev, coll, id) => {
+  ev.preventDefault();
+  const f = new FormData(ev.target);
+  const fields = coll === "personnel" ? { name: f.get("name"), title: f.get("title") }
+    : coll === "vehicles" ? { plate: f.get("plate"), type: f.get("type") }
+    : { code: f.get("code") };
+  updateBaseData(coll, id, fields).then(() => { state.baseDataEditingId = null; render(); }).catch(baseDataErr);
+};
 window.__editProfile = () => { state.profileEditing = true; render(); };
 window.__cancelEditProfile = () => { state.profileEditing = false; render(); };
 window.__saveProfile = (ev) => {
