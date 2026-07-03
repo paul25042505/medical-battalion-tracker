@@ -293,7 +293,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-47-home-tasks-not-vehicles";
+const BUILD_TAG = "2026-07-03-48-crew-rank-label";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -928,15 +928,19 @@ function taskCardClass(statusKey){
 function findPersonnelByName(pool, name){
   return pool.find(x => x.name === name) || pool.find(x => x.name && name.startsWith(x.name));
 }
-function personnelPhone(name, unit){
-  if (!name) return "";
+function findPersonnel(name, unit){
+  if (!name) return null;
   const scoped = unit ? state.personnel.filter(x => x.unit === unit) : state.personnel;
-  const match = findPersonnelByName(scoped, name) || (unit ? findPersonnelByName(state.personnel, name) : null);
-  return (match && match.phone) || "";
+  return findPersonnelByName(scoped, name) || (unit ? findPersonnelByName(state.personnel, name) : null);
 }
+// 姓名 + 階級（若姓名本身沒有帶階級，如新版下拉選單只存姓名，才補上人員名冊的階級）+
+// 電話（可點擊撥打）。
 function crewLabel(name, unit){
-  const phone = personnelPhone(name, unit);
-  return `${esc(name||'—')}${phone ? ` <a href="tel:${esc(phone)}" onclick="event.stopPropagation()" style="color:var(--blue); text-decoration:none;">${esc(phone)}</a>` : ''}`;
+  if (!name) return esc('—');
+  const match = findPersonnel(name, unit);
+  const rank = (match && match.title && !name.includes(match.title)) ? ' ' + match.title : '';
+  const phone = (match && match.phone) || "";
+  return `${esc(name)}${esc(rank)}${phone ? ` <a href="tel:${esc(phone)}" onclick="event.stopPropagation()" style="color:var(--blue); text-decoration:none;">${esc(phone)}</a>` : ''}`;
 }
 function taskCard(t){
   const s = deriveStatus(t.id);
