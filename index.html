@@ -293,7 +293,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-36-tasks-view-only";
+const BUILD_TAG = "2026-07-03-37-hide-ops";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -520,11 +520,14 @@ function canManageUsers(p){ return myRole(p) === "admin"; }
 function canManageTasks(p){ const r = myRole(p); return r === "admin" || r === "duty_officer" || r === "commander"; }
 function canManageBaseData(p){ return canManageTasks(p); }
 function canSeeAllTasks(p){ return canSeeAllUnits(p); }
-function canDeleteTask(p){ const r = myRole(p); return r === "admin" || r === "duty_officer"; } // 主官管只能建立，不可編輯/刪除
+// 高勤官、主官管對勤務只有查看權限：不可編輯、不可強制結束，僅 admin 可操作。
+function canDeleteTask(p){ return myRole(p) === "admin"; }
+function canForceEndTask(p){ return myRole(p) === "admin"; }
 function canCreateTask(p){ const r = myRole(p); return r === "admin" || r === "duty_officer" || r === "commander"; } // 一般成員不可建立勤務，僅可回報
-// 高勤官、主官管對勤務只有查看權限，不可編輯；僅 admin 可編輯勤務內容。
 function canEditTask(p, t){ return myRole(p) === "admin"; }
-function canReport(p, task){ return isActive(p); } // 回報開放給所有已審核成員（受限於自己單位可見的勤務）
+// 回報（出勤/抵達現場/返營/抵達營區）僅開放給實際執行勤務的一般成員，以及 admin（後台支援用）；
+// 高勤官、主官管屬於督導/查看角色，不進行第一線回報操作。
+function canReport(p, task){ const r = myRole(p); return r === "admin" || r === "member"; }
 function visibleTasks(p, tasks){
   if (!p) return [];
   if (canSeeAllUnits(p)) return tasks;
@@ -1178,8 +1181,7 @@ function viewTaskDetail(taskId){
         <div class="k">建立時間</div><div class="v">${fmtTime(new Date(t.createdAt||0).getTime())}</div>
       </div>
     </div>
-    <div class="section-label">回報操作</div>
-    ${reportSection}
+    ${canReport(p, t) ? `<div class="section-label">回報操作</div>${reportSection}` : ""}
     <div class="section-label">勤務資訊</div>
     <div class="detail-head">
       <div class="kv">
@@ -1533,7 +1535,7 @@ function viewAdminTasks(){
         </div>
         <div style="display:flex; gap:6px; flex-wrap:wrap;">
           ${canEditTask(p, t) ? `<button class="icon-btn" onclick="window.__nav({name:'editTask', id:'${t.id}'})">編輯</button>` : ""}
-          ${s !== "completed" ? `<button class="icon-btn" onclick="window.__forceEndTask('${t.id}')">強制結束</button>` : ""}
+          ${s !== "completed" && canForceEndTask(p) ? `<button class="icon-btn" onclick="window.__forceEndTask('${t.id}')">強制結束</button>` : ""}
           ${canDelete ? `<button class="icon-btn danger" onclick="window.__deleteTask('${t.id}')">刪除</button>` : ""}
         </div>
       </div>`;

@@ -59,17 +59,19 @@ service cloud.firestore {
       allow read: if isStaff() || sameUnit(resource.data.unit);
       // 一般成員不可建立勤務，僅可回報；建立限管理員、高勤官、該單位主官管。
       allow create: if isStaff() || (isCommander() && sameUnit(request.resource.data.unit));
-      // 高勤官、主官管對勤務只有查看權限，不可編輯內容；僅 admin 可編輯。
+      // 高勤官、主官管對勤務只有查看權限：不可編輯、不可刪除（含強制結束），僅 admin 可操作。
       allow update: if isAdmin();
-      allow delete: if isStaff(); // 主官管不可刪除勤務
+      allow delete: if isAdmin();
     }
 
     match /events/{eventId} {
-      // events 皆綁定 taskId 對應的勤務單位；讀取/建立時比對該勤務的 unit，
-      // 確保「隱藏按鈕」之外，伺服器端也真正限制資料存取範圍。
+      // events 皆綁定 taskId 對應的勤務單位；讀取時比對該勤務的 unit，確保伺服器端也真正
+      // 限制資料存取範圍，不只是前端隱藏按鈕。
+      // 回報（建立 event）僅開放給一般成員（限自己單位的勤務）與 admin（後台支援／強制結束用）；
+      // 高勤官、主官管屬於督導/查看角色，不進行第一線回報操作。
       allow read: if isStaff() || sameUnit(get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.unit);
-      allow create: if isActive() &&
-                    (isStaff() || sameUnit(get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.unit));
+      allow create: if isAdmin() ||
+                    (isSignedIn() && myRole() == 'member' && sameUnit(get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.unit));
       allow update, delete: if false;
     }
   }
