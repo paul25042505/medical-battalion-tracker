@@ -75,12 +75,15 @@
   }
   .topbar-sub{
     color:var(--text); min-width:0;
-    display:flex; align-items:baseline; gap:8px;
+    display:flex; align-items:center; gap:9px;
   }
   .topbar-sub .name{font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:21px; font-weight:700;}
-  .topbar-sub .rank{font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:14.5px; font-weight:500; color:var(--text);}
-  .topbar-icon-btn{background:none; border:none; color:var(--text); width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center;}
-  .topbar-icon-btn:active{background:var(--panel-2); transform:scale(0.92);}
+  .topbar-sub .rank{
+    font-family:var(--sans); font-size:12px; font-weight:700; color:var(--muted);
+    background:var(--panel-2); padding:3px 10px; border-radius:999px; letter-spacing:0.02em;
+  }
+  .topbar-icon-btn{background:var(--panel-2); border:none; color:var(--text); width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;}
+  .topbar-icon-btn:active{background:var(--border); transform:scale(0.92);}
 
   main{flex:1; padding:16px 16px 100px 16px; max-width:680px; width:100%; margin:0 auto;}
 
@@ -231,8 +234,14 @@
   .role-controls{display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; width:100%;}
   .role-controls select{flex:1 1 120px; min-width:0;}
   .tabs2{display:flex; gap:4px; margin-bottom:18px; background:var(--panel-2); padding:4px; border-radius:var(--radius-md);}
-  .tab2{flex:1; text-align:center; padding:10px; border-radius:calc(var(--radius-md) - 4px); font-size:13.5px; font-weight:600; color:var(--muted);}
+  .tab2{flex:1; text-align:center; padding:10px; border-radius:calc(var(--radius-md) - 4px); font-size:13.5px; font-weight:600; color:var(--muted); white-space:nowrap;}
   .tab2.active{background:var(--panel); color:var(--text); box-shadow:var(--shadow-xs);}
+  .tab2-count{margin-left:5px; opacity:0.65; font-weight:700;}
+  /* 頁籤數量較多（例如任務狀態篩選）時改成可橫向滑動的膠囊列，每個頁籤依內容寬度排列，
+     不會被擠壓到文字換行。 */
+  .tabs2.scroll{overflow-x:auto; scrollbar-width:none;}
+  .tabs2.scroll::-webkit-scrollbar{display:none;}
+  .tabs2.scroll .tab2{flex:0 0 auto; padding:9px 15px;}
 
   /* ---- records search ---- */
   .search-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;}
@@ -344,7 +353,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-62-arrival-location-field";
+const BUILD_TAG = "2026-07-04-63-header-polish-scrollable-tabs";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1253,10 +1262,10 @@ function viewTasks(){
   const shown = state.tasksTab === "all" ? all : all.filter(t => deriveStatus(t.id) === state.tasksTab);
 
   const tabs = `
-    <div class="tabs2" style="overflow-x:auto;">
+    <div class="tabs2 scroll">
       ${TASKS_TABS.map(tb => `
         <div class="tab2 ${state.tasksTab===tb.key?'active':''}" onclick="window.__setTasksTab('${tb.key}')">
-          ${tb.label} · ${tb.key==='all' ? all.length : all.filter(t=>deriveStatus(t.id)===tb.key).length}
+          ${tb.label}<span class="tab2-count">${tb.key==='all' ? all.length : all.filter(t=>deriveStatus(t.id)===tb.key).length}</span>
         </div>`).join("")}
     </div>`;
 
