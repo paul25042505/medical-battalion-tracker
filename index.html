@@ -30,9 +30,20 @@
   body{ padding-bottom:env(safe-area-inset-bottom); }
   #app{min-height:100vh; display:flex; flex-direction:column;}
 
+  /* ---- 固定頂部區塊（預覽 banner + topbar 一起 sticky，避免疊在一起） ---- */
+  .sticky-head{position:sticky; top:0; z-index:20;}
+  .preview-banner{
+    background:var(--amber); color:#1A1200;
+    padding:10px 14px; padding-top:calc(10px + env(safe-area-inset-top));
+    display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;
+    font-size:13px; font-weight:700; text-align:center;
+  }
+  .preview-banner button{
+    background:#1A1200; color:#fff; border:none; border-radius:8px; padding:6px 12px; font-size:12.5px; font-weight:700;
+  }
+
   /* ---- top status strip ---- */
   .topbar{
-    position:sticky; top:0; z-index:20;
     background:linear-gradient(180deg, var(--panel) 0%, var(--topbar-fade) 100%);
     backdrop-filter:blur(8px);
     border-bottom:1px solid var(--border);
@@ -122,13 +133,6 @@
   .stat-tile.t-orange{background:#FFF2E0; border-color:#FFE1B8;} .stat-tile.t-orange .num{color:#B45F00;} .stat-tile.t-orange .lbl{color:#B45F00; opacity:0.75;}
   .stat-tile.t-green{background:#E6F9EC; border-color:#C6F0D3;} .stat-tile.t-green .num{color:#177A34;} .stat-tile.t-green .lbl{color:#177A34; opacity:0.75;}
   .stat-tile.t-purple{background:#F2E9FE; border-color:#E1CDFB;} .stat-tile.t-purple .num{color:#6B23C7;} .stat-tile.t-purple .lbl{color:#6B23C7; opacity:0.75;}
-  .current-banner{
-    background:linear-gradient(135deg, rgba(255,149,0,0.16), rgba(255,59,48,0.12));
-    border:1px solid var(--amber); border-radius:16px; padding:20px; margin-bottom:20px; cursor:pointer;
-  }
-  .current-banner .cb-label{font-family:var(--mono); font-size:12.5px; color:var(--amber); letter-spacing:0.1em; margin-bottom:8px;}
-  .current-banner .task-title{font-size:20px;}
-  .quick-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:12px;}
   .quick-btn{
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px;
     background:var(--panel-2); border:1px solid var(--border); border-radius:14px; padding:18px 8px;
@@ -198,7 +202,7 @@
   .role-controls{display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; width:100%;}
   .role-controls select{flex:1 1 120px; min-width:0;}
   .quickform{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;}
-  .quickform input{flex:1 1 130px; min-width:0; background:var(--panel-2); border:1px solid var(--border); color:var(--text); border-radius:10px; padding:12px; font-size:15px;}
+  .quickform input, .quickform select{flex:1 1 130px; min-width:0; background:var(--panel-2); border:1px solid var(--border); color:var(--text); border-radius:10px; padding:12px; font-size:15px;}
   .quickform button{flex:0 0 auto;}
   .tabs2{display:flex; gap:6px; margin-bottom:18px; background:var(--panel-2); padding:4px; border-radius:12px;}
   .tab2{flex:1; text-align:center; padding:11px; border-radius:9px; font-size:13.5px; font-weight:600; color:var(--muted);}
@@ -208,6 +212,13 @@
   .search-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;}
   .search-grid .field{margin-bottom:0;}
   .search-grid .full{grid-column:1 / -1;}
+  .filters-toggle{
+    display:flex; align-items:center; justify-content:space-between; width:100%;
+    background:none; border:none; padding:12px 2px; margin-bottom:6px;
+    color:var(--blue); font-weight:700; font-size:15px; font-family:var(--sans);
+  }
+  .filters-toggle .chev{transition:transform 0.2s;}
+  .filters-toggle.open .chev{transform:rotate(180deg);}
 
   /* ---- profile / 更多 ---- */
   .profile-card{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:20px; margin-bottom:18px; box-shadow:var(--card-shadow);}
@@ -247,25 +258,6 @@
   .stack-legend .leg-name{flex:1; color:var(--text);}
   .stack-legend .leg-val{color:var(--text); font-weight:600; font-family:var(--mono); font-size:14px;}
 
-  /* ---- 回報精靈 ---- */
-  .stepper{display:flex; align-items:center; justify-content:center; gap:9px; margin-bottom:22px;}
-  .stepper .step-dot{
-    width:30px; height:30px; border-radius:50%; background:var(--panel-2); border:1px solid var(--border);
-    display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:var(--muted);
-  }
-  .stepper .step-dot.done{background:var(--green); border-color:var(--green); color:#fff;}
-  .stepper .step-dot.current{background:var(--blue); border-color:var(--blue); color:#fff;}
-  .stepper .step-line{width:30px; height:2px; background:var(--border);}
-  .big-status-btn{
-    display:flex; align-items:center; gap:14px; width:100%; padding:18px; border-radius:14px; border:none;
-    color:#fff; font-size:16px; font-weight:700; margin-bottom:12px; text-align:left;
-  }
-  .big-status-text{display:flex; flex-direction:column; gap:3px;}
-  .big-status-text .t1{font-size:16px; font-weight:700;}
-  .big-status-text .t2{font-size:12.5px; font-weight:500; opacity:0.85;}
-  .success-card{text-align:center; padding:36px 22px;}
-  .success-card .check{width:64px; height:64px; border-radius:50%; background:var(--green); color:#fff; display:flex; align-items:center; justify-content:center; margin:0 auto 18px auto;}
-
   /* ---- bottom nav ---- */
   .bottomnav{
     position:fixed; left:0; right:0; bottom:0; z-index:30;
@@ -302,7 +294,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-27-ux-revamp";
+const BUILD_TAG = "2026-07-03-28-ranks-preview";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -448,6 +440,14 @@ const UNITS = [
 function unitLabel(code){ return (UNITS.find(u => u.code === code) || {}).label || code || "未設定"; }
 
 /* =========================================================
+   2c) 階級（依權重排序，數字越小階級越高）
+   ========================================================= */
+const RANKS = ["中校","少校","上尉","中尉","少尉","士官長","上士","中士","下士","上等兵","一等兵","二等兵"];
+function rankWeight(rank){ const i = RANKS.indexOf(rank); return i === -1 ? RANKS.length : i; }
+
+const VEHICLE_TYPES = ["城市型救護車","野戰型救護車","悍馬型救護車","中型戰術輪車","輕型戰術輪車","1.75貨車"];
+
+/* =========================================================
    3) 全域狀態
    ========================================================= */
 const state = {
@@ -456,12 +456,13 @@ const state = {
   route: { name: "home" }, adminTab: "tasks",
   reportDraft: null, // { taskId, type }
   recordsFilter: { period: "all", unit: "", vehicle: "", title: "", location: "", status: "", person: "" },
+  recordsFiltersExpanded: false,
   tasksTab: "all",
   statsPeriod: "today",
-  reportWizard: { step: 1, taskId: "" }, // 底部導覽「回報」精靈流程狀態
   profileEditing: false,
   baseDataUnit: "", baseDataTab: "personnel", baseDataEditingId: null, // 基礎資料管理頁籤狀態
-  createTaskUnit: "" // 建立勤務頁面：admin/高勤官可切換的單位
+  createTaskUnit: "", // 建立勤務頁面：admin/高勤官可切換的單位
+  previewActive: false, realRoleUnit: null // 角色權限預覽（僅限 admin）
 };
 let tasksPoll = null, eventsPoll = null, profilePoll = null;
 let personnelPoll = null, vehiclesPoll = null, recordersPoll = null;
@@ -524,6 +525,38 @@ function visibleTasks(p, tasks){
   if (!p) return [];
   if (canSeeAllUnits(p)) return tasks;
   return tasks.filter(t => t.unit === myUnit(p));
+}
+
+/* =========================================================
+   5b) 角色權限預覽（僅限 admin）
+   只切換畫面顯示用的 role/unit，讓管理員能檢視「換成別的角色/單位
+   登入後預設會看到什麼」，不會真的變更帳號、也不影響 Firestore
+   實際的讀寫權限（那些永遠依照真實登入帳號的 role/unit 判斷）。
+   ========================================================= */
+const PREVIEW_OPTIONS = [
+  { role:"duty_officer", unit:"", label:"高勤官" },
+  { role:"commander", unit:"hq", label:"營部主官管" },
+  { role:"member", unit:"hq", label:"營部一般成員" },
+  { role:"commander", unit:"co1", label:"第一連主官管" },
+  { role:"member", unit:"co1", label:"第一連一般成員" },
+  { role:"commander", unit:"co2", label:"第二連主官管" },
+  { role:"member", unit:"co2", label:"第二連一般成員" }
+];
+function startRolePreview(role, unit){
+  if (!state.realRoleUnit) state.realRoleUnit = { role: state.profile.role, unit: state.profile.unit };
+  state.profile.role = role;
+  state.profile.unit = unit || "";
+  state.previewActive = true;
+  nav({ name: "home" });
+}
+function endRolePreview(){
+  if (state.realRoleUnit) {
+    state.profile.role = state.realRoleUnit.role;
+    state.profile.unit = state.realRoleUnit.unit;
+    state.realRoleUnit = null;
+  }
+  state.previewActive = false;
+  nav({ name: "profile" });
 }
 
 /* =========================================================
@@ -658,7 +691,13 @@ onAuthStateChanged(auth, async (user) => {
       if (!p) return;
       const wasPending = state.profile && state.profile.role === "pending";
       const changed = changedSince("profile", p);
-      state.profile = { uid: user.uid, ...p };
+      if (state.previewActive) {
+        // 預覽模式進行中：背景保持同步真實角色/單位，但不覆蓋畫面上正在預覽的狀態
+        state.realRoleUnit = { role: p.role, unit: p.unit };
+        state.profile = { ...state.profile, uid: user.uid, displayName: p.displayName, email: p.email, rank: p.rank, createdAt: p.createdAt };
+      } else {
+        state.profile = { uid: user.uid, ...p };
+      }
       if (wasPending && state.profile.role !== "pending") startDataListeners();
       if (changed || (wasPending && state.profile.role !== "pending")) safeRender();
     }, 8000);
@@ -710,6 +749,7 @@ function cleanupListeners(){
   for (const k in lastJson) delete lastJson[k];
   tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = null;
   state.tasks = []; state.events = []; state.personnel = []; state.vehicles = []; state.recorders = [];
+  state.previewActive = false; state.realRoleUnit = null;
 }
 // 系統固定為營部／第一連／第二連三個單位；首次啟用時自動補建 units 文件，
 // 供其他集合以 unit_id 建立關聯（不提供 UI 編輯，因為單位編制本身不會變動）。
@@ -756,7 +796,6 @@ function showToast(msg){
 }
 function nav(route){
   state.route = route; state.reportDraft = null;
-  if (route.name === "report") state.reportWizard = { step: 1, taskId: "" };
   render(); window.scrollTo(0,0);
 }
 function esc(s){ return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -777,7 +816,8 @@ const ICON_PATHS = {
   flag:    `<path d="M6 3v18"/><path d="M6 4h12l-2.3 4L18 12H6"/>`,
   cloud:   `<path d="M7.5 18a4 4 0 0 1-.7-7.9 5 5 0 0 1 9.6-1.6A4.3 4.3 0 0 1 16.3 18Z"/>`,
   check:   `<path d="M5 13l4.5 4.5L19 7"/>`,
-  chart:   `<path d="M4 20V10"/><path d="M11 20V4"/><path d="M18 20v-7"/>`
+  chart:   `<path d="M4 20V10"/><path d="M11 20V4"/><path d="M18 20v-7"/>`,
+  chevronDown: `<path d="M5 8.5 12 15.5 19 8.5"/>`
 };
 function icon(name, size){
   size = size || 20;
@@ -868,32 +908,13 @@ function viewHome(){
   const todayDone = todayTasks.filter(t => deriveStatus(t.id) === "completed");
   const todayActive = todayTasks.filter(t => deriveStatus(t.id) !== "completed");
 
-  const ongoing = tasks
-    .filter(t => deriveStatus(t.id) !== "completed" && deriveStatus(t.id) !== "pending")
-    .sort((a,b) => {
-      const la = taskEvents(a.id).slice(-1)[0]; const lb = taskEvents(b.id).slice(-1)[0];
-      return (lb?.ts||0) - (la?.ts||0);
-    })[0];
-
-  const banner = ongoing ? `
-    <div class="current-banner" onclick="window.__nav({name:'task', id:'${ongoing.id}'})">
-      <div class="cb-label">${icon('alert',16)} 進行中勤務</div>
-      <p class="task-title">${esc(ongoing.title)}</p>
-      <div class="task-meta">${esc(ongoing.vehicle||'—')} · ${esc(ongoing.location||'—')}</div>
-      <div style="margin-top:8px;">${statusBadge(deriveStatus(ongoing.id))}</div>
-    </div>` : "";
-
   const scopedVehicles = (canSeeAllUnits(p) ? state.vehicles : state.vehicles.filter(v => v.unit === myUnit(p)))
+    .filter(v => tasks.some(t => t.vehicle === v.plate && deriveStatus(t.id) !== "completed"))
     .slice()
-    .sort((a,b) => {
-      const aActive = tasks.some(t => t.vehicle === a.plate && deriveStatus(t.id) !== "completed");
-      const bActive = tasks.some(t => t.vehicle === b.plate && deriveStatus(t.id) !== "completed");
-      if (aActive !== bActive) return aActive ? -1 : 1;
-      return unitLabel(a.unit).localeCompare(unitLabel(b.unit));
-    });
+    .sort((a,b) => unitLabel(a.unit).localeCompare(unitLabel(b.unit)));
   const fleetSection = scopedVehicles.length
     ? scopedVehicles.map(v => vehicleDynamicCard(v, tasks)).join("")
-    : `<div class="empty">尚未建立車輛資料，請至基礎資料管理新增</div>`;
+    : `<div class="empty">目前沒有車輛執行中</div>`;
 
   return `
     <div class="home-date">${fmtDate(today)}</div>
@@ -901,14 +922,13 @@ function viewHome(){
       <span class="emoji">${icon('cloud',30)}</span>
       <div>天氣資訊尚未串接（規劃使用中央氣象署 CWA 開放資料，待提供 API 金鑰）</div>
     </div>
-    ${banner}
     <div class="section-label">今日概況</div>
     <div class="stat-grid">
       <div class="stat-tile t-blue"><div class="num">${todayTasks.length}</div><div class="lbl">今日勤務數</div></div>
       <div class="stat-tile t-orange"><div class="num">${todayActive.length}</div><div class="lbl">進行中</div></div>
       <div class="stat-tile t-green"><div class="num">${todayDone.length}</div><div class="lbl">已完成</div></div>
     </div>
-    <div class="section-label">所有車輛動態</div>
+    <div class="section-label">車輛動態</div>
     ${fleetSection}
   `;
 }
@@ -959,7 +979,6 @@ function viewTasks(){
     </div>`;
 
   return `
-    <button class="btn-primary" style="display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:18px;" onclick="window.__nav({name:'report'})">${icon('alert',18)} 快速回報</button>
     ${tabs}
     ${shown.length ? shown.map(taskCard).join("") : `<div class="empty">目前沒有符合條件的勤務</div>`}
     ${canCreateTask(p) ? `<button class="fab" onclick="window.__nav({name:'createTask'})">${icon('plus',26)}</button>` : ""}
@@ -976,7 +995,7 @@ function viewCreateTask(){
   const unit = canSwitch ? (state.createTaskUnit || myUnit(p) || UNITS[0].code) : myUnit(p);
   if (!unit) return `<div class="empty">您尚未被指派單位，請聯繫管理員。</div>`;
 
-  const personnelOpts = state.personnel.filter(x => x.unit === unit && x.active !== false);
+  const personnelOpts = state.personnel.filter(x => x.unit === unit && x.active !== false).slice().sort((a,b) => rankWeight(a.title) - rankWeight(b.title));
   const vehicleOpts = state.vehicles.filter(x => x.unit === unit && x.active !== false);
   const recorderOpts = state.recorders.filter(x => x.unit === unit && x.active !== false);
 
@@ -1020,107 +1039,6 @@ function viewCreateTask(){
       <div class="field"><label>備註（選填）</label><textarea name="notes" placeholder="其他需要註記的事項"></textarea></div>
       <button class="btn-primary" type="submit">建立勤務</button>
     </form>
-  `;
-}
-
-/* =========================================================
-   13b) 畫面：回報精靈（底部導覽直接回報，不需先進任務詳情）
-   ========================================================= */
-function stepperHtml(step){
-  const labels = ["選擇任務","選擇狀態","確認送出"];
-  return `<div class="stepper">
-    ${labels.map((_,i) => {
-      const n = i+1;
-      const cls = n < step ? "done" : (n === step ? "current" : "");
-      return `${i>0?'<div class="step-line"></div>':''}<div class="step-dot ${cls}">${n<step?icon('check',15):n}</div>`;
-    }).join("")}
-  </div>`;
-}
-function viewReport(){
-  const p = state.profile;
-  const w = state.reportWizard;
-  const reportable = visibleTasks(p, state.tasks).filter(t => deriveStatus(t.id) !== "completed" && canReport(p, t));
-
-  if (w.step === 4) {
-    const t = state.tasks.find(x => x.id === w.taskId);
-    const def = EVENT_TYPES.find(e => e.type === w.type);
-    const evs = taskEvents(w.taskId).filter(e => e.type === w.type);
-    const lastEv = evs[evs.length - 1];
-    return `
-      <div class="success-card">
-        <div class="check">${icon('check',32)}</div>
-        <h2 style="margin:0 0 6px 0;">回報成功！</h2>
-        <p style="color:var(--text); font-weight:600; font-size:15px; margin-bottom:16px;">${t ? esc(t.title) : ''}</p>
-        <div class="detail-head" style="text-align:left;">
-          <div class="kv">
-            <div class="k">已記錄</div><div class="v">${def ? def.label : ''}</div>
-            <div class="k">時間</div><div class="v">${lastEv ? fmtTime(lastEv.ts) : '—'}</div>
-            ${lastEv && lastEv.mileage != null ? `<div class="k">里程</div><div class="v">${lastEv.mileage} km</div>` : ""}
-            ${lastEv && lastEv.reportedLocation ? `<div class="k">地點</div><div class="v">${esc(lastEv.reportedLocation)}</div>` : ""}
-          </div>
-        </div>
-        <button class="btn-primary" onclick="window.__nav({name:'task', id:'${w.taskId}'})">查看任務</button>
-        <button class="btn-ghost" style="width:100%; margin-top:10px;" onclick="window.__resetReportWizard()">繼續回報</button>
-      </div>`;
-  }
-
-  if (w.step === 1) {
-    const t = state.tasks.find(x => x.id === w.taskId);
-    return `
-      <div class="back-row"><button onclick="window.__nav({name:'tasks'})">‹ 返回任務</button></div>
-      ${stepperHtml(1)}
-      <div class="section-label">選擇任務</div>
-      ${reportable.length ? `
-        <div class="field">
-          <select onchange="window.__setReportTask(this.value)">
-            <option value="">請選擇任務</option>
-            ${reportable.map(rt => `<option value="${rt.id}" ${w.taskId===rt.id?'selected':''}>${esc(rt.vehicle||'—')} · ${esc(rt.title)}</option>`).join("")}
-          </select>
-        </div>
-        ${t ? `
-          <div class="detail-head">
-            <div class="kv">
-              <div class="k">目前狀態</div><div class="v">${STATUS_LABEL[deriveStatus(t.id)]}</div>
-              <div class="k">地點</div><div class="v">${esc(t.location||'—')}</div>
-            </div>
-          </div>` : ""}
-        <button class="btn-primary" ${!w.taskId?'disabled':''} onclick="window.__reportWizardNext(2)">下一步</button>
-      ` : `<div class="empty">目前沒有可回報的勤務</div>`}
-    `;
-  }
-
-  if (w.step === 2) {
-    const t = state.tasks.find(x => x.id === w.taskId);
-    if (!t) return `<div class="empty">找不到此任務</div>`;
-    return `
-      ${stepperHtml(2)}
-      <div class="back-row"><button onclick="window.__reportWizardNext(1)">‹ 上一步</button></div>
-      <div class="section-label">選擇回報狀態</div>
-      ${EVENT_TYPES.map(e => `
-        <button class="big-status-btn" style="background:${STATUS_COLOR[e.statusKey]};" onclick="window.__setReportType('${e.type}')">
-          ${icon(e.icon,28)}
-          <span class="big-status-text"><span class="t1">${e.label}</span><span class="t2">${e.hint}</span></span>
-        </button>`).join("")}
-    `;
-  }
-
-  // step 3
-  const t = state.tasks.find(x => x.id === w.taskId);
-  const def = EVENT_TYPES.find(e => e.type === w.type);
-  if (!t || !def) return `<div class="empty">找不到此任務</div>`;
-  const isFinal = w.type === "COMPLETED";
-  return `
-    ${stepperHtml(3)}
-    <div class="back-row"><button onclick="window.__reportWizardNext(2)">‹ 上一步</button></div>
-    <div class="detail-head">
-      <div class="task-top"><p class="task-title">${esc(t.title)}</p>${statusBadge(deriveStatus(t.id))}</div>
-      <div class="kv"><div class="k">選擇狀態</div><div class="v">${icon(def.icon,15)} ${def.label}</div></div>
-    </div>
-    <div class="field"><label>地點</label><input id="rw-location" value="${esc(t.location||'')}"></div>
-    <div class="field"><label>里程（公里）</label><input id="rw-mileage" type="number" inputmode="decimal" placeholder="目前里程"></div>
-    ${isFinal ? `<div class="field"><label>剩餘油量</label><input id="rw-fuel" placeholder="例如：1/2 或 40%"></div>` : ""}
-    <div class="field"><label>備註（選填）</label><input id="rw-note" placeholder="備註"></div>
-    <button class="btn-primary" onclick="window.__submitReportWizard()">送出回報</button>
   `;
 }
 
@@ -1266,17 +1184,22 @@ function viewRecords(){
       ${UNITS.map(u => `<div class="tab2 ${f.unit===u.code?'active':''}" onclick="window.__setRecordsFilter('unit','${u.code}')">${u.label}</div>`).join("")}
     </div>` : "";
 
+  const expanded = state.recordsFiltersExpanded;
   return `
     <div class="section-label">搜尋條件</div>
     ${periodTabs}
     ${unitTabs}
+    <button class="filters-toggle ${expanded?'open':''}" onclick="window.__toggleRecordsFilters()">
+      進階篩選（車號／人員／狀態／任務名稱／地點）${icon('chevronDown',18).replace('<svg ', '<svg class="chev" ')}
+    </button>
+    ${expanded ? `
     <div class="search-grid">
       <div class="field"><label>車號</label><select onchange="window.__setRecordsFilter('vehicle', this.value)">${vehicleOptions}</select></div>
       <div class="field"><label>人員（車長/駕駛）</label><select onchange="window.__setRecordsFilter('person', this.value)">${personOptions}</select></div>
       <div class="field"><label>狀態</label><select onchange="window.__setRecordsFilter('status', this.value)">${statusOptions}</select></div>
       <div class="field"><label>任務名稱</label><input value="${esc(f.title)}" oninput="window.__setRecordsFilter('title', this.value)"></div>
       <div class="field full"><label>地點</label><input value="${esc(f.location)}" oninput="window.__setRecordsFilter('location', this.value)"></div>
-    </div>
+    </div>` : ""}
     <div class="section-label">結果 · ${tasks.length}</div>
     ${tasks.length ? tasks.map(taskCard).join("") : `<div class="empty">找不到符合條件的勤務紀錄</div>`}
   `;
@@ -1392,7 +1315,12 @@ function viewProfile(){
       <div class="section-label">個人資料</div>
       <form onsubmit="window.__saveProfile(event)">
         <div class="field"><label>姓名</label><input name="displayName" value="${esc(p.displayName||'')}"></div>
-        <div class="field"><label>階級</label><input name="rank" value="${esc(p.rank||'')}" placeholder="例如：上士"></div>
+        <div class="field"><label>階級</label>
+          <select name="rank">
+            <option value="">請選擇階級</option>
+            ${RANKS.map(r => `<option value="${r}" ${p.rank===r?'selected':''}>${r}</option>`).join("")}
+          </select>
+        </div>
         <div class="field"><label>單位</label><input value="${unitLabel(p.unit)}" disabled></div>
         <div class="field"><label>Email</label><input value="${esc(p.email||'—')}" disabled></div>
         <div class="field"><label>角色</label><input value="${ROLE_LABEL[myRole(p)]||p.role}" disabled></div>
@@ -1436,11 +1364,37 @@ function viewProfile(){
       <div class="txt"><div class="t1">編輯個人資料</div><div class="t2">修改姓名、階級</div></div>
       <span class="chev">›</span>
     </div>
+    ${canManageUsers(p) && !state.previewActive ? `
+    <div class="service-row" onclick="window.__nav({name:'rolePreview'})">
+      <span class="icon-wrap" style="background:#FFF2E0; color:#B45F00;">${icon('user',20)}</span>
+      <div class="txt"><div class="t1">角色權限預覽</div><div class="t2">檢視各角色/單位登入後預設看到的畫面</div></div>
+      <span class="chev">›</span>
+    </div>` : ""}
     <div class="service-row" style="cursor:default;">
       <span class="icon-wrap" style="background:#F2E9FE; color:#6B23C7;">${icon('check',20)}</span>
       <div class="txt"><div class="t1">系統版本</div><div class="t2">build ${BUILD_TAG}</div></div>
     </div>
     <button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="window.__logout()">登出</button>
+  `;
+}
+
+/* =========================================================
+   17b) 畫面：角色權限預覽選單（僅限 admin）
+   ========================================================= */
+function viewRolePreview(){
+  const p = state.profile;
+  if (!canManageUsers(p)) return `<div class="empty">您沒有使用此功能的權限</div>`;
+  return `
+    <div class="back-row"><button onclick="window.__nav({name:'profile'})">‹ 返回更多</button></div>
+    <div class="section-label">選擇要預覽的角色</div>
+    <div class="empty" style="text-align:left; padding:16px;">
+      預覽僅切換畫面顯示內容，方便確認各角色能看到哪些功能／資料；不會變更任何帳號的實際權限，Firestore 讀寫仍以您目前登入帳號的真實身份判斷。
+    </div>
+    ${PREVIEW_OPTIONS.map(o => `
+      <div class="admin-row" style="cursor:pointer;" onclick="window.__startRolePreview('${o.role}','${o.unit}')">
+        <div><div class="name">${esc(o.label)}</div><div class="sub">${ROLE_LABEL[o.role]}${o.unit ? ' · ' + unitLabel(o.unit) : ''}</div></div>
+        <span class="chev" style="color:var(--muted); font-size:20px;">›</span>
+      </div>`).join("")}
   `;
 }
 
@@ -1544,17 +1498,18 @@ function viewAdminBaseData(){
   const editingId = state.baseDataEditingId;
   let body = "";
   if (state.baseDataTab === "personnel") {
-    const rows = state.personnel.filter(x => x.unit === unit);
+    const rankOptions = (sel) => `<option value="">請選擇階級</option>${RANKS.map(r => `<option value="${r}" ${sel===r?'selected':''}>${r}</option>`).join("")}`;
+    const rows = state.personnel.filter(x => x.unit === unit).slice().sort((a,b) => rankWeight(a.title) - rankWeight(b.title));
     body = `
       <form class="quickform" onsubmit="window.__addPersonnel(event,'${unit}')">
         <input name="name" placeholder="姓名" required>
-        <input name="title" placeholder="職稱">
+        <select name="title">${rankOptions("")}</select>
         <button class="icon-btn" type="submit">新增</button>
       </form>
       ${rows.length ? rows.map(x => editingId === x.id ? `
         <form class="quickform" onsubmit="window.__saveBaseData(event,'personnel','${x.id}')">
           <input name="name" placeholder="姓名" required value="${esc(x.name)}">
-          <input name="title" placeholder="職稱" value="${esc(x.title||'')}">
+          <select name="title">${rankOptions(x.title||"")}</select>
           <button class="icon-btn" type="submit">儲存</button>
           <button class="icon-btn" type="button" onclick="window.__cancelEditBaseData()">取消</button>
         </form>` : `
@@ -1568,16 +1523,17 @@ function viewAdminBaseData(){
         </div>`).join("") : `<div class="empty">尚無人員資料</div>`}`;
   } else if (state.baseDataTab === "vehicles") {
     const rows = state.vehicles.filter(x => x.unit === unit);
+    const vehicleTypeOptions = (sel) => `<option value="">請選擇車種</option>${VEHICLE_TYPES.map(t => `<option value="${t}" ${sel===t?'selected':''}>${t}</option>`).join("")}`;
     body = `
       <form class="quickform" onsubmit="window.__addVehicle(event,'${unit}')">
         <input name="plate" placeholder="車號" required>
-        <input name="type" placeholder="車種">
+        <select name="type">${vehicleTypeOptions("")}</select>
         <button class="icon-btn" type="submit">新增</button>
       </form>
       ${rows.length ? rows.map(x => editingId === x.id ? `
         <form class="quickform" onsubmit="window.__saveBaseData(event,'vehicles','${x.id}')">
           <input name="plate" placeholder="車號" required value="${esc(x.plate)}">
-          <input name="type" placeholder="車種" value="${esc(x.type||'')}">
+          <select name="type">${vehicleTypeOptions(x.type||"")}</select>
           <button class="icon-btn" type="submit">儲存</button>
           <button class="icon-btn" type="button" onclick="window.__cancelEditBaseData()">取消</button>
         </form>` : `
@@ -1665,12 +1621,12 @@ const ROUTE_VIEWS = {
   home: viewHome,
   tasks: viewTasks,
   createTask: viewCreateTask,
-  report: viewReport,
   task: () => viewTaskDetail(state.route.id),
   records: viewRecords,
   stats: viewStats,
   notifications: viewNotifications,
   profile: viewProfile,
+  rolePreview: viewRolePreview,
   admin: viewAdmin
 };
 const NAV_ITEMS = [
@@ -1701,19 +1657,27 @@ function render(){
   const body = view();
 
   const p = state.profile;
+  const previewBanner = state.previewActive ? `
+    <div class="preview-banner">
+      ${icon('alert',16)} 預覽模式：以「${ROLE_LABEL[myRole(p)]||p.role}${p.unit?'・'+unitLabel(p.unit):''}」檢視畫面（僅預覽，實際寫入權限仍以您的真實身份為準）
+      <button onclick="window.__endRolePreview()">結束預覽</button>
+    </div>` : "";
   app.innerHTML = `
-    <div class="topbar">
-      <div class="topbar-top">
-        <div class="topbar-titles">
-          <h1>衛生營車輛人員動態管制系統</h1>
-          <div class="topbar-en">Medical Battalion Vehicle &amp; Personnel Management System</div>
-          <div class="topbar-sub">
-            <span class="name">${esc(p.displayName||p.email).split(' ')[0]}</span>${p.rank ? `<span class="rank">${esc(p.rank)}</span>` : ''}
+    <div class="sticky-head">
+      ${previewBanner}
+      <div class="topbar">
+        <div class="topbar-top">
+          <div class="topbar-titles">
+            <h1>衛生營車輛人員動態管制系統</h1>
+            <div class="topbar-en">Medical Battalion Vehicle &amp; Personnel Management System</div>
+            <div class="topbar-sub">
+              <span class="name">${esc(p.displayName||p.email).split(' ')[0]}</span>${p.rank ? `<span class="rank">${esc(p.rank)}</span>` : ''}
+            </div>
           </div>
-        </div>
-        <div class="topbar-icons">
-          <button class="topbar-icon-btn" onclick="window.__nav({name:'notifications'})">${icon('bell',25)}</button>
-          <button class="topbar-icon-btn" onclick="window.__nav({name:'profile'})">${icon('user',25)}</button>
+          <div class="topbar-icons">
+            <button class="topbar-icon-btn" onclick="window.__nav({name:'notifications'})">${icon('bell',25)}</button>
+            <button class="topbar-icon-btn" onclick="window.__nav({name:'profile'})">${icon('user',25)}</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1734,6 +1698,8 @@ function render(){
 window.__login = doLogin;
 window.__logout = doLogout;
 window.__nav = nav;
+window.__startRolePreview = (role, unit) => startRolePreview(role, unit);
+window.__endRolePreview = () => endRolePreview();
 window.__startReport = (taskId, type) => { state.reportDraft = { taskId, type }; render(); };
 window.__cancelReport = () => { state.reportDraft = null; render(); };
 window.__submitReport = (taskId, type) => {
@@ -1799,25 +1765,9 @@ window.__saveProfile = (ev) => {
   });
 };
 window.__setRecordsFilter = (key, value) => { state.recordsFilter[key] = value; render(); };
+window.__toggleRecordsFilters = () => { state.recordsFiltersExpanded = !state.recordsFiltersExpanded; render(); };
 window.__setTasksTab = (key) => { state.tasksTab = key; render(); };
 window.__setStatsPeriod = (key) => { state.statsPeriod = key; render(); };
-window.__setReportTask = (taskId) => { state.reportWizard.taskId = taskId; render(); };
-window.__reportWizardNext = (step) => { state.reportWizard.step = step; render(); };
-window.__setReportType = (type) => { state.reportWizard.type = type; state.reportWizard.step = 3; render(); };
-window.__resetReportWizard = () => { state.reportWizard = { step: 1, taskId: "" }; render(); };
-window.__submitReportWizard = () => {
-  const w = state.reportWizard;
-  const mileageEl = document.getElementById("rw-mileage");
-  const fuelEl = document.getElementById("rw-fuel");
-  const noteEl = document.getElementById("rw-note");
-  const locationEl = document.getElementById("rw-location");
-  const extra = {};
-  if (mileageEl && mileageEl.value !== "") extra.mileage = Number(mileageEl.value);
-  if (noteEl && noteEl.value) extra.note = noteEl.value;
-  if (fuelEl && fuelEl.value) extra.endFuel = fuelEl.value;
-  if (locationEl && locationEl.value) extra.reportedLocation = locationEl.value;
-  addEvent(w.taskId, w.type, extra).then(() => { state.reportWizard.step = 4; render(); });
-};
 window.__setCreateTaskUnit = (code) => { state.createTaskUnit = code; render(); };
 window.__createTask = (ev, unit) => {
   ev.preventDefault();
