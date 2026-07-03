@@ -369,7 +369,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-69-tasks-completed-tab";
+const BUILD_TAG = "2026-07-04-70-report-form-refinements";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -536,6 +536,11 @@ const RANKS = ["中校","少校","上尉","中尉","少尉","士官長","上士"
 function rankWeight(rank){ const i = RANKS.indexOf(rank); return i === -1 ? RANKS.length : i; }
 
 const VEHICLE_TYPES = ["城市型救護車","野戰型救護車","悍馬型救護車","中型戰術輪車","輕型戰術輪車","1.75貨車"];
+
+const FUEL_LEVELS = ["1/4","1/2","3/4","滿油"];
+function fuelOptions(sel){
+  return `<option value="">請選擇油量</option>${FUEL_LEVELS.map(f => `<option value="${f}" ${sel===f?'selected':''}>${f}</option>`).join("")}`;
+}
 
 /* =========================================================
    3) 全域狀態
@@ -1365,7 +1370,7 @@ function viewCreateTask(){
         </select>
       </div>
       <div class="field"><label>出發前里程（公里）</label><input name="startMileage" type="number" inputmode="decimal" placeholder="例如：12345"></div>
-      <div class="field"><label>出發前油量</label><input name="startFuel" placeholder="例如：3/4 或 60%"></div>
+      <div class="field"><label>出發前油量</label><select name="startFuel">${fuelOptions("")}</select></div>
       <div class="field"><label>備註（選填）</label><textarea name="notes" placeholder="其他需要註記的事項"></textarea></div>
       <button class="btn-primary" type="submit">建立勤務</button>
     </form>
@@ -1418,7 +1423,7 @@ function viewEditTask(taskId){
         </select>
       </div>
       <div class="field"><label>出發前里程（公里）</label><input name="startMileage" type="number" inputmode="decimal" value="${t.startMileage!=null?t.startMileage:''}"></div>
-      <div class="field"><label>出發前油量</label><input name="startFuel" value="${esc(t.startFuel||'')}"></div>
+      <div class="field"><label>出發前油量</label><select name="startFuel">${fuelOptions(t.startFuel||"")}</select></div>
       <div class="field"><label>備註（選填）</label><textarea name="notes">${esc(t.notes||'')}</textarea></div>
       <button class="btn-primary" type="submit">儲存變更</button>
     </form>
@@ -1440,6 +1445,14 @@ function viewTaskDetail(taskId){
   const dispatchEv = eventByType(taskId, "DISPATCH");
   const arrivedEvs = evs.filter(e => e.type === "ARRIVED_SCENE");
   const departEvs = evs.filter(e => e.type === "DEPART_SCENE");
+  // 多地點時每一站分開列成自己的一列（不要用頓號串在同一行），才看得出來
+  // 抵達／離開的流水時間線，一眼就知道第幾站對應哪個里程。
+  const arrivalRows = arrivedEvs.length
+    ? arrivedEvs.map((e,i) => `<div class="k">抵達里程${arrivedEvs.length>1?' '+(i+1):''}</div><div class="v">${e.mileage!=null?e.mileage+' km':'—'}${e.location?'（'+esc(e.location)+'）':''}</div>`).join("")
+    : `<div class="k">抵達里程</div><div class="v">—</div>`;
+  const departRows = departEvs.length
+    ? departEvs.map((e,i) => `<div class="k">離開里程${departEvs.length>1?' '+(i+1):''}</div><div class="v">${e.mileage!=null?e.mileage+' km':'—'}</div>`).join("")
+    : `<div class="k">離開里程</div><div class="v">—</div>`;
   const returningEv = eventByType(taskId, "RETURNING");
   const completedEv = eventByType(taskId, "COMPLETED");
   const startMileage = dispatchEv?.mileage ?? t.startMileage ?? null;
@@ -1497,28 +1510,31 @@ function viewTaskDetail(taskId){
     const isNextStop = draft.type === "ARRIVED_SCENE" && arrivedEvs.length > 0;
     const formTitle = isNextStop ? "抵達下一個地點" : def.label;
     // 開始返營時，車輛都還沒有移動（人剛在原地回報），里程理論上跟上一筆回報
-    // 的里程一樣，直接帶入避免重複輸入；抵達現場／抵達營區才是真的開車移動
-    // 後的新里程，需要手動輸入。（離開現場已經改成自動補寫，見 __submitReport）
+    // 的里程一樣，直接帶入避免重複輸入；前往下一個地點時雖然會開車移動，但
+    // 先帶入上一筆已知里程當作起始值，使用者只要接著往上改，不用從零開始
+    // 整串重打一次；抵達營區才是完全空白，需要手動輸入。
+    // （離開現場已經改成自動補寫，見 __submitReport）
     const lastMileageEv = evs.slice().reverse().find(e => e.mileage != null);
-    const prefillMileage = draft.type === "RETURNING" && lastMileageEv ? lastMileageEv.mileage : null;
+    const prefillMileage = (draft.type === "RETURNING" || isNextStop) && lastMileageEv ? lastMileageEv.mileage : null;
     // 回報表單改用彈窗（跟基礎資料管理的新增/編輯彈窗同一套元件），避免表單
     // 內容被固定在畫面底部的 Sticky Action Bar 擋住看不到。
+    // 除了備註以外都是必填欄位，避免漏填造成紀錄不完整。
     reportModal = `
       <div class="modal-overlay" onclick="if(event.target===this) window.__cancelReport()">
         <div class="modal-sheet">
           <div class="modal-handle"></div>
           <div class="modal-title">${icon(def.icon,19)} 回報：${formTitle}</div>
           <form onsubmit="event.preventDefault(); window.__submitReport('${t.id}','${draft.type}')">
-            ${isNextStop ? `<div class="field"><label>地點</label><input id="rf-location" placeholder="例如：加油站、OO超商"></div>` : ""}
+            ${isNextStop ? `<div class="field"><label>地點</label><input id="rf-location" placeholder="例如：加油站、OO超商" required></div>` : ""}
             <div class="field">
               <label>時間</label>
               <div style="display:flex; gap:8px;">
-                <input id="rf-time" type="time" style="flex:1;" ${minTime?`min="${minTime}"`:""} value="${hhmmValue(new Date())}">
+                <input id="rf-time" type="time" style="flex:1;" ${minTime?`min="${minTime}"`:""} value="${hhmmValue(new Date())}" required>
                 <button type="button" class="icon-btn" style="flex-shrink:0;" onclick="window.__resetReportTime()">套用目前</button>
               </div>
             </div>
-            <div class="field"><label>里程（公里）</label><input id="rf-mileage" type="number" inputmode="decimal" placeholder="目前里程" value="${prefillMileage != null ? prefillMileage : ''}"></div>
-            ${isFinal ? `<div class="field"><label>剩餘油量</label><input id="rf-fuel" placeholder="例如：1/2 或 40%"></div>` : ""}
+            <div class="field"><label>里程（公里）</label><input id="rf-mileage" type="number" inputmode="decimal" placeholder="目前里程" value="${prefillMileage != null ? prefillMileage : ''}" required></div>
+            ${isFinal ? `<div class="field"><label>剩餘油量</label><select id="rf-fuel" required>${fuelOptions("")}</select></div>` : ""}
             <div class="field"><label>備註（選填）</label><input id="rf-note" placeholder="備註"></div>
             <button class="btn-primary" type="submit">確認送出</button>
             <button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__cancelReport()">取消</button>
@@ -1583,8 +1599,8 @@ function viewTaskDetail(taskId){
     <div class="detail-head">
       <div class="kv">
         <div class="k">出發里程</div><div class="v">${startMileage!=null ? startMileage+' km' : '—'}</div>
-        <div class="k">抵達里程</div><div class="v">${arrivedEvs.length ? arrivedEvs.map(e => (e.mileage!=null ? e.mileage+' km' : '—') + (e.location ? '（'+esc(e.location)+'）' : '')).join('、') : '—'}</div>
-        <div class="k">離開里程</div><div class="v">${departEvs.length ? departEvs.map(e => e.mileage!=null ? e.mileage+' km' : '—').join('、') : '—'}</div>
+        ${arrivalRows}
+        ${departRows}
         <div class="k">返營里程</div><div class="v">${returningEv?.mileage!=null ? returningEv.mileage+' km' : '—'}</div>
         <div class="k">最終里程</div><div class="v">${finalMileage!=null ? finalMileage+' km' : '—'}</div>
         <div class="k">出發油量</div><div class="v">${esc(t.startFuel||'—')}</div>
