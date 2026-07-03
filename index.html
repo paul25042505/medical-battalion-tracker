@@ -293,7 +293,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-44-legacy-crew-phone-match";
+const BUILD_TAG = "2026-07-03-45-self-sync-phone";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -651,6 +651,19 @@ function ensureAdminPersonnelSync(p){
 async function updateOwnProfile(displayName, rank, phone){
   await fsSetDoc(`users/${state.user.uid}`, { displayName, rank, phone });
   state.profile = { ...state.profile, displayName, rank, phone };
+  // 若自己已有對應的人員名冊資料（帳號綁定單位後會自動建立），一併同步姓名/階級/電話，
+  // 車長/駕駛卡片上的電話才會立即反映，不必等管理員重新打開帳號權限頁籤才觸發同步。
+  const existing = state.personnel.find(x => x.id === state.user.uid);
+  if (existing) {
+    try {
+      await fsSetDoc(`personnel/${state.user.uid}`, { name: displayName, title: rank, phone });
+      if (personnelPoll) personnelPoll.refreshNow();
+    } catch (e) {
+      console.error("同步人員名冊失敗", e);
+      showToast(`個人資料已更新，但同步人員名冊失敗：[${e.code||'?'}] ${e.message||e}`);
+      return;
+    }
+  }
   showToast("個人資料已更新");
 }
 
