@@ -293,7 +293,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-48-crew-rank-label";
+const BUILD_TAG = "2026-07-03-49-rank-everywhere";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -933,14 +933,20 @@ function findPersonnel(name, unit){
   const scoped = unit ? state.personnel.filter(x => x.unit === unit) : state.personnel;
   return findPersonnelByName(scoped, name) || (unit ? findPersonnelByName(state.personnel, name) : null);
 }
-// 姓名 + 階級（若姓名本身沒有帶階級，如新版下拉選單只存姓名，才補上人員名冊的階級）+
-// 電話（可點擊撥打）。
-function crewLabel(name, unit){
+// 姓名 + 階級（若姓名本身沒有帶階級，如新版下拉選單只存姓名，才補上人員名冊的階級）。
+// 凡是畫面上會出現人名的地方都套用，讓階級一律跟著姓名顯示。
+function nameWithRank(name, unit){
   if (!name) return esc('—');
   const match = findPersonnel(name, unit);
   const rank = (match && match.title && !name.includes(match.title)) ? ' ' + match.title : '';
+  return esc(name) + esc(rank);
+}
+// 姓名 + 階級 + 電話（可點擊撥打），給車長/駕駛這種需要聯絡方式的欄位用。
+function crewLabel(name, unit){
+  if (!name) return esc('—');
+  const match = findPersonnel(name, unit);
   const phone = (match && match.phone) || "";
-  return `${esc(name)}${esc(rank)}${phone ? ` <a href="tel:${esc(phone)}" onclick="event.stopPropagation()" style="color:var(--blue); text-decoration:none;">${esc(phone)}</a>` : ''}`;
+  return `${nameWithRank(name, unit)}${phone ? ` <a href="tel:${esc(phone)}" onclick="event.stopPropagation()" style="color:var(--blue); text-decoration:none;">${esc(phone)}</a>` : ''}`;
 }
 function taskCard(t){
   const s = deriveStatus(t.id);
@@ -1194,7 +1200,7 @@ function viewTaskDetail(taskId){
         <div class="tl-item">
           <div class="tl-dot ${def?.statusKey}"></div>
           <div class="tl-type">${def ? icon(def.icon,17) : ''} ${def?.label}</div>
-          <div class="tl-meta">${fmtTime(e.ts)} · ${esc(e.userName||'')}${e.mileage!=null ? ' · ' + e.mileage + ' km' : ''}</div>
+          <div class="tl-meta">${fmtTime(e.ts)} · ${nameWithRank(e.userName, e.unit)}${e.mileage!=null ? ' · ' + e.mileage + ' km' : ''}</div>
           ${e.note ? `<div class="tl-note">${esc(e.note)}</div>` : ""}
         </div>`;
       }).join("")}
@@ -1226,7 +1232,7 @@ function viewTaskDetail(taskId){
         <div class="k">車長</div><div class="v">${crewLabel(t.crewLeader, t.unit)}</div>
         <div class="k">駕駛</div><div class="v">${crewLabel(t.driver, t.unit)}</div>
         <div class="k">紀錄器</div><div class="v">${esc((t.recorders||[]).join('、') || '—')}</div>
-        <div class="k">建立人</div><div class="v">${esc(t.createdByName||'—')}</div>
+        <div class="k">建立人</div><div class="v">${nameWithRank(t.createdByName, t.unit)}</div>
         <div class="k">建立時間</div><div class="v">${fmtTime(new Date(t.createdAt||0).getTime())}</div>
       </div>
     </div>
@@ -1285,7 +1291,7 @@ function viewRecords(){
   const vehiclePool = (f.unit ? state.vehicles.filter(v => v.unit === f.unit) : state.vehicles);
   const personPool = (f.unit ? state.personnel.filter(x => x.unit === f.unit) : state.personnel);
   const vehicleOptions = [`<option value="">全部車號</option>`, ...vehiclePool.map(v => `<option value="${esc(v.plate)}" ${f.vehicle===v.plate?'selected':''}>${esc(v.plate)}</option>`)].join("");
-  const personOptions = [`<option value="">全部人員</option>`, ...personPool.map(x => `<option value="${esc(x.name)}" ${f.person===x.name?'selected':''}>${esc(x.name)}</option>`)].join("");
+  const personOptions = [`<option value="">全部人員</option>`, ...personPool.map(x => `<option value="${esc(x.name)}" ${f.person===x.name?'selected':''}>${esc(x.name)}${x.title?' '+esc(x.title):''}</option>`)].join("");
 
   const periodPills = `
     <div class="pill-row">
@@ -1724,7 +1730,7 @@ function viewAdminUsers(){
       return `
       <div class="admin-row">
         <div>
-          <div class="name">${esc(u.displayName||u.email)}</div>
+          <div class="name">${esc(u.displayName||u.email)}${u.rank?' '+esc(u.rank):''}</div>
           <div class="sub">${esc(u.email)} · ${unitLabel(u.unit)}</div>
         </div>
         <div class="role-controls">
