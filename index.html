@@ -184,6 +184,7 @@
   .report-btn .emoji{font-size:26px;}
   .report-btn.recommended{border-color:var(--blue); box-shadow:0 0 0 1.5px var(--blue) inset;}
   .report-btn:disabled{opacity:0.35;}
+  .report-count{font-size:11.5px; font-weight:600; color:var(--muted); margin-top:-4px;}
   .no-permission{color:var(--muted); font-size:14.5px; text-align:center; padding:16px; border:1px dashed var(--border-strong); border-radius:var(--radius-md); margin-bottom:20px;}
   .report-form{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:18px; margin-bottom:20px; box-shadow:var(--shadow-sm);}
   .report-form .title{font-weight:700; font-size:15px; margin-bottom:14px;}
@@ -340,7 +341,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-57-weather-hazard-warnings";
+const BUILD_TAG = "2026-07-03-58-report-flow-redesign";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -549,6 +550,26 @@ function taskEvents(taskId) {
 }
 function eventByType(taskId, type){
   return taskEvents(taskId).find(e => e.type === type) || null;
+}
+// 回報操作允許哪些動作：出勤／返營／抵達營區都是一次性動作，回報過就不再顯示；
+// 抵達現場則可重複回報（同一趟勤務可能去兩個以上的地點），直到返營為止都還能再回報。
+function reportableTypes(taskId){
+  const s = deriveStatus(taskId);
+  const has = (type) => taskEvents(taskId).some(e => e.type === type);
+  const list = [];
+  if (!has("DISPATCH")) list.push("DISPATCH");
+  if (has("DISPATCH") && s !== "returning") list.push("ARRIVED_SCENE");
+  if (has("DISPATCH") && !has("RETURNING")) list.push("RETURNING");
+  if (has("RETURNING")) list.push("COMPLETED");
+  return list;
+}
+// 推薦動作：剛出勤時建議抵達現場，開始返營後建議抵達營區；已抵達現場時可能還要
+// 去下一個地點、也可能要返營了，兩者都合理，不特別推薦其中一個。
+function recommendedType(taskId){
+  const s = deriveStatus(taskId);
+  if (s === "dispatch") return "ARRIVED_SCENE";
+  if (s === "returning") return "COMPLETED";
+  return null;
 }
 function isSameDay(ms, ref){
   if (!ms) return false;
@@ -969,6 +990,12 @@ function fmtTime(ms){
 function fmtDate(d){
   return d.toLocaleDateString("zh-TW", { year:"numeric", month:"long", day:"numeric", weekday:"long" });
 }
+// datetime-local 欄位需要「本地時間」字串（YYYY-MM-DDTHH:mm），不能用
+// toISOString()（那是 UTC），否則時區會偏移，使用者填的時間就會跑掉。
+function localDatetimeInputValue(d){
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 function showToast(msg){
   let t = document.getElementById("toast");
   if (!t){ t = document.createElement("div"); t.id="toast"; t.className="toast"; document.body.appendChild(t); }
@@ -1340,8 +1367,17 @@ function viewTaskDetail(taskId){
   const p = state.profile;
   const s = deriveStatus(taskId);
   const evs = taskEvents(taskId);
-  const currentIdx = STATUS_ORDER.indexOf(s);
-  const nextType = EVENT_TYPES[currentIdx] ? EVENT_TYPES[currentIdx].type : null;
+
+  // 勤務資訊：出發/抵達/返營/最終里程與油量、自動計算行駛公里數與任務耗時
+  // （抵達現場可能有多筆，因為同一趟勤務可能去兩個以上的地點）
+  const dispatchEv = eventByType(taskId, "DISPATCH");
+  const arrivedEvs = evs.filter(e => e.type === "ARRIVED_SCENE");
+  const returningEv = eventByType(taskId, "RETURNING");
+  const completedEv = eventByType(taskId, "COMPLETED");
+  const startMileage = dispatchEv?.mileage ?? t.startMileage ?? null;
+  const finalMileage = completedEv?.mileage ?? null;
+  const distance = (startMileage != null && finalMileage != null) ? (finalMileage - startMileage) : null;
+  const duration = completedEv ? (completedEv.ts - (dispatchEv?.ts ?? new Date(t.createdAt||0).getTime())) : null;
 
   const draft = state.reportDraft && state.reportDraft.taskId === taskId ? state.reportDraft : null;
 
@@ -1353,26 +1389,41 @@ function viewTaskDetail(taskId){
   } else if (draft) {
     const def = EVENT_TYPES.find(e=>e.type===draft.type);
     const isFinal = draft.type === "COMPLETED";
+    const minTime = dispatchEv?.ts ? localDatetimeInputValue(new Date(dispatchEv.ts)) : "";
     reportSection = `
       <div class="report-form">
         <div class="title">${icon(def.icon,19)} 回報：${def.label}</div>
+        <div class="field">
+          <label>時間</label>
+          <div style="display:flex; gap:8px;">
+            <input id="rf-time" type="datetime-local" style="flex:1;" ${minTime?`min="${minTime}"`:""} value="${localDatetimeInputValue(new Date())}">
+            <button type="button" class="icon-btn" style="flex-shrink:0;" onclick="window.__resetReportTime()">套用目前</button>
+          </div>
+        </div>
         <div class="field"><label>里程（公里）</label><input id="rf-mileage" type="number" inputmode="decimal" placeholder="目前里程"></div>
         ${isFinal ? `<div class="field"><label>剩餘油量</label><input id="rf-fuel" placeholder="例如：1/2 或 40%"></div>` : ""}
-        <div class="field"><label>備註（選填）</label><input id="rf-note" placeholder="備註"></div>
+        <div class="field"><label>備註（選填）</label><input id="rf-note" placeholder="例如：地點名稱"></div>
         <div class="row">
           <button class="btn-ghost" onclick="window.__cancelReport()">取消</button>
           <button class="btn-primary" style="margin-top:0;" onclick="window.__submitReport('${t.id}','${draft.type}')">確認送出</button>
         </div>
       </div>`;
   } else {
-    reportSection = `
+    const rTypes = reportableTypes(taskId);
+    const recType = recommendedType(taskId);
+    reportSection = rTypes.length ? `
       <div class="report-grid">
-        ${EVENT_TYPES.map(e => `
-          <button class="report-btn ${e.type===nextType?'recommended':''}"
-            onclick="window.__startReport('${t.id}','${e.type}')">
+        ${rTypes.map(type => {
+          const e = EVENT_TYPES.find(x=>x.type===type);
+          const count = type === "ARRIVED_SCENE" ? arrivedEvs.length : 0;
+          return `
+          <button class="report-btn ${type===recType?'recommended':''}"
+            onclick="window.__startReport('${t.id}','${type}')">
             <span class="emoji">${icon(e.icon,28)}</span>${e.label}
-          </button>`).join("")}
-      </div>`;
+            ${count > 0 ? `<span class="report-count">已回報 ${count} 次</span>` : ""}
+          </button>`;
+        }).join("")}
+      </div>` : `<div class="no-permission">目前沒有可回報的動作</div>`;
   }
 
   const timeline = evs.length ? `
@@ -1388,16 +1439,6 @@ function viewTaskDetail(taskId){
         </div>`;
       }).join("")}
     </div>` : `<div class="empty">尚無事件紀錄</div>`;
-
-  // 勤務資訊：出發/抵達/返營/最終里程與油量、自動計算行駛公里數與任務耗時
-  const dispatchEv = eventByType(taskId, "DISPATCH");
-  const arrivedEv = eventByType(taskId, "ARRIVED_SCENE");
-  const returningEv = eventByType(taskId, "RETURNING");
-  const completedEv = eventByType(taskId, "COMPLETED");
-  const startMileage = dispatchEv?.mileage ?? t.startMileage ?? null;
-  const finalMileage = completedEv?.mileage ?? null;
-  const distance = (startMileage != null && finalMileage != null) ? (finalMileage - startMileage) : null;
-  const duration = completedEv ? (completedEv.ts - (dispatchEv?.ts ?? new Date(t.createdAt||0).getTime())) : null;
 
   return `
     <div class="back-row" style="justify-content:space-between;">
@@ -1425,7 +1466,7 @@ function viewTaskDetail(taskId){
     <div class="detail-head">
       <div class="kv">
         <div class="k">出發里程</div><div class="v">${startMileage!=null ? startMileage+' km' : '—'}</div>
-        <div class="k">抵達里程</div><div class="v">${arrivedEv?.mileage!=null ? arrivedEv.mileage+' km' : '—'}</div>
+        <div class="k">抵達里程</div><div class="v">${arrivedEvs.length ? arrivedEvs.map(e => e.mileage!=null ? e.mileage+' km' : '—').join('、') : '—'}</div>
         <div class="k">返營里程</div><div class="v">${returningEv?.mileage!=null ? returningEv.mileage+' km' : '—'}</div>
         <div class="k">最終里程</div><div class="v">${finalMileage!=null ? finalMileage+' km' : '—'}</div>
         <div class="k">出發油量</div><div class="v">${esc(t.startFuel||'—')}</div>
@@ -2038,14 +2079,20 @@ window.__startRolePreview = (role, unit) => startRolePreview(role, unit);
 window.__endRolePreview = () => endRolePreview();
 window.__startReport = (taskId, type) => { state.reportDraft = { taskId, type }; render(); };
 window.__cancelReport = () => { state.reportDraft = null; render(); };
+window.__resetReportTime = () => {
+  const el = document.getElementById("rf-time");
+  if (el) el.value = localDatetimeInputValue(new Date());
+};
 window.__submitReport = (taskId, type) => {
   const mileageEl = document.getElementById("rf-mileage");
   const fuelEl = document.getElementById("rf-fuel");
   const noteEl = document.getElementById("rf-note");
+  const timeEl = document.getElementById("rf-time");
   const extra = {};
   if (mileageEl && mileageEl.value !== "") extra.mileage = Number(mileageEl.value);
   if (noteEl && noteEl.value) extra.note = noteEl.value;
   if (fuelEl && fuelEl.value) extra.endFuel = fuelEl.value;
+  if (timeEl && timeEl.value) extra.timestamp = new Date(timeEl.value);
   state.reportDraft = null;
   addEvent(taskId, type, extra);
 };
