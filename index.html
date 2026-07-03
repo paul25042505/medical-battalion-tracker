@@ -293,7 +293,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-35-edit-task";
+const BUILD_TAG = "2026-07-03-36-tasks-view-only";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -520,10 +520,10 @@ function canManageUsers(p){ return myRole(p) === "admin"; }
 function canManageTasks(p){ const r = myRole(p); return r === "admin" || r === "duty_officer" || r === "commander"; }
 function canManageBaseData(p){ return canManageTasks(p); }
 function canSeeAllTasks(p){ return canSeeAllUnits(p); }
-function canDeleteTask(p){ const r = myRole(p); return r === "admin" || r === "duty_officer"; } // 主官管只能建立/編輯，不可刪除
+function canDeleteTask(p){ const r = myRole(p); return r === "admin" || r === "duty_officer"; } // 主官管只能建立，不可編輯/刪除
 function canCreateTask(p){ const r = myRole(p); return r === "admin" || r === "duty_officer" || r === "commander"; } // 一般成員不可建立勤務，僅可回報
-// 高勤官／admin 可編輯所有單位的勤務；主官管僅能編輯自己單位的勤務（對應 Firestore 規則）
-function canEditTask(p, t){ const r = myRole(p); if (r === "admin" || r === "duty_officer") return true; if (r === "commander") return t.unit === myUnit(p); return false; }
+// 高勤官、主官管對勤務只有查看權限，不可編輯；僅 admin 可編輯勤務內容。
+function canEditTask(p, t){ return myRole(p) === "admin"; }
 function canReport(p, task){ return isActive(p); } // 回報開放給所有已審核成員（受限於自己單位可見的勤務）
 function visibleTasks(p, tasks){
   if (!p) return [];
