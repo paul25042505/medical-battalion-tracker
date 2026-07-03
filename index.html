@@ -330,7 +330,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-55-name-rank-no-dot";
+const BUILD_TAG = "2026-07-03-56-weather-forecast";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -480,6 +480,12 @@ const UNITS = [
 function unitLabel(code){ return (UNITS.find(u => u.code === code) || {}).label || code || "未設定"; }
 
 /* =========================================================
+   2d) 氣象預報（中央氣象署 CWA 開放資料平臺，依單位對應縣市）
+   ========================================================= */
+const CWA_API_KEY = "CWA-C471B712-733E-4115-9AD2-0E1D96D3A10E";
+const UNIT_WEATHER_LOCATION = { hq: "臺中市", co1: "臺中市", co2: "嘉義縣" };
+
+/* =========================================================
    2c) 階級（依權重排序，數字越小階級越高）
    ========================================================= */
 const RANKS = ["中校","少校","上尉","中尉","少尉","士官長","上士","中士","下士","上等兵","一等兵","二等兵"];
@@ -503,7 +509,8 @@ const state = {
   profileEditing: false,
   baseDataUnit: "", baseDataTab: "personnel", baseDataModal: null, // 基礎資料管理頁籤狀態；baseDataModal: {coll, id, unit} | null
   createTaskUnit: "", // 建立勤務頁面：admin/高勤官可切換的單位
-  previewActive: false, realRoleUnit: null // 角色權限預覽（僅限 admin）
+  previewActive: false, realRoleUnit: null, // 角色權限預覽（僅限 admin）
+  weather: null // 首頁氣象預報（依單位對應縣市，見 ensureWeatherLoaded）
 };
 let tasksPoll = null, eventsPoll = null, profilePoll = null;
 let personnelPoll = null, vehiclesPoll = null, recordersPoll = null;
@@ -842,6 +849,55 @@ async function ensureUnitsSeeded(){
 }
 
 /* =========================================================
+   7b) 氣象預報（中央氣象署 CWA 開放資料 API，直接從瀏覽器端呼叫；
+   縣市層級 36 小時天氣預報，快取 30 分鐘，只在切換單位或首頁重新
+   整理時才會重抓，不使用背景計時器）
+   ========================================================= */
+const weatherCache = {}; // { [縣市名稱]: { data, fetchedAt } }
+let weatherLoadingCounty = null;
+async function fetchWeather(county){
+  const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-001?Authorization=${CWA_API_KEY}&locationName=${encodeURIComponent(county)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  const loc = json?.records?.location?.[0];
+  if (!loc) throw new Error("查無天氣資料");
+  const els = {};
+  loc.weatherElement.forEach(e => { els[e.elementName] = e.time; });
+  return {
+    county,
+    wx: els.Wx?.[0]?.parameter?.parameterName || "—",
+    pop: els.PoP?.[0]?.parameter?.parameterName ?? null,
+    minT: els.MinT?.[0]?.parameter?.parameterName ?? null,
+    maxT: els.MaxT?.[0]?.parameter?.parameterName ?? null
+  };
+}
+function ensureWeatherLoaded(unit){
+  const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
+  const cached = weatherCache[county];
+  if (cached && Date.now() - cached.fetchedAt < 30*60*1000) { state.weather = cached.data; return; }
+  if (weatherLoadingCounty === county) return;
+  weatherLoadingCounty = county;
+  fetchWeather(county).then(data => {
+    weatherCache[county] = { data, fetchedAt: Date.now() };
+    state.weather = data;
+    weatherLoadingCounty = null;
+    safeRender();
+  }).catch(err => {
+    console.error("天氣資訊載入失敗", err);
+    state.weather = { error: true, county, message: err.message || String(err) };
+    weatherLoadingCounty = null;
+    safeRender();
+  });
+}
+function weatherIconFor(wx){
+  if (!wx) return "cloud";
+  if (wx.includes("雷") || wx.includes("雨")) return "rain";
+  if (wx.startsWith("晴") && !wx.includes("多雲") && !wx.includes("陰")) return "sun";
+  return "cloud";
+}
+
+/* =========================================================
    8) 小工具
    ========================================================= */
 function timeAgo(ms){
@@ -897,6 +953,8 @@ const ICON_PATHS = {
   returnArrow: `<path d="M9.5 14 4.5 9l5-5"/><path d="M4.5 9h9.5a5.5 5.5 0 0 1 5.5 5.5V17"/>`,
   flag:    `<path d="M6 3v18"/><path d="M6 4h12l-2.3 4L18 12H6"/>`,
   cloud:   `<path d="M7.5 18a4 4 0 0 1-.7-7.9 5 5 0 0 1 9.6-1.6A4.3 4.3 0 0 1 16.3 18Z"/>`,
+  sun:     `<circle cx="12" cy="12" r="4.2"/><path d="M12 3v2.2M12 18.8V21M4.2 12H2M22 12h-2.2M5.8 5.8l1.5 1.5M16.7 16.7l1.5 1.5M18.2 5.8l-1.5 1.5M7.3 16.7l-1.5 1.5"/>`,
+  rain:    `<path d="M7.5 15a4 4 0 0 1-.7-7.9 5 5 0 0 1 9.6-1.6A4.3 4.3 0 0 1 16.3 15Z"/><path d="M8 18.5 7 21M12.5 18.5 11.5 21M17 18.5 16 21"/>`,
   check:   `<path d="M5 13l4.5 4.5L19 7"/>`,
   chart:   `<path d="M4 20V10"/><path d="M11 20V4"/><path d="M18 20v-7"/>`,
   chevronDown: `<path d="M5 8.5 12 15.5 19 8.5"/>`
@@ -1014,8 +1072,25 @@ function taskCard(t){
 /* =========================================================
    11) 畫面：首頁 Dashboard
    ========================================================= */
+function renderWeatherCard(unit){
+  const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
+  const w = state.weather;
+  if (!w) return `<div class="weather-card"><span class="emoji">${icon('cloud',30)}</span><div>天氣資訊載入中…</div></div>`;
+  if (w.error || w.county !== county) return `<div class="weather-card"><span class="emoji">${icon('cloud',30)}</span><div>${esc(county)}天氣資訊載入失敗${w.message ? '：'+esc(w.message) : ''}</div></div>`;
+  const range = (w.minT!=null && w.maxT!=null) ? `${w.minT}° - ${w.maxT}°` : "";
+  return `
+    <div class="weather-card">
+      <span class="emoji">${icon(weatherIconFor(w.wx),30)}</span>
+      <div>
+        <div style="color:var(--text); font-weight:700; font-size:15px;">${esc(county)} · ${esc(w.wx)}</div>
+        <div style="margin-top:2px;">${range}${w.pop!=null ? (range?' · ':'')+'降雨機率 '+w.pop+'%' : ''}</div>
+      </div>
+    </div>`;
+}
 function viewHome(){
   const p = state.profile;
+  const unit = myUnit(p);
+  ensureWeatherLoaded(unit);
   const tasks = visibleTasks(p, state.tasks);
   const today = new Date();
   const todayTasks = tasks.filter(t => isSameDay(new Date(t.createdAt||0).getTime(), today));
@@ -1034,10 +1109,7 @@ function viewHome(){
 
   return `
     <div class="home-date">${fmtDate(today)}</div>
-    <div class="weather-card">
-      <span class="emoji">${icon('cloud',30)}</span>
-      <div>天氣資訊尚未串接（規劃使用中央氣象署 CWA 開放資料，待提供 API 金鑰）</div>
-    </div>
+    ${renderWeatherCard(unit)}
     <div class="section-label">今日概況</div>
     <div class="stat-grid">
       <div class="stat-tile t-blue"><div class="num">${todayTasks.length}</div><div class="lbl">今日勤務數</div></div>
