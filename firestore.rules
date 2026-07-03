@@ -39,10 +39,16 @@ service cloud.firestore {
     // 基礎資料：人員／車輛／行車紀錄器，依單位分類。
     // Admin、高勤官可管理所有單位；主官管僅能管理自己單位的資料；
     // 一般成員與主官管都只能讀取自己單位的資料（供建立勤務下拉選單使用）。
+    // 帳號綁定單位後，個人資料（姓名/階級/電話）會自動鏡射進同一份人員名冊
+    // （文件 id = 使用者 uid），所以自己也需要能更新這份對應到自己的資料；
+    // 但跟 users 集合一樣不能自己改 unit，避免藉此跨單位。
     match /personnel/{id} {
       allow read: if isStaff() || sameUnit(resource.data.unit);
       allow create: if isStaff() || (isCommander() && sameUnit(request.resource.data.unit));
-      allow update, delete: if isStaff() || (isCommander() && sameUnit(resource.data.unit) && sameUnit(request.resource.data.unit));
+      allow update: if isStaff()
+                    || (isCommander() && sameUnit(resource.data.unit) && sameUnit(request.resource.data.unit))
+                    || (isSignedIn() && request.auth.uid == id && request.resource.data.unit == resource.data.unit);
+      allow delete: if isStaff() || (isCommander() && sameUnit(resource.data.unit));
     }
     match /vehicles/{id} {
       allow read: if isStaff() || sameUnit(resource.data.unit);
