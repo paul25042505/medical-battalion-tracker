@@ -172,7 +172,7 @@ import {
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
-  getFirestore, collection, doc, addDoc, setDoc, getDoc, deleteDoc,
+  initializeFirestore, collection, doc, addDoc, setDoc, getDoc, deleteDoc,
   query, orderBy, onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
@@ -191,7 +191,9 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
+// 部分行動網路/電信商環境會擋掉 Firestore 預設的串流連線，導致一直卡在
+// "client is offline"；改用自動偵測長輪詢可以相容這類網路環境。
+const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
 const googleProvider = new GoogleAuthProvider();
 
 /* =========================================================
