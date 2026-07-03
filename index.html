@@ -293,7 +293,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-42-no-clobber-edits";
+const BUILD_TAG = "2026-07-03-43-no-background-polling";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -390,17 +390,19 @@ async function fsListCollection(collectionPath){
   return (data.documents||[]).map(d => ({ id: d.name.split("/").pop(), ...fromFsFields(d.fields) }));
 }
 
-function poll(fn, intervalMs){
-  let stopped = false, timer = null;
+// 不再定時自動輪詢（使用者反應一直背景更新很干擾）。改成只在建立時抓一次，
+// 之後只有畫面切換／使用者做出寫入動作時才會呼叫 refreshNow() 手動刷新一次，
+// 沒有任何背景計時器會自己觸發重繪。
+function poll(fn){
+  let stopped = false;
   async function tick(){
     if (stopped) return;
-    try { await fn(); } catch(e){ console.error("輪詢失敗", e); }
-    if (!stopped) timer = setTimeout(tick, intervalMs);
+    try { await fn(); } catch(e){ console.error("刷新失敗", e); }
   }
   tick();
   return {
-    stop(){ stopped = true; if (timer) clearTimeout(timer); },
-    refreshNow(){ if (timer) clearTimeout(timer); tick(); }
+    stop(){ stopped = true; },
+    refreshNow(){ if (!stopped) tick(); }
   };
 }
 
@@ -723,7 +725,7 @@ onAuthStateChanged(auth, async (user) => {
       }
       if (wasPending && state.profile.role !== "pending") startDataListeners();
       if (changed || (wasPending && state.profile.role !== "pending")) safeRender();
-    }, 8000);
+    });
   } catch (err) {
     console.error("登入後初始化失敗", err);
     showToast(`登入後初始化失敗：[${err.code||'?'}] ${err.message} · build:${BUILD_TAG}`);
@@ -738,7 +740,7 @@ function startDataListeners(){
     const changed = changedSince("tasks", docs);
     state.tasks = docs;
     if (changed) safeRender();
-  }, 6000);
+  });
   eventsPoll = poll(async () => {
     const docs = await fsListCollection("events");
     docs.forEach(d => { d.ts = d.timestamp ? new Date(d.timestamp).getTime() : Date.now(); });
@@ -746,25 +748,25 @@ function startDataListeners(){
     const changed = changedSince("events", docs);
     state.events = docs;
     if (changed) safeRender();
-  }, 6000);
+  });
   personnelPoll = poll(async () => {
     const docs = await fsListCollection("personnel");
     const changed = changedSince("personnel", docs);
     state.personnel = docs;
     if (changed) safeRender();
-  }, 10000);
+  });
   vehiclesPoll = poll(async () => {
     const docs = await fsListCollection("vehicles");
     const changed = changedSince("vehicles", docs);
     state.vehicles = docs;
     if (changed) safeRender();
-  }, 10000);
+  });
   recordersPoll = poll(async () => {
     const docs = await fsListCollection("recorders");
     const changed = changedSince("recorders", docs);
     state.recorders = docs;
     if (changed) safeRender();
-  }, 10000);
+  });
   ensureUnitsSeeded();
 }
 function cleanupListeners(){
@@ -820,6 +822,13 @@ function showToast(msg){
 function nav(route){
   state.route = route; state.reportDraft = null;
   render(); window.scrollTo(0,0);
+  // 沒有背景計時器會自動刷新資料了，改成每次切換畫面時抓一次最新資料
+  // （包含再次點同一個分頁也會刷新），確保看到的內容不會太舊。
+  if (tasksPoll) tasksPoll.refreshNow();
+  if (eventsPoll) eventsPoll.refreshNow();
+  if (personnelPoll) personnelPoll.refreshNow();
+  if (vehiclesPoll) vehiclesPoll.refreshNow();
+  if (recordersPoll) recordersPoll.refreshNow();
 }
 function esc(s){ return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -871,7 +880,8 @@ function viewPending(){
     <div class="pending-box">
       <p>您的帳號（${esc(state.user.email)}）已建立，但尚未指派角色。<br><br>請聯繫系統管理員開通權限後再登入。</p>
     </div>
-    <button class="icon-btn" style="margin-top:20px;" onclick="window.__logout()">登出</button>
+    <button class="icon-btn" style="margin-top:20px;" onclick="window.__refreshProfile()">重新整理</button>
+    <button class="icon-btn" style="margin-top:10px;" onclick="window.__logout()">登出</button>
   </div>`;
 }
 function viewDisabled(){
@@ -882,7 +892,8 @@ function viewDisabled(){
     <div class="pending-box">
       <p>您的帳號（${esc(state.user.email)}）已被系統管理員停用。<br><br>如有疑問請聯繫系統管理員。</p>
     </div>
-    <button class="icon-btn" style="margin-top:20px;" onclick="window.__logout()">登出</button>
+    <button class="icon-btn" style="margin-top:20px;" onclick="window.__refreshProfile()">重新整理</button>
+    <button class="icon-btn" style="margin-top:10px;" onclick="window.__logout()">登出</button>
   </div>`;
 }
 
@@ -1794,6 +1805,7 @@ function render(){
    ========================================================= */
 window.__login = doLogin;
 window.__logout = doLogout;
+window.__refreshProfile = () => { if (profilePoll) profilePoll.refreshNow(); };
 window.__nav = nav;
 window.__startRolePreview = (role, unit) => startRolePreview(role, unit);
 window.__endRolePreview = () => endRolePreview();
