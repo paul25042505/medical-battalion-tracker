@@ -179,6 +179,7 @@
     padding:13px 14px; border-radius:10px; font-size:16px; font-family:var(--sans);
   }
   .field textarea{resize:vertical; min-height:72px;}
+  .field input:disabled{color:var(--muted); background:var(--bg);}
   .btn-primary{width:100%; background:var(--amber); color:#1A1200; font-weight:700; border:none; padding:15px; border-radius:10px; font-size:16px; margin-top:4px;}
   .admin-row{display:flex; justify-content:space-between; align-items:center; background:var(--panel); border:1px solid var(--border); padding:14px 16px; border-radius:12px; margin-bottom:10px; box-shadow:var(--card-shadow);}
   .admin-row .name{font-size:15px; font-weight:600;}
@@ -277,7 +278,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-15-scale";
+const BUILD_TAG = "2026-07-03-16-profileform";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1175,8 +1176,8 @@ function viewProfile(){
         <div class="field"><label>姓名</label><input name="displayName" value="${esc(p.displayName||'')}"></div>
         <div class="field"><label>階級</label><input name="rank" value="${esc(p.rank||'')}" placeholder="例如：上士"></div>
         <div class="field"><label>單位</label><input name="unit" value="${esc(p.unit||'')}" placeholder="例如：第一連"></div>
-        <div class="profile-row"><span class="k">Email</span><span>${esc(p.email||'—')}</span></div>
-        <div class="profile-row"><span class="k">角色</span><span>${ROLE_LABEL[p.role]||p.role}</span></div>
+        <div class="field"><label>Email</label><input value="${esc(p.email||'—')}" disabled></div>
+        <div class="field"><label>角色</label><input value="${ROLE_LABEL[p.role]||p.role}" disabled></div>
         <button class="btn-primary" type="submit">儲存</button>
         <button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__cancelEditProfile()">取消</button>
       </form>
