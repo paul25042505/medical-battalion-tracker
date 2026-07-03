@@ -135,6 +135,16 @@
     border-radius:var(--radius-md); padding:16px 18px; margin-bottom:18px; color:var(--muted); font-size:14px; box-shadow:var(--shadow-xs);
   }
   .weather-card .emoji{font-size:30px;}
+  .hazard-banner{margin-bottom:14px;}
+  .hazard-row{
+    display:flex; align-items:flex-start; gap:10px; color:var(--red);
+    background:rgba(255,59,48,0.08); border:1px solid rgba(255,59,48,0.22);
+    border-radius:var(--radius-md); padding:12px 14px; margin-bottom:8px;
+  }
+  .hazard-row:last-child{margin-bottom:0;}
+  .hazard-txt{flex:1; min-width:0;}
+  .hazard-name{font-weight:700; font-size:14.5px; color:var(--text);}
+  .hazard-time{font-size:12.5px; color:var(--muted); font-family:var(--mono); margin-top:2px;}
   .stat-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:8px;}
   .stat-tile{border-radius:var(--radius-md); padding:18px 10px; text-align:center; box-shadow:var(--shadow-xs); border:1px solid transparent;}
   .stat-tile .num{font-size:27px; font-weight:800; font-family:var(--mono); letter-spacing:-0.02em;}
@@ -330,7 +340,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-56-weather-forecast";
+const BUILD_TAG = "2026-07-03-57-weather-hazard-warnings";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -510,7 +520,8 @@ const state = {
   baseDataUnit: "", baseDataTab: "personnel", baseDataModal: null, // 基礎資料管理頁籤狀態；baseDataModal: {coll, id, unit} | null
   createTaskUnit: "", // 建立勤務頁面：admin/高勤官可切換的單位
   previewActive: false, realRoleUnit: null, // 角色權限預覽（僅限 admin）
-  weather: null // 首頁氣象預報（依單位對應縣市，見 ensureWeatherLoaded）
+  weather: null, // 首頁氣象預報（依單位對應縣市，見 ensureWeatherLoaded）
+  hazards: null // 首頁天氣特報／陸上警報（依單位對應縣市，見 ensureHazardsLoaded）
 };
 let tasksPoll = null, eventsPoll = null, profilePoll = null;
 let personnelPoll = null, vehiclesPoll = null, recordersPoll = null;
@@ -897,6 +908,46 @@ function weatherIconFor(wx){
   return "cloud";
 }
 
+// 天氣特報（W-C0033-001，各縣市目前有效的天氣警特報，含颱風陸上警報／大雨特報等）。
+// 縣市層級的特報 feed 本身就會涵蓋「颱風陸上警報」：陸上警報生效時，受影響縣市會
+// 出現在這份清單裡，不需要另外接颱風警報單的資料集。
+const hazardCache = {}; // { [縣市名稱]: { data, fetchedAt } }
+let hazardLoadingCounty = null;
+async function fetchHazards(county){
+  const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0033-001?Authorization=${CWA_API_KEY}&locationName=${encodeURIComponent(county)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  console.log("[天氣特報原始回應]", county, json);
+  const locs = json?.records?.location || [];
+  const loc = locs.find(l => l.locationName === county) || locs[0];
+  const hazards = loc?.hazardConditions?.hazards || [];
+  return hazards.map(h => ({
+    phenomena: h.info?.phenomena || "天氣特報",
+    significance: h.info?.significance || "",
+    startTime: h.validTime?.startTime || null,
+    endTime: h.validTime?.endTime || null
+  }));
+}
+function ensureHazardsLoaded(unit){
+  const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
+  const cached = hazardCache[county];
+  if (cached && Date.now() - cached.fetchedAt < 10*60*1000) { state.hazards = { county, list: cached.data }; return; }
+  if (hazardLoadingCounty === county) return;
+  hazardLoadingCounty = county;
+  fetchHazards(county).then(data => {
+    hazardCache[county] = { data, fetchedAt: Date.now() };
+    state.hazards = { county, list: data };
+    hazardLoadingCounty = null;
+    safeRender();
+  }).catch(err => {
+    console.error("天氣特報載入失敗", err);
+    state.hazards = { county, error: true, message: err.message || String(err) };
+    hazardLoadingCounty = null;
+    safeRender();
+  });
+}
+
 /* =========================================================
    8) 小工具
    ========================================================= */
@@ -1087,10 +1138,29 @@ function renderWeatherCard(unit){
       </div>
     </div>`;
 }
+function renderHazardBanner(unit){
+  const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
+  const h = state.hazards;
+  // 尚未載入完成或載入失敗時安靜略過，不影響首頁其他內容顯示
+  // （天氣卡片本身已經有自己的載入中／失敗狀態，不需要重複顯示）。
+  if (!h || h.county !== county || h.error || !h.list || !h.list.length) return "";
+  return `
+    <div class="hazard-banner">
+      ${h.list.map(x => `
+        <div class="hazard-row">
+          ${icon('alert',18)}
+          <div class="hazard-txt">
+            <div class="hazard-name">${esc(county)} ${esc(x.phenomena)}${esc(x.significance)}</div>
+            ${x.startTime ? `<div class="hazard-time">${fmtTime(new Date(x.startTime).getTime())}${x.endTime?' 至 '+fmtTime(new Date(x.endTime).getTime()):''}</div>` : ""}
+          </div>
+        </div>`).join("")}
+    </div>`;
+}
 function viewHome(){
   const p = state.profile;
   const unit = myUnit(p);
   ensureWeatherLoaded(unit);
+  ensureHazardsLoaded(unit);
   const tasks = visibleTasks(p, state.tasks);
   const today = new Date();
   const todayTasks = tasks.filter(t => isSameDay(new Date(t.createdAt||0).getTime(), today));
@@ -1109,6 +1179,7 @@ function viewHome(){
 
   return `
     <div class="home-date">${fmtDate(today)}</div>
+    ${renderHazardBanner(unit)}
     ${renderWeatherCard(unit)}
     <div class="section-label">今日概況</div>
     <div class="stat-grid">
