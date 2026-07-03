@@ -369,7 +369,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-68-fix-home-inprogress-count";
+const BUILD_TAG = "2026-07-04-69-tasks-completed-tab";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1275,24 +1275,37 @@ function viewHome(){
 /* =========================================================
    12) 畫面：任務中心（所有尚未完成的勤務）
    ========================================================= */
+// 完成的勤務不能直接從清單裡消失、找不到——除了「全部」跟各進行中狀態頁籤
+// （只列尚未完成的勤務）以外，另外加一個「已完成」頁籤，才能在任務頁本身
+// 就查得到剛完成的勤務，不用跳去「紀錄」頁另外查詢。
 const TASKS_TABS = [
   { key:"all", label:"全部" },
   { key:"dispatch", label:"出勤中" },
   { key:"onscene", label:"現場中" },
   { key:"transit", label:"前往中" },
-  { key:"returning", label:"返營中" }
+  { key:"returning", label:"返營中" },
+  { key:"completed", label:"已完成" }
 ];
 function viewTasks(){
   const p = state.profile;
-  const all = visibleTasks(p, state.tasks).filter(t => deriveStatus(t.id) !== "completed");
-  const shown = state.tasksTab === "all" ? all : all.filter(t => deriveStatus(t.id) === state.tasksTab);
+  const visible = visibleTasks(p, state.tasks);
+  const active = visible.filter(t => deriveStatus(t.id) !== "completed");
+  const completedTasks = visible.filter(t => deriveStatus(t.id) === "completed");
+  const shown = state.tasksTab === "all" ? active
+    : state.tasksTab === "completed" ? completedTasks
+    : active.filter(t => deriveStatus(t.id) === state.tasksTab);
 
   const tabs = `
     <div class="tabs2 scroll">
-      ${TASKS_TABS.map(tb => `
+      ${TASKS_TABS.map(tb => {
+        const count = tb.key === "all" ? active.length
+          : tb.key === "completed" ? completedTasks.length
+          : active.filter(t=>deriveStatus(t.id)===tb.key).length;
+        return `
         <div class="tab2 ${state.tasksTab===tb.key?'active':''}" onclick="window.__setTasksTab('${tb.key}')">
-          ${tb.label}<span class="tab2-count">${tb.key==='all' ? all.length : all.filter(t=>deriveStatus(t.id)===tb.key).length}</span>
-        </div>`).join("")}
+          ${tb.label}<span class="tab2-count">${count}</span>
+        </div>`;
+      }).join("")}
     </div>`;
 
   return `
