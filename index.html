@@ -293,7 +293,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-33-home-cards-unify";
+const BUILD_TAG = "2026-07-03-34-auto-dispatch";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -377,7 +377,9 @@ async function fsSetDoc(path, obj){
   await fsFetch(`${path}?${mask}`, { method: "PATCH", body: JSON.stringify({ fields: toFsFields(obj) }) });
 }
 async function fsAddDoc(collectionPath, obj){
-  await fsFetch(collectionPath, { method: "POST", body: JSON.stringify({ fields: toFsFields(obj) }) });
+  const res = await fsFetch(collectionPath, { method: "POST", body: JSON.stringify({ fields: toFsFields(obj) }) });
+  const data = await res.json();
+  return { id: data.name.split("/").pop(), ...fromFsFields(data.fields) };
 }
 async function fsDeleteDoc(path){
   await fsFetch(path, { method: "DELETE" });
@@ -575,9 +577,19 @@ async function addEvent(taskId, type, extra){
   if (eventsPoll) eventsPoll.refreshNow();
 }
 async function createTask(data){
-  await fsAddDoc("tasks", { ...data, createdAt: new Date(), createdBy: state.user.uid, createdByName: state.profile.displayName || state.user.email });
-  showToast("勤務已建立");
+  const created = await fsAddDoc("tasks", { ...data, createdAt: new Date(), createdBy: state.user.uid, createdByName: state.profile.displayName || state.user.email });
+  // 建立勤務後直接視為已出勤，不再停留在「待命中」的中間狀態
+  // （待命中之後會另外設計，目前先讓新建立的勤務直接進入出勤中）。
+  await fsAddDoc("events", {
+    taskId: created.id, type: "DISPATCH", unit: data.unit,
+    timestamp: new Date(),
+    userId: state.user.uid,
+    userName: state.profile.displayName || state.user.email,
+    ...(data.startMileage != null ? { mileage: data.startMileage } : {})
+  });
+  showToast("勤務已建立並標記出勤");
   if (tasksPoll) tasksPoll.refreshNow();
+  if (eventsPoll) eventsPoll.refreshNow();
 }
 async function deleteTask(taskId){
   await fsDeleteDoc(`tasks/${taskId}`);
