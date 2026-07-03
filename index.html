@@ -293,7 +293,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-46-tappable-phone";
+const BUILD_TAG = "2026-07-03-47-home-tasks-not-vehicles";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -972,12 +972,14 @@ function viewHome(){
   const todayDone = todayTasks.filter(t => deriveStatus(t.id) === "completed");
   const todayActive = todayTasks.filter(t => deriveStatus(t.id) !== "completed");
 
-  const activeTasksByVehicle = (canSeeAllUnits(p) ? state.vehicles : state.vehicles.filter(v => v.unit === myUnit(p)))
-    .map(v => tasks.find(t => t.vehicle === v.plate && deriveStatus(t.id) !== "completed"))
-    .filter(Boolean)
+  // 車輛動態＝目前所有進行中的勤務（一輛車理論上同時只會有一個進行中任務，
+  // 但測試資料常會讓同一車號被多筆任務共用，所以直接以「任務」為單位列出，
+  // 不要用「車輛」去找對應任務，否則同一車號的第二筆任務會被吃掉不顯示）。
+  const activeTasks = tasks
+    .filter(t => deriveStatus(t.id) !== "completed")
     .sort((a,b) => unitLabel(a.unit).localeCompare(unitLabel(b.unit)));
-  const fleetSection = activeTasksByVehicle.length
-    ? activeTasksByVehicle.map(taskCard).join("")
+  const fleetSection = activeTasks.length
+    ? activeTasks.map(taskCard).join("")
     : `<div class="empty">目前沒有車輛執行中</div>`;
 
   return `
