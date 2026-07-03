@@ -223,10 +223,6 @@
   .filters-toggle.open .chev{transform:rotate(180deg);}
 
   /* ---- profile / 更多 ---- */
-  .profile-card{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:20px; margin-bottom:18px; box-shadow:var(--card-shadow);}
-  .profile-row{display:flex; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border); font-size:15px;}
-  .profile-row:last-child{border-bottom:none;}
-  .profile-row .k{color:var(--text); font-weight:600;}
   .hub-head{display:flex; flex-direction:column; align-items:center; text-align:center; padding:14px 0 10px 0;}
   .hub-avatar{width:88px; height:88px; border-radius:50%; object-fit:cover; box-shadow:var(--card-shadow); background:var(--panel-2); display:flex; align-items:center; justify-content:center; color:var(--muted);}
   .hub-name{margin-top:14px; font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:22px; font-weight:700; color:var(--text);}
@@ -296,7 +292,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-52-revert-call-confirm";
+const BUILD_TAG = "2026-07-03-53-more-hub-reorder";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1472,7 +1468,7 @@ function viewProfile(){
     { iconName:"bell", label:"通知", route:{name:"notifications"}, bg:"#FFE9E8", fg:"#C62828" },
     { iconName:"records", label:"勤務紀錄", route:{name:"records"}, bg:"#F2E9FE", fg:"#6B23C7" },
     { iconName:"chart", label:"統計分析", route:{name:"stats"}, bg:"#E6F9EC", fg:"#177A34" },
-    { iconName:"tasks", label:"管理後台", route:{name:"admin"}, show: canManageTasks(p), bg:"#E8F1FF", fg:"#0056C7" }
+    { iconName:"user", label:"編輯個人資料", action:"window.__editProfile()", bg:"#E8F1FF", fg:"#0056C7" }
   ].filter(q => q.show !== false);
 
   return `
@@ -1483,23 +1479,17 @@ function viewProfile(){
     </div>
     <div class="hub-icon-grid">
       ${quick.map(q => `
-        <button class="quick-btn" onclick='window.__nav(${JSON.stringify(q.route)})'>
+        <button class="quick-btn" onclick='${q.action ? q.action : `window.__nav(${JSON.stringify(q.route)})`}'>
           <span class="quick-icon-wrap" style="background:${q.bg}; color:${q.fg};">${icon(q.iconName,22)}</span>${q.label}
         </button>`).join("")}
     </div>
-    <div class="section-label">帳號資訊</div>
-    <div class="profile-card">
-      <div class="profile-row"><span class="k">Email</span><span>${esc(p.email||'—')}</span></div>
-      <div class="profile-row"><span class="k">電話</span><span>${esc(p.phone||'未設定')}</span></div>
-      <div class="profile-row"><span class="k">單位</span><span>${unitLabel(p.unit)}</span></div>
-      <div class="profile-row"><span class="k">角色</span><span>${ROLE_LABEL[myRole(p)]||p.role}</span></div>
-    </div>
     <div class="section-label">服務</div>
-    <div class="service-row" onclick="window.__editProfile()">
-      <span class="icon-wrap" style="background:#E8F1FF; color:#0056C7;">${icon('user',20)}</span>
-      <div class="txt"><div class="t1">編輯個人資料</div><div class="t2">修改姓名、階級</div></div>
+    ${canManageTasks(p) ? `
+    <div class="service-row" onclick="window.__nav({name:'admin'})">
+      <span class="icon-wrap" style="background:#E8F1FF; color:#0056C7;">${icon('tasks',20)}</span>
+      <div class="txt"><div class="t1">管理後台</div><div class="t2">任務管理、基礎資料管理、帳號權限</div></div>
       <span class="chev">›</span>
-    </div>
+    </div>` : ""}
     ${canManageUsers(p) && !state.previewActive ? `
     <div class="service-row" onclick="window.__nav({name:'rolePreview'})">
       <span class="icon-wrap" style="background:#FFF2E0; color:#B45F00;">${icon('user',20)}</span>
