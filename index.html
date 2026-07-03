@@ -225,7 +225,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-10-svgicons";
+const BUILD_TAG = "2026-07-03-11-adminplus";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -355,7 +355,7 @@ const STATUS_ORDER = ["pending","dispatch","onscene","returning","completed"];
 
 const ROLE_LABEL = {
   admin: "管理員", duty_officer: "高勤官", company_commander: "連級主官管",
-  member: "一般成員", pending: "待審核"
+  member: "一般成員", pending: "待審核", disabled: "已停用"
 };
 
 /* =========================================================
@@ -404,7 +404,7 @@ function durationLabel(ms){
 function canManageUsers(p){ return p && p.role === "admin"; }
 function canManageTasks(p){ return p && (p.role === "admin" || p.role === "duty_officer"); }
 function canSeeAllTasks(p){ return p && (p.role === "admin" || p.role === "duty_officer"); }
-function isActive(p){ return p && p.role !== "pending"; }
+function isActive(p){ return p && p.role !== "pending" && p.role !== "disabled"; }
 function canCreateTask(p){ return isActive(p); } // 建立勤務（所有成員）
 function canReport(p, task){ return isActive(p); } // 回報開放給所有已審核成員
 function visibleTasks(p, tasks){
@@ -437,6 +437,10 @@ async function deleteTask(taskId){
   await fsDeleteDoc(`tasks/${taskId}`);
   showToast("任務已刪除");
   if (tasksPoll) tasksPoll.refreshNow();
+}
+async function forceEndTask(taskId){
+  await addEvent(taskId, "COMPLETED", { note: "管理員強制結束" });
+  showToast("已強制結束勤務");
 }
 async function setUserRole(uid, role, unit){
   await fsSetDoc(`users/${uid}`, { role, unit });
@@ -577,6 +581,17 @@ function viewPending(){
     <h1 class="login-title" style="font-size:20px;">帳號待審核</h1>
     <div class="pending-box">
       <p>您的帳號（${esc(state.user.email)}）已建立，但尚未指派角色。<br><br>請聯繫系統管理員開通權限後再登入。</p>
+    </div>
+    <button class="icon-btn" style="margin-top:20px;" onclick="window.__logout()">登出</button>
+  </div>`;
+}
+function viewDisabled(){
+  return `
+  <div class="login-wrap">
+    <div class="login-mark">PHOENIX · DISPATCH</div>
+    <h1 class="login-title" style="font-size:20px;">帳號已停用</h1>
+    <div class="pending-box">
+      <p>您的帳號（${esc(state.user.email)}）已被系統管理員停用。<br><br>如有疑問請聯繫系統管理員。</p>
     </div>
     <button class="icon-btn" style="margin-top:20px;" onclick="window.__logout()">登出</button>
   </div>`;
@@ -888,6 +903,25 @@ function viewAdmin(){
   const p = state.profile;
   if (!canManageTasks(p)) return `<div class="empty">您沒有管理權限</div>`;
 
+  const today = new Date();
+  const todayTasks = state.tasks.filter(t => isSameDay(new Date(t.createdAt||0).getTime(), today));
+  const todayDone = todayTasks.filter(t => deriveStatus(t.id) === "completed");
+  const todayActive = todayTasks.filter(t => deriveStatus(t.id) !== "completed");
+  const personnelCount = (state._usersCache && Array.isArray(state._usersCache))
+    ? state._usersCache.filter(u => u.role !== "pending" && u.role !== "disabled").length
+    : null;
+
+  const overview = `
+    <div class="section-label">管理後台總覽</div>
+    <div class="stat-grid">
+      <div class="stat-tile"><div class="num">${todayTasks.length}</div><div class="lbl">今日勤務</div></div>
+      <div class="stat-tile"><div class="num">${todayActive.length}</div><div class="lbl">今日進行中</div></div>
+      <div class="stat-tile"><div class="num">${todayDone.length}</div><div class="lbl">今日完成</div></div>
+    </div>
+    <div class="stat-grid" style="grid-template-columns:1fr;">
+      <div class="stat-tile"><div class="num">${personnelCount!=null ? personnelCount : '—'}</div><div class="lbl">已審核人員總數${personnelCount==null ? '（開啟帳號權限頁籤後顯示）' : ''}</div></div>
+    </div>`;
+
   const tabs = `
     <div class="tabs2">
       <div class="tab2 ${state.adminTab==='tasks'?'active':''}" onclick="window.__setAdminTab('tasks')">任務管理</div>
@@ -895,22 +929,51 @@ function viewAdmin(){
     </div>`;
 
   if (state.adminTab === "users" && canManageUsers(p)) {
-    return tabs + viewAdminUsers();
+    return overview + tabs + viewAdminUsers();
   }
-  return tabs + viewAdminTasks();
+  return overview + tabs + viewAdminTasks();
+}
+
+function taskToCsvRow(t){
+  const s = deriveStatus(t.id);
+  const dispatchEv = eventByType(t.id, "DISPATCH");
+  const completedEv = eventByType(t.id, "COMPLETED");
+  const startMileage = dispatchEv?.mileage ?? t.startMileage ?? "";
+  const finalMileage = completedEv?.mileage ?? "";
+  const distance = (startMileage !== "" && finalMileage !== "") ? (finalMileage - startMileage) : "";
+  return [t.title, t.vehicle, t.location, t.crewLeader, t.driver, STATUS_LABEL[s], fmtTime(new Date(t.createdAt||0).getTime()), startMileage, finalMileage, distance]
+    .map(v => `"${String(v??"").replace(/"/g,'""')}"`).join(",");
+}
+function exportTasksCsv(){
+  const header = ["任務名稱","車號","地點","車長","駕駛","狀態","建立時間","出發里程","最終里程","行駛公里"].join(",");
+  const rows = state.tasks.map(taskToCsvRow);
+  const csv = "﻿" + [header, ...rows].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `勤務紀錄_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function viewAdminTasks(){
   return `
     <div class="section-label">所有勤務</div>
-    ${state.tasks.length ? state.tasks.map(t => `
+    <button class="btn-ghost" style="width:100%;margin-bottom:10px;" onclick="window.__exportTasks()">匯出 CSV</button>
+    ${state.tasks.length ? state.tasks.map(t => {
+      const s = deriveStatus(t.id);
+      return `
       <div class="admin-row">
         <div>
           <div class="name">${esc(t.title)}</div>
-          <div class="sub">${esc(t.vehicle||'—')} · ${STATUS_LABEL[deriveStatus(t.id)]}</div>
+          <div class="sub">${esc(t.vehicle||'—')} · ${STATUS_LABEL[s]}</div>
         </div>
-        <button class="icon-btn danger" onclick="window.__deleteTask('${t.id}')">刪除</button>
-      </div>`).join("") : `<div class="empty">尚無勤務</div>`}
+        <div style="display:flex; gap:6px;">
+          ${s !== "completed" ? `<button class="icon-btn" onclick="window.__forceEndTask('${t.id}')">強制結束</button>` : ""}
+          <button class="icon-btn danger" onclick="window.__deleteTask('${t.id}')">刪除</button>
+        </div>
+      </div>`;
+    }).join("") : `<div class="empty">尚無勤務</div>`}
   `;
 }
 
@@ -931,7 +994,7 @@ function viewAdminUsers(){
   }
   if (state._usersCache === "loading") return `<div class="spinner"></div>`;
 
-  const roles = ["pending","member","company_commander","duty_officer","admin"];
+  const roles = ["pending","member","company_commander","duty_officer","admin","disabled"];
   return `
     <div class="section-label">帳號權限管理</div>
     ${state._usersCache.map(u => `
@@ -973,6 +1036,7 @@ function render(){
   if (!state.user) { app.innerHTML = viewLogin(); return; }
   if (!state.profile) { app.innerHTML = `<div class="spinner"></div>`; return; }
   if (state.profile.role === "pending") { app.innerHTML = viewPending(); return; }
+  if (state.profile.role === "disabled") { app.innerHTML = viewDisabled(); return; }
 
   const view = ROUTE_VIEWS[state.route.name] || viewHome;
   const body = view();
@@ -1015,6 +1079,8 @@ window.__submitReport = (taskId, type) => {
 };
 window.__setAdminTab = (t) => { state.adminTab = t; state._usersCache = null; render(); };
 window.__deleteTask = (id) => { if (confirm("確定刪除此任務？此動作無法復原。")) deleteTask(id); };
+window.__forceEndTask = (id) => { if (confirm("確定強制結束此勤務？此動作無法復原。")) forceEndTask(id); };
+window.__exportTasks = () => exportTasksCsv();
 window.__setRole = (uid, role) => setUserRole(uid, role, "").then(() => { state._usersCache = null; render(); });
 window.__setRecordsFilter = (key, value) => { state.recordsFilter[key] = value; render(); };
 window.__createTask = (ev) => {
