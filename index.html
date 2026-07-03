@@ -171,16 +171,12 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/fireba
 import {
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-import {
-  initializeFirestore, collection, doc, addDoc, setDoc, getDoc, deleteDoc,
-  query, orderBy, onSnapshot, serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 /* =========================================================
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-01";
+const BUILD_TAG = "2026-07-03-02-rest";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -193,10 +189,99 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-// 部分行動網路/電信商環境會擋掉 Firestore 預設的串流連線，導致一直卡在
-// "client is offline"；改用自動偵測長輪詢可以相容這類網路環境。
-const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
 const googleProvider = new GoogleAuthProvider();
+
+/* =========================================================
+   1b) Firestore REST 用戶端
+   部分行動網路環境會干擾 Firestore SDK 預設的長連線/串流協定，
+   導致一直卡在 "client is offline"（即使網域本身連得到）。
+   這裡改用一般的 HTTPS REST 請求存取 Firestore，即時同步則改為
+   定時輪詢，避開長連線相容性問題。
+   ========================================================= */
+const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents`;
+
+function toFsValue(v){
+  if (v === null || v === undefined) return { nullValue: null };
+  if (typeof v === "string") return { stringValue: v };
+  if (typeof v === "boolean") return { booleanValue: v };
+  if (typeof v === "number") return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
+  if (v instanceof Date) return { timestampValue: v.toISOString() };
+  if (Array.isArray(v)) return { arrayValue: { values: v.map(toFsValue) } };
+  if (typeof v === "object") return { mapValue: { fields: toFsFields(v) } };
+  return { stringValue: String(v) };
+}
+function toFsFields(obj){
+  const out = {};
+  for (const k in obj) if (obj[k] !== undefined) out[k] = toFsValue(obj[k]);
+  return out;
+}
+function fromFsValue(v){
+  if (!v) return null;
+  if ("stringValue" in v) return v.stringValue;
+  if ("booleanValue" in v) return v.booleanValue;
+  if ("integerValue" in v) return parseInt(v.integerValue, 10);
+  if ("doubleValue" in v) return v.doubleValue;
+  if ("timestampValue" in v) return v.timestampValue;
+  if ("nullValue" in v) return null;
+  if ("arrayValue" in v) return (v.arrayValue.values||[]).map(fromFsValue);
+  if ("mapValue" in v) return fromFsFields(v.mapValue.fields||{});
+  return null;
+}
+function fromFsFields(fields){
+  const out = {};
+  for (const k in fields||{}) out[k] = fromFsValue(fields[k]);
+  return out;
+}
+
+async function fsFetch(path, options={}){
+  const idToken = await auth.currentUser.getIdToken();
+  const res = await fetch(`${FIRESTORE_BASE}/${path}`, {
+    ...options,
+    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json", ...(options.headers||{}) }
+  });
+  if (!res.ok && res.status !== 404) {
+    let msg = res.statusText;
+    try { const j = await res.json(); msg = (Array.isArray(j)?j[0]:j).error?.message || msg; } catch(e){}
+    const err = new Error(msg); err.code = res.status;
+    throw err;
+  }
+  return res;
+}
+async function fsGetDoc(path){
+  const res = await fsFetch(path);
+  if (res.status === 404) return null;
+  const data = await res.json();
+  return fromFsFields(data.fields);
+}
+async function fsSetDoc(path, obj){
+  const mask = Object.keys(obj).map(k => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join("&");
+  await fsFetch(`${path}?${mask}`, { method: "PATCH", body: JSON.stringify({ fields: toFsFields(obj) }) });
+}
+async function fsAddDoc(collectionPath, obj){
+  await fsFetch(collectionPath, { method: "POST", body: JSON.stringify({ fields: toFsFields(obj) }) });
+}
+async function fsDeleteDoc(path){
+  await fsFetch(path, { method: "DELETE" });
+}
+async function fsListCollection(collectionPath){
+  const res = await fsFetch(`${collectionPath}?pageSize=300`);
+  const data = await res.json();
+  return (data.documents||[]).map(d => ({ id: d.name.split("/").pop(), ...fromFsFields(d.fields) }));
+}
+
+function poll(fn, intervalMs){
+  let stopped = false, timer = null;
+  async function tick(){
+    if (stopped) return;
+    try { await fn(); } catch(e){ console.error("輪詢失敗", e); }
+    if (!stopped) timer = setTimeout(tick, intervalMs);
+  }
+  tick();
+  return {
+    stop(){ stopped = true; if (timer) clearTimeout(timer); },
+    refreshNow(){ if (timer) clearTimeout(timer); tick(); }
+  };
+}
 
 /* =========================================================
    2) Event 類型定義（精簡版，不含 ON_SCENE_UPDATE）
@@ -229,7 +314,7 @@ const state = {
   user: null, profile: null, tasks: [], events: [],
   route: { name: "dashboard" }, adminTab: "tasks"
 };
-let unsubTasks = null, unsubEvents = null, unsubProfile = null;
+let tasksPoll = null, eventsPoll = null, profilePoll = null;
 
 /* =========================================================
    4) 狀態推導（純函式：Event 陣列 → 狀態）
@@ -270,26 +355,27 @@ function visibleTasks(p, tasks){
    6) Firestore 動作
    ========================================================= */
 async function addEvent(taskId, type){
-  await addDoc(collection(db, "events"), {
+  await fsAddDoc("events", {
     taskId, type,
-    timestamp: serverTimestamp(),
+    timestamp: new Date(),
     userId: state.user.uid,
     userName: state.profile.displayName || state.user.displayName || state.user.email
   });
   showToast(`已回報：${EVENT_TYPES.find(t=>t.type===type).label}`);
+  if (eventsPoll) eventsPoll.refreshNow();
 }
 async function createTask(data){
-  await addDoc(collection(db, "tasks"), {
-    ...data, createdAt: serverTimestamp(), createdBy: state.user.uid
-  });
+  await fsAddDoc("tasks", { ...data, createdAt: new Date(), createdBy: state.user.uid });
   showToast("任務已建立");
+  if (tasksPoll) tasksPoll.refreshNow();
 }
 async function deleteTask(taskId){
-  await deleteDoc(doc(db, "tasks", taskId));
+  await fsDeleteDoc(`tasks/${taskId}`);
   showToast("任務已刪除");
+  if (tasksPoll) tasksPoll.refreshNow();
 }
 async function setUserRole(uid, role, unit){
-  await setDoc(doc(db, "users", uid), { role, unit }, { merge: true });
+  await fsSetDoc(`users/${uid}`, { role, unit });
   showToast("角色已更新");
 }
 
@@ -307,21 +393,24 @@ onAuthStateChanged(auth, async (user) => {
   render(); // 立即顯示 spinner，避免畫面停留在登入頁
 
   try {
-    const ref = doc(db, "users", user.uid);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) {
-      await setDoc(ref, {
-        email: user.email, displayName: user.displayName, role: "pending", unit: "", createdAt: serverTimestamp()
-      });
+    const path = `users/${user.uid}`;
+    let data = await fsGetDoc(path);
+    if (!data) {
+      data = { email: user.email, displayName: user.displayName, role: "pending", unit: "", createdAt: new Date() };
+      await fsSetDoc(path, data);
     }
-    unsubProfile = onSnapshot(ref, (s) => {
-      state.profile = s.exists() ? { uid: user.uid, ...s.data() } : null;
-      if (state.profile && state.profile.role !== "pending") startDataListeners();
+    state.profile = { uid: user.uid, ...data };
+    if (state.profile.role !== "pending") startDataListeners();
+    render();
+
+    profilePoll = poll(async () => {
+      const p = await fsGetDoc(path);
+      if (!p) return;
+      const wasPending = state.profile && state.profile.role === "pending";
+      state.profile = { uid: user.uid, ...p };
+      if (wasPending && state.profile.role !== "pending") startDataListeners();
       render();
-    }, (err) => {
-      console.error("讀取使用者資料失敗", err);
-      showToast(`讀取使用者資料失敗：[${err.code||'?'}] ${err.message}`);
-    });
+    }, 8000);
   } catch (err) {
     console.error("登入後初始化失敗", err);
     showToast(`登入後初始化失敗：[${err.code||'?'}] ${err.message} · build:${BUILD_TAG}`);
@@ -329,22 +418,24 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 function startDataListeners(){
-  if (unsubTasks || unsubEvents) return;
-  unsubTasks = onSnapshot(query(collection(db, "tasks"), orderBy("createdAt", "desc")), (snap) => {
-    state.tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (tasksPoll || eventsPoll) return;
+  tasksPoll = poll(async () => {
+    const docs = await fsListCollection("tasks");
+    docs.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0));
+    state.tasks = docs;
     render();
-  });
-  unsubEvents = onSnapshot(query(collection(db, "events"), orderBy("timestamp", "asc")), (snap) => {
-    state.events = snap.docs.map(d => {
-      const v = d.data();
-      return { id: d.id, ...v, ts: v.timestamp ? v.timestamp.toMillis() : Date.now() };
-    });
+  }, 6000);
+  eventsPoll = poll(async () => {
+    const docs = await fsListCollection("events");
+    docs.forEach(d => { d.ts = d.timestamp ? new Date(d.timestamp).getTime() : Date.now(); });
+    docs.sort((a,b) => a.ts - b.ts);
+    state.events = docs;
     render();
-  });
+  }, 6000);
 }
 function cleanupListeners(){
-  if (unsubTasks) unsubTasks(); if (unsubEvents) unsubEvents(); if (unsubProfile) unsubProfile();
-  unsubTasks = unsubEvents = unsubProfile = null;
+  if (tasksPoll) tasksPoll.stop(); if (eventsPoll) eventsPoll.stop(); if (profilePoll) profilePoll.stop();
+  tasksPoll = eventsPoll = profilePoll = null;
   state.tasks = []; state.events = [];
 }
 
@@ -549,9 +640,13 @@ function viewAdminUsers(){
   // 使用者清單需即時讀取，這裡用簡易一次性快取（開啟頁籤時抓取）
   if (!state._usersCache) {
     state._usersCache = "loading";
-    import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js").then(async (mod) => {
-      const snap = await mod.getDocs(mod.collection(db, "users"));
-      state._usersCache = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+    fsListCollection("users").then(list => {
+      state._usersCache = list;
+      render();
+    }).catch(err => {
+      console.error("讀取使用者清單失敗", err);
+      showToast(`讀取使用者清單失敗：[${err.code||'?'}] ${err.message}`);
+      state._usersCache = [];
       render();
     });
     return `<div class="spinner"></div>`;
@@ -567,7 +662,7 @@ function viewAdminUsers(){
           <div class="name">${esc(u.displayName||u.email)}</div>
           <div class="sub">${esc(u.email)} · ${esc(u.unit||'未設定單位')}</div>
         </div>
-        <select class="role-select" onchange="window.__setRole('${u.uid}', this.value)">
+        <select class="role-select" onchange="window.__setRole('${u.id}', this.value)">
           ${roles.map(r => `<option value="${r}" ${u.role===r?'selected':''}>${ROLE_LABEL[r]}</option>`).join("")}
         </select>
       </div>`).join("")}
@@ -620,7 +715,7 @@ window.__nav = nav;
 window.__report = (taskId, type) => addEvent(taskId, type);
 window.__setAdminTab = (t) => { state.adminTab = t; state._usersCache = null; render(); };
 window.__deleteTask = (id) => { if (confirm("確定刪除此任務？此動作無法復原。")) deleteTask(id); };
-window.__setRole = (uid, role) => setUserRole(uid, role, "");
+window.__setRole = (uid, role) => setUserRole(uid, role, "").then(() => { state._usersCache = null; render(); });
 window.__createTask = (ev) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
