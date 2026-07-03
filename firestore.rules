@@ -14,7 +14,11 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create: if isSignedIn() && request.auth.uid == uid
                     && request.resource.data.role == 'pending';
-      allow update: if isAdmin();
+      // 允許使用者編輯自己的個人資料（姓名/階級/單位等），但不能自己改 role 欄位；
+      // role 只能由管理員（isAdmin）異動。
+      allow update: if isAdmin()
+                    || (isSignedIn() && request.auth.uid == uid
+                        && request.resource.data.role == resource.data.role);
       allow delete: if false;
     }
 
