@@ -109,6 +109,7 @@
   .task-card.s-pending::before{background:var(--gray);}
   .task-card.s-dispatch::before{background:var(--red);}
   .task-card.s-onscene::before{background:var(--amber);}
+  .task-card.s-transit::before{background:#6B23C7;}
   .task-card.s-returning::before{background:var(--blue);}
   .task-card.s-completed::before{background:var(--green);}
   .task-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
@@ -122,6 +123,7 @@
   .badge.pending{background:rgba(142,142,147,0.13); color:var(--gray);}
   .badge.dispatch{background:rgba(255,59,48,0.12); color:var(--red);}
   .badge.onscene{background:rgba(255,149,0,0.13); color:#B45F00;}
+  .badge.transit{background:rgba(107,35,199,0.12); color:#6B23C7;}
   .badge.returning{background:rgba(0,102,255,0.12); color:var(--blue);}
   .badge.completed{background:rgba(52,199,89,0.13); color:#177A34;}
   .task-foot{display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:13.5px; color:var(--muted);}
@@ -198,6 +200,7 @@
   .tl-item:last-child{padding-bottom:0;}
   .tl-dot{position:absolute; left:-22px; top:2px; width:12px; height:12px; border-radius:50%; border:2px solid var(--bg);}
   .tl-dot.dispatch{background:var(--red);} .tl-dot.onscene{background:var(--amber);}
+  .tl-dot.transit{background:#6B23C7;}
   .tl-dot.returning{background:var(--blue);} .tl-dot.completed{background:var(--green);}
   .tl-type{font-weight:700; font-size:15px;}
   .tl-meta{font-family:var(--mono); font-size:13px; color:var(--muted); font-weight:500; margin-top:3px;}
@@ -341,7 +344,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-59-header-layout";
+const BUILD_TAG = "2026-07-04-60-multi-stop-depart-time-only";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -460,6 +463,7 @@ function poll(fn){
 const EVENT_TYPES = [
   { type: "DISPATCH",      label: "出勤",     icon: "alert",       statusKey: "dispatch",  hint: "從營區出發" },
   { type: "ARRIVED_SCENE", label: "抵達現場", icon: "pin",         statusKey: "onscene",   hint: "抵達勤務目的地" },
+  { type: "DEPART_SCENE",  label: "離開現場", icon: "depart",      statusKey: "transit",   hint: "離開目前地點，前往下一個地點" },
   { type: "RETURNING",     label: "返營",     icon: "returnArrow", statusKey: "returning", hint: "處置完畢，返回營區" },
   { type: "COMPLETED",     label: "抵達營區", icon: "flag",        statusKey: "completed", hint: "完成勤務，回報最終里程與油量" }
 ];
@@ -467,11 +471,12 @@ const STATUS_LABEL = {
   pending:   "待出勤",
   dispatch:  "出勤中",
   onscene:   "已抵達現場",
+  transit:   "前往下一地點",
   returning: "返營中",
   completed: "已完成"
 };
 // 順序決定「下一個建議動作」，但不強制封鎖其他按鈕（保留調度彈性）
-const STATUS_ORDER = ["pending","dispatch","onscene","returning","completed"];
+const STATUS_ORDER = ["pending","dispatch","onscene","transit","returning","completed"];
 
 const ROLE_LABEL = {
   admin: "管理員", duty_officer: "高勤官", commander: "主官管",
@@ -552,23 +557,28 @@ function eventByType(taskId, type){
   return taskEvents(taskId).find(e => e.type === type) || null;
 }
 // 回報操作允許哪些動作：出勤／返營／抵達營區都是一次性動作，回報過就不再顯示；
-// 抵達現場則可重複回報（同一趟勤務可能去兩個以上的地點），直到返營為止都還能再回報。
+// 抵達現場／離開現場則是一組可重複的配對（同一趟勤務可能去兩個以上的地點）：
+// 抵達現場後一定要先回報離開現場，才能再抵達下一個地點或直接返營，避免漏記
+// 「已經離開第一個地方、正前往第二個地方」這段狀態。
 function reportableTypes(taskId){
   const s = deriveStatus(taskId);
-  const has = (type) => taskEvents(taskId).some(e => e.type === type);
-  const list = [];
-  if (!has("DISPATCH")) list.push("DISPATCH");
-  if (has("DISPATCH") && s !== "returning") list.push("ARRIVED_SCENE");
-  if (has("DISPATCH") && !has("RETURNING")) list.push("RETURNING");
-  if (has("RETURNING")) list.push("COMPLETED");
-  return list;
+  if (s === "returning") return ["COMPLETED"];
+  if (s === "completed") return [];
+  const evs = taskEvents(taskId);
+  if (!evs.length) return ["DISPATCH"];
+  const lastType = evs[evs.length - 1].type;
+  if (lastType === "ARRIVED_SCENE") return ["DEPART_SCENE"];
+  return ["ARRIVED_SCENE", "RETURNING"]; // 剛出勤或剛離開現場：可以抵達下一個地點，也可以直接返營
 }
-// 推薦動作：剛出勤時建議抵達現場，開始返營後建議抵達營區；已抵達現場時可能還要
-// 去下一個地點、也可能要返營了，兩者都合理，不特別推薦其中一個。
+// 推薦動作：剛出勤或剛離開現場時建議抵達下一個地點；已抵達現場時建議先回報離開；
+// 開始返營後建議抵達營區。
 function recommendedType(taskId){
-  const s = deriveStatus(taskId);
-  if (s === "dispatch") return "ARRIVED_SCENE";
-  if (s === "returning") return "COMPLETED";
+  const evs = taskEvents(taskId);
+  if (!evs.length) return "DISPATCH";
+  const lastType = evs[evs.length - 1].type;
+  if (lastType === "DISPATCH" || lastType === "DEPART_SCENE") return "ARRIVED_SCENE";
+  if (lastType === "ARRIVED_SCENE") return "DEPART_SCENE";
+  if (lastType === "RETURNING") return "COMPLETED";
   return null;
 }
 function isSameDay(ms, ref){
@@ -990,11 +1000,18 @@ function fmtTime(ms){
 function fmtDate(d){
   return d.toLocaleDateString("zh-TW", { year:"numeric", month:"long", day:"numeric", weekday:"long" });
 }
-// datetime-local 欄位需要「本地時間」字串（YYYY-MM-DDTHH:mm），不能用
-// toISOString()（那是 UTC），否則時區會偏移，使用者填的時間就會跑掉。
-function localDatetimeInputValue(d){
+// 回報表單的時間欄位只顯示「時:分」不顯示日期（勤務都是當天的），
+// 送出時再跟今天的日期組合成完整時間。
+function hhmmValue(d){
   const pad = n => String(n).padStart(2,'0');
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+// 把「HH:mm」字串跟今天的日期組合成完整的本地時間 Date。
+function todayAt(hhmm){
+  const [h, m] = hhmm.split(':').map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d;
 }
 function showToast(msg){
   let t = document.getElementById("toast");
@@ -1028,6 +1045,7 @@ const ICON_PATHS = {
   user:    `<circle cx="12" cy="8" r="3.7"/><path d="M4.5 20c.7-4.2 4.2-6.2 7.5-6.2s6.8 2 7.5 6.2"/>`,
   alert:   `<path d="M12 3 21.5 20h-19Z"/><path d="M12 10v4"/><circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none"/>`,
   pin:     `<path d="M12 21s7-7.2 7-12a7 7 0 1 0-14 0c0 4.8 7 12 7 12Z"/><circle cx="12" cy="9.2" r="2.4"/>`,
+  depart:  `<path d="M9 20s6-6.6 6-11.2A6 6 0 1 0 3 8.8C3 13.4 9 20 9 20Z"/><circle cx="9" cy="8.6" r="2.1"/><path d="M15 5l6 6M21 6v5h-5"/>`,
   returnArrow: `<path d="M9.5 14 4.5 9l5-5"/><path d="M4.5 9h9.5a5.5 5.5 0 0 1 5.5 5.5V17"/>`,
   flag:    `<path d="M6 3v18"/><path d="M6 4h12l-2.3 4L18 12H6"/>`,
   cloud:   `<path d="M7.5 18a4 4 0 0 1-.7-7.9 5 5 0 0 1 9.6-1.6A4.3 4.3 0 0 1 16.3 18Z"/>`,
@@ -1087,11 +1105,11 @@ function viewDisabled(){
    10) 共用：狀態徽章 / 卡片
    ========================================================= */
 function statusBadge(statusKey){
-  const cls = { pending:"pending", dispatch:"dispatch", onscene:"onscene", returning:"returning", completed:"completed" }[statusKey];
+  const cls = { pending:"pending", dispatch:"dispatch", onscene:"onscene", transit:"transit", returning:"returning", completed:"completed" }[statusKey];
   return `<span class="badge ${cls}"><i class="dot"></i>${STATUS_LABEL[statusKey]}</span>`;
 }
 function taskCardClass(statusKey){
-  return { pending:"s-pending", dispatch:"s-dispatch", onscene:"s-onscene", returning:"s-returning", completed:"s-completed" }[statusKey];
+  return { pending:"s-pending", dispatch:"s-dispatch", onscene:"s-onscene", transit:"s-transit", returning:"s-returning", completed:"s-completed" }[statusKey];
 }
 // 依姓名＋單位查該人員的電話（人員資料由帳號同步或基礎資料管理手動維護）。
 // 舊資料（單位欄位、下拉選單上線前）可能沒有 unit，姓名也常跟階級直接連寫成
@@ -1226,6 +1244,7 @@ const TASKS_TABS = [
   { key:"all", label:"全部" },
   { key:"dispatch", label:"出勤中" },
   { key:"onscene", label:"現場中" },
+  { key:"transit", label:"前往中" },
   { key:"returning", label:"返營中" }
 ];
 function viewTasks(){
@@ -1372,6 +1391,7 @@ function viewTaskDetail(taskId){
   // （抵達現場可能有多筆，因為同一趟勤務可能去兩個以上的地點）
   const dispatchEv = eventByType(taskId, "DISPATCH");
   const arrivedEvs = evs.filter(e => e.type === "ARRIVED_SCENE");
+  const departEvs = evs.filter(e => e.type === "DEPART_SCENE");
   const returningEv = eventByType(taskId, "RETURNING");
   const completedEv = eventByType(taskId, "COMPLETED");
   const startMileage = dispatchEv?.mileage ?? t.startMileage ?? null;
@@ -1389,14 +1409,16 @@ function viewTaskDetail(taskId){
   } else if (draft) {
     const def = EVENT_TYPES.find(e=>e.type===draft.type);
     const isFinal = draft.type === "COMPLETED";
-    const minTime = dispatchEv?.ts ? localDatetimeInputValue(new Date(dispatchEv.ts)) : "";
+    const lastEv = evs[evs.length - 1];
+    const minBase = lastEv?.ts ?? dispatchEv?.ts ?? null;
+    const minTime = minBase ? hhmmValue(new Date(minBase)) : "";
     reportSection = `
       <div class="report-form">
         <div class="title">${icon(def.icon,19)} 回報：${def.label}</div>
         <div class="field">
           <label>時間</label>
           <div style="display:flex; gap:8px;">
-            <input id="rf-time" type="datetime-local" style="flex:1;" ${minTime?`min="${minTime}"`:""} value="${localDatetimeInputValue(new Date())}">
+            <input id="rf-time" type="time" style="flex:1;" ${minTime?`min="${minTime}"`:""} value="${hhmmValue(new Date())}">
             <button type="button" class="icon-btn" style="flex-shrink:0;" onclick="window.__resetReportTime()">套用目前</button>
           </div>
         </div>
@@ -1415,7 +1437,7 @@ function viewTaskDetail(taskId){
       <div class="report-grid">
         ${rTypes.map(type => {
           const e = EVENT_TYPES.find(x=>x.type===type);
-          const count = type === "ARRIVED_SCENE" ? arrivedEvs.length : 0;
+          const count = type === "ARRIVED_SCENE" ? arrivedEvs.length : type === "DEPART_SCENE" ? departEvs.length : 0;
           return `
           <button class="report-btn ${type===recType?'recommended':''}"
             onclick="window.__startReport('${t.id}','${type}')">
@@ -1467,6 +1489,7 @@ function viewTaskDetail(taskId){
       <div class="kv">
         <div class="k">出發里程</div><div class="v">${startMileage!=null ? startMileage+' km' : '—'}</div>
         <div class="k">抵達里程</div><div class="v">${arrivedEvs.length ? arrivedEvs.map(e => e.mileage!=null ? e.mileage+' km' : '—').join('、') : '—'}</div>
+        <div class="k">離開里程</div><div class="v">${departEvs.length ? departEvs.map(e => e.mileage!=null ? e.mileage+' km' : '—').join('、') : '—'}</div>
         <div class="k">返營里程</div><div class="v">${returningEv?.mileage!=null ? returningEv.mileage+' km' : '—'}</div>
         <div class="k">最終里程</div><div class="v">${finalMileage!=null ? finalMileage+' km' : '—'}</div>
         <div class="k">出發油量</div><div class="v">${esc(t.startFuel||'—')}</div>
@@ -1560,7 +1583,7 @@ function viewRecords(){
 /* =========================================================
    15b) 畫面：統計分析
    ========================================================= */
-const STATUS_COLOR = { pending:"#8E8E93", dispatch:"#FF3B30", onscene:"#FF9500", returning:"#007AFF", completed:"#34C759" };
+const STATUS_COLOR = { pending:"#8E8E93", dispatch:"#FF3B30", onscene:"#FF9500", transit:"#6B23C7", returning:"#0066FF", completed:"#34C759" };
 function tasksInPeriod(tasks, period){
   const now = new Date();
   return tasks.filter(t => {
@@ -2081,7 +2104,7 @@ window.__startReport = (taskId, type) => { state.reportDraft = { taskId, type };
 window.__cancelReport = () => { state.reportDraft = null; render(); };
 window.__resetReportTime = () => {
   const el = document.getElementById("rf-time");
-  if (el) el.value = localDatetimeInputValue(new Date());
+  if (el) el.value = hhmmValue(new Date());
 };
 window.__submitReport = (taskId, type) => {
   const mileageEl = document.getElementById("rf-mileage");
@@ -2092,7 +2115,7 @@ window.__submitReport = (taskId, type) => {
   if (mileageEl && mileageEl.value !== "") extra.mileage = Number(mileageEl.value);
   if (noteEl && noteEl.value) extra.note = noteEl.value;
   if (fuelEl && fuelEl.value) extra.endFuel = fuelEl.value;
-  if (timeEl && timeEl.value) extra.timestamp = new Date(timeEl.value);
+  if (timeEl && timeEl.value) extra.timestamp = todayAt(timeEl.value);
   state.reportDraft = null;
   addEvent(taskId, type, extra);
 };
