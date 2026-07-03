@@ -293,7 +293,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-39-profile-phone";
+const BUILD_TAG = "2026-07-03-40-crew-phone";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -627,9 +627,10 @@ async function syncPersonnelFromUsers(users){
     const active = r !== "pending" && r !== "disabled";
     const name = u.displayName || u.email || u.id;
     const title = u.rank || ROLE_LABEL[r] || "";
+    const phone = u.phone || "";
     const existing = state.personnel.find(x => x.id === u.id);
-    if (existing && existing.unit === u.unit && existing.active === active && existing.name === name && existing.title === title) continue;
-    try { await fsSetDoc(`personnel/${u.id}`, { unit: u.unit, name, title, active }); } catch(e){ console.error("同步人員資料失敗", e); firstError = firstError || e; }
+    if (existing && existing.unit === u.unit && existing.active === active && existing.name === name && existing.title === title && (existing.phone||"") === phone) continue;
+    try { await fsSetDoc(`personnel/${u.id}`, { unit: u.unit, name, title, phone, active }); } catch(e){ console.error("同步人員資料失敗", e); firstError = firstError || e; }
   }
   if (personnelPoll) personnelPoll.refreshNow();
   // 同步失敗最常見的原因是 Firestore 規則還沒發布到最新版本（personnel 集合不在
@@ -652,8 +653,8 @@ async function updateOwnProfile(displayName, rank, phone){
 }
 
 /* ---- 基礎資料管理：人員／車輛／行車紀錄器（依單位分類，供各下拉選單動態讀取） ---- */
-async function addPersonnel(unit, name, title){
-  await fsAddDoc("personnel", { unit, name, title, active: true });
+async function addPersonnel(unit, name, title, phone){
+  await fsAddDoc("personnel", { unit, name, title, phone: phone||"", active: true });
   showToast("已新增人員"); if (personnelPoll) personnelPoll.refreshNow();
 }
 async function addVehicle(unit, plate, type){
@@ -895,6 +896,16 @@ function statusBadge(statusKey){
 function taskCardClass(statusKey){
   return { pending:"s-pending", dispatch:"s-dispatch", onscene:"s-onscene", returning:"s-returning", completed:"s-completed" }[statusKey];
 }
+// 依姓名＋單位查該人員的電話（人員資料由帳號同步或基礎資料管理手動維護）
+function personnelPhone(name, unit){
+  if (!name) return "";
+  const person = state.personnel.find(x => x.unit === unit && x.name === name);
+  return (person && person.phone) || "";
+}
+function crewLabel(name, unit){
+  const phone = personnelPhone(name, unit);
+  return `${esc(name||'—')}${phone ? '（'+esc(phone)+'）' : ''}`;
+}
 function taskCard(t){
   const s = deriveStatus(t.id);
   const evs = taskEvents(t.id);
@@ -909,8 +920,8 @@ function taskCard(t){
       ${statusBadge(s)}
     </div>
     <div class="task-crew">
-      <span>車長：${esc(t.crewLeader||'—')}</span>
-      <span>駕駛：${esc(t.driver||'—')}</span>
+      <span>車長：${crewLabel(t.crewLeader, t.unit)}</span>
+      <span>駕駛：${crewLabel(t.driver, t.unit)}</span>
     </div>
     <div class="task-foot" style="justify-content:${last ? 'flex-end' : 'flex-start'};">
       <span>${last ? timeAgo(last.ts) : '尚無回報'}</span>
@@ -1174,8 +1185,8 @@ function viewTaskDetail(taskId){
       <div class="kv">
         <div class="k">車號</div><div class="v">${esc(t.vehicle||'—')}</div>
         <div class="k">地點</div><div class="v">${esc(t.location||'—')}</div>
-        <div class="k">車長</div><div class="v">${esc(t.crewLeader||'—')}</div>
-        <div class="k">駕駛</div><div class="v">${esc(t.driver||'—')}</div>
+        <div class="k">車長</div><div class="v">${crewLabel(t.crewLeader, t.unit)}</div>
+        <div class="k">駕駛</div><div class="v">${crewLabel(t.driver, t.unit)}</div>
         <div class="k">紀錄器</div><div class="v">${esc((t.recorders||[]).join('、') || '—')}</div>
         <div class="k">建立人</div><div class="v">${esc(t.createdByName||'—')}</div>
         <div class="k">建立時間</div><div class="v">${fmtTime(new Date(t.createdAt||0).getTime())}</div>
@@ -1580,17 +1591,19 @@ function viewAdminBaseData(){
       <form class="quickform" onsubmit="window.__addPersonnel(event,'${unit}')">
         <input name="name" placeholder="姓名" required>
         <select name="title">${rankOptions("")}</select>
+        <input name="phone" type="tel" inputmode="tel" placeholder="電話（選填）">
         <button class="icon-btn" type="submit">新增</button>
       </form>
       ${rows.length ? rows.map(x => editingId === x.id ? `
         <form class="quickform" onsubmit="window.__saveBaseData(event,'personnel','${x.id}')">
           <input name="name" placeholder="姓名" required value="${esc(x.name)}">
           <select name="title">${rankOptions(x.title||"")}</select>
+          <input name="phone" type="tel" inputmode="tel" placeholder="電話（選填）" value="${esc(x.phone||'')}">
           <button class="icon-btn" type="submit">儲存</button>
           <button class="icon-btn" type="button" onclick="window.__cancelEditBaseData()">取消</button>
         </form>` : `
         <div class="admin-row">
-          <div><div class="name">${esc(x.name)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.title||'—')}</div></div>
+          <div><div class="name">${esc(x.name)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.title||'—')}${x.phone?' · '+esc(x.phone):''}</div></div>
           <div style="display:flex; gap:6px; flex-wrap:wrap;">
             <button class="icon-btn" onclick="window.__editBaseData('${x.id}')">編輯</button>
             <button class="icon-btn" onclick="window.__toggleBaseData('personnel','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
@@ -1806,7 +1819,7 @@ window.__addPersonnel = (ev, unit) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
   const form = ev.target;
-  addPersonnel(unit, f.get("name"), f.get("title")).then(() => form.reset()).catch(baseDataErr);
+  addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone")).then(() => form.reset()).catch(baseDataErr);
 };
 window.__addVehicle = (ev, unit) => {
   ev.preventDefault();
@@ -1827,7 +1840,7 @@ window.__cancelEditBaseData = () => { state.baseDataEditingId = null; render(); 
 window.__saveBaseData = (ev, coll, id) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
-  const fields = coll === "personnel" ? { name: f.get("name"), title: f.get("title") }
+  const fields = coll === "personnel" ? { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"" }
     : coll === "vehicles" ? { plate: f.get("plate"), type: f.get("type") }
     : { code: f.get("code") };
   updateBaseData(coll, id, fields).then(() => { state.baseDataEditingId = null; render(); }).catch(baseDataErr);
