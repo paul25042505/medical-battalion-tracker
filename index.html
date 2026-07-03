@@ -108,7 +108,7 @@
   .badge.returning{background:rgba(0,122,255,0.15); color:var(--blue);}
   .badge.completed{background:rgba(52,199,89,0.15); color:var(--green);}
   .task-foot{display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:14.5px; color:var(--text);}
-  .task-crew{display:flex; gap:16px; margin-top:10px; font-size:14px; color:var(--text); font-family:var(--mono); font-weight:500;}
+  .task-crew{display:flex; flex-direction:column; gap:6px; margin-top:10px; font-size:14px; color:var(--text); font-family:var(--mono); font-weight:500;}
   .empty{color:var(--text); font-size:16px; text-align:center; padding:46px 22px; border:1px dashed var(--border); border-radius:14px;}
 
   /* ---- home ---- */
@@ -293,7 +293,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-45-self-sync-phone";
+const BUILD_TAG = "2026-07-03-46-tappable-phone";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -936,7 +936,7 @@ function personnelPhone(name, unit){
 }
 function crewLabel(name, unit){
   const phone = personnelPhone(name, unit);
-  return `${esc(name||'—')}${phone ? '（'+esc(phone)+'）' : ''}`;
+  return `${esc(name||'—')}${phone ? ` <a href="tel:${esc(phone)}" onclick="event.stopPropagation()" style="color:var(--blue); text-decoration:none;">${esc(phone)}</a>` : ''}`;
 }
 function taskCard(t){
   const s = deriveStatus(t.id);
