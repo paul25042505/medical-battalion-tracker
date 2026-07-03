@@ -293,7 +293,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-41-profile-save-error";
+const BUILD_TAG = "2026-07-03-42-no-clobber-edits";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1730,9 +1730,16 @@ const NAV_ITEMS = [
 // 打字，重繪會讓輸入框元素被整個換掉，導致輸入焦點與鍵盤被打斷。輪詢觸發的
 // 重繪一律呼叫這個函式，偵測到目前有輸入中的欄位就先跳過，等使用者打完離開
 // 該欄位（或下一次輪詢/使用者操作觸發真正的 render）再更新畫面。
+//
+// 只檢查當下有沒有 focus 在輸入框還不夠：手機上切換欄位、跳出鍵盤工具列等
+// 動作都可能讓輸入框短暫失焦，若輪詢剛好在那個空檔觸發，整個表單會被重繪回
+// 伺服器上的舊資料，使用者還沒送出的內容就會憑空消失。因此只要使用者正處於
+// 任何編輯中的表單（個人資料、基礎資料管理、任務回報草稿），一律跳過背景重繪，
+// 直到儲存/取消離開編輯狀態為止。
 function safeRender(){
   const ae = document.activeElement;
   if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT")) return;
+  if (state.profileEditing || state.baseDataEditingId || state.reportDraft) return;
   render();
 }
 
