@@ -369,7 +369,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-67-auto-depart-skip-duplicate-time";
+const BUILD_TAG = "2026-07-04-68-fix-home-inprogress-count";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1243,11 +1243,13 @@ function viewHome(){
   const today = new Date();
   const todayTasks = tasks.filter(t => isSameDay(new Date(t.createdAt||0).getTime(), today));
   const todayDone = todayTasks.filter(t => deriveStatus(t.id) === "completed");
-  const todayActive = todayTasks.filter(t => deriveStatus(t.id) !== "completed");
 
   // 車輛動態＝目前所有進行中的勤務（一輛車理論上同時只會有一個進行中任務，
   // 但測試資料常會讓同一車號被多筆任務共用，所以直接以「任務」為單位列出，
   // 不要用「車輛」去找對應任務，否則同一車號的第二筆任務會被吃掉不顯示）。
+  // 「進行中」統計直接沿用這份清單的數量，確保上面數字跟下面實際列出的
+  // 卡片一定對得上；不能只算「今天建立」的任務，否則跨日還在進行中的
+  // 勤務（例如昨天出勤、今天還沒返營）會出現在下面清單卻沒被算進數字。
   const activeTasks = tasks
     .filter(t => deriveStatus(t.id) !== "completed")
     .sort((a,b) => unitLabel(a.unit).localeCompare(unitLabel(b.unit)));
@@ -1262,7 +1264,7 @@ function viewHome(){
     <div class="section-label">今日概況</div>
     <div class="stat-grid">
       <div class="stat-tile t-blue"><div class="num">${todayTasks.length}</div><div class="lbl">今日勤務數</div></div>
-      <div class="stat-tile t-orange"><div class="num">${todayActive.length}</div><div class="lbl">進行中</div></div>
+      <div class="stat-tile t-orange"><div class="num">${activeTasks.length}</div><div class="lbl">進行中</div></div>
       <div class="stat-tile t-green"><div class="num">${todayDone.length}</div><div class="lbl">已完成</div></div>
     </div>
     <div class="section-label">車輛動態</div>
