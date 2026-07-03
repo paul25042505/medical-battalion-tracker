@@ -26,7 +26,7 @@
     --sans:-apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
-  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:var(--sans); height:100%; font-size:16px;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:var(--sans); height:100%; font-size:17px;}
   body{ padding-bottom:env(safe-area-inset-bottom); }
   #app{min-height:100vh; display:flex; flex-direction:column;}
 
@@ -36,18 +36,18 @@
     background:linear-gradient(180deg, var(--panel) 0%, var(--topbar-fade) 100%);
     backdrop-filter:blur(8px);
     border-bottom:1px solid var(--border);
-    padding:16px 18px calc(14px + env(safe-area-inset-top)) 18px;
-    padding-top:calc(16px + env(safe-area-inset-top));
+    padding:17px 19px calc(14px + env(safe-area-inset-top)) 19px;
+    padding-top:calc(17px + env(safe-area-inset-top));
   }
   .topbar-top{display:flex; align-items:center; justify-content:space-between; gap:12px;}
   .topbar-titles{min-width:0;}
   .topbar-icons{display:flex; align-items:center; gap:16px; flex-shrink:0;}
-  .topbar h1{font-size:15.5px; font-weight:700; margin:0; letter-spacing:0.01em; line-height:1.3;}
+  .topbar h1{font-size:17px; font-weight:700; margin:0; letter-spacing:0.01em; line-height:1.3;}
   .topbar-en{
-    font-family:var(--mono); font-size:9.5px; font-weight:600; color:var(--amber);
+    font-family:var(--mono); font-size:11px; font-weight:600; color:var(--amber);
     letter-spacing:0.14em; text-transform:uppercase; margin-top:2px;
   }
-  .topbar-sub{margin-top:8px; font-family:var(--mono); font-size:17px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:8px;}
+  .topbar-sub{margin-top:8px; font-family:var(--mono); font-size:19px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:8px;}
   .topbar .live{
     display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size:12px; color:var(--muted);
   }
@@ -64,23 +64,23 @@
   /* ---- login ---- */
   .login-wrap{min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; text-align:center;}
   .login-mark{font-family:var(--mono); font-size:13px; letter-spacing:0.25em; color:var(--amber); margin-bottom:12px;}
-  .login-title{font-size:29px; font-weight:800; line-height:1.3; margin:0 0 8px 0;}
-  .login-sub{color:var(--muted); font-size:15.5px; margin-bottom:38px;}
+  .login-title{font-size:32px; font-weight:800; line-height:1.3; margin:0 0 8px 0;}
+  .login-sub{color:var(--muted); font-size:16.5px; margin-bottom:38px;}
   .btn-google{
     display:flex; align-items:center; justify-content:center; gap:10px;
-    background:#fff; color:#1F2937; font-weight:600; font-size:16.5px;
-    padding:16px 22px; border-radius:12px; border:1px solid var(--border); width:100%; max-width:340px;
+    background:#fff; color:#1F2937; font-weight:600; font-size:17.5px;
+    padding:17px 23px; border-radius:12px; border:1px solid var(--border); width:100%; max-width:340px;
     box-shadow:var(--card-shadow);
   }
   .pending-box{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:24px; max-width:360px; margin-top:22px; box-shadow:var(--card-shadow);}
-  .pending-box p{color:var(--muted); font-size:14.5px; line-height:1.7; margin:0;}
+  .pending-box p{color:var(--text); font-size:15.5px; line-height:1.7; margin:0;}
 
   /* ---- cards ---- */
-  .section-label{font-family:var(--mono); font-size:12.5px; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; margin:22px 4px 13px 4px;}
+  .section-label{font-family:var(--mono); font-size:13.5px; font-weight:700; color:var(--muted); letter-spacing:0.08em; text-transform:uppercase; margin:24px 4px 14px 4px;}
   .section-label:first-child{margin-top:0;}
   .task-card{
     background:var(--panel); border:1px solid var(--border); border-radius:16px;
-    padding:18px; margin-bottom:13px; position:relative; overflow:hidden; box-shadow:var(--card-shadow);
+    padding:20px; margin-bottom:14px; position:relative; overflow:hidden; box-shadow:var(--card-shadow);
   }
   .task-card::before{content:''; position:absolute; left:0; top:0; bottom:0; width:4px;}
   .task-card.s-pending::before{background:var(--gray);}
@@ -89,11 +89,11 @@
   .task-card.s-returning::before{background:var(--blue);}
   .task-card.s-completed::before{background:var(--green);}
   .task-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
-  .task-title{font-size:18px; font-weight:700; margin:0 0 4px 0;}
-  .task-meta{color:var(--muted); font-size:14px; font-family:var(--mono);}
+  .task-title{font-size:19.5px; font-weight:700; margin:0 0 4px 0;}
+  .task-meta{color:var(--text); font-size:15px; font-family:var(--mono); font-weight:500;}
   .badge{
-    display:inline-flex; align-items:center; gap:6px; font-size:13px; font-family:var(--mono); font-weight:600;
-    padding:6px 12px; border-radius:999px; white-space:nowrap;
+    display:inline-flex; align-items:center; gap:6px; font-size:14px; font-family:var(--mono); font-weight:700;
+    padding:7px 13px; border-radius:999px; white-space:nowrap;
   }
   .badge .bdot{width:7px; height:7px; border-radius:50%;}
   .badge.pending{background:rgba(142,142,147,0.15); color:var(--gray);}
@@ -102,12 +102,12 @@
   .badge.onscene{background:rgba(255,149,0,0.15); color:var(--amber);}
   .badge.returning{background:rgba(0,122,255,0.15); color:var(--blue);}
   .badge.completed{background:rgba(52,199,89,0.15); color:var(--green);}
-  .task-foot{display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:13.5px; color:var(--muted);}
-  .task-crew{display:flex; gap:16px; margin-top:10px; font-size:13px; color:var(--muted); font-family:var(--mono);}
-  .empty{color:var(--muted); font-size:15px; text-align:center; padding:46px 22px; border:1px dashed var(--border); border-radius:14px;}
+  .task-foot{display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:14.5px; color:var(--text);}
+  .task-crew{display:flex; gap:16px; margin-top:10px; font-size:14px; color:var(--text); font-family:var(--mono); font-weight:500;}
+  .empty{color:var(--text); font-size:16px; text-align:center; padding:46px 22px; border:1px dashed var(--border); border-radius:14px;}
 
   /* ---- home ---- */
-  .home-date{font-size:14.5px; color:var(--muted); font-family:var(--mono); margin-bottom:16px;}
+  .home-date{font-size:16px; color:var(--text); font-weight:700; font-family:var(--mono); margin-bottom:16px;}
   .weather-card{
     display:flex; align-items:center; gap:14px; background:var(--panel); border:1px solid var(--border);
     border-radius:14px; padding:16px 18px; margin-bottom:18px; color:var(--muted); font-size:14px;
@@ -115,8 +115,8 @@
   .weather-card .emoji{font-size:30px;}
   .stat-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:8px;}
   .stat-tile{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 10px; text-align:center; box-shadow:var(--card-shadow);}
-  .stat-tile .num{font-size:27px; font-weight:800; font-family:var(--mono);}
-  .stat-tile .lbl{font-size:12.5px; color:var(--muted); margin-top:5px;}
+  .stat-tile .num{font-size:29px; font-weight:800; font-family:var(--mono);}
+  .stat-tile .lbl{font-size:13.5px; font-weight:600; color:var(--muted); margin-top:5px;}
   .stat-tile.t-blue{background:#E8F1FF; border-color:#CFE3FF;} .stat-tile.t-blue .num{color:#0056C7;} .stat-tile.t-blue .lbl{color:#0056C7; opacity:0.75;}
   .stat-tile.t-orange{background:#FFF2E0; border-color:#FFE1B8;} .stat-tile.t-orange .num{color:#B45F00;} .stat-tile.t-orange .lbl{color:#B45F00; opacity:0.75;}
   .stat-tile.t-green{background:#E6F9EC; border-color:#C6F0D3;} .stat-tile.t-green .num{color:#177A34;} .stat-tile.t-green .lbl{color:#177A34; opacity:0.75;}
@@ -129,10 +129,11 @@
   .current-banner .task-title{font-size:20px;}
   .quick-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:12px;}
   .quick-btn{
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px;
     background:var(--panel-2); border:1px solid var(--border); border-radius:14px; padding:18px 8px;
-    color:var(--text); font-size:13.5px; font-weight:600;
+    color:var(--text); font-size:14.5px; font-weight:700;
   }
+  .quick-icon-wrap{width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center;}
   .quick-btn .navicon{font-size:26px;}
   .fab{
     position:fixed; right:22px; bottom:calc(84px + env(safe-area-inset-bottom));
@@ -141,11 +142,11 @@
   }
 
   /* ---- task detail ---- */
-  .back-row{display:flex; align-items:center; gap:8px; margin-bottom:16px; color:var(--muted); font-size:14.5px;}
-  .back-row button{background:none; border:none; color:var(--muted); font-size:14.5px; padding:6px 0; font-family:var(--sans);}
+  .back-row{display:flex; align-items:center; gap:8px; margin-bottom:16px; color:var(--blue); font-size:15.5px; font-weight:600;}
+  .back-row button{background:none; border:none; color:var(--blue); font-size:15.5px; font-weight:600; padding:6px 0; font-family:var(--sans);}
   .detail-head{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:20px; margin-bottom:18px; box-shadow:var(--card-shadow);}
   .detail-head .task-title{font-size:21px;}
-  .kv{display:grid; grid-template-columns:88px 1fr; gap:9px 12px; margin-top:14px; font-size:14.5px;}
+  .kv{display:grid; grid-template-columns:92px 1fr; gap:10px 12px; margin-top:14px; font-size:15.5px;}
   .kv .k{color:var(--text); font-weight:600; font-family:var(--mono); font-size:12.5px; padding-top:2px;}
   .kv .v{color:var(--text);}
 
@@ -158,12 +159,12 @@
   .report-btn .emoji{font-size:28px;}
   .report-btn.recommended{border-color:var(--amber); box-shadow:0 0 0 1px var(--amber) inset;}
   .report-btn:disabled{opacity:0.35;}
-  .no-permission{color:var(--muted); font-size:14px; text-align:center; padding:16px; border:1px dashed var(--border); border-radius:12px; margin-bottom:20px;}
+  .no-permission{color:var(--text); font-size:15px; text-align:center; padding:16px; border:1px dashed var(--border); border-radius:12px; margin-bottom:20px;}
   .report-form{background:var(--panel); border:1px solid var(--amber); border-radius:14px; padding:18px; margin-bottom:20px; box-shadow:var(--card-shadow);}
   .report-form .title{font-weight:700; font-size:15.5px; margin-bottom:14px;}
   .report-form .row{display:flex; gap:10px; margin-top:10px;}
   .report-form .row button{flex:1;}
-  .btn-ghost{background:none; border:1px solid var(--border); color:var(--muted); border-radius:10px; padding:14px; font-size:15px; font-family:var(--sans);}
+  .btn-ghost{background:none; border:1.5px solid var(--border); color:var(--text); font-weight:600; border-radius:10px; padding:15px; font-size:16px; font-family:var(--sans);}
 
   .timeline{position:relative; padding-left:22px;}
   .timeline::before{content:''; position:absolute; left:5px; top:4px; bottom:4px; width:1px; background:var(--border);}
@@ -173,7 +174,7 @@
   .tl-dot.dispatch{background:var(--red);} .tl-dot.onscene{background:var(--amber);}
   .tl-dot.returning{background:var(--blue);} .tl-dot.completed{background:var(--green);}
   .tl-type{font-weight:700; font-size:15px;}
-  .tl-meta{font-family:var(--mono); font-size:12.5px; color:var(--muted); margin-top:3px;}
+  .tl-meta{font-family:var(--mono); font-size:13.5px; color:var(--text); font-weight:500; margin-top:3px;}
   .tl-note{font-size:14px; color:var(--text); margin-top:5px;}
 
   /* ---- forms / admin ---- */
@@ -188,8 +189,8 @@
   .btn-primary{width:100%; background:var(--amber); color:#1A1200; font-weight:700; border:none; padding:15px; border-radius:10px; font-size:16px; margin-top:4px;}
   .admin-row{display:flex; justify-content:space-between; align-items:center; background:var(--panel); border:1px solid var(--border); padding:14px 16px; border-radius:12px; margin-bottom:10px; box-shadow:var(--card-shadow);}
   .admin-row .name{font-size:15px; font-weight:600;}
-  .admin-row .sub{font-size:13px; color:var(--muted); font-family:var(--mono);}
-  .icon-btn{background:none; border:1px solid var(--border); color:var(--muted); border-radius:8px; padding:8px 12px; font-size:13.5px;}
+  .admin-row .sub{font-size:14px; color:var(--text); font-family:var(--mono);}
+  .icon-btn{background:none; border:1.5px solid var(--border); color:var(--text); font-weight:600; border-radius:8px; padding:9px 13px; font-size:14.5px;}
   .icon-btn.danger{color:var(--red); border-color:rgba(255,59,48,0.35);}
   .role-select{background:var(--panel-2); border:1px solid var(--border); color:var(--text); font-size:13.5px; border-radius:8px; padding:8px 10px; font-family:var(--mono);}
   .tabs2{display:flex; gap:6px; margin-bottom:18px; background:var(--panel-2); padding:4px; border-radius:12px;}
@@ -211,7 +212,7 @@
   .chart-card{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:18px; margin-bottom:18px; box-shadow:var(--card-shadow);}
   .chart-title{font-size:15px; font-weight:700; margin-bottom:16px;}
   .bar-row{display:flex; align-items:center; gap:12px; margin-bottom:14px; font-size:14px;}
-  .bar-row .bar-label{width:84px; flex-shrink:0; color:var(--muted); font-family:var(--mono); font-size:12.5px;}
+  .bar-row .bar-label{width:88px; flex-shrink:0; color:var(--text); font-weight:600; font-family:var(--mono); font-size:13.5px;}
   .bar-row .bar-track{flex:1; background:var(--panel-2); border-radius:6px; height:20px; position:relative; overflow:hidden;}
   .bar-row .bar-fill{position:absolute; left:0; top:0; bottom:0; background:var(--blue); border-radius:6px;}
   .bar-row .bar-val{width:34px; text-align:right; font-family:var(--mono); font-weight:700; flex-shrink:0;}
@@ -219,14 +220,14 @@
   .rank-row:last-child{border-bottom:none;}
   .rank-row .rank-num{width:22px; height:22px; border-radius:50%; background:var(--panel-2); color:var(--muted); font-family:var(--mono); font-weight:700; font-size:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
   .rank-row .rank-name{flex:1;}
-  .rank-row .rank-count{color:var(--muted); font-family:var(--mono); font-size:13px;}
+  .rank-row .rank-count{color:var(--text); font-weight:600; font-family:var(--mono); font-size:14px;}
   .stackbar{display:flex; height:22px; border-radius:8px; overflow:hidden; background:var(--panel-2); margin-bottom:14px;}
   .stackbar .seg{height:100%;}
   .stack-legend{display:flex; flex-direction:column; gap:8px;}
   .stack-legend .leg-row{display:flex; align-items:center; gap:9px; font-size:14px;}
   .stack-legend .leg-dot{width:10px; height:10px; border-radius:50%; flex-shrink:0;}
   .stack-legend .leg-name{flex:1; color:var(--text);}
-  .stack-legend .leg-val{color:var(--muted); font-family:var(--mono); font-size:13px;}
+  .stack-legend .leg-val{color:var(--text); font-weight:600; font-family:var(--mono); font-size:14px;}
 
   /* ---- 回報精靈 ---- */
   .stepper{display:flex; align-items:center; justify-content:center; gap:9px; margin-bottom:22px;}
@@ -254,8 +255,8 @@
     display:flex; padding-bottom:env(safe-area-inset-bottom);
   }
   .navbtn{flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; padding:12px 4px 10px 4px; color:var(--muted); background:none; border:none; font-family:var(--sans);}
-  .navbtn .navicon{font-size:22px;}
-  .navbtn .navlabel{font-size:11.5px; font-weight:600;}
+  .navbtn .navicon{font-size:24px;}
+  .navbtn .navlabel{font-size:12.5px; font-weight:700;}
   .navbtn.active{color:var(--amber);}
 
   .toast{
@@ -283,7 +284,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-17-header";
+const BUILD_TAG = "2026-07-03-18-vivid";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -745,11 +746,11 @@ function viewHome(){
     </div>` : "";
 
   const quick = [
-    { iconName:"tasks", label:"任務中", route:{name:"tasks"} },
-    { iconName:"plus", label:"建立勤務", route:{name:"createTask"}, show: canCreateTask(p) },
-    { iconName:"records", label:"勤務紀錄", route:{name:"records"} },
-    { iconName:"bell", label:"通知", route:{name:"notifications"} },
-    { iconName:"user", label:"個人資料", route:{name:"profile"} }
+    { iconName:"tasks", label:"任務中", route:{name:"tasks"}, bg:"#FFF2E0", fg:"#B45F00" },
+    { iconName:"plus", label:"建立勤務", route:{name:"createTask"}, show: canCreateTask(p), bg:"#E6F9EC", fg:"#177A34" },
+    { iconName:"records", label:"勤務紀錄", route:{name:"records"}, bg:"#F2E9FE", fg:"#6B23C7" },
+    { iconName:"bell", label:"通知", route:{name:"notifications"}, bg:"#FFE9E8", fg:"#C62828" },
+    { iconName:"user", label:"個人資料", route:{name:"profile"}, bg:"#E8F1FF", fg:"#0056C7" }
   ].filter(q => q.show !== false);
 
   return `
@@ -769,7 +770,7 @@ function viewHome(){
     <div class="quick-grid">
       ${quick.map(q => `
         <button class="quick-btn" onclick='window.__nav(${JSON.stringify(q.route)})'>
-          <span class="navicon">${icon(q.iconName,26)}</span>${q.label}
+          <span class="quick-icon-wrap" style="background:${q.bg}; color:${q.fg};">${icon(q.iconName,22)}</span>${q.label}
         </button>`).join("")}
     </div>
   `;
@@ -854,7 +855,7 @@ function viewReport(){
       <div class="success-card">
         <div class="check">${icon('check',32)}</div>
         <h2 style="margin:0 0 6px 0;">回報成功！</h2>
-        <p style="color:var(--muted); font-size:13.5px; margin-bottom:16px;">${t ? esc(t.title) : ''}</p>
+        <p style="color:var(--text); font-weight:600; font-size:15px; margin-bottom:16px;">${t ? esc(t.title) : ''}</p>
         <div class="detail-head" style="text-align:left;">
           <div class="kv">
             <div class="k">已記錄</div><div class="v">${def ? def.label : ''}</div>
@@ -1332,11 +1333,11 @@ const ROUTE_VIEWS = {
   admin: viewAdmin
 };
 const NAV_ITEMS = [
-  { name:"home", iconName:"home", label:"首頁" },
-  { name:"tasks", iconName:"tasks", label:"任務中" },
-  { name:"report", iconName:"alert", label:"回報" },
-  { name:"records", iconName:"records", label:"紀錄" },
-  { name:"stats", iconName:"chart", label:"統計" }
+  { name:"home", iconName:"home", label:"首頁", accent:"#007AFF" },
+  { name:"tasks", iconName:"tasks", label:"任務中", accent:"#FF9500" },
+  { name:"report", iconName:"alert", label:"回報", accent:"#FF3B30" },
+  { name:"records", iconName:"records", label:"紀錄", accent:"#6B23C7" },
+  { name:"stats", iconName:"chart", label:"統計", accent:"#34C759" }
 ];
 
 // 背景輪詢用：畫面會整個重繪（innerHTML 全部換掉），如果使用者正在輸入框
@@ -1377,8 +1378,8 @@ function render(){
     <main>${body}</main>
     <div class="bottomnav">
       ${NAV_ITEMS.map(n => `
-        <button class="navbtn ${state.route.name===n.name?'active':''}" onclick="window.__nav({name:'${n.name}'})">
-          <span class="navicon">${icon(n.iconName,22)}</span><span class="navlabel">${n.label}</span>
+        <button class="navbtn ${state.route.name===n.name?'active':''}" style="${state.route.name===n.name?`color:${n.accent};`:''}" onclick="window.__nav({name:'${n.name}'})">
+          <span class="navicon">${icon(n.iconName,24)}</span><span class="navlabel">${n.label}</span>
         </button>`).join("")}
     </div>
     <div id="toast" class="toast"></div>
