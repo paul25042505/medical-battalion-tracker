@@ -141,7 +141,7 @@
   .detail-head{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:18px; margin-bottom:16px; box-shadow:var(--card-shadow);}
   .detail-head .task-title{font-size:19px;}
   .kv{display:grid; grid-template-columns:76px 1fr; gap:6px 10px; margin-top:12px; font-size:13px;}
-  .kv .k{color:var(--muted); font-family:var(--mono); font-size:11px; padding-top:2px;}
+  .kv .k{color:var(--text); font-weight:600; font-family:var(--mono); font-size:11px; padding-top:2px;}
   .kv .v{color:var(--text);}
 
   .report-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;}
@@ -173,7 +173,7 @@
 
   /* ---- forms / admin ---- */
   .field{margin-bottom:12px;}
-  .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:6px; font-family:var(--mono);}
+  .field label{display:block; font-size:12.5px; font-weight:700; color:var(--text); margin-bottom:6px; font-family:var(--mono);}
   .field input, .field select, .field textarea{
     width:100%; background:var(--panel-2); border:1px solid var(--border); color:var(--text);
     padding:11px 12px; border-radius:10px; font-size:14px; font-family:var(--sans);
@@ -199,7 +199,7 @@
   .profile-card{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:18px; margin-bottom:16px; box-shadow:var(--card-shadow);}
   .profile-row{display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); font-size:13.5px;}
   .profile-row:last-child{border-bottom:none;}
-  .profile-row .k{color:var(--muted);}
+  .profile-row .k{color:var(--text); font-weight:600;}
 
   /* ---- stats / charts ---- */
   .chart-card{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:16px; margin-bottom:16px; box-shadow:var(--card-shadow);}
@@ -233,8 +233,11 @@
   .stepper .step-line{width:28px; height:2px; background:var(--border);}
   .big-status-btn{
     display:flex; align-items:center; gap:12px; width:100%; padding:16px; border-radius:14px; border:none;
-    color:#fff; font-size:15px; font-weight:700; margin-bottom:10px;
+    color:#fff; font-size:15px; font-weight:700; margin-bottom:10px; text-align:left;
   }
+  .big-status-text{display:flex; flex-direction:column; gap:2px;}
+  .big-status-text .t1{font-size:15px; font-weight:700;}
+  .big-status-text .t2{font-size:11.5px; font-weight:500; opacity:0.85;}
   .success-card{text-align:center; padding:32px 20px;}
   .success-card .check{width:56px; height:56px; border-radius:50%; background:var(--green); color:#fff; display:flex; align-items:center; justify-content:center; margin:0 auto 16px auto;}
 
@@ -274,7 +277,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-13-profile";
+const BUILD_TAG = "2026-07-03-14-polish";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -387,10 +390,10 @@ function poll(fn, intervalMs){
    2) Event 類型定義
    ========================================================= */
 const EVENT_TYPES = [
-  { type: "DISPATCH",      label: "出勤",     icon: "alert",       statusKey: "dispatch" },
-  { type: "ARRIVED_SCENE", label: "抵達現場", icon: "pin",         statusKey: "onscene" },
-  { type: "RETURNING",     label: "返營",     icon: "returnArrow", statusKey: "returning" },
-  { type: "COMPLETED",     label: "抵達營區", icon: "flag",        statusKey: "completed" }
+  { type: "DISPATCH",      label: "出勤",     icon: "alert",       statusKey: "dispatch",  hint: "從營區出發" },
+  { type: "ARRIVED_SCENE", label: "抵達現場", icon: "pin",         statusKey: "onscene",   hint: "抵達勤務目的地" },
+  { type: "RETURNING",     label: "返營",     icon: "returnArrow", statusKey: "returning", hint: "處置完畢，返回營區" },
+  { type: "COMPLETED",     label: "抵達營區", icon: "flag",        statusKey: "completed", hint: "完成勤務，回報最終里程與油量" }
 ];
 const STATUS_LABEL = {
   pending:   "待出勤",
@@ -534,7 +537,7 @@ onAuthStateChanged(auth, async (user) => {
       const wasPending = state.profile && state.profile.role === "pending";
       state.profile = { uid: user.uid, ...p };
       if (wasPending && state.profile.role !== "pending") startDataListeners();
-      render();
+      safeRender();
     }, 8000);
   } catch (err) {
     console.error("登入後初始化失敗", err);
@@ -548,14 +551,14 @@ function startDataListeners(){
     const docs = await fsListCollection("tasks");
     docs.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0));
     state.tasks = docs;
-    render();
+    safeRender();
   }, 6000);
   eventsPoll = poll(async () => {
     const docs = await fsListCollection("events");
     docs.forEach(d => { d.ts = d.timestamp ? new Date(d.timestamp).getTime() : Date.now(); });
     docs.sort((a,b) => a.ts - b.ts);
     state.events = docs;
-    render();
+    safeRender();
   }, 6000);
 }
 function cleanupListeners(){
@@ -824,11 +827,22 @@ function viewReport(){
 
   if (w.step === 4) {
     const t = state.tasks.find(x => x.id === w.taskId);
+    const def = EVENT_TYPES.find(e => e.type === w.type);
+    const evs = taskEvents(w.taskId).filter(e => e.type === w.type);
+    const lastEv = evs[evs.length - 1];
     return `
       <div class="success-card">
         <div class="check">${icon('check',28)}</div>
         <h2 style="margin:0 0 6px 0;">回報成功！</h2>
-        <p style="color:var(--muted); font-size:13.5px;">${t ? esc(t.title) : ''} · ${STATUS_LABEL[deriveStatus(w.taskId)]}</p>
+        <p style="color:var(--muted); font-size:13.5px; margin-bottom:16px;">${t ? esc(t.title) : ''}</p>
+        <div class="detail-head" style="text-align:left;">
+          <div class="kv">
+            <div class="k">已記錄</div><div class="v">${def ? def.label : ''}</div>
+            <div class="k">時間</div><div class="v">${lastEv ? fmtTime(lastEv.ts) : '—'}</div>
+            ${lastEv && lastEv.mileage != null ? `<div class="k">里程</div><div class="v">${lastEv.mileage} km</div>` : ""}
+            ${lastEv && lastEv.reportedLocation ? `<div class="k">地點</div><div class="v">${esc(lastEv.reportedLocation)}</div>` : ""}
+          </div>
+        </div>
         <button class="btn-primary" onclick="window.__nav({name:'task', id:'${w.taskId}'})">查看任務</button>
         <button class="btn-ghost" style="width:100%; margin-top:10px;" onclick="window.__resetReportWizard()">繼續回報</button>
       </div>`;
@@ -867,7 +881,8 @@ function viewReport(){
       <div class="section-label">選擇回報狀態</div>
       ${EVENT_TYPES.map(e => `
         <button class="big-status-btn" style="background:${STATUS_COLOR[e.statusKey]};" onclick="window.__setReportType('${e.type}')">
-          ${icon(e.icon,22)}${e.label}
+          ${icon(e.icon,22)}
+          <span class="big-status-text"><span class="t1">${e.label}</span><span class="t2">${e.hint}</span></span>
         </button>`).join("")}
     `;
   }
@@ -1070,13 +1085,14 @@ function viewStats(){
   const vehicleEntries = Object.entries(vehicleCounts).sort((a,b) => b[1]-a[1]);
   const maxCount = Math.max(1, ...vehicleEntries.map(e=>e[1]));
 
+  const CHART_CAT_COLORS = ["#007AFF", "#FF9500", "#34C759", "#6B23C7", "#FF3B30", "#00A3A3"];
   const barChart = vehicleEntries.length ? `
     <div class="chart-card">
       <div class="chart-title">各車輛出勤次數</div>
-      ${vehicleEntries.map(([veh,count]) => `
+      ${vehicleEntries.map(([veh,count], i) => `
         <div class="bar-row">
           <div class="bar-label">${esc(veh)}</div>
-          <div class="bar-track"><div class="bar-fill" style="width:${(count/maxCount*100).toFixed(0)}%;"></div></div>
+          <div class="bar-track"><div class="bar-fill" style="width:${(count/maxCount*100).toFixed(0)}%; background:${CHART_CAT_COLORS[i % CHART_CAT_COLORS.length]};"></div></div>
           <div class="bar-val">${count}</div>
         </div>`).join("")}
     </div>` : `<div class="chart-card"><div class="chart-title">各車輛出勤次數</div><div class="empty">此區間尚無出勤紀錄</div></div>`;
@@ -1302,6 +1318,16 @@ const NAV_ITEMS = [
   { name:"records", iconName:"records", label:"紀錄" },
   { name:"stats", iconName:"chart", label:"統計" }
 ];
+
+// 背景輪詢用：畫面會整個重繪（innerHTML 全部換掉），如果使用者正在輸入框
+// 打字，重繪會讓輸入框元素被整個換掉，導致輸入焦點與鍵盤被打斷。輪詢觸發的
+// 重繪一律呼叫這個函式，偵測到目前有輸入中的欄位就先跳過，等使用者打完離開
+// 該欄位（或下一次輪詢/使用者操作觸發真正的 render）再更新畫面。
+function safeRender(){
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT")) return;
+  render();
+}
 
 function render(){
   const app = document.getElementById("app");
