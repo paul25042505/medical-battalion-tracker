@@ -65,16 +65,16 @@
     padding:17px 19px calc(14px + env(safe-area-inset-top)) 19px;
     padding-top:calc(17px + env(safe-area-inset-top));
   }
-  .topbar-top{display:flex; align-items:center; justify-content:space-between; gap:12px;}
-  .topbar-titles{min-width:0;}
-  .topbar-icons{display:flex; align-items:center; gap:6px; flex-shrink:0; align-self:center;}
+  .topbar-title-row{min-width:0;}
+  .topbar-bottom-row{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:9px;}
+  .topbar-icons{display:flex; align-items:center; gap:6px; flex-shrink:0;}
   .topbar h1{font-size:17px; font-weight:700; margin:0; letter-spacing:0.01em; line-height:1.3; white-space:nowrap;}
   .topbar-en{
     font-family:var(--mono); font-size:clamp(6px, 1.7vw, 9.5px); font-weight:600; color:var(--muted);
     letter-spacing:0.03em; text-transform:none; margin-top:3px; white-space:nowrap;
   }
   .topbar-sub{
-    margin-top:9px; color:var(--text);
+    color:var(--text); min-width:0;
     display:flex; align-items:baseline; gap:8px;
   }
   .topbar-sub .name{font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:21px; font-weight:700;}
@@ -341,7 +341,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-58-report-flow-redesign";
+const BUILD_TAG = "2026-07-04-59-header-layout";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -2041,13 +2041,13 @@ function render(){
     <div class="sticky-head">
       ${previewBanner}
       <div class="topbar">
-        <div class="topbar-top">
-          <div class="topbar-titles">
-            <h1>衛生營車輛人員動態管制系統</h1>
-            <div class="topbar-en">Medical Battalion Vehicle &amp; Personnel Management System</div>
-            <div class="topbar-sub">
-              <span class="name">${esc(p.displayName||p.email).split(' ')[0]}</span>${p.rank ? `<span class="rank">${esc(p.rank)}</span>` : ''}
-            </div>
+        <div class="topbar-title-row">
+          <h1>衛生營車輛人員動態管制系統</h1>
+          <div class="topbar-en">Medical Battalion Vehicle &amp; Personnel Management System</div>
+        </div>
+        <div class="topbar-bottom-row">
+          <div class="topbar-sub">
+            <span class="name">${esc(p.displayName||p.email).split(' ')[0]}</span>${p.rank ? `<span class="rank">${esc(p.rank)}</span>` : ''}
           </div>
           <div class="topbar-icons">
             <button class="topbar-icon-btn" onclick="window.__nav({name:'notifications'})">${icon('bell',25)}</button>
