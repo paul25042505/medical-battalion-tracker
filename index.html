@@ -44,6 +44,7 @@
   .topbar .live{
     display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size:11px; color:var(--muted);
   }
+  .topbar-icon-btn{background:none; border:none; color:var(--text); padding:2px; display:flex;}
   .dot-live{width:6px; height:6px; border-radius:50%; background:var(--green); box-shadow:0 0 0 0 rgba(52,199,89,0.6); animation:pulse 2s infinite;}
   @keyframes pulse{
     0%{box-shadow:0 0 0 0 rgba(52,199,89,0.5);}
@@ -109,6 +110,10 @@
   .stat-tile{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:14px 8px; text-align:center; box-shadow:var(--card-shadow);}
   .stat-tile .num{font-size:22px; font-weight:800; font-family:var(--mono);}
   .stat-tile .lbl{font-size:11px; color:var(--muted); margin-top:4px;}
+  .stat-tile.t-blue{background:#E8F1FF; border-color:#CFE3FF;} .stat-tile.t-blue .num{color:#0056C7;} .stat-tile.t-blue .lbl{color:#0056C7; opacity:0.75;}
+  .stat-tile.t-orange{background:#FFF2E0; border-color:#FFE1B8;} .stat-tile.t-orange .num{color:#B45F00;} .stat-tile.t-orange .lbl{color:#B45F00; opacity:0.75;}
+  .stat-tile.t-green{background:#E6F9EC; border-color:#C6F0D3;} .stat-tile.t-green .num{color:#177A34;} .stat-tile.t-green .lbl{color:#177A34; opacity:0.75;}
+  .stat-tile.t-purple{background:#F2E9FE; border-color:#E1CDFB;} .stat-tile.t-purple .num{color:#6B23C7;} .stat-tile.t-purple .lbl{color:#6B23C7; opacity:0.75;}
   .current-banner{
     background:linear-gradient(135deg, rgba(255,149,0,0.16), rgba(255,59,48,0.12));
     border:1px solid var(--amber); border-radius:16px; padding:16px; margin-bottom:18px; cursor:pointer;
@@ -122,6 +127,11 @@
     color:var(--text); font-size:12px; font-weight:600;
   }
   .quick-btn .navicon{font-size:22px;}
+  .fab{
+    position:fixed; right:20px; bottom:calc(78px + env(safe-area-inset-bottom));
+    width:52px; height:52px; border-radius:50%; background:var(--blue); color:#fff; border:none;
+    display:flex; align-items:center; justify-content:center; box-shadow:0 4px 14px rgba(0,122,255,0.4); z-index:25;
+  }
 
   /* ---- task detail ---- */
   .back-row{display:flex; align-items:center; gap:8px; margin-bottom:14px; color:var(--muted); font-size:13px;}
@@ -189,6 +199,43 @@
   .profile-row:last-child{border-bottom:none;}
   .profile-row .k{color:var(--muted);}
 
+  /* ---- stats / charts ---- */
+  .chart-card{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:16px; margin-bottom:16px; box-shadow:var(--card-shadow);}
+  .chart-title{font-size:13.5px; font-weight:700; margin-bottom:14px;}
+  .bar-row{display:flex; align-items:center; gap:10px; margin-bottom:12px; font-size:12.5px;}
+  .bar-row .bar-label{width:76px; flex-shrink:0; color:var(--muted); font-family:var(--mono); font-size:11.5px;}
+  .bar-row .bar-track{flex:1; background:var(--panel-2); border-radius:6px; height:18px; position:relative; overflow:hidden;}
+  .bar-row .bar-fill{position:absolute; left:0; top:0; bottom:0; background:var(--blue); border-radius:6px;}
+  .bar-row .bar-val{width:30px; text-align:right; font-family:var(--mono); font-weight:700; flex-shrink:0;}
+  .rank-row{display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--border); font-size:13px;}
+  .rank-row:last-child{border-bottom:none;}
+  .rank-row .rank-num{width:20px; height:20px; border-radius:50%; background:var(--panel-2); color:var(--muted); font-family:var(--mono); font-weight:700; font-size:11px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .rank-row .rank-name{flex:1;}
+  .rank-row .rank-count{color:var(--muted); font-family:var(--mono); font-size:12px;}
+  .stackbar{display:flex; height:20px; border-radius:8px; overflow:hidden; background:var(--panel-2); margin-bottom:12px;}
+  .stackbar .seg{height:100%;}
+  .stack-legend{display:flex; flex-direction:column; gap:6px;}
+  .stack-legend .leg-row{display:flex; align-items:center; gap:8px; font-size:12.5px;}
+  .stack-legend .leg-dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
+  .stack-legend .leg-name{flex:1; color:var(--text);}
+  .stack-legend .leg-val{color:var(--muted); font-family:var(--mono); font-size:12px;}
+
+  /* ---- 回報精靈 ---- */
+  .stepper{display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:20px;}
+  .stepper .step-dot{
+    width:26px; height:26px; border-radius:50%; background:var(--panel-2); border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:var(--muted);
+  }
+  .stepper .step-dot.done{background:var(--green); border-color:var(--green); color:#fff;}
+  .stepper .step-dot.current{background:var(--blue); border-color:var(--blue); color:#fff;}
+  .stepper .step-line{width:28px; height:2px; background:var(--border);}
+  .big-status-btn{
+    display:flex; align-items:center; gap:12px; width:100%; padding:16px; border-radius:14px; border:none;
+    color:#fff; font-size:15px; font-weight:700; margin-bottom:10px;
+  }
+  .success-card{text-align:center; padding:32px 20px;}
+  .success-card .check{width:56px; height:56px; border-radius:50%; background:var(--green); color:#fff; display:flex; align-items:center; justify-content:center; margin:0 auto 16px auto;}
+
   /* ---- bottom nav ---- */
   .bottomnav{
     position:fixed; left:0; right:0; bottom:0; z-index:30;
@@ -225,7 +272,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-11-adminplus";
+const BUILD_TAG = "2026-07-03-12-redesign";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -365,7 +412,10 @@ const state = {
   user: null, profile: null, tasks: [], events: [],
   route: { name: "home" }, adminTab: "tasks",
   reportDraft: null, // { taskId, type }
-  recordsFilter: { date: "", vehicle: "", title: "", location: "", status: "", person: "" }
+  recordsFilter: { date: "", vehicle: "", title: "", location: "", status: "", person: "" },
+  tasksTab: "all",
+  statsPeriod: "today",
+  reportWizard: { step: 1, taskId: "" } // 底部導覽「回報」精靈流程狀態
 };
 let tasksPoll = null, eventsPoll = null, profilePoll = null;
 
@@ -534,7 +584,11 @@ function showToast(msg){
   clearTimeout(showToast._tm);
   showToast._tm = setTimeout(()=>t.classList.remove("show"), 2200);
 }
-function nav(route){ state.route = route; state.reportDraft = null; render(); window.scrollTo(0,0); }
+function nav(route){
+  state.route = route; state.reportDraft = null;
+  if (route.name === "report") state.reportWizard = { step: 1, taskId: "" };
+  render(); window.scrollTo(0,0);
+}
 function esc(s){ return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* =========================================================
@@ -551,7 +605,9 @@ const ICON_PATHS = {
   pin:     `<path d="M12 21s7-7.2 7-12a7 7 0 1 0-14 0c0 4.8 7 12 7 12Z"/><circle cx="12" cy="9.2" r="2.4"/>`,
   returnArrow: `<path d="M9.5 14 4.5 9l5-5"/><path d="M4.5 9h9.5a5.5 5.5 0 0 1 5.5 5.5V17"/>`,
   flag:    `<path d="M6 3v18"/><path d="M6 4h12l-2.3 4L18 12H6"/>`,
-  cloud:   `<path d="M7.5 18a4 4 0 0 1-.7-7.9 5 5 0 0 1 9.6-1.6A4.3 4.3 0 0 1 16.3 18Z"/>`
+  cloud:   `<path d="M7.5 18a4 4 0 0 1-.7-7.9 5 5 0 0 1 9.6-1.6A4.3 4.3 0 0 1 16.3 18Z"/>`,
+  check:   `<path d="M5 13l4.5 4.5L19 7"/>`,
+  chart:   `<path d="M4 20V10"/><path d="M11 20V4"/><path d="M18 20v-7"/>`
 };
 function icon(name, size){
   size = size || 20;
@@ -674,9 +730,9 @@ function viewHome(){
     ${banner}
     <div class="section-label">今日概況</div>
     <div class="stat-grid">
-      <div class="stat-tile"><div class="num">${todayTasks.length}</div><div class="lbl">今日勤務數</div></div>
-      <div class="stat-tile"><div class="num">${todayActive.length}</div><div class="lbl">進行中</div></div>
-      <div class="stat-tile"><div class="num">${todayDone.length}</div><div class="lbl">已完成</div></div>
+      <div class="stat-tile t-blue"><div class="num">${todayTasks.length}</div><div class="lbl">今日勤務數</div></div>
+      <div class="stat-tile t-orange"><div class="num">${todayActive.length}</div><div class="lbl">進行中</div></div>
+      <div class="stat-tile t-green"><div class="num">${todayDone.length}</div><div class="lbl">已完成</div></div>
     </div>
     <div class="section-label">快捷功能</div>
     <div class="quick-grid">
@@ -691,13 +747,29 @@ function viewHome(){
 /* =========================================================
    12) 畫面：任務中心（所有尚未完成的勤務）
    ========================================================= */
+const TASKS_TABS = [
+  { key:"all", label:"全部" },
+  { key:"dispatch", label:"出勤中" },
+  { key:"onscene", label:"現場中" },
+  { key:"returning", label:"返營中" }
+];
 function viewTasks(){
   const p = state.profile;
-  const tasks = visibleTasks(p, state.tasks);
-  const active = tasks.filter(t => deriveStatus(t.id) !== "completed");
+  const all = visibleTasks(p, state.tasks).filter(t => deriveStatus(t.id) !== "completed");
+  const shown = state.tasksTab === "all" ? all : all.filter(t => deriveStatus(t.id) === state.tasksTab);
+
+  const tabs = `
+    <div class="tabs2" style="overflow-x:auto;">
+      ${TASKS_TABS.map(tb => `
+        <div class="tab2 ${state.tasksTab===tb.key?'active':''}" onclick="window.__setTasksTab('${tb.key}')">
+          ${tb.label} · ${tb.key==='all' ? all.length : all.filter(t=>deriveStatus(t.id)===tb.key).length}
+        </div>`).join("")}
+    </div>`;
+
   return `
-    <div class="section-label">進行中勤務 · ${active.length}</div>
-    ${active.length ? active.map(taskCard).join("") : `<div class="empty">目前沒有進行中的勤務</div>`}
+    ${tabs}
+    ${shown.length ? shown.map(taskCard).join("") : `<div class="empty">目前沒有符合條件的勤務</div>`}
+    ${canCreateTask(p) ? `<button class="fab" onclick="window.__nav({name:'createTask'})">${icon('plus',24)}</button>` : ""}
   `;
 }
 
@@ -721,6 +793,94 @@ function viewCreateTask(){
       <div class="field"><label>備註（選填）</label><textarea name="notes" placeholder="其他需要註記的事項"></textarea></div>
       <button class="btn-primary" type="submit">建立勤務</button>
     </form>
+  `;
+}
+
+/* =========================================================
+   13b) 畫面：回報精靈（底部導覽直接回報，不需先進任務詳情）
+   ========================================================= */
+function stepperHtml(step){
+  const labels = ["選擇任務","選擇狀態","確認送出"];
+  return `<div class="stepper">
+    ${labels.map((_,i) => {
+      const n = i+1;
+      const cls = n < step ? "done" : (n === step ? "current" : "");
+      return `${i>0?'<div class="step-line"></div>':''}<div class="step-dot ${cls}">${n<step?icon('check',14):n}</div>`;
+    }).join("")}
+  </div>`;
+}
+function viewReport(){
+  const p = state.profile;
+  const w = state.reportWizard;
+  const reportable = visibleTasks(p, state.tasks).filter(t => deriveStatus(t.id) !== "completed" && canReport(p, t));
+
+  if (w.step === 4) {
+    const t = state.tasks.find(x => x.id === w.taskId);
+    return `
+      <div class="success-card">
+        <div class="check">${icon('check',28)}</div>
+        <h2 style="margin:0 0 6px 0;">回報成功！</h2>
+        <p style="color:var(--muted); font-size:13.5px;">${t ? esc(t.title) : ''} · ${STATUS_LABEL[deriveStatus(w.taskId)]}</p>
+        <button class="btn-primary" onclick="window.__nav({name:'task', id:'${w.taskId}'})">查看任務</button>
+        <button class="btn-ghost" style="width:100%; margin-top:10px;" onclick="window.__resetReportWizard()">繼續回報</button>
+      </div>`;
+  }
+
+  if (w.step === 1) {
+    const t = state.tasks.find(x => x.id === w.taskId);
+    return `
+      ${stepperHtml(1)}
+      <div class="section-label">選擇任務</div>
+      ${reportable.length ? `
+        <div class="field">
+          <select onchange="window.__setReportTask(this.value)">
+            <option value="">請選擇任務</option>
+            ${reportable.map(rt => `<option value="${rt.id}" ${w.taskId===rt.id?'selected':''}>${esc(rt.vehicle||'—')} · ${esc(rt.title)}</option>`).join("")}
+          </select>
+        </div>
+        ${t ? `
+          <div class="detail-head">
+            <div class="kv">
+              <div class="k">目前狀態</div><div class="v">${STATUS_LABEL[deriveStatus(t.id)]}</div>
+              <div class="k">地點</div><div class="v">${esc(t.location||'—')}</div>
+            </div>
+          </div>` : ""}
+        <button class="btn-primary" ${!w.taskId?'disabled':''} onclick="window.__reportWizardNext(2)">下一步</button>
+      ` : `<div class="empty">目前沒有可回報的勤務</div>`}
+    `;
+  }
+
+  if (w.step === 2) {
+    const t = state.tasks.find(x => x.id === w.taskId);
+    if (!t) return `<div class="empty">找不到此任務</div>`;
+    return `
+      ${stepperHtml(2)}
+      <div class="back-row"><button onclick="window.__reportWizardNext(1)">‹ 上一步</button></div>
+      <div class="section-label">選擇回報狀態</div>
+      ${EVENT_TYPES.map(e => `
+        <button class="big-status-btn" style="background:${STATUS_COLOR[e.statusKey]};" onclick="window.__setReportType('${e.type}')">
+          ${icon(e.icon,22)}${e.label}
+        </button>`).join("")}
+    `;
+  }
+
+  // step 3
+  const t = state.tasks.find(x => x.id === w.taskId);
+  const def = EVENT_TYPES.find(e => e.type === w.type);
+  if (!t || !def) return `<div class="empty">找不到此任務</div>`;
+  const isFinal = w.type === "COMPLETED";
+  return `
+    ${stepperHtml(3)}
+    <div class="back-row"><button onclick="window.__reportWizardNext(2)">‹ 上一步</button></div>
+    <div class="detail-head">
+      <div class="task-top"><p class="task-title">${esc(t.title)}</p>${statusBadge(deriveStatus(t.id))}</div>
+      <div class="kv"><div class="k">選擇狀態</div><div class="v">${icon(def.icon,14)} ${def.label}</div></div>
+    </div>
+    <div class="field"><label>地點</label><input id="rw-location" value="${esc(t.location||'')}"></div>
+    <div class="field"><label>里程（公里）</label><input id="rw-mileage" type="number" inputmode="decimal" placeholder="目前里程"></div>
+    ${isFinal ? `<div class="field"><label>剩餘油量</label><input id="rw-fuel" placeholder="例如：1/2 或 40%"></div>` : ""}
+    <div class="field"><label>備註（選填）</label><input id="rw-note" placeholder="備註"></div>
+    <button class="btn-primary" onclick="window.__submitReportWizard()">送出回報</button>
   `;
 }
 
@@ -869,6 +1029,93 @@ function viewRecords(){
 }
 
 /* =========================================================
+   15b) 畫面：統計分析
+   ========================================================= */
+const STATUS_COLOR = { pending:"#8E8E93", dispatch:"#FF3B30", onscene:"#FF9500", returning:"#007AFF", completed:"#34C759" };
+function tasksInPeriod(tasks, period){
+  const now = new Date();
+  return tasks.filter(t => {
+    const d = new Date(t.createdAt||0);
+    if (period === "today") return isSameDay(d.getTime(), now);
+    if (period === "week") { const diff = (now - d) / 86400000; return diff >= 0 && diff < 7; }
+    if (period === "month") return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth();
+    return true;
+  });
+}
+function viewStats(){
+  const p = state.profile;
+  const base = visibleTasks(p, state.tasks);
+  const tasks = tasksInPeriod(base, state.statsPeriod);
+
+  const periods = [
+    { key:"today", label:"今日" }, { key:"week", label:"本週" }, { key:"month", label:"本月" }
+  ];
+
+  // 各車輛出勤次數（依 DISPATCH 事件計算，同一車輛可能執行多趟勤務）
+  const vehicleCounts = {};
+  tasks.forEach(t => {
+    const d = eventByType(t.id, "DISPATCH");
+    if (!d) return;
+    const key = t.vehicle || "未填車號";
+    vehicleCounts[key] = (vehicleCounts[key]||0) + 1;
+  });
+  const vehicleEntries = Object.entries(vehicleCounts).sort((a,b) => b[1]-a[1]);
+  const maxCount = Math.max(1, ...vehicleEntries.map(e=>e[1]));
+
+  const barChart = vehicleEntries.length ? `
+    <div class="chart-card">
+      <div class="chart-title">各車輛出勤次數</div>
+      ${vehicleEntries.map(([veh,count]) => `
+        <div class="bar-row">
+          <div class="bar-label">${esc(veh)}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${(count/maxCount*100).toFixed(0)}%;"></div></div>
+          <div class="bar-val">${count}</div>
+        </div>`).join("")}
+    </div>` : `<div class="chart-card"><div class="chart-title">各車輛出勤次數</div><div class="empty">此區間尚無出勤紀錄</div></div>`;
+
+  const rankList = vehicleEntries.length ? `
+    <div class="chart-card">
+      <div class="chart-title">車輛使用次數排行</div>
+      ${vehicleEntries.map(([veh,count], i) => `
+        <div class="rank-row">
+          <div class="rank-num">${i+1}</div>
+          <div class="rank-name">${esc(veh)}</div>
+          <div class="rank-count">${count} 次</div>
+        </div>`).join("")}
+    </div>` : "";
+
+  // 任務狀態比例（part-to-whole → 橫向堆疊長條，不用圓餅圖）
+  const statusCounts = {};
+  STATUS_ORDER.forEach(s => statusCounts[s] = 0);
+  tasks.forEach(t => { const s = deriveStatus(t.id); statusCounts[s] = (statusCounts[s]||0) + 1; });
+  const totalTasks = tasks.length || 1;
+  const stackSegs = STATUS_ORDER.filter(s => statusCounts[s] > 0).map(s => `
+    <div class="seg" style="width:${(statusCounts[s]/totalTasks*100).toFixed(1)}%; background:${STATUS_COLOR[s]};"></div>`).join("");
+  const legendRows = STATUS_ORDER.map(s => `
+    <div class="leg-row">
+      <span class="leg-dot" style="background:${STATUS_COLOR[s]};"></span>
+      <span class="leg-name">${STATUS_LABEL[s]}</span>
+      <span class="leg-val">${statusCounts[s]}（${Math.round(statusCounts[s]/totalTasks*100)}%）</span>
+    </div>`).join("");
+
+  const statusChart = `
+    <div class="chart-card">
+      <div class="chart-title">任務狀態比例</div>
+      <div class="stackbar">${stackSegs}</div>
+      <div class="stack-legend">${legendRows}</div>
+    </div>`;
+
+  return `
+    <div class="tabs2">
+      ${periods.map(pd => `<div class="tab2 ${state.statsPeriod===pd.key?'active':''}" onclick="window.__setStatsPeriod('${pd.key}')">${pd.label}</div>`).join("")}
+    </div>
+    ${barChart}
+    ${rankList}
+    ${statusChart}
+  `;
+}
+
+/* =========================================================
    16) 畫面：通知中心（開發中）
    ========================================================= */
 function viewNotifications(){
@@ -914,12 +1161,12 @@ function viewAdmin(){
   const overview = `
     <div class="section-label">管理後台總覽</div>
     <div class="stat-grid">
-      <div class="stat-tile"><div class="num">${todayTasks.length}</div><div class="lbl">今日勤務</div></div>
-      <div class="stat-tile"><div class="num">${todayActive.length}</div><div class="lbl">今日進行中</div></div>
-      <div class="stat-tile"><div class="num">${todayDone.length}</div><div class="lbl">今日完成</div></div>
+      <div class="stat-tile t-blue"><div class="num">${todayTasks.length}</div><div class="lbl">今日勤務</div></div>
+      <div class="stat-tile t-orange"><div class="num">${todayActive.length}</div><div class="lbl">今日進行中</div></div>
+      <div class="stat-tile t-green"><div class="num">${todayDone.length}</div><div class="lbl">今日完成</div></div>
     </div>
     <div class="stat-grid" style="grid-template-columns:1fr;">
-      <div class="stat-tile"><div class="num">${personnelCount!=null ? personnelCount : '—'}</div><div class="lbl">已審核人員總數${personnelCount==null ? '（開啟帳號權限頁籤後顯示）' : ''}</div></div>
+      <div class="stat-tile t-purple"><div class="num">${personnelCount!=null ? personnelCount : '—'}</div><div class="lbl">已審核人員總數${personnelCount==null ? '（開啟帳號權限頁籤後顯示）' : ''}</div></div>
     </div>`;
 
   const tabs = `
@@ -1017,8 +1264,10 @@ const ROUTE_VIEWS = {
   home: viewHome,
   tasks: viewTasks,
   createTask: viewCreateTask,
+  report: viewReport,
   task: () => viewTaskDetail(state.route.id),
   records: viewRecords,
+  stats: viewStats,
   notifications: viewNotifications,
   profile: viewProfile,
   admin: viewAdmin
@@ -1026,9 +1275,9 @@ const ROUTE_VIEWS = {
 const NAV_ITEMS = [
   { name:"home", iconName:"home", label:"首頁" },
   { name:"tasks", iconName:"tasks", label:"任務中" },
-  { name:"createTask", iconName:"plus", label:"建立" },
+  { name:"report", iconName:"alert", label:"回報" },
   { name:"records", iconName:"records", label:"紀錄" },
-  { name:"profile", iconName:"user", label:"我的" }
+  { name:"stats", iconName:"chart", label:"統計" }
 ];
 
 function render(){
@@ -1045,7 +1294,11 @@ function render(){
   app.innerHTML = `
     <div class="topbar">
       <h1>救護勤務調度系統</h1>
-      <div class="live"><span class="dot-live"></span>${ROLE_LABEL[p.role]} · ${esc(p.displayName||p.email).split(' ')[0]}</div>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div class="live"><span class="dot-live"></span>${ROLE_LABEL[p.role]} · ${esc(p.displayName||p.email).split(' ')[0]}</div>
+        <button class="topbar-icon-btn" onclick="window.__nav({name:'notifications'})">${icon('bell',19)}</button>
+        <button class="topbar-icon-btn" onclick="window.__nav({name:'profile'})">${icon('user',19)}</button>
+      </div>
     </div>
     <main>${body}</main>
     <div class="bottomnav">
@@ -1083,6 +1336,25 @@ window.__forceEndTask = (id) => { if (confirm("確定強制結束此勤務？此
 window.__exportTasks = () => exportTasksCsv();
 window.__setRole = (uid, role) => setUserRole(uid, role, "").then(() => { state._usersCache = null; render(); });
 window.__setRecordsFilter = (key, value) => { state.recordsFilter[key] = value; render(); };
+window.__setTasksTab = (key) => { state.tasksTab = key; render(); };
+window.__setStatsPeriod = (key) => { state.statsPeriod = key; render(); };
+window.__setReportTask = (taskId) => { state.reportWizard.taskId = taskId; render(); };
+window.__reportWizardNext = (step) => { state.reportWizard.step = step; render(); };
+window.__setReportType = (type) => { state.reportWizard.type = type; state.reportWizard.step = 3; render(); };
+window.__resetReportWizard = () => { state.reportWizard = { step: 1, taskId: "" }; render(); };
+window.__submitReportWizard = () => {
+  const w = state.reportWizard;
+  const mileageEl = document.getElementById("rw-mileage");
+  const fuelEl = document.getElementById("rw-fuel");
+  const noteEl = document.getElementById("rw-note");
+  const locationEl = document.getElementById("rw-location");
+  const extra = {};
+  if (mileageEl && mileageEl.value !== "") extra.mileage = Number(mileageEl.value);
+  if (noteEl && noteEl.value) extra.note = noteEl.value;
+  if (fuelEl && fuelEl.value) extra.endFuel = fuelEl.value;
+  if (locationEl && locationEl.value) extra.reportedLocation = locationEl.value;
+  addEvent(w.taskId, w.type, extra).then(() => { state.reportWizard.step = 4; render(); });
+};
 window.__createTask = (ev) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
