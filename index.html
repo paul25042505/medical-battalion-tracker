@@ -300,18 +300,28 @@ onAuthStateChanged(auth, async (user) => {
   state.user = user;
   if (!user) { state.profile = null; render(); return; }
 
-  const ref = doc(db, "users", user.uid);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) {
-    await setDoc(ref, {
-      email: user.email, displayName: user.displayName, role: "pending", unit: "", createdAt: serverTimestamp()
+  render(); // 立即顯示 spinner，避免畫面停留在登入頁
+
+  try {
+    const ref = doc(db, "users", user.uid);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      await setDoc(ref, {
+        email: user.email, displayName: user.displayName, role: "pending", unit: "", createdAt: serverTimestamp()
+      });
+    }
+    unsubProfile = onSnapshot(ref, (s) => {
+      state.profile = s.exists() ? { uid: user.uid, ...s.data() } : null;
+      if (state.profile && state.profile.role !== "pending") startDataListeners();
+      render();
+    }, (err) => {
+      console.error("讀取使用者資料失敗", err);
+      showToast("讀取使用者資料失敗：" + err.message);
     });
+  } catch (err) {
+    console.error("登入後初始化失敗", err);
+    showToast("登入後初始化失敗：" + err.message);
   }
-  unsubProfile = onSnapshot(ref, (s) => {
-    state.profile = s.exists() ? { uid: user.uid, ...s.data() } : null;
-    if (state.profile && state.profile.role !== "pending") startDataListeners();
-    render();
-  });
 });
 
 function startDataListeners(){
