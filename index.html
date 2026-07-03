@@ -302,7 +302,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-23-more-hub";
+const BUILD_TAG = "2026-07-03-24-personnel-sync";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -558,6 +558,24 @@ async function forceEndTask(taskId){
 async function setUserRole(uid, role, unit){
   await fsSetDoc(`users/${uid}`, { role, unit });
   showToast("角色已更新");
+}
+// 帳號已綁定單位，理應自動出現在該單位的人員名冊（基礎資料管理／建立勤務下拉選單），
+// 不必再由管理員手動重複輸入一次姓名。以 uid 作為 personnel 文件 id 做鏡射同步。
+async function syncPersonnelFromUsers(users){
+  for (const u of users) {
+    const r = normalizeRole(u.role);
+    if (!u.unit) { // 未指派單位：若先前有鏡射資料需一併移除，避免殘留
+      if (state.personnel.find(x => x.id === u.id)) { try { await fsDeleteDoc(`personnel/${u.id}`); } catch(e){} }
+      continue;
+    }
+    const active = r !== "pending" && r !== "disabled";
+    const name = u.displayName || u.email || u.id;
+    const title = u.rank || ROLE_LABEL[r] || "";
+    const existing = state.personnel.find(x => x.id === u.id);
+    if (existing && existing.unit === u.unit && existing.active === active && existing.name === name && existing.title === title) continue;
+    try { await fsSetDoc(`personnel/${u.id}`, { unit: u.unit, name, title, active }); } catch(e){ console.error("同步人員資料失敗", e); }
+  }
+  if (personnelPoll) personnelPoll.refreshNow();
 }
 async function updateOwnProfile(displayName, rank){
   await fsSetDoc(`users/${state.user.uid}`, { displayName, rank });
@@ -1524,6 +1542,7 @@ function viewAdminUsers(){
     state._usersCache = "loading";
     fsListCollection("users").then(list => {
       state._usersCache = list;
+      syncPersonnelFromUsers(list);
       render();
     }).catch(err => {
       console.error("讀取使用者清單失敗", err);
