@@ -293,7 +293,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-32-no-dots";
+const BUILD_TAG = "2026-07-03-33-home-cards-unify";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -907,12 +907,12 @@ function viewHome(){
   const todayDone = todayTasks.filter(t => deriveStatus(t.id) === "completed");
   const todayActive = todayTasks.filter(t => deriveStatus(t.id) !== "completed");
 
-  const scopedVehicles = (canSeeAllUnits(p) ? state.vehicles : state.vehicles.filter(v => v.unit === myUnit(p)))
-    .filter(v => tasks.some(t => t.vehicle === v.plate && deriveStatus(t.id) !== "completed"))
-    .slice()
+  const activeTasksByVehicle = (canSeeAllUnits(p) ? state.vehicles : state.vehicles.filter(v => v.unit === myUnit(p)))
+    .map(v => tasks.find(t => t.vehicle === v.plate && deriveStatus(t.id) !== "completed"))
+    .filter(Boolean)
     .sort((a,b) => unitLabel(a.unit).localeCompare(unitLabel(b.unit)));
-  const fleetSection = scopedVehicles.length
-    ? scopedVehicles.map(v => vehicleDynamicCard(v, tasks)).join("")
+  const fleetSection = activeTasksByVehicle.length
+    ? activeTasksByVehicle.map(taskCard).join("")
     : `<div class="empty">目前沒有車輛執行中</div>`;
 
   return `
@@ -930,29 +930,6 @@ function viewHome(){
     <div class="section-label">車輛動態</div>
     ${fleetSection}
   `;
-}
-function vehicleDynamicCard(v, tasks){
-  const activeTask = tasks.find(t => t.vehicle === v.plate && deriveStatus(t.id) !== "completed");
-  const s = activeTask ? deriveStatus(activeTask.id) : null;
-  const cls = activeTask ? taskCardClass(s) : "s-pending";
-  return `
-  <div class="task-card ${cls}" ${activeTask ? `onclick="window.__nav({name:'task', id:'${activeTask.id}'})"` : ''}>
-    <div class="task-top">
-      <div>
-        <p class="task-title">${esc(v.plate)}${v.type ? ' · ' + esc(v.type) : ''}</p>
-        <div class="task-meta">${unitLabel(v.unit)}${v.active===false ? '（已停用）' : ''}</div>
-      </div>
-      ${activeTask ? statusBadge(s) : `<span class="badge pending">待命中</span>`}
-    </div>
-    ${activeTask ? `
-    <div class="task-crew">
-      <span>任務：${esc(activeTask.title)}</span>
-    </div>
-    <div class="task-foot">
-      <span>${esc(activeTask.location||'—')}</span>
-      <span>車長 ${esc(activeTask.crewLeader||'—')} · 駕駛 ${esc(activeTask.driver||'—')}</span>
-    </div>` : ""}
-  </div>`;
 }
 
 /* =========================================================
