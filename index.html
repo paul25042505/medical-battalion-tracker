@@ -176,7 +176,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-02-rest";
+const BUILD_TAG = "2026-07-03-03-bootstrap";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -378,6 +378,13 @@ async function setUserRole(uid, role, unit){
   await fsSetDoc(`users/${uid}`, { role, unit });
   showToast("角色已更新");
 }
+async function bootstrapAdmin(){
+  await fsSetDoc(`users/${state.user.uid}`, { role: "admin" });
+  state.profile.role = "admin";
+  showToast("已設為管理員");
+  startDataListeners();
+  render();
+}
 
 /* =========================================================
    7) Auth 流程
@@ -491,7 +498,8 @@ function viewPending(){
     <div class="pending-box">
       <p>您的帳號（${esc(state.user.email)}）已建立，但尚未指派角色。<br><br>請聯繫系統管理員開通權限後再登入。</p>
     </div>
-    <button class="icon-btn" style="margin-top:20px;" onclick="window.__logout()">登出</button>
+    <button class="btn-primary" style="max-width:320px;margin-top:20px;" onclick="window.__bootstrapAdmin()">設為管理員（僅限初始設定）</button>
+    <button class="icon-btn" style="margin-top:12px;" onclick="window.__logout()">登出</button>
   </div>`;
 }
 
@@ -716,6 +724,10 @@ window.__report = (taskId, type) => addEvent(taskId, type);
 window.__setAdminTab = (t) => { state.adminTab = t; state._usersCache = null; render(); };
 window.__deleteTask = (id) => { if (confirm("確定刪除此任務？此動作無法復原。")) deleteTask(id); };
 window.__setRole = (uid, role) => setUserRole(uid, role, "").then(() => { state._usersCache = null; render(); });
+window.__bootstrapAdmin = () => bootstrapAdmin().catch(err => {
+  console.error("設為管理員失敗", err);
+  showToast(`設為管理員失敗：[${err.code||'?'}] ${err.message}`);
+});
 window.__createTask = (ev) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
