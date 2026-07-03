@@ -353,7 +353,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-63-header-polish-scrollable-tabs";
+const BUILD_TAG = "2026-07-04-64-smart-report-defaults";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1421,10 +1421,18 @@ function viewTaskDetail(taskId){
     const lastEv = evs[evs.length - 1];
     const minBase = lastEv?.ts ?? dispatchEv?.ts ?? null;
     const minTime = minBase ? hhmmValue(new Date(minBase)) : "";
+    // 第一次抵達的地點已經在建立勤務時填過了（任務本身的「地點」欄位），
+    // 不用再問一次；只有離開後前往第二個（含以後）地點時才需要重新輸入。
+    const showLocationField = draft.type === "ARRIVED_SCENE" && arrivedEvs.length > 0;
+    // 離開現場／開始返營時，車輛都還沒有移動（人剛在原地回報），里程理論上
+    // 跟上一筆回報的里程一樣，直接帶入避免重複輸入；抵達現場／抵達營區才是
+    // 真的開車移動後的新里程，需要手動輸入。
+    const lastMileageEv = evs.slice().reverse().find(e => e.mileage != null);
+    const prefillMileage = (draft.type === "DEPART_SCENE" || draft.type === "RETURNING") && lastMileageEv ? lastMileageEv.mileage : null;
     reportSection = `
       <div class="report-form">
         <div class="title">${icon(def.icon,19)} 回報：${def.label}</div>
-        ${draft.type === "ARRIVED_SCENE" ? `<div class="field"><label>地點</label><input id="rf-location" placeholder="例如：加油站、OO超商"></div>` : ""}
+        ${showLocationField ? `<div class="field"><label>地點</label><input id="rf-location" placeholder="例如：加油站、OO超商"></div>` : ""}
         <div class="field">
           <label>時間</label>
           <div style="display:flex; gap:8px;">
@@ -1432,7 +1440,7 @@ function viewTaskDetail(taskId){
             <button type="button" class="icon-btn" style="flex-shrink:0;" onclick="window.__resetReportTime()">套用目前</button>
           </div>
         </div>
-        <div class="field"><label>里程（公里）</label><input id="rf-mileage" type="number" inputmode="decimal" placeholder="目前里程"></div>
+        <div class="field"><label>里程（公里）</label><input id="rf-mileage" type="number" inputmode="decimal" placeholder="目前里程" value="${prefillMileage != null ? prefillMileage : ''}"></div>
         ${isFinal ? `<div class="field"><label>剩餘油量</label><input id="rf-fuel" placeholder="例如：1/2 或 40%"></div>` : ""}
         <div class="field"><label>備註（選填）</label><input id="rf-note" placeholder="備註"></div>
         <div class="row">
