@@ -293,7 +293,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-43-no-background-polling";
+const BUILD_TAG = "2026-07-03-44-legacy-crew-phone-match";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -907,11 +907,19 @@ function statusBadge(statusKey){
 function taskCardClass(statusKey){
   return { pending:"s-pending", dispatch:"s-dispatch", onscene:"s-onscene", returning:"s-returning", completed:"s-completed" }[statusKey];
 }
-// 依姓名＋單位查該人員的電話（人員資料由帳號同步或基礎資料管理手動維護）
+// 依姓名＋單位查該人員的電話（人員資料由帳號同步或基礎資料管理手動維護）。
+// 舊資料（單位欄位、下拉選單上線前）可能沒有 unit，姓名也常跟階級直接連寫成
+// 一串，例如「林伯霖上士」，對不上人員名冊裡單純的姓名「林伯霖」。這裡先在
+// 同單位內精準比對、再開頭比對；都找不到的話（通常是舊資料缺 unit）才放寬
+// 成全部單位一起找，讓舊任務也能顯示電話。
+function findPersonnelByName(pool, name){
+  return pool.find(x => x.name === name) || pool.find(x => x.name && name.startsWith(x.name));
+}
 function personnelPhone(name, unit){
   if (!name) return "";
-  const person = state.personnel.find(x => x.unit === unit && x.name === name);
-  return (person && person.phone) || "";
+  const scoped = unit ? state.personnel.filter(x => x.unit === unit) : state.personnel;
+  const match = findPersonnelByName(scoped, name) || (unit ? findPersonnelByName(state.personnel, name) : null);
+  return (match && match.phone) || "";
 }
 function crewLabel(name, unit){
   const phone = personnelPhone(name, unit);
