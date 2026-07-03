@@ -369,7 +369,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-66-report-form-modal";
+const BUILD_TAG = "2026-07-04-67-auto-depart-skip-duplicate-time";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -584,16 +584,19 @@ function taskEvents(taskId) {
 function eventByType(taskId, type){
   return taskEvents(taskId).find(e => e.type === type) || null;
 }
-// Workflow 導向：除了離開現場之後（可能前往下一個地點、也可能直接返營，
+// Workflow 導向：除了已抵達現場之後（可能前往下一個地點、也可能直接返營，
 // 真正需要分岔）以外，任何時候都只有「一個」下一步動作，讓使用者不用自己
 // 判斷流程，只要照系統提示做下一步就好。
+// 「離開現場」不再是使用者要另外確認的一個步驟——離開現場一定跟前一筆抵達
+// 同一個地點、同一個里程，沒有東西好額外填，所以改成在使用者選擇「前往
+// 下一個地點」或「返回營區」時自動、安靜地補寫在後面（見 addEvent 呼叫端
+// 的 reportDepartThenContinue），避免同樣的時間/里程要填兩次。
 function reportableTypes(taskId){
   if (deriveStatus(taskId) === "completed") return [];
   const evs = taskEvents(taskId);
   const lastType = evs.length ? evs[evs.length - 1].type : null;
   if (!lastType || lastType === "DISPATCH") return ["ARRIVED_SCENE"];
-  if (lastType === "ARRIVED_SCENE") return ["DEPART_SCENE"];
-  if (lastType === "DEPART_SCENE") return ["ARRIVED_SCENE", "RETURNING"]; // 唯一的分岔點
+  if (lastType === "ARRIVED_SCENE" || lastType === "DEPART_SCENE") return ["ARRIVED_SCENE", "RETURNING"]; // 唯一的分岔點
   if (lastType === "RETURNING") return ["COMPLETED"];
   return [];
 }
@@ -673,7 +676,7 @@ function endRolePreview(){
 /* =========================================================
    6) Firestore 動作
    ========================================================= */
-async function addEvent(taskId, type, extra){
+async function addEvent(taskId, type, extra, opts){
   const task = state.tasks.find(t => t.id === taskId);
   await fsAddDoc("events", {
     taskId, type, unit: task ? task.unit : "",
@@ -682,8 +685,22 @@ async function addEvent(taskId, type, extra){
     userName: state.profile.displayName || state.user.displayName || state.user.email,
     ...extra
   });
-  showToast(`已回報：${EVENT_TYPES.find(t=>t.type===type).label}`);
-  if (eventsPoll) eventsPoll.refreshNow();
+  if (!opts?.silent) {
+    showToast(`已回報：${EVENT_TYPES.find(t=>t.type===type).label}`);
+    if (eventsPoll) eventsPoll.refreshNow();
+  }
+}
+// 「離開現場」一定跟前一筆抵達同一個地點、同一個里程，沒有東西好額外填，
+// 所以選擇「前往下一個地點」或「返回營區」時自動在背後補寫一筆離開現場
+// （沿用最後一筆已知里程；若是直接返營，時間也直接沿用返營當下送出的
+// 時間，因為兩者本來就是同一刻），使用者不需要把同樣的時間/里程填兩次。
+async function reportDepartThenContinue(taskId, nextType, extra){
+  const evs = taskEvents(taskId);
+  const lastMileageEv = evs.slice().reverse().find(e => e.mileage != null);
+  const departExtra = { mileage: lastMileageEv ? lastMileageEv.mileage : null };
+  if (nextType === "RETURNING" && extra.timestamp) departExtra.timestamp = extra.timestamp;
+  await addEvent(taskId, "DEPART_SCENE", departExtra, { silent: true });
+  await addEvent(taskId, nextType, extra);
 }
 async function createTask(data){
   const created = await fsAddDoc("tasks", { ...data, createdAt: new Date(), createdBy: state.user.uid, createdByName: state.profile.displayName || state.user.email });
@@ -1439,7 +1456,7 @@ function viewTaskDetail(taskId){
   let nextStepText;
   if (!canDoReport) nextStepText = "—（沒有回報權限）";
   else if (s === "completed") nextStepText = "勤務已完成";
-  else if (lastType === "DEPART_SCENE") nextStepText = "前往下一個地點，或直接返回營區";
+  else if (lastType === "ARRIVED_SCENE" || lastType === "DEPART_SCENE") nextStepText = "前往下一個地點，或直接返回營區";
   else nextStepText = rTypes.length ? EVENT_TYPES.find(e=>e.type===rTypes[0]).label : "—";
 
   const statusBlock = `
@@ -1464,11 +1481,11 @@ function viewTaskDetail(taskId){
     // 表單標題也改叫「抵達下一個地點」，跟第一次抵達做出區別。
     const isNextStop = draft.type === "ARRIVED_SCENE" && arrivedEvs.length > 0;
     const formTitle = isNextStop ? "抵達下一個地點" : def.label;
-    // 離開現場／開始返營時，車輛都還沒有移動（人剛在原地回報），里程理論上
-    // 跟上一筆回報的里程一樣，直接帶入避免重複輸入；抵達現場／抵達營區才是
-    // 真的開車移動後的新里程，需要手動輸入。
+    // 開始返營時，車輛都還沒有移動（人剛在原地回報），里程理論上跟上一筆回報
+    // 的里程一樣，直接帶入避免重複輸入；抵達現場／抵達營區才是真的開車移動
+    // 後的新里程，需要手動輸入。（離開現場已經改成自動補寫，見 __submitReport）
     const lastMileageEv = evs.slice().reverse().find(e => e.mileage != null);
-    const prefillMileage = (draft.type === "DEPART_SCENE" || draft.type === "RETURNING") && lastMileageEv ? lastMileageEv.mileage : null;
+    const prefillMileage = draft.type === "RETURNING" && lastMileageEv ? lastMileageEv.mileage : null;
     // 回報表單改用彈窗（跟基礎資料管理的新增/編輯彈窗同一套元件），避免表單
     // 內容被固定在畫面底部的 Sticky Action Bar 擋住看不到。
     reportModal = `
@@ -2184,7 +2201,14 @@ window.__submitReport = (taskId, type) => {
   if (timeEl && timeEl.value) extra.timestamp = todayAt(timeEl.value);
   if (locationEl && locationEl.value) extra.location = locationEl.value;
   state.reportDraft = null;
-  addEvent(taskId, type, extra);
+  const evs = taskEvents(taskId);
+  const lastType = evs.length ? evs[evs.length - 1].type : null;
+  // 從「已抵達現場」狀態選擇前往下一個地點或返回營區時，自動補一筆離開現場。
+  if (lastType === "ARRIVED_SCENE" && (type === "ARRIVED_SCENE" || type === "RETURNING")) {
+    reportDepartThenContinue(taskId, type, extra);
+  } else {
+    addEvent(taskId, type, extra);
+  }
 };
 window.__setAdminTab = (t) => { state.adminTab = t; state._usersCache = null; render(); };
 window.__deleteTask = (id) => { if (confirm("確定刪除此任務？此動作無法復原。")) deleteTask(id); };
