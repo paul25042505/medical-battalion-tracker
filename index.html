@@ -65,11 +65,6 @@
   .topbar-sub .name{font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:21px; font-weight:700;}
   .topbar-sub .rank{font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:14.5px; font-weight:500; color:var(--text);}
   .topbar-icon-btn{background:none; border:none; color:var(--text); padding:4px; display:flex; align-items:center; justify-content:center;}
-  @keyframes pulse{
-    0%{box-shadow:0 0 0 0 rgba(52,199,89,0.5);}
-    70%{box-shadow:0 0 0 6px rgba(52,199,89,0);}
-    100%{box-shadow:0 0 0 0 rgba(52,199,89,0);}
-  }
 
   main{flex:1; padding:16px 16px 100px 16px; max-width:680px; width:100%; margin:0 auto;}
 
@@ -104,13 +99,11 @@
   .task-title{font-size:19.5px; font-weight:700; margin:0 0 4px 0;}
   .task-meta{color:var(--text); font-size:15px; font-family:var(--mono); font-weight:500;}
   .badge{
-    display:inline-flex; align-items:center; gap:0; font-size:14px; font-family:var(--mono); font-weight:700;
+    display:inline-flex; align-items:center; font-size:14px; font-family:var(--mono); font-weight:700;
     padding:7px 13px; border-radius:999px; white-space:nowrap;
   }
-  .badge .bdot{width:7px; height:7px; border-radius:50%;}
   .badge.pending{background:rgba(142,142,147,0.15); color:var(--gray);}
   .badge.dispatch{background:rgba(255,59,48,0.15); color:var(--red);}
-  .badge.dispatch .bdot{animation:pulse 1.4s infinite;}
   .badge.onscene{background:rgba(255,149,0,0.15); color:var(--amber);}
   .badge.returning{background:rgba(0,122,255,0.15); color:var(--blue);}
   .badge.completed{background:rgba(52,199,89,0.15); color:var(--green);}
@@ -300,7 +293,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-31-badge-gap";
+const BUILD_TAG = "2026-07-03-32-no-dots";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -875,7 +868,7 @@ function viewDisabled(){
    ========================================================= */
 function statusBadge(statusKey){
   const cls = { pending:"pending", dispatch:"dispatch", onscene:"onscene", returning:"returning", completed:"completed" }[statusKey];
-  return `<span class="badge ${cls}"><span class="bdot"></span>${STATUS_LABEL[statusKey]}</span>`;
+  return `<span class="badge ${cls}">${STATUS_LABEL[statusKey]}</span>`;
 }
 function taskCardClass(statusKey){
   return { pending:"s-pending", dispatch:"s-dispatch", onscene:"s-onscene", returning:"s-returning", completed:"s-completed" }[statusKey];
@@ -949,7 +942,7 @@ function vehicleDynamicCard(v, tasks){
         <p class="task-title">${esc(v.plate)}${v.type ? ' · ' + esc(v.type) : ''}</p>
         <div class="task-meta">${unitLabel(v.unit)}${v.active===false ? '（已停用）' : ''}</div>
       </div>
-      ${activeTask ? statusBadge(s) : `<span class="badge pending"><span class="bdot"></span>待命中</span>`}
+      ${activeTask ? statusBadge(s) : `<span class="badge pending">待命中</span>`}
     </div>
     ${activeTask ? `
     <div class="task-crew">
