@@ -225,7 +225,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-09-light";
+const BUILD_TAG = "2026-07-03-10-svgicons";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -338,10 +338,10 @@ function poll(fn, intervalMs){
    2) Event 類型定義
    ========================================================= */
 const EVENT_TYPES = [
-  { type: "DISPATCH",      label: "出勤",     emoji: "🚨", statusKey: "dispatch" },
-  { type: "ARRIVED_SCENE", label: "抵達現場", emoji: "📍", statusKey: "onscene" },
-  { type: "RETURNING",     label: "返營",     emoji: "🚑", statusKey: "returning" },
-  { type: "COMPLETED",     label: "抵達營區", emoji: "🏁", statusKey: "completed" }
+  { type: "DISPATCH",      label: "出勤",     icon: "alert",       statusKey: "dispatch" },
+  { type: "ARRIVED_SCENE", label: "抵達現場", icon: "pin",         statusKey: "onscene" },
+  { type: "RETURNING",     label: "返營",     icon: "returnArrow", statusKey: "returning" },
+  { type: "COMPLETED",     label: "抵達營區", icon: "flag",        statusKey: "completed" }
 ];
 const STATUS_LABEL = {
   pending:   "待出勤",
@@ -534,6 +534,27 @@ function nav(route){ state.route = route; state.reportDraft = null; render(); wi
 function esc(s){ return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* =========================================================
+   8b) 線條 SVG 圖標（取代 emoji，搭配淺色 iOS 風格）
+   ========================================================= */
+const ICON_PATHS = {
+  home:    `<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9a1 1 0 0 0 1 1h4v-6h3v6h4a1 1 0 0 0 1-1v-9"/>`,
+  tasks:   `<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3.5h6v2H9z"/><path d="M8.5 11h7M8.5 14.5h7M8.5 18h4.5"/>`,
+  plus:    `<path d="M12 5v14"/><path d="M5 12h14"/>`,
+  records: `<rect x="3.5" y="4.5" width="17" height="3.5" rx="1"/><path d="M5 8v10.5a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V8"/><path d="M10 13h4"/>`,
+  bell:    `<path d="M6 9a6 6 0 0 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9Z"/><path d="M9.5 19.5a2.5 2.5 0 0 0 5 0"/>`,
+  user:    `<circle cx="12" cy="8" r="3.7"/><path d="M4.5 20c.7-4.2 4.2-6.2 7.5-6.2s6.8 2 7.5 6.2"/>`,
+  alert:   `<path d="M12 3 21.5 20h-19Z"/><path d="M12 10v4"/><circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none"/>`,
+  pin:     `<path d="M12 21s7-7.2 7-12a7 7 0 1 0-14 0c0 4.8 7 12 7 12Z"/><circle cx="12" cy="9.2" r="2.4"/>`,
+  returnArrow: `<path d="M9.5 14 4.5 9l5-5"/><path d="M4.5 9h9.5a5.5 5.5 0 0 1 5.5 5.5V17"/>`,
+  flag:    `<path d="M6 3v18"/><path d="M6 4h12l-2.3 4L18 12H6"/>`,
+  cloud:   `<path d="M7.5 18a4 4 0 0 1-.7-7.9 5 5 0 0 1 9.6-1.6A4.3 4.3 0 0 1 16.3 18Z"/>`
+};
+function icon(name, size){
+  size = size || 20;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;flex-shrink:0;">${ICON_PATHS[name]||''}</svg>`;
+}
+
+/* =========================================================
    9) 畫面：登入 / 待審核
    ========================================================= */
 function viewLogin(){
@@ -615,24 +636,24 @@ function viewHome(){
 
   const banner = ongoing ? `
     <div class="current-banner" onclick="window.__nav({name:'task', id:'${ongoing.id}'})">
-      <div class="cb-label">🚨 進行中勤務</div>
+      <div class="cb-label">${icon('alert',14)} 進行中勤務</div>
       <p class="task-title">${esc(ongoing.title)}</p>
       <div class="task-meta">${esc(ongoing.vehicle||'—')} · ${esc(ongoing.location||'—')}</div>
       <div style="margin-top:8px;">${statusBadge(deriveStatus(ongoing.id))}</div>
     </div>` : "";
 
   const quick = [
-    { icon:"📋", label:"任務中", route:{name:"tasks"} },
-    { icon:"➕", label:"建立勤務", route:{name:"createTask"}, show: canCreateTask(p) },
-    { icon:"🗂️", label:"勤務紀錄", route:{name:"records"} },
-    { icon:"🔔", label:"通知", route:{name:"notifications"} },
-    { icon:"👤", label:"個人資料", route:{name:"profile"} }
+    { iconName:"tasks", label:"任務中", route:{name:"tasks"} },
+    { iconName:"plus", label:"建立勤務", route:{name:"createTask"}, show: canCreateTask(p) },
+    { iconName:"records", label:"勤務紀錄", route:{name:"records"} },
+    { iconName:"bell", label:"通知", route:{name:"notifications"} },
+    { iconName:"user", label:"個人資料", route:{name:"profile"} }
   ].filter(q => q.show !== false);
 
   return `
     <div class="home-date">${fmtDate(today)}</div>
     <div class="weather-card">
-      <span class="emoji">⛅</span>
+      <span class="emoji">${icon('cloud',26)}</span>
       <div>天氣資訊尚未串接（規劃使用中央氣象署 CWA 開放資料，待提供 API 金鑰）</div>
     </div>
     ${banner}
@@ -646,7 +667,7 @@ function viewHome(){
     <div class="quick-grid">
       ${quick.map(q => `
         <button class="quick-btn" onclick='window.__nav(${JSON.stringify(q.route)})'>
-          <span class="navicon">${q.icon}</span>${q.label}
+          <span class="navicon">${icon(q.iconName,22)}</span>${q.label}
         </button>`).join("")}
     </div>
   `;
@@ -712,7 +733,7 @@ function viewTaskDetail(taskId){
     const isFinal = draft.type === "COMPLETED";
     reportSection = `
       <div class="report-form">
-        <div class="title">${def.emoji} 回報：${def.label}</div>
+        <div class="title">${icon(def.icon,18)} 回報：${def.label}</div>
         <div class="field"><label>里程（公里）</label><input id="rf-mileage" type="number" inputmode="decimal" placeholder="目前里程"></div>
         ${isFinal ? `<div class="field"><label>剩餘油量</label><input id="rf-fuel" placeholder="例如：1/2 或 40%"></div>` : ""}
         <div class="field"><label>備註（選填）</label><input id="rf-note" placeholder="備註"></div>
@@ -727,7 +748,7 @@ function viewTaskDetail(taskId){
         ${EVENT_TYPES.map(e => `
           <button class="report-btn ${e.type===nextType?'recommended':''}"
             onclick="window.__startReport('${t.id}','${e.type}')">
-            <span class="emoji">${e.emoji}</span>${e.label}
+            <span class="emoji">${icon(e.icon,24)}</span>${e.label}
           </button>`).join("")}
       </div>`;
   }
@@ -739,7 +760,7 @@ function viewTaskDetail(taskId){
         return `
         <div class="tl-item">
           <div class="tl-dot ${def?.statusKey}"></div>
-          <div class="tl-type">${def?.emoji} ${def?.label}</div>
+          <div class="tl-type">${def ? icon(def.icon,16) : ''} ${def?.label}</div>
           <div class="tl-meta">${fmtTime(e.ts)} · ${esc(e.userName||'')}${e.mileage!=null ? ' · ' + e.mileage + ' km' : ''}</div>
           ${e.note ? `<div class="tl-note">${esc(e.note)}</div>` : ""}
         </div>`;
@@ -940,11 +961,11 @@ const ROUTE_VIEWS = {
   admin: viewAdmin
 };
 const NAV_ITEMS = [
-  { name:"home", icon:"🏠", label:"首頁" },
-  { name:"tasks", icon:"📋", label:"任務中" },
-  { name:"createTask", icon:"➕", label:"建立" },
-  { name:"records", icon:"🗂️", label:"紀錄" },
-  { name:"profile", icon:"👤", label:"我的" }
+  { name:"home", iconName:"home", label:"首頁" },
+  { name:"tasks", iconName:"tasks", label:"任務中" },
+  { name:"createTask", iconName:"plus", label:"建立" },
+  { name:"records", iconName:"records", label:"紀錄" },
+  { name:"profile", iconName:"user", label:"我的" }
 ];
 
 function render(){
@@ -966,7 +987,7 @@ function render(){
     <div class="bottomnav">
       ${NAV_ITEMS.map(n => `
         <button class="navbtn ${state.route.name===n.name?'active':''}" onclick="window.__nav({name:'${n.name}'})">
-          <span class="navicon">${n.icon}</span><span class="navlabel">${n.label}</span>
+          <span class="navicon">${icon(n.iconName,20)}</span><span class="navlabel">${n.label}</span>
         </button>`).join("")}
     </div>
     <div id="toast" class="toast"></div>
