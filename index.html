@@ -302,7 +302,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-24-personnel-sync";
+const BUILD_TAG = "2026-07-03-25-personnel-sync-eager";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -576,6 +576,15 @@ async function syncPersonnelFromUsers(users){
     try { await fsSetDoc(`personnel/${u.id}`, { unit: u.unit, name, title, active }); } catch(e){ console.error("同步人員資料失敗", e); }
   }
   if (personnelPoll) personnelPoll.refreshNow();
+}
+// 先前只有實際點進「帳號權限」頁籤才會觸發同步；改成只要 admin 打開管理後台
+// （不論停留在哪個頁籤）就會在背景嘗試同步一次，避免使用者誤以為指派單位後
+// 沒去點帳號權限頁籤，人員名冊就不會更新。
+let adminPersonnelSyncTried = false;
+function ensureAdminPersonnelSync(p){
+  if (!canManageUsers(p) || adminPersonnelSyncTried) return;
+  adminPersonnelSyncTried = true;
+  fsListCollection("users").then(list => { syncPersonnelFromUsers(list); }).catch(e => console.error("同步人員資料失敗", e));
 }
 async function updateOwnProfile(displayName, rank){
   await fsSetDoc(`users/${state.user.uid}`, { displayName, rank });
@@ -1393,6 +1402,7 @@ function viewProfile(){
 function viewAdmin(){
   const p = state.profile;
   if (!canManageTasks(p)) return `<div class="empty">您沒有管理權限</div>`;
+  ensureAdminPersonnelSync(p);
 
   const overview = `<div class="section-label">管理後台${canSeeAllUnits(p) ? '' : ' · ' + unitLabel(myUnit(p))}</div>`;
 
