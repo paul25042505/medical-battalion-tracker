@@ -293,7 +293,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-37-hide-ops";
+const BUILD_TAG = "2026-07-03-38-hide-mission-info";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1182,6 +1182,7 @@ function viewTaskDetail(taskId){
       </div>
     </div>
     ${canReport(p, t) ? `<div class="section-label">回報操作</div>${reportSection}` : ""}
+    ${canReport(p, t) ? `
     <div class="section-label">勤務資訊</div>
     <div class="detail-head">
       <div class="kv">
@@ -1194,7 +1195,7 @@ function viewTaskDetail(taskId){
         <div class="k">行駛公里</div><div class="v">${distance!=null ? distance+' km' : '—'}</div>
         <div class="k">任務耗時</div><div class="v">${duration!=null ? durationLabel(duration) : '—'}</div>
       </div>
-    </div>
+    </div>` : ""}
     <div class="section-label">勤務時間軸（唯讀，不可修改）</div>
     ${timeline}
   `;
