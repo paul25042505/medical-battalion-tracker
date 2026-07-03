@@ -14,13 +14,7 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create: if isSignedIn() && request.auth.uid == uid
                     && request.resource.data.role == 'pending';
-      // TEMP：允許目前還是 pending 的使用者，把自己升級成 admin 一次，
-      // 用來在還沒有任何管理員時完成初始設定。設定完第一位 admin 後
-      // 請務必把這段拿掉，只留 isAdmin()。
-      allow update: if isAdmin()
-                    || (isSignedIn() && request.auth.uid == uid
-                        && resource.data.role == 'pending'
-                        && request.resource.data.role == 'admin');
+      allow update: if isAdmin();
       allow delete: if false;
     }
 
