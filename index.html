@@ -344,7 +344,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-61-title-fill-width";
+const BUILD_TAG = "2026-07-04-62-arrival-location-field";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1415,6 +1415,7 @@ function viewTaskDetail(taskId){
     reportSection = `
       <div class="report-form">
         <div class="title">${icon(def.icon,19)} 回報：${def.label}</div>
+        ${draft.type === "ARRIVED_SCENE" ? `<div class="field"><label>地點</label><input id="rf-location" placeholder="例如：加油站、OO超商"></div>` : ""}
         <div class="field">
           <label>時間</label>
           <div style="display:flex; gap:8px;">
@@ -1424,7 +1425,7 @@ function viewTaskDetail(taskId){
         </div>
         <div class="field"><label>里程（公里）</label><input id="rf-mileage" type="number" inputmode="decimal" placeholder="目前里程"></div>
         ${isFinal ? `<div class="field"><label>剩餘油量</label><input id="rf-fuel" placeholder="例如：1/2 或 40%"></div>` : ""}
-        <div class="field"><label>備註（選填）</label><input id="rf-note" placeholder="例如：地點名稱"></div>
+        <div class="field"><label>備註（選填）</label><input id="rf-note" placeholder="備註"></div>
         <div class="row">
           <button class="btn-ghost" onclick="window.__cancelReport()">取消</button>
           <button class="btn-primary" style="margin-top:0;" onclick="window.__submitReport('${t.id}','${draft.type}')">確認送出</button>
@@ -1455,7 +1456,7 @@ function viewTaskDetail(taskId){
         return `
         <div class="tl-item">
           <div class="tl-dot ${def?.statusKey}"></div>
-          <div class="tl-type">${def ? icon(def.icon,17) : ''} ${def?.label}</div>
+          <div class="tl-type">${def ? icon(def.icon,17) : ''} ${def?.label}${e.location ? '：'+esc(e.location) : ''}</div>
           <div class="tl-meta">${fmtTime(e.ts)} · ${nameWithRank(e.userName, e.unit)}${e.mileage!=null ? ' · ' + e.mileage + ' km' : ''}</div>
           ${e.note ? `<div class="tl-note">${esc(e.note)}</div>` : ""}
         </div>`;
@@ -1488,7 +1489,7 @@ function viewTaskDetail(taskId){
     <div class="detail-head">
       <div class="kv">
         <div class="k">出發里程</div><div class="v">${startMileage!=null ? startMileage+' km' : '—'}</div>
-        <div class="k">抵達里程</div><div class="v">${arrivedEvs.length ? arrivedEvs.map(e => e.mileage!=null ? e.mileage+' km' : '—').join('、') : '—'}</div>
+        <div class="k">抵達里程</div><div class="v">${arrivedEvs.length ? arrivedEvs.map(e => (e.mileage!=null ? e.mileage+' km' : '—') + (e.location ? '（'+esc(e.location)+'）' : '')).join('、') : '—'}</div>
         <div class="k">離開里程</div><div class="v">${departEvs.length ? departEvs.map(e => e.mileage!=null ? e.mileage+' km' : '—').join('、') : '—'}</div>
         <div class="k">返營里程</div><div class="v">${returningEv?.mileage!=null ? returningEv.mileage+' km' : '—'}</div>
         <div class="k">最終里程</div><div class="v">${finalMileage!=null ? finalMileage+' km' : '—'}</div>
@@ -2111,11 +2112,13 @@ window.__submitReport = (taskId, type) => {
   const fuelEl = document.getElementById("rf-fuel");
   const noteEl = document.getElementById("rf-note");
   const timeEl = document.getElementById("rf-time");
+  const locationEl = document.getElementById("rf-location");
   const extra = {};
   if (mileageEl && mileageEl.value !== "") extra.mileage = Number(mileageEl.value);
   if (noteEl && noteEl.value) extra.note = noteEl.value;
   if (fuelEl && fuelEl.value) extra.endFuel = fuelEl.value;
   if (timeEl && timeEl.value) extra.timestamp = todayAt(timeEl.value);
+  if (locationEl && locationEl.value) extra.location = locationEl.value;
   state.reportDraft = null;
   addEvent(taskId, type, extra);
 };
