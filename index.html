@@ -8,27 +8,39 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Serif+TC:wght@500;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#F2F2F7;
+    --bg:#F4F5F8;
     --panel:#FFFFFF;
-    --panel-2:#F2F2F7;
-    --border:#E5E5EA;
-    --text:#1C1C1E;
-    --muted:#8E8E93;
+    --panel-2:#F3F4F7;
+    --border:#E7E8EE;
+    --border-strong:#D8DAE3;
+    --text:#15161B;
+    --muted:#8A8D98;
     --amber:#FF9500;
     --red:#FF3B30;
     --green:#34C759;
-    --blue:#007AFF;
+    --blue:#0066FF;
     --gray:#8E8E93;
     --topbar-fade: rgba(255,255,255,0.92);
-    --navbar-bg: rgba(255,255,255,0.94);
-    --card-shadow: 0 1px 3px rgba(60,60,67,0.08), 0 1px 1px rgba(60,60,67,0.04);
+    --navbar-bg: rgba(255,255,255,0.96);
+    --radius-sm:10px;
+    --radius-md:14px;
+    --radius-lg:18px;
+    --shadow-xs: 0 1px 2px rgba(15,15,20,0.04);
+    --shadow-sm: 0 1px 2px rgba(15,15,20,0.05), 0 2px 8px rgba(15,15,20,0.05);
+    --shadow-md: 0 6px 20px rgba(15,15,20,0.08), 0 1px 3px rgba(15,15,20,0.05);
+    --card-shadow: var(--shadow-sm);
     --mono:'JetBrains Mono', ui-monospace, monospace;
     --sans:-apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
-  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:var(--sans); height:100%; font-size:17px; overflow-x:hidden; max-width:100%;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:var(--sans); height:100%; font-size:17px; overflow-x:hidden; max-width:100%; -webkit-font-smoothing:antialiased;}
   body{ padding-bottom:env(safe-area-inset-bottom); }
   #app{min-height:100vh; display:flex; flex-direction:column;}
+  button{font-family:var(--sans); cursor:pointer; transition:transform 0.12s ease, opacity 0.12s ease;}
+  button:active{transform:scale(0.96);}
+  button:disabled{cursor:default;}
+  .tab2, .task-card, .service-row{transition:transform 0.12s ease, box-shadow 0.12s ease;}
+  .tab2:active, .task-card:active, .service-row:active{transform:scale(0.985);}
 
   /* ---- 固定頂部區塊（預覽 banner + topbar 一起 sticky，避免疊在一起） ---- */
   .sticky-head{position:sticky; top:0; z-index:20;}
@@ -48,18 +60,18 @@
   /* ---- top status strip ---- */
   .topbar{
     background:linear-gradient(180deg, var(--panel) 0%, var(--topbar-fade) 100%);
-    backdrop-filter:blur(8px);
-    border-bottom:1px solid var(--border);
+    backdrop-filter:blur(10px);
+    box-shadow:0 1px 0 var(--border), 0 4px 16px rgba(15,15,20,0.03);
     padding:17px 19px calc(14px + env(safe-area-inset-top)) 19px;
     padding-top:calc(17px + env(safe-area-inset-top));
   }
   .topbar-top{display:flex; align-items:center; justify-content:space-between; gap:12px;}
   .topbar-titles{min-width:0;}
-  .topbar-icons{display:flex; align-items:center; gap:16px; flex-shrink:0; align-self:center;}
+  .topbar-icons{display:flex; align-items:center; gap:6px; flex-shrink:0; align-self:center;}
   .topbar h1{font-size:17px; font-weight:700; margin:0; letter-spacing:0.01em; line-height:1.3; white-space:nowrap;}
   .topbar-en{
-    font-family:var(--mono); font-size:clamp(6px, 1.7vw, 9.5px); font-weight:600; color:var(--amber);
-    letter-spacing:0.02em; text-transform:none; margin-top:3px; white-space:nowrap;
+    font-family:var(--mono); font-size:clamp(6px, 1.7vw, 9.5px); font-weight:600; color:var(--muted);
+    letter-spacing:0.03em; text-transform:none; margin-top:3px; white-space:nowrap;
   }
   .topbar-sub{
     margin-top:9px; color:var(--text);
@@ -67,105 +79,107 @@
   }
   .topbar-sub .name{font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:21px; font-weight:700;}
   .topbar-sub .rank{font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:14.5px; font-weight:500; color:var(--text);}
-  .topbar-icon-btn{background:none; border:none; color:var(--text); padding:4px; display:flex; align-items:center; justify-content:center;}
+  .topbar-icon-btn{background:none; border:none; color:var(--text); width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center;}
+  .topbar-icon-btn:active{background:var(--panel-2); transform:scale(0.92);}
 
   main{flex:1; padding:16px 16px 100px 16px; max-width:680px; width:100%; margin:0 auto;}
 
   /* ---- login ---- */
   .login-wrap{min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; text-align:center;}
-  .login-mark{font-family:var(--mono); font-size:13px; letter-spacing:0.25em; color:var(--amber); margin-bottom:12px;}
-  .login-title{font-size:32px; font-weight:800; line-height:1.3; margin:0 0 8px 0;}
+  .login-mark{font-family:var(--mono); font-size:13px; letter-spacing:0.25em; color:var(--blue); margin-bottom:12px;}
+  .login-title{font-size:32px; font-weight:800; line-height:1.3; margin:0 0 8px 0; letter-spacing:-0.01em;}
   .login-sub{color:var(--muted); font-size:16.5px; margin-bottom:38px;}
   .btn-google{
     display:flex; align-items:center; justify-content:center; gap:10px;
     background:#fff; color:#1F2937; font-weight:600; font-size:17.5px;
-    padding:17px 23px; border-radius:12px; border:1px solid var(--border); width:100%; max-width:340px;
-    box-shadow:var(--card-shadow);
+    padding:17px 23px; border-radius:var(--radius-md); border:1px solid var(--border); width:100%; max-width:340px;
+    box-shadow:var(--shadow-sm);
   }
-  .pending-box{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:24px; max-width:360px; margin-top:22px; box-shadow:var(--card-shadow);}
+  .pending-box{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:24px; max-width:360px; margin-top:22px; box-shadow:var(--shadow-sm);}
   .pending-box p{color:var(--text); font-size:15.5px; line-height:1.7; margin:0;}
 
   /* ---- cards ---- */
-  .section-label{font-family:var(--mono); font-size:13.5px; font-weight:700; color:var(--muted); letter-spacing:0.08em; text-transform:uppercase; margin:24px 4px 14px 4px;}
+  .section-label{font-family:var(--mono); font-size:12.5px; font-weight:700; color:var(--muted); letter-spacing:0.09em; text-transform:uppercase; margin:26px 4px 13px 4px;}
   .section-label:first-child{margin-top:0;}
   .task-card{
-    background:var(--panel); border:1px solid var(--border); border-radius:16px;
-    padding:20px; margin-bottom:14px; position:relative; overflow:hidden; box-shadow:var(--card-shadow);
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg);
+    padding:20px; margin-bottom:14px; position:relative; overflow:hidden; box-shadow:var(--shadow-sm);
   }
-  .task-card::before{content:''; position:absolute; left:0; top:0; bottom:0; width:4px;}
+  .task-card::before{content:''; position:absolute; left:0; top:0; bottom:0; width:4px; border-radius:0 4px 4px 0;}
   .task-card.s-pending::before{background:var(--gray);}
   .task-card.s-dispatch::before{background:var(--red);}
   .task-card.s-onscene::before{background:var(--amber);}
   .task-card.s-returning::before{background:var(--blue);}
   .task-card.s-completed::before{background:var(--green);}
   .task-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
-  .task-title{font-size:19.5px; font-weight:700; margin:0 0 4px 0;}
-  .task-meta{color:var(--text); font-size:15px; font-family:var(--mono); font-weight:500;}
+  .task-title{font-size:19px; font-weight:700; margin:0 0 4px 0; letter-spacing:-0.01em;}
+  .task-meta{color:var(--muted); font-size:14.5px; font-family:var(--mono); font-weight:500;}
   .badge{
-    display:inline-flex; align-items:center; font-size:14px; font-family:var(--mono); font-weight:700;
-    padding:7px 13px; border-radius:999px; white-space:nowrap;
+    display:inline-flex; align-items:center; gap:6px; font-size:13px; font-family:var(--mono); font-weight:700;
+    padding:7px 13px; border-radius:var(--radius-sm); white-space:nowrap;
   }
-  .badge.pending{background:rgba(142,142,147,0.15); color:var(--gray);}
-  .badge.dispatch{background:rgba(255,59,48,0.15); color:var(--red);}
-  .badge.onscene{background:rgba(255,149,0,0.15); color:var(--amber);}
-  .badge.returning{background:rgba(0,122,255,0.15); color:var(--blue);}
-  .badge.completed{background:rgba(52,199,89,0.15); color:var(--green);}
-  .task-foot{display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:14.5px; color:var(--text);}
-  .task-crew{display:flex; flex-direction:column; gap:6px; margin-top:10px; font-size:14px; color:var(--text); font-family:var(--mono); font-weight:500;}
-  .empty{color:var(--text); font-size:16px; text-align:center; padding:46px 22px; border:1px dashed var(--border); border-radius:14px;}
+  .badge .dot{width:6px; height:6px; border-radius:50%; background:currentColor; flex-shrink:0;}
+  .badge.pending{background:rgba(142,142,147,0.13); color:var(--gray);}
+  .badge.dispatch{background:rgba(255,59,48,0.12); color:var(--red);}
+  .badge.onscene{background:rgba(255,149,0,0.13); color:#B45F00;}
+  .badge.returning{background:rgba(0,102,255,0.12); color:var(--blue);}
+  .badge.completed{background:rgba(52,199,89,0.13); color:#177A34;}
+  .task-foot{display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:13.5px; color:var(--muted);}
+  .task-crew{display:flex; flex-direction:column; gap:6px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border); font-size:14px; color:var(--text); font-family:var(--mono); font-weight:500;}
+  .empty{color:var(--muted); font-size:15.5px; text-align:center; padding:46px 22px; border:1px dashed var(--border-strong); border-radius:var(--radius-lg);}
 
   /* ---- home ---- */
-  .home-date{font-size:16px; color:var(--text); font-weight:700; font-family:var(--mono); margin-bottom:16px;}
+  .home-date{font-size:15px; color:var(--muted); font-weight:600; font-family:var(--mono); margin-bottom:16px;}
   .weather-card{
     display:flex; align-items:center; gap:14px; background:var(--panel); border:1px solid var(--border);
-    border-radius:14px; padding:16px 18px; margin-bottom:18px; color:var(--muted); font-size:14px;
+    border-radius:var(--radius-md); padding:16px 18px; margin-bottom:18px; color:var(--muted); font-size:14px; box-shadow:var(--shadow-xs);
   }
   .weather-card .emoji{font-size:30px;}
   .stat-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:8px;}
-  .stat-tile{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 10px; text-align:center; box-shadow:var(--card-shadow);}
-  .stat-tile .num{font-size:29px; font-weight:800; font-family:var(--mono);}
-  .stat-tile .lbl{font-size:13.5px; font-weight:600; color:var(--muted); margin-top:5px;}
-  .stat-tile.t-blue{background:#E8F1FF; border-color:#CFE3FF;} .stat-tile.t-blue .num{color:#0056C7;} .stat-tile.t-blue .lbl{color:#0056C7; opacity:0.75;}
-  .stat-tile.t-orange{background:#FFF2E0; border-color:#FFE1B8;} .stat-tile.t-orange .num{color:#B45F00;} .stat-tile.t-orange .lbl{color:#B45F00; opacity:0.75;}
-  .stat-tile.t-green{background:#E6F9EC; border-color:#C6F0D3;} .stat-tile.t-green .num{color:#177A34;} .stat-tile.t-green .lbl{color:#177A34; opacity:0.75;}
-  .stat-tile.t-purple{background:#F2E9FE; border-color:#E1CDFB;} .stat-tile.t-purple .num{color:#6B23C7;} .stat-tile.t-purple .lbl{color:#6B23C7; opacity:0.75;}
+  .stat-tile{border-radius:var(--radius-md); padding:18px 10px; text-align:center; box-shadow:var(--shadow-xs); border:1px solid transparent;}
+  .stat-tile .num{font-size:27px; font-weight:800; font-family:var(--mono); letter-spacing:-0.02em;}
+  .stat-tile .lbl{font-size:13px; font-weight:600; margin-top:5px;}
+  .stat-tile.t-blue{background:#EAF1FF;} .stat-tile.t-blue .num{color:#0052E0;} .stat-tile.t-blue .lbl{color:#0052E0; opacity:0.7;}
+  .stat-tile.t-orange{background:#FFF3E3;} .stat-tile.t-orange .num{color:#B45F00;} .stat-tile.t-orange .lbl{color:#B45F00; opacity:0.7;}
+  .stat-tile.t-green{background:#E9F9EF;} .stat-tile.t-green .num{color:#177A34;} .stat-tile.t-green .lbl{color:#177A34; opacity:0.7;}
+  .stat-tile.t-purple{background:#F3EEFE;} .stat-tile.t-purple .num{color:#6B23C7;} .stat-tile.t-purple .lbl{color:#6B23C7; opacity:0.7;}
   .quick-btn{
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px;
-    background:var(--panel-2); border:1px solid var(--border); border-radius:14px; padding:18px 8px;
-    color:var(--text); font-size:14.5px; font-weight:700;
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md); padding:18px 8px;
+    color:var(--text); font-size:13.5px; font-weight:600; box-shadow:var(--shadow-xs);
   }
   .quick-icon-wrap{width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center;}
   .quick-btn .navicon{font-size:26px;}
   .fab{
     position:fixed; right:22px; bottom:calc(84px + env(safe-area-inset-bottom));
     width:58px; height:58px; border-radius:50%; background:var(--blue); color:#fff; border:none;
-    display:flex; align-items:center; justify-content:center; box-shadow:0 4px 14px rgba(0,122,255,0.4); z-index:25;
+    display:flex; align-items:center; justify-content:center; box-shadow:0 6px 18px rgba(0,102,255,0.35); z-index:25;
   }
 
   /* ---- task detail ---- */
   .back-row{display:flex; align-items:center; gap:8px; margin-bottom:16px; color:var(--blue); font-size:15.5px; font-weight:600;}
   .back-row button{background:none; border:none; color:var(--blue); font-size:15.5px; font-weight:600; padding:6px 0; font-family:var(--sans);}
-  .detail-head{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:20px; margin-bottom:18px; box-shadow:var(--card-shadow);}
-  .detail-head .task-title{font-size:21px;}
-  .kv{display:grid; grid-template-columns:92px 1fr; gap:10px 12px; margin-top:14px; font-size:15.5px;}
-  .kv .k{color:var(--text); font-weight:600; font-family:var(--mono); font-size:12.5px; padding-top:2px;}
+  .detail-head{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; margin-bottom:18px; box-shadow:var(--shadow-sm);}
+  .detail-head .task-title{font-size:20px;}
+  .kv{display:grid; grid-template-columns:96px 1fr; gap:12px 12px; margin-top:14px; font-size:15px;}
+  .kv .k{color:var(--muted); font-weight:600; font-family:var(--mono); font-size:12px; padding-top:2px; text-transform:uppercase; letter-spacing:0.04em;}
   .kv .v{color:var(--text);}
 
   .report-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;}
   .report-btn{
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
-    padding:20px 10px; border-radius:14px; border:1px solid var(--border); background:var(--panel-2);
-    font-family:var(--sans); font-weight:700; font-size:15px; color:var(--text);
+    padding:20px 10px; border-radius:var(--radius-md); border:1px solid var(--border); background:var(--panel);
+    font-family:var(--sans); font-weight:700; font-size:14.5px; color:var(--text); box-shadow:var(--shadow-xs);
   }
-  .report-btn .emoji{font-size:28px;}
-  .report-btn.recommended{border-color:var(--amber); box-shadow:0 0 0 1px var(--amber) inset;}
+  .report-btn .emoji{font-size:26px;}
+  .report-btn.recommended{border-color:var(--blue); box-shadow:0 0 0 1.5px var(--blue) inset;}
   .report-btn:disabled{opacity:0.35;}
-  .no-permission{color:var(--text); font-size:15px; text-align:center; padding:16px; border:1px dashed var(--border); border-radius:12px; margin-bottom:20px;}
-  .report-form{background:var(--panel); border:1px solid var(--amber); border-radius:14px; padding:18px; margin-bottom:20px; box-shadow:var(--card-shadow);}
-  .report-form .title{font-weight:700; font-size:15.5px; margin-bottom:14px;}
+  .no-permission{color:var(--muted); font-size:14.5px; text-align:center; padding:16px; border:1px dashed var(--border-strong); border-radius:var(--radius-md); margin-bottom:20px;}
+  .report-form{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:18px; margin-bottom:20px; box-shadow:var(--shadow-sm);}
+  .report-form .title{font-weight:700; font-size:15px; margin-bottom:14px;}
   .report-form .row{display:flex; gap:10px; margin-top:10px;}
   .report-form .row button{flex:1;}
-  .btn-ghost{background:none; border:1.5px solid var(--border); color:var(--text); font-weight:600; border-radius:10px; padding:15px; font-size:16px; font-family:var(--sans);}
+  .btn-ghost{background:none; border:1.5px solid var(--border); color:var(--text); font-weight:600; border-radius:var(--radius-sm); padding:15px; font-size:16px; font-family:var(--sans);}
 
   .timeline{position:relative; padding-left:22px;}
   .timeline::before{content:''; position:absolute; left:5px; top:4px; bottom:4px; width:1px; background:var(--border);}
@@ -175,34 +189,36 @@
   .tl-dot.dispatch{background:var(--red);} .tl-dot.onscene{background:var(--amber);}
   .tl-dot.returning{background:var(--blue);} .tl-dot.completed{background:var(--green);}
   .tl-type{font-weight:700; font-size:15px;}
-  .tl-meta{font-family:var(--mono); font-size:13.5px; color:var(--text); font-weight:500; margin-top:3px;}
+  .tl-meta{font-family:var(--mono); font-size:13px; color:var(--muted); font-weight:500; margin-top:3px;}
   .tl-note{font-size:14px; color:var(--text); margin-top:5px;}
 
   /* ---- forms / admin ---- */
   .field{margin-bottom:14px;}
-  .field label{display:block; font-size:13.5px; font-weight:700; color:var(--text); margin-bottom:7px; font-family:var(--mono);}
+  .field label{display:block; font-size:13px; font-weight:700; color:var(--muted); margin-bottom:7px; font-family:var(--mono); letter-spacing:0.02em;}
   .field input, .field select, .field textarea{
     width:100%; background:var(--panel-2); border:1px solid var(--border); color:var(--text);
-    padding:13px 14px; border-radius:10px; font-size:16px; font-family:var(--sans);
+    padding:13px 14px; border-radius:var(--radius-sm); font-size:16px; font-family:var(--sans);
+    transition:border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{
+    outline:none; border-color:var(--blue); box-shadow:0 0 0 3px rgba(0,102,255,0.14);
   }
   .field textarea{resize:vertical; min-height:72px;}
   .field input:disabled{color:var(--muted); background:var(--bg);}
-  .btn-primary{width:100%; background:var(--amber); color:#1A1200; font-weight:700; border:none; padding:15px; border-radius:10px; font-size:16px; margin-top:4px;}
-  .admin-row{display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; background:var(--panel); border:1px solid var(--border); padding:14px 16px; border-radius:12px; margin-bottom:10px; box-shadow:var(--card-shadow);}
+  .btn-primary{width:100%; background:var(--blue); color:#fff; font-weight:700; border:none; padding:15px; border-radius:var(--radius-sm); font-size:16px; margin-top:4px; box-shadow:0 4px 14px rgba(0,102,255,0.25);}
+  .admin-row{display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; background:var(--panel); border:1px solid var(--border); padding:14px 16px; border-radius:var(--radius-md); margin-bottom:10px; box-shadow:var(--shadow-xs);}
   .admin-row .name{font-size:15px; font-weight:600; word-break:break-word;}
-  .admin-row .sub{font-size:14px; color:var(--text); font-family:var(--mono); word-break:break-word;}
+  .admin-row .sub{font-size:13.5px; color:var(--muted); font-family:var(--mono); word-break:break-word;}
   .admin-row > div:first-child{min-width:0; flex:1 1 160px;}
-  .icon-btn{background:none; border:1.5px solid var(--border); color:var(--text); font-weight:600; border-radius:8px; padding:9px 13px; font-size:14.5px;}
-  .icon-btn.danger{color:var(--red); border-color:rgba(255,59,48,0.35);}
-  .role-select{background:var(--panel-2); border:1px solid var(--border); color:var(--text); font-size:13.5px; border-radius:8px; padding:8px 10px; font-family:var(--mono); min-width:0; max-width:100%;}
+  .icon-btn{background:var(--panel-2); border:1px solid var(--border); color:var(--text); font-weight:600; border-radius:var(--radius-sm); padding:9px 13px; font-size:14px; display:inline-flex; align-items:center; gap:5px;}
+  .icon-btn.danger{color:var(--red); border-color:rgba(255,59,48,0.25); background:rgba(255,59,48,0.06);}
+  .icon-btn.primary{color:#fff; background:var(--blue); border-color:var(--blue);}
+  .role-select{background:var(--panel-2); border:1px solid var(--border); color:var(--text); font-size:13.5px; border-radius:var(--radius-sm); padding:8px 10px; font-family:var(--mono); min-width:0; max-width:100%;}
   .role-controls{display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; width:100%;}
   .role-controls select{flex:1 1 120px; min-width:0;}
-  .quickform{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;}
-  .quickform input, .quickform select{flex:1 1 130px; min-width:0; background:var(--panel-2); border:1px solid var(--border); color:var(--text); border-radius:10px; padding:12px; font-size:15px;}
-  .quickform button{flex:0 0 auto;}
-  .tabs2{display:flex; gap:6px; margin-bottom:18px; background:var(--panel-2); padding:4px; border-radius:12px;}
-  .tab2{flex:1; text-align:center; padding:11px; border-radius:9px; font-size:13.5px; font-weight:600; color:var(--muted);}
-  .tab2.active{background:var(--panel); color:var(--text);}
+  .tabs2{display:flex; gap:4px; margin-bottom:18px; background:var(--panel-2); padding:4px; border-radius:var(--radius-md);}
+  .tab2{flex:1; text-align:center; padding:10px; border-radius:calc(var(--radius-md) - 4px); font-size:13.5px; font-weight:600; color:var(--muted);}
+  .tab2.active{background:var(--panel); color:var(--text); box-shadow:var(--shadow-xs);}
 
   /* ---- records search ---- */
   .search-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;}
@@ -210,10 +226,11 @@
   .search-grid .full{grid-column:1 / -1;}
   .pill-row{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;}
   .pill{
-    background:var(--panel); border:1.5px solid var(--border); color:var(--muted);
-    font-weight:700; font-size:13.5px; padding:8px 15px; border-radius:999px; font-family:var(--sans);
+    background:var(--panel); border:1px solid var(--border); color:var(--muted);
+    font-weight:600; font-size:13.5px; padding:8px 15px; border-radius:var(--radius-sm); font-family:var(--sans);
+    box-shadow:var(--shadow-xs);
   }
-  .pill.active{background:var(--amber); border-color:var(--amber); color:#1A1200; box-shadow:0 3px 10px rgba(255,149,0,0.3);}
+  .pill.active{background:var(--blue); border-color:var(--blue); color:#fff; box-shadow:0 3px 10px rgba(0,102,255,0.25);}
   .filters-toggle{
     display:flex; align-items:center; justify-content:center; gap:6px; width:100%;
     background:none; border:none; padding:6px 2px; margin-bottom:2px;
@@ -224,23 +241,23 @@
 
   /* ---- profile / 更多 ---- */
   .hub-head{display:flex; flex-direction:column; align-items:center; text-align:center; padding:14px 0 10px 0;}
-  .hub-avatar{width:88px; height:88px; border-radius:50%; object-fit:cover; box-shadow:var(--card-shadow); background:var(--panel-2); display:flex; align-items:center; justify-content:center; color:var(--muted);}
+  .hub-avatar{width:88px; height:88px; border-radius:50%; object-fit:cover; box-shadow:var(--shadow-sm); background:var(--panel-2); display:flex; align-items:center; justify-content:center; color:var(--muted);}
   .hub-name{margin-top:14px; font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:22px; font-weight:700; color:var(--text);}
   .hub-sub{margin-top:4px; font-size:14px; color:var(--muted);}
   .hub-icon-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:22px 0;}
-  .service-row{display:flex; align-items:center; gap:14px; background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:10px; box-shadow:var(--card-shadow); cursor:pointer;}
-  .service-row .icon-wrap{width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .service-row{display:flex; align-items:center; gap:14px; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md); padding:15px 16px; margin-bottom:10px; box-shadow:var(--shadow-xs); cursor:pointer;}
+  .service-row .icon-wrap{width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
   .service-row .txt{flex:1; min-width:0;}
-  .service-row .txt .t1{font-weight:700; font-size:15.5px; color:var(--text);}
-  .service-row .txt .t2{font-size:13px; color:var(--muted); margin-top:2px;}
+  .service-row .txt .t1{font-weight:600; font-size:15px; color:var(--text);}
+  .service-row .txt .t2{font-size:12.5px; color:var(--muted); margin-top:2px;}
   .service-row .chev{color:var(--muted); flex-shrink:0; font-size:20px;}
 
   /* ---- stats / charts ---- */
-  .chart-card{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:18px; margin-bottom:18px; box-shadow:var(--card-shadow);}
-  .chart-title{font-size:15px; font-weight:700; margin-bottom:16px;}
+  .chart-card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:18px; margin-bottom:18px; box-shadow:var(--shadow-sm);}
+  .chart-title{font-size:14.5px; font-weight:700; margin-bottom:16px; color:var(--text);}
   .bar-row{display:flex; align-items:center; gap:12px; margin-bottom:14px; font-size:14px;}
-  .bar-row .bar-label{width:88px; flex-shrink:0; color:var(--text); font-weight:600; font-family:var(--mono); font-size:13.5px;}
-  .bar-row .bar-track{flex:1; background:var(--panel-2); border-radius:6px; height:20px; position:relative; overflow:hidden;}
+  .bar-row .bar-label{width:88px; flex-shrink:0; color:var(--muted); font-weight:600; font-family:var(--mono); font-size:13px;}
+  .bar-row .bar-track{flex:1; background:var(--panel-2); border-radius:6px; height:18px; position:relative; overflow:hidden;}
   .bar-row .bar-fill{position:absolute; left:0; top:0; bottom:0; background:var(--blue); border-radius:6px;}
   .bar-row .bar-val{width:34px; text-align:right; font-family:var(--mono); font-weight:700; flex-shrink:0;}
   .rank-row{display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid var(--border); font-size:14.5px;}
@@ -248,35 +265,56 @@
   .rank-row .rank-num{width:22px; height:22px; border-radius:50%; background:var(--panel-2); color:var(--muted); font-family:var(--mono); font-weight:700; font-size:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
   .rank-row .rank-name{flex:1;}
   .rank-row .rank-count{color:var(--text); font-weight:600; font-family:var(--mono); font-size:14px;}
-  .stackbar{display:flex; height:22px; border-radius:8px; overflow:hidden; background:var(--panel-2); margin-bottom:14px;}
+  .stackbar{display:flex; height:20px; border-radius:8px; overflow:hidden; background:var(--panel-2); margin-bottom:14px;}
   .stackbar .seg{height:100%;}
   .stack-legend{display:flex; flex-direction:column; gap:8px;}
   .stack-legend .leg-row{display:flex; align-items:center; gap:9px; font-size:14px;}
-  .stack-legend .leg-dot{width:10px; height:10px; border-radius:50%; flex-shrink:0;}
+  .stack-legend .leg-dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
   .stack-legend .leg-name{flex:1; color:var(--text);}
-  .stack-legend .leg-val{color:var(--text); font-weight:600; font-family:var(--mono); font-size:14px;}
+  .stack-legend .leg-val{color:var(--muted); font-weight:600; font-family:var(--mono); font-size:13.5px;}
 
   /* ---- bottom nav ---- */
   .bottomnav{
     position:fixed; left:0; right:0; bottom:0; z-index:30;
-    background:var(--navbar-bg); backdrop-filter:blur(10px); border-top:1px solid var(--border);
+    background:var(--navbar-bg); backdrop-filter:blur(14px); box-shadow:0 -1px 0 var(--border), 0 -8px 24px rgba(15,15,20,0.04);
     display:flex; padding-bottom:env(safe-area-inset-bottom);
   }
-  .navbtn{flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; padding:12px 4px 10px 4px; color:var(--muted); background:none; border:none; font-family:var(--sans);}
-  .navbtn .navicon{font-size:24px;}
-  .navbtn .navlabel{font-size:12.5px; font-weight:700;}
-  .navbtn.active{color:var(--amber);}
+  .navbtn{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:11px 4px 10px 4px; color:var(--muted); background:none; border:none; font-family:var(--sans);}
+  .navbtn .navicon{font-size:23px; transition:transform 0.15s ease;}
+  .navbtn .navlabel{font-size:11.5px; font-weight:700;}
+  .navbtn.active{color:var(--blue);}
+  .navbtn.active .navicon{transform:translateY(-1px);}
 
   .toast{
     position:fixed; bottom:92px; left:50%; transform:translateX(-50%); z-index:50;
-    background:var(--panel); border:1px solid var(--border); color:var(--text); font-size:14.5px;
-    padding:12px 20px; border-radius:999px; box-shadow:0 8px 24px rgba(0,0,0,0.4);
+    background:#1C1C1E; border:1px solid rgba(255,255,255,0.08); color:#fff; font-size:14px; font-weight:500;
+    padding:12px 20px; border-radius:var(--radius-sm); box-shadow:0 12px 32px rgba(0,0,0,0.28);
     opacity:0; pointer-events:none; transition:opacity 0.25s, transform 0.25s;
   }
   .toast.show{opacity:1; transform:translateX(-50%) translateY(-4px);}
 
-  .spinner{width:22px; height:22px; border:2.5px solid var(--border); border-top-color:var(--amber); border-radius:50%; animation:spin 0.8s linear infinite; margin:60px auto;}
+  .spinner{width:22px; height:22px; border:2.5px solid var(--border); border-top-color:var(--blue); border-radius:50%; animation:spin 0.8s linear infinite; margin:60px auto;}
   @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* ---- modal（後台編輯用彈窗） ---- */
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(10,10,14,0.44); backdrop-filter:blur(1.5px);
+    display:flex; align-items:flex-end; justify-content:center; z-index:60;
+    animation:modalFade 0.18s ease;
+  }
+  .modal-sheet{
+    background:var(--panel); width:100%; max-width:520px; border-radius:22px 22px 0 0;
+    padding:14px 20px calc(20px + env(safe-area-inset-bottom)) 20px; max-height:88vh; overflow-y:auto;
+    box-shadow:0 -12px 40px rgba(0,0,0,0.2); animation:modalSlideUp 0.24s cubic-bezier(.22,1,.36,1);
+  }
+  .modal-handle{width:36px; height:5px; border-radius:3px; background:var(--border-strong); margin:0 auto 16px auto;}
+  .modal-title{font-size:17px; font-weight:700; margin-bottom:16px;}
+  @keyframes modalFade{from{opacity:0;} to{opacity:1;}}
+  @keyframes modalSlideUp{from{transform:translateY(28px); opacity:0;} to{transform:translateY(0); opacity:1;}}
+  @media (min-width:560px){
+    .modal-overlay{align-items:center;}
+    .modal-sheet{border-radius:var(--radius-lg); max-height:80vh;}
+  }
 </style>
 </head>
 <body>
@@ -292,7 +330,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-53-more-hub-reorder";
+const BUILD_TAG = "2026-07-03-54-premium-redesign-basedata-modals";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -463,7 +501,7 @@ const state = {
   tasksTab: "all",
   statsPeriod: "today",
   profileEditing: false,
-  baseDataUnit: "", baseDataTab: "personnel", baseDataEditingId: null, // 基礎資料管理頁籤狀態
+  baseDataUnit: "", baseDataTab: "personnel", baseDataModal: null, // 基礎資料管理頁籤狀態；baseDataModal: {coll, id, unit} | null
   createTaskUnit: "", // 建立勤務頁面：admin/高勤官可切換的單位
   previewActive: false, realRoleUnit: null // 角色權限預覽（僅限 admin）
 };
@@ -914,7 +952,7 @@ function viewDisabled(){
    ========================================================= */
 function statusBadge(statusKey){
   const cls = { pending:"pending", dispatch:"dispatch", onscene:"onscene", returning:"returning", completed:"completed" }[statusKey];
-  return `<span class="badge ${cls}">${STATUS_LABEL[statusKey]}</span>`;
+  return `<span class="badge ${cls}"><i class="dot"></i>${STATUS_LABEL[statusKey]}</span>`;
 }
 function taskCardClass(statusKey){
   return { pending:"s-pending", dispatch:"s-dispatch", onscene:"s-onscene", returning:"s-returning", completed:"s-completed" }[statusKey];
@@ -1622,54 +1660,29 @@ function viewAdminBaseData(){
       ${BASEDATA_TABS.map(t => `<div class="tab2 ${state.baseDataTab===t.key?'active':''}" onclick="window.__setBaseDataTab('${t.key}')">${t.label}</div>`).join("")}
     </div>`;
 
-  const editingId = state.baseDataEditingId;
   let body = "";
   if (state.baseDataTab === "personnel") {
-    const rankOptions = (sel) => `<option value="">請選擇階級</option>${RANKS.map(r => `<option value="${r}" ${sel===r?'selected':''}>${r}</option>`).join("")}`;
     const rows = state.personnel.filter(x => x.unit === unit).slice().sort((a,b) => rankWeight(a.title) - rankWeight(b.title));
     body = `
-      <form class="quickform" onsubmit="window.__addPersonnel(event,'${unit}')">
-        <input name="name" placeholder="姓名" required>
-        <select name="title">${rankOptions("")}</select>
-        <input name="phone" type="tel" inputmode="tel" placeholder="電話（選填）">
-        <button class="icon-btn" type="submit">新增</button>
-      </form>
-      ${rows.length ? rows.map(x => editingId === x.id ? `
-        <form class="quickform" onsubmit="window.__saveBaseData(event,'personnel','${x.id}')">
-          <input name="name" placeholder="姓名" required value="${esc(x.name)}">
-          <select name="title">${rankOptions(x.title||"")}</select>
-          <input name="phone" type="tel" inputmode="tel" placeholder="電話（選填）" value="${esc(x.phone||'')}">
-          <button class="icon-btn" type="submit">儲存</button>
-          <button class="icon-btn" type="button" onclick="window.__cancelEditBaseData()">取消</button>
-        </form>` : `
+      <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('personnel', null, '${unit}')">${icon('plus',15)} 新增人員</button>
+      ${rows.length ? rows.map(x => `
         <div class="admin-row">
           <div><div class="name">${esc(x.name)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.title||'—')}${x.phone?' · '+esc(x.phone):''}</div></div>
           <div style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button class="icon-btn" onclick="window.__editBaseData('${x.id}')">編輯</button>
+            <button class="icon-btn" onclick="window.__openBaseDataModal('personnel','${x.id}','${unit}')">編輯</button>
             <button class="icon-btn" onclick="window.__toggleBaseData('personnel','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
             <button class="icon-btn danger" onclick="window.__deleteBaseData('personnel','${x.id}')">刪除</button>
           </div>
         </div>`).join("") : `<div class="empty">尚無人員資料</div>`}`;
   } else if (state.baseDataTab === "vehicles") {
     const rows = state.vehicles.filter(x => x.unit === unit);
-    const vehicleTypeOptions = (sel) => `<option value="">請選擇車種</option>${VEHICLE_TYPES.map(t => `<option value="${t}" ${sel===t?'selected':''}>${t}</option>`).join("")}`;
     body = `
-      <form class="quickform" onsubmit="window.__addVehicle(event,'${unit}')">
-        <input name="plate" placeholder="車號" required>
-        <select name="type">${vehicleTypeOptions("")}</select>
-        <button class="icon-btn" type="submit">新增</button>
-      </form>
-      ${rows.length ? rows.map(x => editingId === x.id ? `
-        <form class="quickform" onsubmit="window.__saveBaseData(event,'vehicles','${x.id}')">
-          <input name="plate" placeholder="車號" required value="${esc(x.plate)}">
-          <select name="type">${vehicleTypeOptions(x.type||"")}</select>
-          <button class="icon-btn" type="submit">儲存</button>
-          <button class="icon-btn" type="button" onclick="window.__cancelEditBaseData()">取消</button>
-        </form>` : `
+      <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('vehicles', null, '${unit}')">${icon('plus',15)} 新增車輛</button>
+      ${rows.length ? rows.map(x => `
         <div class="admin-row">
           <div><div class="name">${esc(x.plate)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.type||'—')}</div></div>
           <div style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button class="icon-btn" onclick="window.__editBaseData('${x.id}')">編輯</button>
+            <button class="icon-btn" onclick="window.__openBaseDataModal('vehicles','${x.id}','${unit}')">編輯</button>
             <button class="icon-btn" onclick="window.__toggleBaseData('vehicles','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
             <button class="icon-btn danger" onclick="window.__deleteBaseData('vehicles','${x.id}')">刪除</button>
           </div>
@@ -1677,20 +1690,12 @@ function viewAdminBaseData(){
   } else {
     const rows = state.recorders.filter(x => x.unit === unit);
     body = `
-      <form class="quickform" onsubmit="window.__addRecorder(event,'${unit}')">
-        <input name="code" placeholder="編號" required>
-        <button class="icon-btn" type="submit">新增</button>
-      </form>
-      ${rows.length ? rows.map(x => editingId === x.id ? `
-        <form class="quickform" onsubmit="window.__saveBaseData(event,'recorders','${x.id}')">
-          <input name="code" placeholder="編號" required value="${esc(x.code)}">
-          <button class="icon-btn" type="submit">儲存</button>
-          <button class="icon-btn" type="button" onclick="window.__cancelEditBaseData()">取消</button>
-        </form>` : `
+      <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('recorders', null, '${unit}')">${icon('plus',15)} 新增行車紀錄器</button>
+      ${rows.length ? rows.map(x => `
         <div class="admin-row">
           <div><div class="name">${esc(x.code)}${x.active===false?'（已停用）':''}</div></div>
           <div style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button class="icon-btn" onclick="window.__editBaseData('${x.id}')">編輯</button>
+            <button class="icon-btn" onclick="window.__openBaseDataModal('recorders','${x.id}','${unit}')">編輯</button>
             <button class="icon-btn" onclick="window.__toggleBaseData('recorders','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
             <button class="icon-btn danger" onclick="window.__deleteBaseData('recorders','${x.id}')">刪除</button>
           </div>
@@ -1698,6 +1703,55 @@ function viewAdminBaseData(){
   }
 
   return `${unitTabs}${subTabs}${body}`;
+}
+
+/* =========================================================
+   18c) 畫面：基礎資料新增／編輯彈窗
+   ========================================================= */
+function viewBaseDataModal(){
+  const m = state.baseDataModal;
+  if (!m) return "";
+  const { coll, id, unit } = m;
+  const pool = coll === "personnel" ? state.personnel : coll === "vehicles" ? state.vehicles : state.recorders;
+  const editing = id ? pool.find(x => x.id === id) : null;
+  let title, fields;
+  if (coll === "personnel") {
+    title = editing ? "編輯人員" : "新增人員";
+    fields = `
+      <div class="field"><label>姓名</label><input name="name" required value="${esc(editing?.name||'')}"></div>
+      <div class="field"><label>階級</label>
+        <select name="title">
+          <option value="">請選擇階級</option>
+          ${RANKS.map(r => `<option value="${r}" ${editing?.title===r?'selected':''}>${r}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field"><label>電話（選填）</label><input name="phone" type="tel" inputmode="tel" value="${esc(editing?.phone||'')}"></div>`;
+  } else if (coll === "vehicles") {
+    title = editing ? "編輯車輛" : "新增車輛";
+    fields = `
+      <div class="field"><label>車號</label><input name="plate" required value="${esc(editing?.plate||'')}"></div>
+      <div class="field"><label>車種</label>
+        <select name="type">
+          <option value="">請選擇車種</option>
+          ${VEHICLE_TYPES.map(t => `<option value="${t}" ${editing?.type===t?'selected':''}>${t}</option>`).join("")}
+        </select>
+      </div>`;
+  } else {
+    title = editing ? "編輯行車紀錄器" : "新增行車紀錄器";
+    fields = `<div class="field"><label>編號</label><input name="code" required value="${esc(editing?.code||'')}"></div>`;
+  }
+  return `
+    <div class="modal-overlay" onclick="if(event.target===this) window.__closeBaseDataModal()">
+      <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-title">${title}</div>
+        <form onsubmit="window.__submitBaseDataModal(event,'${coll}','${unit}'${editing?`,'${editing.id}'`:''})">
+          ${fields}
+          <button class="btn-primary" type="submit">${editing?'儲存變更':'新增'}</button>
+          <button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__closeBaseDataModal()">取消</button>
+        </form>
+      </div>
+    </div>`;
 }
 
 function viewAdminUsers(){
@@ -1779,7 +1833,7 @@ const NAV_ITEMS = [
 function safeRender(){
   const ae = document.activeElement;
   if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT")) return;
-  if (state.profileEditing || state.baseDataEditingId || state.reportDraft) return;
+  if (state.profileEditing || state.baseDataModal || state.reportDraft) return;
   render();
 }
 
@@ -1825,6 +1879,7 @@ function render(){
           <span class="navicon">${icon(n.iconName,24)}</span><span class="navlabel">${n.label}</span>
         </button>`).join("")}
     </div>
+    ${viewBaseDataModal()}
     <div id="toast" class="toast"></div>
   `;
 }
@@ -1860,38 +1915,24 @@ window.__setRole = (uid) => {
   const unit = document.getElementById(`unit-${uid}`).value;
   setUserRole(uid, role, unit).then(() => { state._usersCache = null; render(); });
 };
-window.__setBaseDataUnit = (code) => { state.baseDataUnit = code; state.baseDataEditingId = null; render(); };
-window.__setBaseDataTab = (key) => { state.baseDataTab = key; state.baseDataEditingId = null; render(); };
+window.__setBaseDataUnit = (code) => { state.baseDataUnit = code; state.baseDataModal = null; render(); };
+window.__setBaseDataTab = (key) => { state.baseDataTab = key; state.baseDataModal = null; render(); };
 function baseDataErr(err){ showToast(`操作失敗：[${err.code||'?'}] ${err.message||err}`); console.error("基礎資料操作失敗", err); }
-window.__addPersonnel = (ev, unit) => {
-  ev.preventDefault();
-  const f = new FormData(ev.target);
-  const form = ev.target;
-  addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone")).then(() => form.reset()).catch(baseDataErr);
-};
-window.__addVehicle = (ev, unit) => {
-  ev.preventDefault();
-  const f = new FormData(ev.target);
-  const form = ev.target;
-  addVehicle(unit, f.get("plate"), f.get("type")).then(() => form.reset()).catch(baseDataErr);
-};
-window.__addRecorder = (ev, unit) => {
-  ev.preventDefault();
-  const f = new FormData(ev.target);
-  const form = ev.target;
-  addRecorder(unit, f.get("code")).then(() => form.reset()).catch(baseDataErr);
-};
 window.__toggleBaseData = (coll, id, active) => toggleBaseDataActive(coll, id, active).catch(baseDataErr);
 window.__deleteBaseData = (coll, id) => { if (confirm("確定刪除此筆資料？此動作無法復原。")) deleteBaseData(coll, id).catch(baseDataErr); };
-window.__editBaseData = (id) => { state.baseDataEditingId = id; render(); };
-window.__cancelEditBaseData = () => { state.baseDataEditingId = null; render(); };
-window.__saveBaseData = (ev, coll, id) => {
+window.__openBaseDataModal = (coll, id, unit) => { state.baseDataModal = { coll, id: id||null, unit }; render(); };
+window.__closeBaseDataModal = () => { state.baseDataModal = null; render(); };
+window.__submitBaseDataModal = (ev, coll, unit, id) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
-  const fields = coll === "personnel" ? { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"" }
-    : coll === "vehicles" ? { plate: f.get("plate"), type: f.get("type") }
-    : { code: f.get("code") };
-  updateBaseData(coll, id, fields).then(() => { state.baseDataEditingId = null; render(); }).catch(baseDataErr);
+  const action = id
+    ? (coll === "personnel" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"" })
+       : coll === "vehicles" ? updateBaseData(coll, id, { plate: f.get("plate"), type: f.get("type") })
+       : updateBaseData(coll, id, { code: f.get("code") }))
+    : (coll === "personnel" ? addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone"))
+       : coll === "vehicles" ? addVehicle(unit, f.get("plate"), f.get("type"))
+       : addRecorder(unit, f.get("code")));
+  action.then(() => { state.baseDataModal = null; render(); }).catch(baseDataErr);
 };
 window.__editProfile = () => { state.profileEditing = true; render(); };
 window.__cancelEditProfile = () => { state.profileEditing = false; render(); };
