@@ -176,7 +176,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-04";
+const BUILD_TAG = "2026-07-03-05-diag";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -378,6 +378,20 @@ async function setUserRole(uid, role, unit){
   await fsSetDoc(`users/${uid}`, { role, unit });
   showToast("角色已更新");
 }
+async function bootstrapAdmin(){
+  const path = `users/${state.user.uid}`;
+  await fsSetDoc(path, { role: "admin" });
+  // 寫入後立刻重新讀取一次，用伺服器實際資料確認是否真的寫入成功，
+  // 而不是只信任本地端假設寫入成功。
+  const confirmed = await fsGetDoc(path);
+  if (!confirmed || confirmed.role !== "admin") {
+    throw new Error(`寫入後重新讀取，role 仍是 "${confirmed && confirmed.role}"，不是 "admin"`);
+  }
+  state.profile = { uid: state.user.uid, ...confirmed };
+  showToast("已設為管理員");
+  startDataListeners();
+  render();
+}
 
 /* =========================================================
    7) Auth 流程
@@ -491,7 +505,9 @@ function viewPending(){
     <div class="pending-box">
       <p>您的帳號（${esc(state.user.email)}）已建立，但尚未指派角色。<br><br>請聯繫系統管理員開通權限後再登入。</p>
     </div>
-    <button class="icon-btn" style="margin-top:20px;" onclick="window.__logout()">登出</button>
+    <div style="margin-top:14px;color:var(--muted);font-size:10.5px;font-family:var(--mono);word-break:break-all;">uid: ${esc(state.user.uid)} · role: ${esc(state.profile.role)}</div>
+    <button class="btn-primary" style="max-width:320px;margin-top:20px;" onclick="window.__bootstrapAdmin()">設為管理員（僅限初始設定）</button>
+    <button class="icon-btn" style="margin-top:12px;" onclick="window.__logout()">登出</button>
   </div>`;
 }
 
@@ -716,6 +732,10 @@ window.__report = (taskId, type) => addEvent(taskId, type);
 window.__setAdminTab = (t) => { state.adminTab = t; state._usersCache = null; render(); };
 window.__deleteTask = (id) => { if (confirm("確定刪除此任務？此動作無法復原。")) deleteTask(id); };
 window.__setRole = (uid, role) => setUserRole(uid, role, "").then(() => { state._usersCache = null; render(); });
+window.__bootstrapAdmin = () => bootstrapAdmin().catch(err => {
+  console.error("設為管理員失敗", err);
+  showToast(`設為管理員失敗：[${err.code||'?'}] ${err.message}`);
+});
 window.__createTask = (ev) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
