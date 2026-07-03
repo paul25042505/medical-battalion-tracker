@@ -302,7 +302,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-25-personnel-sync-eager";
+const BUILD_TAG = "2026-07-03-26-surface-errors";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -562,10 +562,11 @@ async function setUserRole(uid, role, unit){
 // 帳號已綁定單位，理應自動出現在該單位的人員名冊（基礎資料管理／建立勤務下拉選單），
 // 不必再由管理員手動重複輸入一次姓名。以 uid 作為 personnel 文件 id 做鏡射同步。
 async function syncPersonnelFromUsers(users){
+  let firstError = null;
   for (const u of users) {
     const r = normalizeRole(u.role);
     if (!u.unit) { // 未指派單位：若先前有鏡射資料需一併移除，避免殘留
-      if (state.personnel.find(x => x.id === u.id)) { try { await fsDeleteDoc(`personnel/${u.id}`); } catch(e){} }
+      if (state.personnel.find(x => x.id === u.id)) { try { await fsDeleteDoc(`personnel/${u.id}`); } catch(e){ firstError = firstError || e; } }
       continue;
     }
     const active = r !== "pending" && r !== "disabled";
@@ -573,9 +574,12 @@ async function syncPersonnelFromUsers(users){
     const title = u.rank || ROLE_LABEL[r] || "";
     const existing = state.personnel.find(x => x.id === u.id);
     if (existing && existing.unit === u.unit && existing.active === active && existing.name === name && existing.title === title) continue;
-    try { await fsSetDoc(`personnel/${u.id}`, { unit: u.unit, name, title, active }); } catch(e){ console.error("同步人員資料失敗", e); }
+    try { await fsSetDoc(`personnel/${u.id}`, { unit: u.unit, name, title, active }); } catch(e){ console.error("同步人員資料失敗", e); firstError = firstError || e; }
   }
   if (personnelPoll) personnelPoll.refreshNow();
+  // 同步失敗最常見的原因是 Firestore 規則還沒發布到最新版本（personnel 集合不在
+  // 舊規則裡，會被預設拒絕），這裡明確提示出來，避免又變成「看起來沒反應」的靜默失敗。
+  if (firstError) showToast(`人員資料同步失敗：[${firstError.code||'?'}] ${firstError.message||firstError}（可能是 Firestore 規則尚未更新）`);
 }
 // 先前只有實際點進「帳號權限」頁籤才會觸發同步；改成只要 admin 打開管理後台
 // （不論停留在哪個頁籤）就會在背景嘗試同步一次，避免使用者誤以為指派單位後
@@ -1690,23 +1694,27 @@ window.__setRole = (uid) => {
 };
 window.__setBaseDataUnit = (code) => { state.baseDataUnit = code; render(); };
 window.__setBaseDataTab = (key) => { state.baseDataTab = key; render(); };
+function baseDataErr(err){ showToast(`操作失敗：[${err.code||'?'}] ${err.message||err}`); console.error("基礎資料操作失敗", err); }
 window.__addPersonnel = (ev, unit) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
-  addPersonnel(unit, f.get("name"), f.get("title")); ev.target.reset();
+  const form = ev.target;
+  addPersonnel(unit, f.get("name"), f.get("title")).then(() => form.reset()).catch(baseDataErr);
 };
 window.__addVehicle = (ev, unit) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
-  addVehicle(unit, f.get("plate"), f.get("type")); ev.target.reset();
+  const form = ev.target;
+  addVehicle(unit, f.get("plate"), f.get("type")).then(() => form.reset()).catch(baseDataErr);
 };
 window.__addRecorder = (ev, unit) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
-  addRecorder(unit, f.get("code")); ev.target.reset();
+  const form = ev.target;
+  addRecorder(unit, f.get("code")).then(() => form.reset()).catch(baseDataErr);
 };
-window.__toggleBaseData = (coll, id, active) => toggleBaseDataActive(coll, id, active);
-window.__deleteBaseData = (coll, id) => { if (confirm("確定刪除此筆資料？此動作無法復原。")) deleteBaseData(coll, id); };
+window.__toggleBaseData = (coll, id, active) => toggleBaseDataActive(coll, id, active).catch(baseDataErr);
+window.__deleteBaseData = (coll, id) => { if (confirm("確定刪除此筆資料？此動作無法復原。")) deleteBaseData(coll, id).catch(baseDataErr); };
 window.__editProfile = () => { state.profileEditing = true; render(); };
 window.__cancelEditProfile = () => { state.profileEditing = false; render(); };
 window.__saveProfile = (ev) => {
