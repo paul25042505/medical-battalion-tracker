@@ -330,7 +330,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-03-54-premium-redesign-basedata-modals";
+const BUILD_TAG = "2026-07-03-55-name-rank-no-dot";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1113,13 +1113,13 @@ function viewCreateTask(){
       <div class="field"><label>車長</label>
         <select name="crewLeader">
           <option value="">請選擇車長</option>
-          ${personnelOpts.map(x => `<option value="${esc(x.name)}">${esc(x.name)}${x.title?' · '+esc(x.title):''}</option>`).join("")}
+          ${personnelOpts.map(x => `<option value="${esc(x.name)}">${esc(x.name)}${x.title?' '+esc(x.title):''}</option>`).join("")}
         </select>
       </div>
       <div class="field"><label>駕駛</label>
         <select name="driver">
           <option value="">請選擇駕駛</option>
-          ${personnelOpts.map(x => `<option value="${esc(x.name)}">${esc(x.name)}${x.title?' · '+esc(x.title):''}</option>`).join("")}
+          ${personnelOpts.map(x => `<option value="${esc(x.name)}">${esc(x.name)}${x.title?' '+esc(x.title):''}</option>`).join("")}
         </select>
       </div>
       <div class="field"><label>行車紀錄器（可多選）</label>
@@ -1166,13 +1166,13 @@ function viewEditTask(taskId){
       <div class="field"><label>車長</label>
         <select name="crewLeader">
           <option value="">請選擇車長</option>
-          ${personnelOpts.map(x => `<option value="${esc(x.name)}" ${t.crewLeader===x.name?'selected':''}>${esc(x.name)}${x.title?' · '+esc(x.title):''}</option>`).join("")}
+          ${personnelOpts.map(x => `<option value="${esc(x.name)}" ${t.crewLeader===x.name?'selected':''}>${esc(x.name)}${x.title?' '+esc(x.title):''}</option>`).join("")}
         </select>
       </div>
       <div class="field"><label>駕駛</label>
         <select name="driver">
           <option value="">請選擇駕駛</option>
-          ${personnelOpts.map(x => `<option value="${esc(x.name)}" ${t.driver===x.name?'selected':''}>${esc(x.name)}${x.title?' · '+esc(x.title):''}</option>`).join("")}
+          ${personnelOpts.map(x => `<option value="${esc(x.name)}" ${t.driver===x.name?'selected':''}>${esc(x.name)}${x.title?' '+esc(x.title):''}</option>`).join("")}
         </select>
       </div>
       <div class="field"><label>行車紀錄器（可多選）</label>
