@@ -2,35 +2,73 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
+    function myUserDoc() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    // 舊資料相容：早期版本把連級主官管存成 "company_commander"。
     function myRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+      let r = myUserDoc().role;
+      return r == 'company_commander' ? 'commander' : r;
     }
+    function myUnit() { return myUserDoc().unit; }
     function isAdmin() { return isSignedIn() && myRole() == 'admin'; }
-    function isStaff() { return isSignedIn() && (myRole() == 'admin' || myRole() == 'duty_officer'); }
-    function isActive() { return isSignedIn() && myRole() != 'pending'; }
+    function isDutyOfficer() { return isSignedIn() && myRole() == 'duty_officer'; }
+    function isStaff() { return isAdmin() || isDutyOfficer(); } // 可查看/管理所有單位
+    function isCommander() { return isSignedIn() && myRole() == 'commander'; }
+    function isActive() { return isSignedIn() && myRole() != 'pending' && myRole() != 'disabled'; }
+    function sameUnit(unit) { return isSignedIn() && myUnit() == unit; }
 
     match /users/{uid} {
       allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin();
       allow create: if isSignedIn() && request.auth.uid == uid
                     && request.resource.data.role == 'pending';
-      // 允許使用者編輯自己的個人資料（姓名/階級/單位等），但不能自己改 role 欄位；
-      // role 只能由管理員（isAdmin）異動。
+      // 使用者可編輯自己的姓名/階級等資料，但不能自己改 role 或 unit；
+      // role、unit 只能由管理員（isAdmin）異動，對應「帳號管理僅限 Admin」的規則。
       allow update: if isAdmin()
                     || (isSignedIn() && request.auth.uid == uid
-                        && request.resource.data.role == resource.data.role);
+                        && request.resource.data.role == resource.data.role
+                        && request.resource.data.unit == resource.data.unit);
       allow delete: if false;
     }
 
-    match /tasks/{taskId} {
+    // 單位編制固定（營部／第一連／第二連），僅供其他集合建立關聯，不提供編輯 UI。
+    match /units/{unitId} {
       allow read: if isActive();
-      allow create: if isActive();
-      allow update, delete: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    // 基礎資料：人員／車輛／行車紀錄器，依單位分類。
+    // Admin、高勤官可管理所有單位；主官管僅能管理自己單位的資料；
+    // 一般成員與主官管都只能讀取自己單位的資料（供建立勤務下拉選單使用）。
+    match /personnel/{id} {
+      allow read: if isStaff() || sameUnit(resource.data.unit);
+      allow create: if isStaff() || (isCommander() && sameUnit(request.resource.data.unit));
+      allow update, delete: if isStaff() || (isCommander() && sameUnit(resource.data.unit) && sameUnit(request.resource.data.unit));
+    }
+    match /vehicles/{id} {
+      allow read: if isStaff() || sameUnit(resource.data.unit);
+      allow create: if isStaff() || (isCommander() && sameUnit(request.resource.data.unit));
+      allow update, delete: if isStaff() || (isCommander() && sameUnit(resource.data.unit) && sameUnit(request.resource.data.unit));
+    }
+    match /recorders/{id} {
+      allow read: if isStaff() || sameUnit(resource.data.unit);
+      allow create: if isStaff() || (isCommander() && sameUnit(request.resource.data.unit));
+      allow update, delete: if isStaff() || (isCommander() && sameUnit(resource.data.unit) && sameUnit(request.resource.data.unit));
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isStaff() || sameUnit(resource.data.unit);
+      // 一般成員不可建立勤務，僅可回報；建立/編輯限管理員、高勤官、該單位主官管。
+      allow create: if isStaff() || (isCommander() && sameUnit(request.resource.data.unit));
+      allow update: if isStaff() || (isCommander() && sameUnit(resource.data.unit));
+      allow delete: if isStaff(); // 主官管不可刪除勤務
     }
 
     match /events/{eventId} {
-      allow read: if isActive();
-      allow create: if isActive();
+      // events 皆綁定 taskId 對應的勤務單位；讀取/建立時比對該勤務的 unit，
+      // 確保「隱藏按鈕」之外，伺服器端也真正限制資料存取範圍。
+      allow read: if isStaff() || sameUnit(get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.unit);
+      allow create: if isActive() &&
+                    (isStaff() || sameUnit(get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.unit));
       allow update, delete: if false;
     }
   }
