@@ -388,7 +388,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-78-separate-depart-arrive-steps";
+const BUILD_TAG = "2026-07-04-79-location-on-depart";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1552,10 +1552,12 @@ function viewTaskDetail(taskId){
   // 多地點時每一站分開列成自己的一列（不要用頓號串在同一行），才看得出來
   // 抵達／離開的流水時間線，一眼就知道第幾站對應哪個里程。
   const arrivalRows = arrivedEvs.length
-    ? arrivedEvs.map((e,i) => `<div class="k">抵達里程${arrivedEvs.length>1?' '+(i+1):''}</div><div class="v">${e.mileage!=null?e.mileage+' km':'—'}${e.location?'（'+esc(e.location)+'）':''}</div>`).join("")
+    ? arrivedEvs.map((e,i) => `<div class="k">抵達里程${arrivedEvs.length>1?' '+(i+1):''}</div><div class="v">${e.mileage!=null?e.mileage+' km':'—'}</div>`).join("")
     : `<div class="k">抵達里程</div><div class="v">—</div>`;
+  // 前往地點是離開現場當下就先問清楚（決定要去哪裡才會按前往下一個地點），
+  // 所以顯示在離開里程這一列，不是抵達里程那一列。
   const departRows = departEvs.length
-    ? departEvs.map((e,i) => `<div class="k">離開里程${departEvs.length>1?' '+(i+1):''}</div><div class="v">${e.mileage!=null?e.mileage+' km':'—'}</div>`).join("")
+    ? departEvs.map((e,i) => `<div class="k">離開里程${departEvs.length>1?' '+(i+1):''}</div><div class="v">${e.mileage!=null?e.mileage+' km':'—'}${e.location?'（前往：'+esc(e.location)+'）':''}</div>`).join("")
     : `<div class="k">離開里程</div><div class="v">—</div>`;
   const returningEv = eventByType(taskId, "RETURNING");
   const completedEv = eventByType(taskId, "COMPLETED");
@@ -1629,19 +1631,20 @@ function viewTaskDetail(taskId){
     const lastEv = evs[evs.length - 1];
     const minBase = lastEv?.ts ?? dispatchEv?.ts ?? null;
     const minTime = minBase ? hhmmValue(new Date(minBase)) : "";
-    // 第一次抵達的地點已經在建立勤務時填過了（任務本身的「地點」欄位），
-    // 不用再問一次；只有離開後前往第二個（含以後）地點時才需要重新輸入，
-    // 表單標題也改叫「抵達下一個地點」，跟第一次抵達做出區別。洽公任務地點
-    // 單一、沒有多站分岔，不會有這個情況。
-    const isNextStop = !isLiaison && draft.type === "ARRIVED_SCENE" && arrivedEvs.length > 0;
-    const formTitle = isNextStop ? "抵達下一個地點" : def.label;
+    // 離開現場當下就已經知道要去哪裡（決定要前往下一個地點才會按這顆按鈕），
+    // 所以地點在「離開現場」就先問清楚，抵達下一個地點時不用再問一次；
+    // 第一次抵達現場的地點則沿用建立勤務時填的任務「地點」欄位，也不用問。
+    // 洽公任務地點單一、沒有多站分岔，不會有這個情況。
+    const needsLocation = !isLiaison && draft.type === "DEPART_SCENE";
+    const formTitle = (!isLiaison && draft.type === "ARRIVED_SCENE" && lastType === "DEPART_SCENE") ? "抵達下一個地點" : def.label;
     // 離開現場、開始返營的當下，車輛都還沒有移動（人剛在原地回報），里程
     // 理論上跟上一筆回報的里程一樣，直接帶入避免重複輸入；抵達下一個地點
     // 是移動之後才回報，先帶入上一筆已知里程當作起始值，使用者只要接著往
     // 上改，不用從零開始整串重打一次；抵達營區才是完全空白，需要手動輸入。
     // 洽公任務不追蹤里程。
     const lastMileageEv = evs.slice().reverse().find(e => e.mileage != null);
-    const prefillMileage = !isLiaison && (draft.type === "RETURNING" || draft.type === "DEPART_SCENE" || isNextStop) && lastMileageEv ? lastMileageEv.mileage : null;
+    const isNextStopArrival = !isLiaison && draft.type === "ARRIVED_SCENE" && arrivedEvs.length > 0;
+    const prefillMileage = !isLiaison && (draft.type === "RETURNING" || draft.type === "DEPART_SCENE" || isNextStopArrival) && lastMileageEv ? lastMileageEv.mileage : null;
     // 回報表單改用彈窗（跟基礎資料管理的新增/編輯彈窗同一套元件），避免表單
     // 內容被固定在畫面底部的 Sticky Action Bar 擋住看不到。
     // 除了備註以外都是必填欄位，避免漏填造成紀錄不完整。
@@ -1651,7 +1654,7 @@ function viewTaskDetail(taskId){
           <div class="modal-handle"></div>
           <div class="modal-title">${icon(def.icon,19)} 回報：${formTitle}</div>
           <form onsubmit="event.preventDefault(); window.__submitReport('${t.id}','${draft.type}')">
-            ${isNextStop ? `<div class="field"><label>地點</label><input id="rf-location" placeholder="例如：加油站、OO超商" required></div>` : ""}
+            ${needsLocation ? `<div class="field"><label>前往地點</label><input id="rf-location" placeholder="例如：加油站、OO超商" required></div>` : ""}
             <div class="field">
               <label>時間</label>
               <div style="display:flex; gap:8px;">
@@ -1694,14 +1697,14 @@ function viewTaskDetail(taskId){
   if (editingEvent) {
     const def = evDefs.find(x=>x.type===editingEvent.type);
     const isFinalEv = !isLiaison && editingEvent.type === "COMPLETED";
-    const hasLocationField = !isLiaison && editingEvent.type === "ARRIVED_SCENE";
+    const hasLocationField = !isLiaison && editingEvent.type === "DEPART_SCENE";
     eventEditModal = `
       <div class="modal-overlay" onclick="if(event.target===this) window.__cancelEditEvent()">
         <div class="modal-sheet">
           <div class="modal-handle"></div>
           <div class="modal-title">${icon(def.icon,19)} 編輯回報：${def.label}</div>
           <form onsubmit="event.preventDefault(); window.__submitEditEvent('${editingEvent.id}')">
-            ${hasLocationField ? `<div class="field"><label>地點</label><input id="ee-location" value="${esc(editingEvent.location||'')}" placeholder="例如：加油站、OO超商"></div>` : ""}
+            ${hasLocationField ? `<div class="field"><label>前往地點</label><input id="ee-location" value="${esc(editingEvent.location||'')}" placeholder="例如：加油站、OO超商"></div>` : ""}
             <div class="field"><label>時間</label><input id="ee-time" type="time" value="${hhmmValue(new Date(editingEvent.ts))}" required></div>
             ${!isLiaison ? `<div class="field"><label>里程（公里）</label><input id="ee-mileage" type="number" inputmode="decimal" value="${editingEvent.mileage!=null?editingEvent.mileage:''}" required></div>` : ""}
             ${isFinalEv ? `<div class="field"><label>剩餘油量</label><select id="ee-fuel" required>${fuelOptions(editingEvent.endFuel||"")}</select></div>` : ""}
