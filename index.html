@@ -388,7 +388,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-81-transit-location-wording";
+const BUILD_TAG = "2026-07-04-82-returning-to-base-wording";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1267,10 +1267,16 @@ function taskCard(t){
   const currentLocation = currentLocationOf(t);
   // 最新一筆是離開現場，代表車輛還在路上、還沒真的抵達那個地點，文字要
   // 講清楚是「正在前往」而不是「已經在那裡」，避免看起來像已經抵達了。
+  // 已經按下返回營區的話，正在前往的地方是營區本身，不是上一次離開現場時
+  // 記的那個地點（那個地點已經是過去式了），所以要顯示「返回營區中」，
+  // 不能沿用舊的地點文字，否則會顯示已經離開的地方、跟目前狀態對不上。
   const inTransit = last && last.type === "DEPART_SCENE";
-  const locationLine = currentLocation
-    ? (inTransit ? `前往 ${esc(currentLocation)} 中` : esc(currentLocation))
-    : "";
+  const returningToBase = last && last.type === "RETURNING" && !isLiaison;
+  const locationLine = returningToBase
+    ? "返回營區中"
+    : currentLocation
+      ? (inTransit ? `前往 ${esc(currentLocation)} 中` : esc(currentLocation))
+      : "";
   return `
   <div class="task-card ${taskCardClass(s)}" onclick="if(!event.target.closest('a')) window.__nav({name:'task', id:'${t.id}'})">
     <div class="task-top">
