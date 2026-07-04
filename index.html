@@ -183,10 +183,10 @@
 
   .no-permission{color:var(--muted); font-size:14.5px; text-align:center; padding:16px; border:1px dashed var(--border-strong); border-radius:var(--radius-md); margin-bottom:20px;}
 
-  /* ---- 勤務進度 Stepper（Workflow 導向的回報介面） ---- */
+  /* ---- 勤務進度 Stepper（融合實際回報內容＋未來步驟預覽） ---- */
   .stepper{position:relative; padding-left:32px; margin:14px 0 20px 0;}
   .stepper::before{content:''; position:absolute; left:9px; top:8px; bottom:8px; width:2px; background:var(--border);}
-  .step-item{position:relative; padding-bottom:20px; display:flex; align-items:center; gap:12px;}
+  .step-item{position:relative; padding-bottom:20px; display:flex; align-items:flex-start; gap:12px;}
   .step-item:last-child{padding-bottom:0;}
   .step-dot{
     position:absolute; left:-32px; top:0; width:20px; height:20px; border-radius:50%;
@@ -198,6 +198,10 @@
   .step-label{font-size:14.5px; font-weight:600; color:var(--muted);}
   .step-item.done .step-label{color:var(--text);}
   .step-item.current .step-label{color:var(--blue); font-weight:700;}
+  .step-body{flex:1; min-width:0; padding-top:1px;}
+  .step-head{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  .step-meta{font-family:var(--mono); font-size:13px; color:var(--muted); font-weight:500; margin-top:3px;}
+  .step-note{font-size:14px; color:var(--text); margin-top:5px;}
 
   /* ---- Sticky Bottom Action Bar：主要回報按鈕固定在畫面底部，方便單手操作 ---- */
   .sticky-action-bar{
@@ -213,19 +217,7 @@
   .sticky-bar-spacer{height:78px;}
   .btn-ghost{background:none; border:1.5px solid var(--border); color:var(--text); font-weight:600; border-radius:var(--radius-sm); padding:15px; font-size:16px; font-family:var(--sans);}
 
-  .timeline{position:relative; padding-left:22px;}
-  .timeline::before{content:''; position:absolute; left:5px; top:4px; bottom:4px; width:1px; background:var(--border);}
-  .tl-item{position:relative; padding-bottom:22px;}
-  .tl-item:last-child{padding-bottom:0;}
-  .tl-dot{position:absolute; left:-22px; top:2px; width:12px; height:12px; border-radius:50%; border:2px solid var(--bg);}
-  .tl-dot.dispatch{background:var(--red);} .tl-dot.onscene{background:var(--amber);}
-  .tl-dot.transit{background:#6B23C7;}
-  .tl-dot.returning{background:var(--blue);} .tl-dot.completed{background:var(--green);}
-  .tl-head{display:flex; align-items:center; justify-content:space-between; gap:8px;}
-  .tl-type{font-weight:700; font-size:15px;}
   .tl-edit-btn{background:none; border:none; color:var(--blue); font-size:13px; font-weight:600; padding:2px 0; flex-shrink:0;}
-  .tl-meta{font-family:var(--mono); font-size:13px; color:var(--muted); font-weight:500; margin-top:3px;}
-  .tl-note{font-size:14px; color:var(--text); margin-top:5px;}
 
   /* ---- forms / admin ---- */
   .field{margin-bottom:14px;}
@@ -371,7 +363,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-71-edit-reported-events";
+const BUILD_TAG = "2026-07-04-72-merge-progress-timeline";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1481,20 +1473,38 @@ function viewTaskDetail(taskId){
   const draft = state.reportDraft && state.reportDraft.taskId === taskId ? state.reportDraft : null;
   const canDoReport = canReport(p, t);
 
-  // ---- 勤務進度 Stepper：一律以「最新一筆事件」決定目前走到第幾步 ----
+  // ---- 勤務進度：把「勤務進度」跟「勤務時間軸」合併成同一份清單——已發生的
+  // 事件直接顯示實際回報內容（時間/回報人/里程/備註/編輯按鈕），還沒發生的
+  // 步驟接在後面用灰色佔位顯示，一次就看得出走到哪一步、之前每一步的細節、
+  // 下一步是什麼，不用分開看兩份內容重複的區塊。
   const lastType = evs.length ? evs[evs.length - 1].type : null;
   const lastIdx = lastType ? STEP_TYPES.indexOf(lastType) : -1;
-  const stepperHtml = `
+  const isTaskDone = s === "completed";
+  const upcomingSteps = EVENT_TYPES.filter((def, i) => i > lastIdx);
+  const progressHtml = `
     <div class="section-label">勤務進度</div>
     <div class="stepper">
-      ${EVENT_TYPES.map((def, i) => {
-        const cls = s === "completed" || i < lastIdx ? "done" : i === lastIdx ? "current" : "upcoming";
+      ${evs.map((e, idx) => {
+        const def = EVENT_TYPES.find(d=>d.type===e.type);
+        const cls = (idx === evs.length - 1 && !isTaskDone) ? "current" : "done";
         return `
         <div class="step-item ${cls}">
           <div class="step-dot">${cls === "done" ? icon("check", 11) : ""}</div>
-          <div class="step-label">${def.label}</div>
+          <div class="step-body">
+            <div class="step-head">
+              <div class="step-label">${def ? icon(def.icon,15) : ''} ${def?.label}${e.location ? '：'+esc(e.location) : ''}</div>
+              ${canDoReport ? `<button class="tl-edit-btn" onclick="window.__editEvent('${e.id}')">編輯</button>` : ""}
+            </div>
+            <div class="step-meta">${fmtTime(e.ts)} · ${nameWithRank(e.userName, e.unit)}${e.mileage!=null ? ' · ' + e.mileage + ' km' : ''}</div>
+            ${e.note ? `<div class="step-note">${esc(e.note)}</div>` : ""}
+          </div>
         </div>`;
       }).join("")}
+      ${upcomingSteps.map(def => `
+        <div class="step-item upcoming">
+          <div class="step-dot"></div>
+          <div class="step-body"><div class="step-label">${icon(def.icon,15)} ${def.label}</div></div>
+        </div>`).join("")}
     </div>`;
 
   // ---- 目前狀態／下一步（純資訊，任何看得到此任務的人都看得到，不受回報權限影響）----
@@ -1601,29 +1611,12 @@ function viewTaskDetail(taskId){
       </div>`;
   }
 
-  const timeline = evs.length ? `
-    <div class="timeline">
-      ${evs.slice().reverse().map(e => {
-        const def = EVENT_TYPES.find(d=>d.type===e.type);
-        return `
-        <div class="tl-item">
-          <div class="tl-dot ${def?.statusKey}"></div>
-          <div class="tl-head">
-            <div class="tl-type">${def ? icon(def.icon,17) : ''} ${def?.label}${e.location ? '：'+esc(e.location) : ''}</div>
-            ${canDoReport ? `<button class="tl-edit-btn" onclick="window.__editEvent('${e.id}')">編輯</button>` : ""}
-          </div>
-          <div class="tl-meta">${fmtTime(e.ts)} · ${nameWithRank(e.userName, e.unit)}${e.mileage!=null ? ' · ' + e.mileage + ' km' : ''}</div>
-          ${e.note ? `<div class="tl-note">${esc(e.note)}</div>` : ""}
-        </div>`;
-      }).join("")}
-    </div>` : `<div class="empty">尚無事件紀錄</div>`;
-
   return `
     <div class="back-row" style="justify-content:space-between;">
       <button onclick="window.__nav({name:'tasks'})">‹ 返回列表</button>
       ${canEditTask(p, t) ? `<button class="icon-btn" onclick="window.__nav({name:'editTask', id:'${t.id}'})">編輯勤務</button>` : ""}
     </div>
-    ${stepperHtml}
+    ${progressHtml}
     ${statusBlock}
     <div class="detail-head">
       <div class="task-top">
@@ -1655,8 +1648,6 @@ function viewTaskDetail(taskId){
         <div class="k">任務耗時</div><div class="v">${duration!=null ? durationLabel(duration) : '—'}</div>
       </div>
     </div>` : ""}
-    <div class="section-label">勤務時間軸</div>
-    ${timeline}
     ${stickyBar}
     ${reportModal}
     ${eventEditModal}
