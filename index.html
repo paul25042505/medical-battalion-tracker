@@ -388,7 +388,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-79-location-on-depart";
+const BUILD_TAG = "2026-07-04-80-current-location-card";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1246,6 +1246,16 @@ function crewLabel(name, unit){
   const phone = (match && match.phone) || "";
   return `${nameWithRank(name, unit)}${phone ? ` <a href="tel:${esc(phone)}" class="phone-link" style="text-decoration:none;">${esc(phone)}</a>` : ''}`;
 }
+// 目前位置：最新一筆有帶地點的事件（離開現場記錄的前往地點、抵達現場記錄
+// 的抵達地點）就是目前最新的已知位置；還沒有任何地點回報時，退回任務本身
+// 建立時填的地點欄位。
+function currentLocationOf(t){
+  const evs = taskEvents(t.id);
+  for (let i = evs.length - 1; i >= 0; i--) {
+    if (evs[i].location) return evs[i].location;
+  }
+  return t.location || null;
+}
 function taskCard(t){
   const s = deriveStatus(t.id);
   const evs = taskEvents(t.id);
@@ -1254,6 +1264,7 @@ function taskCard(t){
   const personnelLine = isLiaison && Array.isArray(t.personnel) && t.personnel.length
     ? t.personnel.map(n => nameWithRank(n, t.unit)).join('、')
     : '—';
+  const currentLocation = currentLocationOf(t);
   return `
   <div class="task-card ${taskCardClass(s)}" onclick="if(!event.target.closest('a')) window.__nav({name:'task', id:'${t.id}'})">
     <div class="task-top">
@@ -1264,6 +1275,7 @@ function taskCard(t){
       ${statusBadge(s)}
     </div>
     <div class="task-crew">
+      ${currentLocation ? `<span>目前位置：${esc(currentLocation)}</span>` : ""}
       ${isLiaison
         ? `<span>人員：${personnelLine}</span>`
         : `<span>車長：${crewLabel(t.crewLeader, t.unit)}</span><span>駕駛：${crewLabel(t.driver, t.unit)}</span>`}
@@ -2387,6 +2399,19 @@ window.__submitReport = (taskId, type) => {
   if (fuelEl && fuelEl.value) extra.endFuel = fuelEl.value;
   if (timeEl && timeEl.value) extra.timestamp = todayAt(timeEl.value);
   if (locationEl && locationEl.value) extra.location = locationEl.value;
+  // 抵達現場本身不再另外問地點（地點在離開現場時就先問過了），但時間軸上
+  // 抵達這一步也要看得出抵達的是哪裡：沿用剛才離開現場填的前往地點；如果
+  // 是出勤後第一次抵達（前面還沒有離開現場的紀錄），就沿用任務本身建立時
+  // 填的地點欄位。
+  if (type === "ARRIVED_SCENE" && !extra.location) {
+    const t = state.tasks.find(x => x.id === taskId);
+    if (t && t.type !== "liaison") {
+      const evs = taskEvents(taskId);
+      const lastEv = evs[evs.length - 1];
+      if (lastEv && lastEv.type === "DEPART_SCENE" && lastEv.location) extra.location = lastEv.location;
+      else if (t.location) extra.location = t.location;
+    }
+  }
   // 寫入成功才關閉彈窗並重繪；失敗（例如權限被拒）要留在原畫面讓使用者看到
   // 錯誤訊息並可重試，不能還沒確認寫入結果就先把草稿清掉。
   addEvent(taskId, type, extra)
