@@ -388,7 +388,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-80-current-location-card";
+const BUILD_TAG = "2026-07-04-81-transit-location-wording";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1265,6 +1265,12 @@ function taskCard(t){
     ? t.personnel.map(n => nameWithRank(n, t.unit)).join('、')
     : '—';
   const currentLocation = currentLocationOf(t);
+  // 最新一筆是離開現場，代表車輛還在路上、還沒真的抵達那個地點，文字要
+  // 講清楚是「正在前往」而不是「已經在那裡」，避免看起來像已經抵達了。
+  const inTransit = last && last.type === "DEPART_SCENE";
+  const locationLine = currentLocation
+    ? (inTransit ? `前往 ${esc(currentLocation)} 中` : esc(currentLocation))
+    : "";
   return `
   <div class="task-card ${taskCardClass(s)}" onclick="if(!event.target.closest('a')) window.__nav({name:'task', id:'${t.id}'})">
     <div class="task-top">
@@ -1275,7 +1281,7 @@ function taskCard(t){
       ${statusBadge(s)}
     </div>
     <div class="task-crew">
-      ${currentLocation ? `<span>目前位置：${esc(currentLocation)}</span>` : ""}
+      ${locationLine ? `<span>目前位置：${locationLine}</span>` : ""}
       ${isLiaison
         ? `<span>人員：${personnelLine}</span>`
         : `<span>車長：${crewLabel(t.crewLeader, t.unit)}</span><span>駕駛：${crewLabel(t.driver, t.unit)}</span>`}
