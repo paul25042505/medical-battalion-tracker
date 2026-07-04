@@ -78,7 +78,12 @@ service cloud.firestore {
       allow read: if isStaff() || sameUnit(get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.unit);
       allow create: if isAdmin() ||
                     (isSignedIn() && myRole() == 'member' && sameUnit(get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.unit));
-      allow update, delete: if false;
+      // 時間、里程有時候會回報錯誤，需要能修正；開放對象跟 create 一致
+      // （admin 或該單位一般成員），維持「誰能回報、誰就能修正自己回報的內容」；
+      // 但不開放刪除，避免整筆歷史紀錄憑空消失。
+      allow update: if isAdmin() ||
+                    (isSignedIn() && myRole() == 'member' && sameUnit(get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.unit));
+      allow delete: if false;
     }
   }
 }
