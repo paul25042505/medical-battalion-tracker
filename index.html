@@ -328,7 +328,7 @@
   .navbtn.active .navicon{transform:translateY(-1px);}
 
   .toast{
-    position:fixed; bottom:92px; left:50%; transform:translateX(-50%); z-index:50;
+    position:fixed; bottom:92px; left:50%; transform:translateX(-50%); z-index:70;
     background:#1C1C1E; border:1px solid rgba(255,255,255,0.08); color:#fff; font-size:14px; font-weight:500;
     padding:12px 20px; border-radius:var(--radius-sm); box-shadow:0 12px 32px rgba(0,0,0,0.28);
     opacity:0; pointer-events:none; transition:opacity 0.25s, transform 0.25s;
@@ -372,7 +372,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-73-fix-time-input-overflow";
+const BUILD_TAG = "2026-07-04-74-fix-silent-save-failure";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -2278,15 +2278,16 @@ window.__submitReport = (taskId, type) => {
   if (fuelEl && fuelEl.value) extra.endFuel = fuelEl.value;
   if (timeEl && timeEl.value) extra.timestamp = todayAt(timeEl.value);
   if (locationEl && locationEl.value) extra.location = locationEl.value;
-  state.reportDraft = null;
   const evs = taskEvents(taskId);
   const lastType = evs.length ? evs[evs.length - 1].type : null;
   // 從「已抵達現場」狀態選擇前往下一個地點或返回營區時，自動補一筆離開現場。
-  if (lastType === "ARRIVED_SCENE" && (type === "ARRIVED_SCENE" || type === "RETURNING")) {
-    reportDepartThenContinue(taskId, type, extra);
-  } else {
-    addEvent(taskId, type, extra);
-  }
+  const writeP = (lastType === "ARRIVED_SCENE" && (type === "ARRIVED_SCENE" || type === "RETURNING"))
+    ? reportDepartThenContinue(taskId, type, extra)
+    : addEvent(taskId, type, extra);
+  // 寫入成功才關閉彈窗並重繪；失敗（例如權限被拒）要留在原畫面讓使用者看到
+  // 錯誤訊息並可重試，不能還沒確認寫入結果就先把草稿清掉。
+  writeP.then(() => { state.reportDraft = null; render(); })
+        .catch(err => showToast(`回報失敗：[${err.code||'?'}] ${err.message||err}`));
 };
 window.__editEvent = (id) => { state.eventEditId = id; render(); };
 window.__cancelEditEvent = () => { state.eventEditId = null; render(); };
@@ -2303,8 +2304,11 @@ window.__submitEditEvent = (id) => {
   if (locationEl) fields.location = locationEl.value || "";
   if (fuelEl) fields.endFuel = fuelEl.value || "";
   if (noteEl) fields.note = noteEl.value || "";
-  state.eventEditId = null;
-  updateEvent(id, fields).catch(err => showToast(`更新失敗：[${err.code||'?'}] ${err.message||err}`));
+  // 寫入成功才關閉彈窗並重繪；失敗（例如權限被拒）要留在原畫面讓使用者看到
+  // 錯誤訊息並可重試，不能還沒確認寫入結果就先把編輯狀態清掉。
+  updateEvent(id, fields)
+    .then(() => { state.eventEditId = null; render(); })
+    .catch(err => showToast(`更新失敗：[${err.code||'?'}] ${err.message||err}`));
 };
 window.__setAdminTab = (t) => { state.adminTab = t; state._usersCache = null; render(); };
 window.__deleteTask = (id) => { if (confirm("確定刪除此任務？此動作無法復原。")) deleteTask(id); };
