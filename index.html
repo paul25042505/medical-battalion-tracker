@@ -232,6 +232,22 @@
   }
   .field textarea{resize:vertical; min-height:72px;}
   .field input:disabled{color:var(--muted); background:var(--bg);}
+  /* 建立勤務：勤務／洽公 任務類型切換 */
+  .seg-toggle{display:flex; gap:8px;}
+  .seg-toggle button{
+    flex:1; padding:12px; border-radius:var(--radius-sm); border:1.5px solid var(--border);
+    background:var(--panel-2); color:var(--text); font-weight:700; font-size:15px; font-family:var(--sans);
+  }
+  .seg-toggle button.active{background:var(--blue); border-color:var(--blue); color:#fff;}
+  /* 洽公任務：人員多選改用可勾選的標籤（chip），行動裝置上比原生 multi-select 好操作 */
+  .chip-select{display:flex; flex-wrap:wrap; gap:8px;}
+  .chip-option{cursor:pointer;}
+  .chip-option input{position:absolute; opacity:0; width:0; height:0; pointer-events:none;}
+  .chip-option span{
+    display:inline-block; padding:9px 16px; border-radius:999px; border:1.5px solid var(--border);
+    font-size:14px; font-weight:600; color:var(--text); background:var(--panel-2); transition:all .15s ease;
+  }
+  .chip-option:has(input:checked) span{background:var(--blue); border-color:var(--blue); color:#fff;}
   /* iOS Safari 的 time/date 原生控制項有時會忽略外層寬度限制而撐出版面，強制鎖定尺寸 */
   input[type="date"], input[type="time"]{
     font-size:16px !important;
@@ -372,7 +388,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-74-fix-silent-save-failure";
+const BUILD_TAG = "2026-07-04-75-liaison-task-type";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -495,7 +511,17 @@ const EVENT_TYPES = [
   { type: "RETURNING",     label: "返營",     icon: "returnArrow", statusKey: "returning", hint: "處置完畢，返回營區" },
   { type: "COMPLETED",     label: "抵達營區", icon: "flag",        statusKey: "completed", hint: "完成勤務，回報最終里程與油量" }
 ];
-// 勤務進度 Stepper 固定的 5 個步驟（依 EVENT_TYPES 順序），抵達現場／離開現場
+// 洽公任務（現勘、開會等非車輛派遣性質的外出）：不追蹤里程/油量，流程也比較
+// 單純，沒有「前往下一個地點」的分岔——地點在建立任務時就一次填完，回報只
+// 是單純的出發→抵達→離開→返營四個時間點，返營即代表任務結束。
+const LIAISON_EVENT_TYPES = [
+  { type: "DISPATCH",      label: "出發", icon: "alert",       statusKey: "dispatch",   hint: "從營區出發" },
+  { type: "ARRIVED_SCENE", label: "抵達", icon: "pin",         statusKey: "onscene",    hint: "抵達洽公地點" },
+  { type: "DEPART_SCENE",  label: "離開", icon: "depart",      statusKey: "transit",    hint: "離開洽公地點，準備返營" },
+  { type: "RETURNING",     label: "返營", icon: "returnArrow", statusKey: "completed",  hint: "返回營區，洽公完成" }
+];
+function eventTypesFor(t){ return (t && t.type === "liaison") ? LIAISON_EVENT_TYPES : EVENT_TYPES; }
+// 勤務進度 Stepper 固定步驟（依 eventTypesFor(t) 順序），抵達現場／離開現場
 // 若同一趟勤務重複多次，Stepper 一律以「最新一筆事件」決定目前走到第幾步。
 const STEP_TYPES = EVENT_TYPES.map(e => e.type);
 const STATUS_LABEL = {
@@ -525,6 +551,14 @@ const UNITS = [
   { code: "co2", label: "第二連" }
 ];
 function unitLabel(code){ return (UNITS.find(u => u.code === code) || {}).label || code || "未設定"; }
+
+// 任務類型：勤務＝車輛派遣（追蹤里程/油量/車長駕駛），洽公＝現勘、開會等
+// 無車輛派遣性質的外出（追蹤出席人員，不追蹤里程油量）。
+const TASK_TYPES = [
+  { key: "duty",    label: "勤務" },
+  { key: "liaison", label: "洽公" }
+];
+function taskTypeLabel(t){ return t && t.type === "liaison" ? "洽公" : "勤務"; }
 
 /* =========================================================
    2d) 氣象預報（中央氣象署 CWA 開放資料平臺，依單位對應縣市）
@@ -562,6 +596,7 @@ const state = {
   profileEditing: false,
   baseDataUnit: "", baseDataTab: "personnel", baseDataModal: null, // 基礎資料管理頁籤狀態；baseDataModal: {coll, id, unit} | null
   createTaskUnit: "", // 建立勤務頁面：admin/高勤官可切換的單位
+  createTaskType: "duty", // 建立勤務頁面：勤務（車輛派遣）或洽公（無車輛/里程追蹤）
   previewActive: false, realRoleUnit: null, // 角色權限預覽（僅限 admin）
   weather: null, // 首頁氣象預報（依單位對應縣市，見 ensureWeatherLoaded）
   hazards: null // 首頁天氣特報／陸上警報（依單位對應縣市，見 ensureHazardsLoaded）
@@ -581,10 +616,11 @@ function changedSince(cacheKey, value){
    4) 狀態推導（純函式：Event 陣列 → 狀態）
    ========================================================= */
 function deriveStatus(taskId) {
+  const t = state.tasks.find(x => x.id === taskId);
   const evs = state.events.filter(e => e.taskId === taskId).sort((a,b) => (a.ts||0) - (b.ts||0));
   if (evs.length === 0) return "pending";
   const last = evs[evs.length - 1];
-  const def = EVENT_TYPES.find(t => t.type === last.type);
+  const def = eventTypesFor(t).find(d => d.type === last.type);
   return def ? def.statusKey : "pending";
 }
 function taskEvents(taskId) {
@@ -602,8 +638,16 @@ function eventByType(taskId, type){
 // 的 reportDepartThenContinue），避免同樣的時間/里程要填兩次。
 function reportableTypes(taskId){
   if (deriveStatus(taskId) === "completed") return [];
+  const t = state.tasks.find(x => x.id === taskId);
   const evs = taskEvents(taskId);
   const lastType = evs.length ? evs[evs.length - 1].type : null;
+  // 洽公任務地點在建立時就一次填完，回報流程沒有分岔，單純出發→抵達→離開→返營。
+  if (t && t.type === "liaison") {
+    if (!lastType || lastType === "DISPATCH") return ["ARRIVED_SCENE"];
+    if (lastType === "ARRIVED_SCENE") return ["DEPART_SCENE"];
+    if (lastType === "DEPART_SCENE") return ["RETURNING"];
+    return [];
+  }
   if (!lastType || lastType === "DISPATCH") return ["ARRIVED_SCENE"];
   if (lastType === "ARRIVED_SCENE" || lastType === "DEPART_SCENE") return ["ARRIVED_SCENE", "RETURNING"]; // 唯一的分岔點
   if (lastType === "RETURNING") return ["COMPLETED"];
@@ -695,7 +739,7 @@ async function addEvent(taskId, type, extra, opts){
     ...extra
   });
   if (!opts?.silent) {
-    showToast(`已回報：${EVENT_TYPES.find(t=>t.type===type).label}`);
+    showToast(`已回報：${eventTypesFor(task).find(e=>e.type===type).label}`);
     if (eventsPoll) eventsPoll.refreshNow();
   }
 }
@@ -728,7 +772,7 @@ async function createTask(data){
     userName: state.profile.displayName || state.user.email,
     ...(data.startMileage != null ? { mileage: data.startMileage } : {})
   });
-  showToast("勤務已建立並標記出勤");
+  showToast(data.type === "liaison" ? "洽公已建立並標記出發" : "勤務已建立並標記出勤");
   if (tasksPoll) tasksPoll.refreshNow();
   if (eventsPoll) eventsPoll.refreshNow();
 }
@@ -743,7 +787,10 @@ async function deleteTask(taskId){
   if (tasksPoll) tasksPoll.refreshNow();
 }
 async function forceEndTask(taskId){
-  await addEvent(taskId, "COMPLETED", { note: "管理員強制結束" });
+  const t = state.tasks.find(x => x.id === taskId);
+  // 洽公任務沒有 COMPLETED 事件，結束點是「返營」（statusKey completed）。
+  const finalType = (t && t.type === "liaison") ? "RETURNING" : "COMPLETED";
+  await addEvent(taskId, finalType, { note: "管理員強制結束" });
   showToast("已強制結束勤務");
 }
 async function setUserRole(uid, role, unit){
@@ -1203,18 +1250,23 @@ function taskCard(t){
   const s = deriveStatus(t.id);
   const evs = taskEvents(t.id);
   const last = evs[evs.length-1];
+  const isLiaison = t.type === "liaison";
+  const personnelLine = isLiaison && Array.isArray(t.personnel) && t.personnel.length
+    ? t.personnel.map(n => nameWithRank(n, t.unit)).join('、')
+    : '—';
   return `
   <div class="task-card ${taskCardClass(s)}" onclick="if(!event.target.closest('a')) window.__nav({name:'task', id:'${t.id}'})">
     <div class="task-top">
       <div>
         <p class="task-title">${esc(t.title)}</p>
-        <div class="task-meta">${esc(t.vehicle||'—')} · ${esc(t.location||'—')}</div>
+        <div class="task-meta">${isLiaison ? '洽公' : esc(t.vehicle||'—')} · ${esc(t.location||'—')}</div>
       </div>
       ${statusBadge(s)}
     </div>
     <div class="task-crew">
-      <span>車長：${crewLabel(t.crewLeader, t.unit)}</span>
-      <span>駕駛：${crewLabel(t.driver, t.unit)}</span>
+      ${isLiaison
+        ? `<span>人員：${personnelLine}</span>`
+        : `<span>車長：${crewLabel(t.crewLeader, t.unit)}</span><span>駕駛：${crewLabel(t.driver, t.unit)}</span>`}
     </div>
     <div class="task-foot" style="justify-content:${last ? 'flex-end' : 'flex-start'};">
       <span>${last ? timeAgo(last.ts) : '尚無回報'}</span>
@@ -1349,21 +1401,39 @@ function viewCreateTask(){
   const unit = canSwitch ? (state.createTaskUnit || myUnit(p) || UNITS[0].code) : myUnit(p);
   if (!unit) return `<div class="empty">您尚未被指派單位，請聯繫管理員。</div>`;
 
+  const taskType = state.createTaskType || "duty";
+  const isLiaison = taskType === "liaison";
   const personnelOpts = state.personnel.filter(x => x.unit === unit && x.active !== false).slice().sort((a,b) => rankWeight(a.title) - rankWeight(b.title));
   const vehicleOpts = state.vehicles.filter(x => x.unit === unit && x.active !== false);
   const recorderOpts = state.recorders.filter(x => x.unit === unit && x.active !== false);
 
   return `
     <div class="section-label">建立勤務</div>
-    <form onsubmit="window.__createTask(event, '${unit}')">
+    <div class="field"><label>任務類型 *</label>
+      <div class="seg-toggle">
+        ${TASK_TYPES.map(x => `<button type="button" class="${taskType===x.key?'active':''}" onclick="window.__setCreateTaskType('${x.key}')">${x.label}</button>`).join("")}
+      </div>
+    </div>
+    <form onsubmit="window.__createTask(event, '${unit}', '${taskType}')">
       ${canSwitch ? `
         <div class="field"><label>單位 *</label>
           <select onchange="window.__setCreateTaskUnit(this.value)">
             ${UNITS.map(u => `<option value="${u.code}" ${unit===u.code?'selected':''}>${u.label}</option>`).join("")}
           </select>
         </div>` : `<div class="field"><label>單位</label><input value="${unitLabel(unit)}" disabled></div>`}
-      <div class="field"><label>任務名稱 *</label><input name="title" required placeholder="例如：OHCA 患者搶救"></div>
-      <div class="field"><label>地點</label><input name="location" placeholder="例如：潭子區豐興路一段"></div>
+      <div class="field"><label>任務名稱 *</label><input name="title" required placeholder="${isLiaison?'例如：軍公民任務現勘':'例如：OHCA 患者搶救'}"></div>
+      <div class="field"><label>地點${isLiaison?'（可多個，用頓號分隔）':''}</label><input name="location" placeholder="${isLiaison?'例如：烏日高鐵站、福田水資源回收中心、天后宮':'例如：潭子區豐興路一段'}"></div>
+      ${isLiaison ? `
+      <div class="field"><label>人員（可複選）*</label>
+        <div class="chip-select">
+          ${personnelOpts.map(x => `
+            <label class="chip-option">
+              <input type="checkbox" name="personnel" value="${esc(x.name)}">
+              <span>${esc(x.name)}${x.title?' '+esc(x.title):''}</span>
+            </label>`).join("")}
+        </div>
+        ${!personnelOpts.length ? `<div style="color:var(--muted);font-size:13px;margin-top:6px;">此單位尚未建立人員資料，請至「基礎資料管理」新增</div>` : ""}
+      </div>` : `
       <div class="field"><label>車號</label>
         <select name="vehicle">
           <option value="">請選擇車輛</option>
@@ -1389,9 +1459,9 @@ function viewCreateTask(){
         </select>
       </div>
       <div class="field"><label>出發前里程（公里）</label><input name="startMileage" type="number" inputmode="decimal" placeholder="例如：12345"></div>
-      <div class="field"><label>出發前油量</label><select name="startFuel">${fuelOptions("")}</select></div>
+      <div class="field"><label>出發前油量</label><select name="startFuel">${fuelOptions("")}</select></div>`}
       <div class="field"><label>備註（選填）</label><textarea name="notes" placeholder="其他需要註記的事項"></textarea></div>
-      <button class="btn-primary" type="submit">建立勤務</button>
+      <button class="btn-primary" type="submit">建立${isLiaison?'洽公':'勤務'}</button>
     </form>
   `;
 }
@@ -1405,19 +1475,31 @@ function viewEditTask(taskId){
   if (!t) return `<div class="empty">找不到此任務</div>`;
   if (!canEditTask(p, t)) return `<div class="empty">您沒有編輯此勤務的權限</div>`;
 
+  const isLiaison = t.type === "liaison";
   const unit = t.unit;
   const personnelOpts = state.personnel.filter(x => x.unit === unit && x.active !== false).slice().sort((a,b) => rankWeight(a.title) - rankWeight(b.title));
   const vehicleOpts = state.vehicles.filter(x => x.unit === unit && x.active !== false);
   const recorderOpts = state.recorders.filter(x => x.unit === unit && x.active !== false);
   const currentRecorders = t.recorders || [];
+  const currentPersonnel = t.personnel || [];
 
   return `
     <div class="back-row"><button onclick="window.__nav({name:'task', id:'${taskId}'})">‹ 返回任務詳情</button></div>
-    <div class="section-label">編輯勤務</div>
+    <div class="section-label">編輯${isLiaison?'洽公':'勤務'}</div>
     <form onsubmit="window.__saveTaskEdit(event,'${taskId}')">
       <div class="field"><label>單位</label><input value="${unitLabel(unit)}" disabled></div>
       <div class="field"><label>任務名稱 *</label><input name="title" required value="${esc(t.title||'')}"></div>
-      <div class="field"><label>地點</label><input name="location" value="${esc(t.location||'')}"></div>
+      <div class="field"><label>地點${isLiaison?'（可多個，用頓號分隔）':''}</label><input name="location" value="${esc(t.location||'')}"></div>
+      ${isLiaison ? `
+      <div class="field"><label>人員（可複選）*</label>
+        <div class="chip-select">
+          ${personnelOpts.map(x => `
+            <label class="chip-option">
+              <input type="checkbox" name="personnel" value="${esc(x.name)}" ${currentPersonnel.includes(x.name)?'checked':''}>
+              <span>${esc(x.name)}${x.title?' '+esc(x.title):''}</span>
+            </label>`).join("")}
+        </div>
+      </div>` : `
       <div class="field"><label>車號</label>
         <select name="vehicle">
           <option value="">請選擇車輛</option>
@@ -1442,7 +1524,7 @@ function viewEditTask(taskId){
         </select>
       </div>
       <div class="field"><label>出發前里程（公里）</label><input name="startMileage" type="number" inputmode="decimal" value="${t.startMileage!=null?t.startMileage:''}"></div>
-      <div class="field"><label>出發前油量</label><select name="startFuel">${fuelOptions(t.startFuel||"")}</select></div>
+      <div class="field"><label>出發前油量</label><select name="startFuel">${fuelOptions(t.startFuel||"")}</select></div>`}
       <div class="field"><label>備註（選填）</label><textarea name="notes">${esc(t.notes||'')}</textarea></div>
       <button class="btn-primary" type="submit">儲存變更</button>
     </form>
@@ -1458,9 +1540,12 @@ function viewTaskDetail(taskId){
   const p = state.profile;
   const s = deriveStatus(taskId);
   const evs = taskEvents(taskId);
+  const isLiaison = t.type === "liaison";
+  const evDefs = eventTypesFor(t);
 
   // 勤務資訊：出發/抵達/返營/最終里程與油量、自動計算行駛公里數與任務耗時
-  // （抵達現場可能有多筆，因為同一趟勤務可能去兩個以上的地點）
+  // （抵達現場可能有多筆，因為同一趟勤務可能去兩個以上的地點；洽公任務地點
+  // 單一、不追蹤里程油量，這段資料只有勤務類任務才會用到）
   const dispatchEv = eventByType(taskId, "DISPATCH");
   const arrivedEvs = evs.filter(e => e.type === "ARRIVED_SCENE");
   const departEvs = evs.filter(e => e.type === "DEPART_SCENE");
@@ -1477,7 +1562,9 @@ function viewTaskDetail(taskId){
   const startMileage = dispatchEv?.mileage ?? t.startMileage ?? null;
   const finalMileage = completedEv?.mileage ?? null;
   const distance = (startMileage != null && finalMileage != null) ? (finalMileage - startMileage) : null;
-  const duration = completedEv ? (completedEv.ts - (dispatchEv?.ts ?? new Date(t.createdAt||0).getTime())) : null;
+  // 洽公任務沒有 COMPLETED 事件，返營本身（statusKey completed）就是結束點。
+  const finalEv = isLiaison ? returningEv : completedEv;
+  const duration = finalEv ? (finalEv.ts - (dispatchEv?.ts ?? new Date(t.createdAt||0).getTime())) : null;
 
   const draft = state.reportDraft && state.reportDraft.taskId === taskId ? state.reportDraft : null;
   const canDoReport = canReport(p, t);
@@ -1487,14 +1574,15 @@ function viewTaskDetail(taskId){
   // 步驟接在後面用灰色佔位顯示，一次就看得出走到哪一步、之前每一步的細節、
   // 下一步是什麼，不用分開看兩份內容重複的區塊。
   const lastType = evs.length ? evs[evs.length - 1].type : null;
-  const lastIdx = lastType ? STEP_TYPES.indexOf(lastType) : -1;
+  const stepTypes = evDefs.map(e => e.type);
+  const lastIdx = lastType ? stepTypes.indexOf(lastType) : -1;
   const isTaskDone = s === "completed";
-  const upcomingSteps = EVENT_TYPES.filter((def, i) => i > lastIdx);
+  const upcomingSteps = evDefs.filter((def, i) => i > lastIdx);
   const progressHtml = `
-    <div class="section-label">勤務進度</div>
+    <div class="section-label">${isLiaison ? "洽公進度" : "勤務進度"}</div>
     <div class="stepper">
       ${evs.map((e, idx) => {
-        const def = EVENT_TYPES.find(d=>d.type===e.type);
+        const def = evDefs.find(d=>d.type===e.type);
         const cls = (idx === evs.length - 1 && !isTaskDone) ? "current" : "done";
         return `
         <div class="step-item ${cls}">
@@ -1520,9 +1608,9 @@ function viewTaskDetail(taskId){
   const rTypes = canDoReport ? reportableTypes(taskId) : [];
   let nextStepText;
   if (!canDoReport) nextStepText = "—（沒有回報權限）";
-  else if (s === "completed") nextStepText = "勤務已完成";
-  else if (lastType === "ARRIVED_SCENE" || lastType === "DEPART_SCENE") nextStepText = "前往下一個地點，或直接返回營區";
-  else nextStepText = rTypes.length ? EVENT_TYPES.find(e=>e.type===rTypes[0]).label : "—";
+  else if (s === "completed") nextStepText = isLiaison ? "洽公已完成" : "勤務已完成";
+  else if (!isLiaison && (lastType === "ARRIVED_SCENE" || lastType === "DEPART_SCENE")) nextStepText = "前往下一個地點，或直接返回營區";
+  else nextStepText = rTypes.length ? evDefs.find(e=>e.type===rTypes[0]).label : "—";
 
   const statusBlock = `
     <div class="detail-head">
@@ -1536,23 +1624,23 @@ function viewTaskDetail(taskId){
   let reportModal = "";
   let stickyBar = "";
   if (canDoReport && draft) {
-    const def = EVENT_TYPES.find(e=>e.type===draft.type);
-    const isFinal = draft.type === "COMPLETED";
+    const def = evDefs.find(e=>e.type===draft.type);
+    const isFinal = !isLiaison && draft.type === "COMPLETED";
     const lastEv = evs[evs.length - 1];
     const minBase = lastEv?.ts ?? dispatchEv?.ts ?? null;
     const minTime = minBase ? hhmmValue(new Date(minBase)) : "";
     // 第一次抵達的地點已經在建立勤務時填過了（任務本身的「地點」欄位），
     // 不用再問一次；只有離開後前往第二個（含以後）地點時才需要重新輸入，
-    // 表單標題也改叫「抵達下一個地點」，跟第一次抵達做出區別。
-    const isNextStop = draft.type === "ARRIVED_SCENE" && arrivedEvs.length > 0;
+    // 表單標題也改叫「抵達下一個地點」，跟第一次抵達做出區別。洽公任務地點
+    // 單一、沒有多站分岔，不會有這個情況。
+    const isNextStop = !isLiaison && draft.type === "ARRIVED_SCENE" && arrivedEvs.length > 0;
     const formTitle = isNextStop ? "抵達下一個地點" : def.label;
     // 開始返營時，車輛都還沒有移動（人剛在原地回報），里程理論上跟上一筆回報
     // 的里程一樣，直接帶入避免重複輸入；前往下一個地點時雖然會開車移動，但
     // 先帶入上一筆已知里程當作起始值，使用者只要接著往上改，不用從零開始
-    // 整串重打一次；抵達營區才是完全空白，需要手動輸入。
-    // （離開現場已經改成自動補寫，見 __submitReport）
+    // 整串重打一次；抵達營區才是完全空白，需要手動輸入。洽公任務不追蹤里程。
     const lastMileageEv = evs.slice().reverse().find(e => e.mileage != null);
-    const prefillMileage = (draft.type === "RETURNING" || isNextStop) && lastMileageEv ? lastMileageEv.mileage : null;
+    const prefillMileage = !isLiaison && (draft.type === "RETURNING" || isNextStop) && lastMileageEv ? lastMileageEv.mileage : null;
     // 回報表單改用彈窗（跟基礎資料管理的新增/編輯彈窗同一套元件），避免表單
     // 內容被固定在畫面底部的 Sticky Action Bar 擋住看不到。
     // 除了備註以外都是必填欄位，避免漏填造成紀錄不完整。
@@ -1570,7 +1658,7 @@ function viewTaskDetail(taskId){
                 <button type="button" class="icon-btn" style="flex-shrink:0;" onclick="window.__resetReportTime()">套用目前</button>
               </div>
             </div>
-            <div class="field"><label>里程（公里）</label><input id="rf-mileage" type="number" inputmode="decimal" placeholder="目前里程" value="${prefillMileage != null ? prefillMileage : ''}" required></div>
+            ${!isLiaison ? `<div class="field"><label>里程（公里）</label><input id="rf-mileage" type="number" inputmode="decimal" placeholder="目前里程" value="${prefillMileage != null ? prefillMileage : ''}" required></div>` : ""}
             ${isFinal ? `<div class="field"><label>剩餘油量</label><select id="rf-fuel" required>${fuelOptions("")}</select></div>` : ""}
             <div class="field"><label>備註（選填）</label><input id="rf-note" placeholder="備註"></div>
             <button class="btn-primary" type="submit">確認送出</button>
@@ -1579,14 +1667,14 @@ function viewTaskDetail(taskId){
         </div>
       </div>`;
   } else if (canDoReport && !draft && rTypes.length === 1) {
-    const def = EVENT_TYPES.find(e=>e.type===rTypes[0]);
+    const def = evDefs.find(e=>e.type===rTypes[0]);
     stickyBar = `
       <div class="sticky-action-bar">
         <button class="btn-primary" onclick="window.__startReport('${t.id}','${rTypes[0]}')">${icon(def.icon,20)} ${def.label}</button>
       </div>
       <div class="sticky-bar-spacer"></div>`;
   } else if (canDoReport && !draft && rTypes.length === 2) {
-    // 唯一的分岔點：離開現場之後，前往下一個地點或直接返回營區
+    // 唯一的分岔點（僅勤務類任務才會出現）：離開現場之後，前往下一個地點或直接返回營區
     stickyBar = `
       <div class="sticky-action-bar">
         <button class="btn-primary" onclick="window.__startReport('${t.id}','ARRIVED_SCENE')">${icon('pin',20)} 前往下一個地點</button>
@@ -1599,9 +1687,9 @@ function viewTaskDetail(taskId){
   const editingEvent = canDoReport && state.eventEditId ? evs.find(e => e.id === state.eventEditId) : null;
   let eventEditModal = "";
   if (editingEvent) {
-    const def = EVENT_TYPES.find(x=>x.type===editingEvent.type);
-    const isFinalEv = editingEvent.type === "COMPLETED";
-    const hasLocationField = editingEvent.type === "ARRIVED_SCENE";
+    const def = evDefs.find(x=>x.type===editingEvent.type);
+    const isFinalEv = !isLiaison && editingEvent.type === "COMPLETED";
+    const hasLocationField = !isLiaison && editingEvent.type === "ARRIVED_SCENE";
     eventEditModal = `
       <div class="modal-overlay" onclick="if(event.target===this) window.__cancelEditEvent()">
         <div class="modal-sheet">
@@ -1610,7 +1698,7 @@ function viewTaskDetail(taskId){
           <form onsubmit="event.preventDefault(); window.__submitEditEvent('${editingEvent.id}')">
             ${hasLocationField ? `<div class="field"><label>地點</label><input id="ee-location" value="${esc(editingEvent.location||'')}" placeholder="例如：加油站、OO超商"></div>` : ""}
             <div class="field"><label>時間</label><input id="ee-time" type="time" value="${hhmmValue(new Date(editingEvent.ts))}" required></div>
-            <div class="field"><label>里程（公里）</label><input id="ee-mileage" type="number" inputmode="decimal" value="${editingEvent.mileage!=null?editingEvent.mileage:''}" required></div>
+            ${!isLiaison ? `<div class="field"><label>里程（公里）</label><input id="ee-mileage" type="number" inputmode="decimal" value="${editingEvent.mileage!=null?editingEvent.mileage:''}" required></div>` : ""}
             ${isFinalEv ? `<div class="field"><label>剩餘油量</label><select id="ee-fuel" required>${fuelOptions(editingEvent.endFuel||"")}</select></div>` : ""}
             <div class="field"><label>備註（選填）</label><input id="ee-note" value="${esc(editingEvent.note||'')}" placeholder="備註"></div>
             <button class="btn-primary" type="submit">儲存修正</button>
@@ -1619,6 +1707,10 @@ function viewTaskDetail(taskId){
         </div>
       </div>`;
   }
+
+  const personnelLine = isLiaison && Array.isArray(t.personnel) && t.personnel.length
+    ? t.personnel.map(n => nameWithRank(n, t.unit)).join('、')
+    : '';
 
   return `
     <div class="back-row" style="justify-content:space-between;">
@@ -1633,16 +1725,25 @@ function viewTaskDetail(taskId){
         ${statusBadge(s)}
       </div>
       <div class="kv">
-        <div class="k">車號</div><div class="v">${esc(t.vehicle||'—')}</div>
+        ${isLiaison
+          ? `<div class="k">人員</div><div class="v">${personnelLine || '—'}</div>`
+          : `<div class="k">車號</div><div class="v">${esc(t.vehicle||'—')}</div>`}
         <div class="k">地點</div><div class="v">${esc(t.location||'—')}</div>
+        ${!isLiaison ? `
         <div class="k">車長</div><div class="v">${crewLabel(t.crewLeader, t.unit)}</div>
         <div class="k">駕駛</div><div class="v">${crewLabel(t.driver, t.unit)}</div>
-        <div class="k">紀錄器</div><div class="v">${esc((t.recorders||[]).join('、') || '—')}</div>
+        <div class="k">紀錄器</div><div class="v">${esc((t.recorders||[]).join('、') || '—')}</div>` : ""}
         <div class="k">建立人</div><div class="v">${nameWithRank(t.createdByName, t.unit)}</div>
         <div class="k">建立時間</div><div class="v">${fmtTime(new Date(t.createdAt||0).getTime())}</div>
       </div>
     </div>
-    ${canDoReport ? `
+    ${canDoReport ? (isLiaison ? `
+    <div class="section-label">洽公資訊</div>
+    <div class="detail-head">
+      <div class="kv">
+        <div class="k">任務耗時</div><div class="v">${duration!=null ? durationLabel(duration) : '—'}</div>
+      </div>
+    </div>` : `
     <div class="section-label">勤務資訊</div>
     <div class="detail-head">
       <div class="kv">
@@ -1656,7 +1757,7 @@ function viewTaskDetail(taskId){
         <div class="k">行駛公里</div><div class="v">${distance!=null ? distance+' km' : '—'}</div>
         <div class="k">任務耗時</div><div class="v">${duration!=null ? durationLabel(duration) : '—'}</div>
       </div>
-    </div>` : ""}
+    </div>`) : ""}
     ${stickyBar}
     ${reportModal}
     ${eventEditModal}
@@ -2358,31 +2459,46 @@ window.__clearRecordsQuery = () => {
 window.__setTasksTab = (key) => { state.tasksTab = key; render(); };
 window.__setStatsPeriod = (key) => { state.statsPeriod = key; render(); };
 window.__setCreateTaskUnit = (code) => { state.createTaskUnit = code; render(); };
-window.__createTask = (ev, unit) => {
+window.__setCreateTaskType = (key) => { state.createTaskType = key; render(); };
+window.__createTask = (ev, unit, type) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
-  const recorders = f.getAll("recorders");
-  const startMileage = f.get("startMileage");
-  createTask({
-    unit, title: f.get("title"), vehicle: f.get("vehicle"), location: f.get("location"),
-    crewLeader: f.get("crewLeader"), driver: f.get("driver"), recorders,
-    startMileage: startMileage ? Number(startMileage) : null,
-    startFuel: f.get("startFuel"), notes: f.get("notes")
-  });
+  if (type === "liaison") {
+    const personnel = f.getAll("personnel");
+    if (!personnel.length) { showToast("請至少選擇一位人員"); return; }
+    createTask({ unit, type, title: f.get("title"), location: f.get("location"), personnel, notes: f.get("notes") });
+  } else {
+    const recorders = f.getAll("recorders");
+    const startMileage = f.get("startMileage");
+    createTask({
+      unit, type: "duty", title: f.get("title"), vehicle: f.get("vehicle"), location: f.get("location"),
+      crewLeader: f.get("crewLeader"), driver: f.get("driver"), recorders,
+      startMileage: startMileage ? Number(startMileage) : null,
+      startFuel: f.get("startFuel"), notes: f.get("notes")
+    });
+  }
   ev.target.reset();
   nav({ name: "tasks" });
 };
 window.__saveTaskEdit = (ev, taskId) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
-  const recorders = f.getAll("recorders");
-  const startMileage = f.get("startMileage");
-  updateTask(taskId, {
-    title: f.get("title"), vehicle: f.get("vehicle"), location: f.get("location"),
-    crewLeader: f.get("crewLeader"), driver: f.get("driver"), recorders,
-    startMileage: startMileage ? Number(startMileage) : null,
-    startFuel: f.get("startFuel"), notes: f.get("notes")
-  }).then(() => nav({ name: "task", id: taskId }))
+  const t = state.tasks.find(x => x.id === taskId);
+  if (t && t.type === "liaison" && !f.getAll("personnel").length) { showToast("請至少選擇一位人員"); return; }
+  const fields = (t && t.type === "liaison")
+    ? { title: f.get("title"), location: f.get("location"), personnel: f.getAll("personnel"), notes: f.get("notes") }
+    : (() => {
+        const recorders = f.getAll("recorders");
+        const startMileage = f.get("startMileage");
+        return {
+          title: f.get("title"), vehicle: f.get("vehicle"), location: f.get("location"),
+          crewLeader: f.get("crewLeader"), driver: f.get("driver"), recorders,
+          startMileage: startMileage ? Number(startMileage) : null,
+          startFuel: f.get("startFuel"), notes: f.get("notes")
+        };
+      })();
+  updateTask(taskId, fields)
+    .then(() => nav({ name: "task", id: taskId }))
     .catch(err => showToast(`更新失敗：[${err.code||'?'}] ${err.message}`));
 };
 
