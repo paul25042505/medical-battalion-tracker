@@ -388,7 +388,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-76-fix-auto-depart-timestamp";
+const BUILD_TAG = "2026-07-04-77-fix-event-order-tiebreak";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -615,16 +615,22 @@ function changedSince(cacheKey, value){
 /* =========================================================
    4) 狀態推導（純函式：Event 陣列 → 狀態）
    ========================================================= */
+// 使用者填的時間只精確到分鐘，「前往下一個地點」自動補寫的離開現場又刻意
+// 沿用同一分鐘（見 reportDepartThenContinue），timestamp 打平手時光靠 ts
+// 排序，順序就要看 Firestore 回傳文件的順序（並無保證），時間軸可能被打亂。
+// seq 是實際寫入當下的毫秒數，跟使用者填的時間無關，只在打平手時當穩定的
+// 次要排序依據，確保「寫入順序」跟「顯示順序」一致。
+function eventOrderCompare(a, b){ return (a.ts||0) - (b.ts||0) || (a.seq||0) - (b.seq||0); }
 function deriveStatus(taskId) {
   const t = state.tasks.find(x => x.id === taskId);
-  const evs = state.events.filter(e => e.taskId === taskId).sort((a,b) => (a.ts||0) - (b.ts||0));
+  const evs = state.events.filter(e => e.taskId === taskId).sort(eventOrderCompare);
   if (evs.length === 0) return "pending";
   const last = evs[evs.length - 1];
   const def = eventTypesFor(t).find(d => d.type === last.type);
   return def ? def.statusKey : "pending";
 }
 function taskEvents(taskId) {
-  return state.events.filter(e => e.taskId === taskId).sort((a,b) => (a.ts||0) - (b.ts||0));
+  return state.events.filter(e => e.taskId === taskId).sort(eventOrderCompare);
 }
 function eventByType(taskId, type){
   return taskEvents(taskId).find(e => e.type === type) || null;
@@ -736,7 +742,13 @@ async function addEvent(taskId, type, extra, opts){
     timestamp: new Date(),
     userId: state.user.uid,
     userName: state.profile.displayName || state.user.displayName || state.user.email,
-    ...extra
+    ...extra,
+    // 使用者可回報的時間只有精確到分鐘，「前往下一個地點」自動補寫的離開現場
+    // 又刻意沿用同一分鐘的時間，兩筆事件的 timestamp 完全相同時，光靠 ts 排序
+    // 順序就要看 Firestore 回傳文件的順序（並無保證），可能兩三下就把時間軸
+    // 順序弄反。seq 是實際寫入當下的毫秒數，跟使用者填的時間無關，只用來在
+    // timestamp 打平手時當作穩定的次要排序依據，確保寫入順序＝顯示順序。
+    seq: Date.now()
   });
   if (!opts?.silent) {
     showToast(`已回報：${eventTypesFor(task).find(e=>e.type===type).label}`);
@@ -773,7 +785,8 @@ async function createTask(data){
     timestamp: new Date(),
     userId: state.user.uid,
     userName: state.profile.displayName || state.user.email,
-    ...(data.startMileage != null ? { mileage: data.startMileage } : {})
+    ...(data.startMileage != null ? { mileage: data.startMileage } : {}),
+    seq: Date.now()
   });
   showToast(data.type === "liaison" ? "洽公已建立並標記出發" : "勤務已建立並標記出勤");
   if (tasksPoll) tasksPoll.refreshNow();
@@ -941,7 +954,7 @@ function startDataListeners(){
   eventsPoll = poll(async () => {
     const docs = await fsListCollection("events");
     docs.forEach(d => { d.ts = d.timestamp ? new Date(d.timestamp).getTime() : Date.now(); });
-    docs.sort((a,b) => a.ts - b.ts);
+    docs.sort(eventOrderCompare);
     const changed = changedSince("events", docs);
     state.events = docs;
     if (changed) safeRender();
