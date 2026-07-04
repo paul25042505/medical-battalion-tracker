@@ -232,6 +232,15 @@
   }
   .field textarea{resize:vertical; min-height:72px;}
   .field input:disabled{color:var(--muted); background:var(--bg);}
+  /* iOS Safari 的 time/date 原生控制項有時會忽略外層寬度限制而撐出版面，強制鎖定尺寸 */
+  input[type="date"], input[type="time"]{
+    font-size:16px !important;
+    box-sizing:border-box !important;
+    -webkit-appearance:none !important;
+    width:100% !important;
+    height:44px;
+    display:block;
+  }
   .btn-primary{width:100%; background:var(--blue); color:#fff; font-weight:700; border:none; padding:15px; border-radius:var(--radius-sm); font-size:16px; margin-top:4px; box-shadow:0 4px 14px rgba(0,102,255,0.25);}
   .admin-row{display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; background:var(--panel); border:1px solid var(--border); padding:14px 16px; border-radius:var(--radius-md); margin-bottom:10px; box-shadow:var(--shadow-xs);}
   .admin-row .name{font-size:15px; font-weight:600; word-break:break-word;}
@@ -363,7 +372,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-72-merge-progress-timeline";
+const BUILD_TAG = "2026-07-04-73-fix-time-input-overflow";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
