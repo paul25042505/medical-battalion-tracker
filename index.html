@@ -221,7 +221,9 @@
   .tl-dot.dispatch{background:var(--red);} .tl-dot.onscene{background:var(--amber);}
   .tl-dot.transit{background:#6B23C7;}
   .tl-dot.returning{background:var(--blue);} .tl-dot.completed{background:var(--green);}
+  .tl-head{display:flex; align-items:center; justify-content:space-between; gap:8px;}
   .tl-type{font-weight:700; font-size:15px;}
+  .tl-edit-btn{background:none; border:none; color:var(--blue); font-size:13px; font-weight:600; padding:2px 0; flex-shrink:0;}
   .tl-meta{font-family:var(--mono); font-size:13px; color:var(--muted); font-weight:500; margin-top:3px;}
   .tl-note{font-size:14px; color:var(--text); margin-top:5px;}
 
@@ -369,7 +371,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-70-report-form-refinements";
+const BUILD_TAG = "2026-07-04-71-edit-reported-events";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -550,6 +552,7 @@ const state = {
   personnel: [], vehicles: [], recorders: [],
   route: { name: "home" }, adminTab: "tasks",
   reportDraft: null, // { taskId, type }
+  eventEditId: null, // 正在編輯哪一筆已回報事件（時間/里程填錯時修正用）
   recordsFilter: { period: "today", unit: "", vehicle: "", title: "", location: "", status: "", person: "", customDate: "" },
   recordsFiltersExpanded: false,
   recordsApplied: null, // 查詢後的篩選條件快照；null 代表尚未按下查詢
@@ -706,6 +709,12 @@ async function reportDepartThenContinue(taskId, nextType, extra){
   if (nextType === "RETURNING" && extra.timestamp) departExtra.timestamp = extra.timestamp;
   await addEvent(taskId, "DEPART_SCENE", departExtra, { silent: true });
   await addEvent(taskId, nextType, extra);
+}
+// 時間、里程有時候會填寫錯誤，回報後仍要能修正，不能整筆事件唯讀鎖死。
+async function updateEvent(id, fields){
+  await fsSetDoc(`events/${id}`, fields);
+  showToast("已更新回報紀錄");
+  if (eventsPoll) eventsPoll.refreshNow();
 }
 async function createTask(data){
   const created = await fsAddDoc("tasks", { ...data, createdAt: new Date(), createdBy: state.user.uid, createdByName: state.profile.displayName || state.user.email });
@@ -1048,6 +1057,15 @@ function hhmmValue(d){
 function todayAt(hhmm){
   const [h, m] = hhmm.split(':').map(Number);
   const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d;
+}
+// 編輯既有回報時，時間欄位一樣只顯示「時:分」，但要沿用該筆回報「原本
+// 的日期」（可能不是今天），不能用 todayAt()，否則修正時間會被誤改到
+// 今天的日期。
+function dateAt(baseMs, hhmm){
+  const [h, m] = hhmm.split(':').map(Number);
+  const d = new Date(baseMs);
   d.setHours(h, m, 0, 0);
   return d;
 }
@@ -1558,6 +1576,31 @@ function viewTaskDetail(taskId){
       <div class="sticky-bar-spacer"></div>`;
   }
 
+  // ---- 編輯既有回報（時間/里程有時候會填錯，需要能修正）----
+  const editingEvent = canDoReport && state.eventEditId ? evs.find(e => e.id === state.eventEditId) : null;
+  let eventEditModal = "";
+  if (editingEvent) {
+    const def = EVENT_TYPES.find(x=>x.type===editingEvent.type);
+    const isFinalEv = editingEvent.type === "COMPLETED";
+    const hasLocationField = editingEvent.type === "ARRIVED_SCENE";
+    eventEditModal = `
+      <div class="modal-overlay" onclick="if(event.target===this) window.__cancelEditEvent()">
+        <div class="modal-sheet">
+          <div class="modal-handle"></div>
+          <div class="modal-title">${icon(def.icon,19)} 編輯回報：${def.label}</div>
+          <form onsubmit="event.preventDefault(); window.__submitEditEvent('${editingEvent.id}')">
+            ${hasLocationField ? `<div class="field"><label>地點</label><input id="ee-location" value="${esc(editingEvent.location||'')}" placeholder="例如：加油站、OO超商"></div>` : ""}
+            <div class="field"><label>時間</label><input id="ee-time" type="time" value="${hhmmValue(new Date(editingEvent.ts))}" required></div>
+            <div class="field"><label>里程（公里）</label><input id="ee-mileage" type="number" inputmode="decimal" value="${editingEvent.mileage!=null?editingEvent.mileage:''}" required></div>
+            ${isFinalEv ? `<div class="field"><label>剩餘油量</label><select id="ee-fuel" required>${fuelOptions(editingEvent.endFuel||"")}</select></div>` : ""}
+            <div class="field"><label>備註（選填）</label><input id="ee-note" value="${esc(editingEvent.note||'')}" placeholder="備註"></div>
+            <button class="btn-primary" type="submit">儲存修正</button>
+            <button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__cancelEditEvent()">取消</button>
+          </form>
+        </div>
+      </div>`;
+  }
+
   const timeline = evs.length ? `
     <div class="timeline">
       ${evs.slice().reverse().map(e => {
@@ -1565,7 +1608,10 @@ function viewTaskDetail(taskId){
         return `
         <div class="tl-item">
           <div class="tl-dot ${def?.statusKey}"></div>
-          <div class="tl-type">${def ? icon(def.icon,17) : ''} ${def?.label}${e.location ? '：'+esc(e.location) : ''}</div>
+          <div class="tl-head">
+            <div class="tl-type">${def ? icon(def.icon,17) : ''} ${def?.label}${e.location ? '：'+esc(e.location) : ''}</div>
+            ${canDoReport ? `<button class="tl-edit-btn" onclick="window.__editEvent('${e.id}')">編輯</button>` : ""}
+          </div>
           <div class="tl-meta">${fmtTime(e.ts)} · ${nameWithRank(e.userName, e.unit)}${e.mileage!=null ? ' · ' + e.mileage + ' km' : ''}</div>
           ${e.note ? `<div class="tl-note">${esc(e.note)}</div>` : ""}
         </div>`;
@@ -1609,10 +1655,11 @@ function viewTaskDetail(taskId){
         <div class="k">任務耗時</div><div class="v">${duration!=null ? durationLabel(duration) : '—'}</div>
       </div>
     </div>` : ""}
-    <div class="section-label">勤務時間軸（唯讀，不可修改）</div>
+    <div class="section-label">勤務時間軸</div>
     ${timeline}
     ${stickyBar}
     ${reportModal}
+    ${eventEditModal}
   `;
 }
 
@@ -2153,7 +2200,7 @@ const NAV_ITEMS = [
 function safeRender(){
   const ae = document.activeElement;
   if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT")) return;
-  if (state.profileEditing || state.baseDataModal || state.reportDraft) return;
+  if (state.profileEditing || state.baseDataModal || state.reportDraft || state.eventEditId) return;
   render();
 }
 
@@ -2240,6 +2287,24 @@ window.__submitReport = (taskId, type) => {
   } else {
     addEvent(taskId, type, extra);
   }
+};
+window.__editEvent = (id) => { state.eventEditId = id; render(); };
+window.__cancelEditEvent = () => { state.eventEditId = null; render(); };
+window.__submitEditEvent = (id) => {
+  const ev = state.events.find(e => e.id === id);
+  const locationEl = document.getElementById("ee-location");
+  const timeEl = document.getElementById("ee-time");
+  const mileageEl = document.getElementById("ee-mileage");
+  const fuelEl = document.getElementById("ee-fuel");
+  const noteEl = document.getElementById("ee-note");
+  const fields = {};
+  if (timeEl && timeEl.value && ev) fields.timestamp = dateAt(ev.ts, timeEl.value);
+  if (mileageEl && mileageEl.value !== "") fields.mileage = Number(mileageEl.value);
+  if (locationEl) fields.location = locationEl.value || "";
+  if (fuelEl) fields.endFuel = fuelEl.value || "";
+  if (noteEl) fields.note = noteEl.value || "";
+  state.eventEditId = null;
+  updateEvent(id, fields).catch(err => showToast(`更新失敗：[${err.code||'?'}] ${err.message||err}`));
 };
 window.__setAdminTab = (t) => { state.adminTab = t; state._usersCache = null; render(); };
 window.__deleteTask = (id) => { if (confirm("確定刪除此任務？此動作無法復原。")) deleteTask(id); };
