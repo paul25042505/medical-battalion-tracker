@@ -388,7 +388,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-75-liaison-task-type";
+const BUILD_TAG = "2026-07-04-76-fix-auto-depart-timestamp";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -751,7 +751,10 @@ async function reportDepartThenContinue(taskId, nextType, extra){
   const evs = taskEvents(taskId);
   const lastMileageEv = evs.slice().reverse().find(e => e.mileage != null);
   const departExtra = { mileage: lastMileageEv ? lastMileageEv.mileage : null };
-  if (nextType === "RETURNING" && extra.timestamp) departExtra.timestamp = extra.timestamp;
+  // 離開現場沿用使用者剛剛送出的時間（不管是前往下一個地點還是返營），
+  // 因為兩者本來就是同一刻；否則會預設成「表單送出當下的伺服器時間」，
+  // 使用者若不是立刻填表，這個自動補寫的時間就會失真、甚至比抵達時間還晚。
+  if (extra.timestamp) departExtra.timestamp = extra.timestamp;
   await addEvent(taskId, "DEPART_SCENE", departExtra, { silent: true });
   await addEvent(taskId, nextType, extra);
 }
