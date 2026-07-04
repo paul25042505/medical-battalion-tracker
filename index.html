@@ -388,7 +388,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-77-fix-event-order-tiebreak";
+const BUILD_TAG = "2026-07-04-78-separate-depart-arrive-steps";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -615,11 +615,11 @@ function changedSince(cacheKey, value){
 /* =========================================================
    4) 狀態推導（純函式：Event 陣列 → 狀態）
    ========================================================= */
-// 使用者填的時間只精確到分鐘，「前往下一個地點」自動補寫的離開現場又刻意
-// 沿用同一分鐘（見 reportDepartThenContinue），timestamp 打平手時光靠 ts
-// 排序，順序就要看 Firestore 回傳文件的順序（並無保證），時間軸可能被打亂。
-// seq 是實際寫入當下的毫秒數，跟使用者填的時間無關，只在打平手時當穩定的
-// 次要排序依據，確保「寫入順序」跟「顯示順序」一致。
+// 使用者填的時間只精確到分鐘，同一分鐘內回報兩筆事件時（例如連續兩個動作
+// 都在同一分鐘內完成），timestamp 打平手光靠 ts 排序，順序就要看 Firestore
+// 回傳文件的順序（並無保證），時間軸可能被打亂。seq 是實際寫入當下的毫秒
+// 數，跟使用者填的時間無關，只在打平手時當穩定的次要排序依據，確保
+// 「寫入順序」跟「顯示順序」一致。
 function eventOrderCompare(a, b){ return (a.ts||0) - (b.ts||0) || (a.seq||0) - (b.seq||0); }
 function deriveStatus(taskId) {
   const t = state.tasks.find(x => x.id === taskId);
@@ -638,10 +638,9 @@ function eventByType(taskId, type){
 // Workflow 導向：除了已抵達現場之後（可能前往下一個地點、也可能直接返營，
 // 真正需要分岔）以外，任何時候都只有「一個」下一步動作，讓使用者不用自己
 // 判斷流程，只要照系統提示做下一步就好。
-// 「離開現場」不再是使用者要另外確認的一個步驟——離開現場一定跟前一筆抵達
-// 同一個地點、同一個里程，沒有東西好額外填，所以改成在使用者選擇「前往
-// 下一個地點」或「返回營區」時自動、安靜地補寫在後面（見 addEvent 呼叫端
-// 的 reportDepartThenContinue），避免同樣的時間/里程要填兩次。
+// 離開現場跟抵達下一個地點是兩個不同時刻（中間有移動時間），必須各自回報
+// 一次時間/里程，不能假設同一刻直接合併成一個動作——否則抵達下一站填的
+// 時間會被誤套用成離開現場的時間，時間軸就會失真甚至順序顛倒。
 function reportableTypes(taskId){
   if (deriveStatus(taskId) === "completed") return [];
   const t = state.tasks.find(x => x.id === taskId);
@@ -655,7 +654,11 @@ function reportableTypes(taskId){
     return [];
   }
   if (!lastType || lastType === "DISPATCH") return ["ARRIVED_SCENE"];
-  if (lastType === "ARRIVED_SCENE" || lastType === "DEPART_SCENE") return ["ARRIVED_SCENE", "RETURNING"]; // 唯一的分岔點
+  if (lastType === "ARRIVED_SCENE") return ["DEPART_SCENE", "RETURNING"]; // 唯一的分岔點
+  // 離開現場後車輛正在移動，還沒抵達下一個地點，所以下一步只會是「抵達」；
+  // 離開跟抵達是兩個不同時刻（中間有移動時間），必須分開回報各自的時間/里程，
+  // 不能像返營那樣直接假設同一刻，否則抵達時間會被錯誤地套用成離開時間。
+  if (lastType === "DEPART_SCENE") return ["ARRIVED_SCENE"];
   if (lastType === "RETURNING") return ["COMPLETED"];
   return [];
 }
@@ -735,7 +738,7 @@ function endRolePreview(){
 /* =========================================================
    6) Firestore 動作
    ========================================================= */
-async function addEvent(taskId, type, extra, opts){
+async function addEvent(taskId, type, extra){
   const task = state.tasks.find(t => t.id === taskId);
   await fsAddDoc("events", {
     taskId, type, unit: task ? task.unit : "",
@@ -743,32 +746,13 @@ async function addEvent(taskId, type, extra, opts){
     userId: state.user.uid,
     userName: state.profile.displayName || state.user.displayName || state.user.email,
     ...extra,
-    // 使用者可回報的時間只有精確到分鐘，「前往下一個地點」自動補寫的離開現場
-    // 又刻意沿用同一分鐘的時間，兩筆事件的 timestamp 完全相同時，光靠 ts 排序
-    // 順序就要看 Firestore 回傳文件的順序（並無保證），可能兩三下就把時間軸
-    // 順序弄反。seq 是實際寫入當下的毫秒數，跟使用者填的時間無關，只用來在
-    // timestamp 打平手時當作穩定的次要排序依據，確保寫入順序＝顯示順序。
+    // seq 是實際寫入當下的毫秒數，跟使用者填的顯示時間無關，只在使用者填的
+    // timestamp（只精確到分鐘）打平手時當作穩定的次要排序依據，確保時間軸
+    // 顯示順序＝寫入順序，不受 Firestore 文件列表回傳順序（並無保證）影響。
     seq: Date.now()
   });
-  if (!opts?.silent) {
-    showToast(`已回報：${eventTypesFor(task).find(e=>e.type===type).label}`);
-    if (eventsPoll) eventsPoll.refreshNow();
-  }
-}
-// 「離開現場」一定跟前一筆抵達同一個地點、同一個里程，沒有東西好額外填，
-// 所以選擇「前往下一個地點」或「返回營區」時自動在背後補寫一筆離開現場
-// （沿用最後一筆已知里程；若是直接返營，時間也直接沿用返營當下送出的
-// 時間，因為兩者本來就是同一刻），使用者不需要把同樣的時間/里程填兩次。
-async function reportDepartThenContinue(taskId, nextType, extra){
-  const evs = taskEvents(taskId);
-  const lastMileageEv = evs.slice().reverse().find(e => e.mileage != null);
-  const departExtra = { mileage: lastMileageEv ? lastMileageEv.mileage : null };
-  // 離開現場沿用使用者剛剛送出的時間（不管是前往下一個地點還是返營），
-  // 因為兩者本來就是同一刻；否則會預設成「表單送出當下的伺服器時間」，
-  // 使用者若不是立刻填表，這個自動補寫的時間就會失真、甚至比抵達時間還晚。
-  if (extra.timestamp) departExtra.timestamp = extra.timestamp;
-  await addEvent(taskId, "DEPART_SCENE", departExtra, { silent: true });
-  await addEvent(taskId, nextType, extra);
+  showToast(`已回報：${eventTypesFor(task).find(e=>e.type===type).label}`);
+  if (eventsPoll) eventsPoll.refreshNow();
 }
 // 時間、里程有時候會填寫錯誤，回報後仍要能修正，不能整筆事件唯讀鎖死。
 async function updateEvent(id, fields){
@@ -1625,7 +1609,7 @@ function viewTaskDetail(taskId){
   let nextStepText;
   if (!canDoReport) nextStepText = "—（沒有回報權限）";
   else if (s === "completed") nextStepText = isLiaison ? "洽公已完成" : "勤務已完成";
-  else if (!isLiaison && (lastType === "ARRIVED_SCENE" || lastType === "DEPART_SCENE")) nextStepText = "前往下一個地點，或直接返回營區";
+  else if (!isLiaison && lastType === "ARRIVED_SCENE") nextStepText = "前往下一個地點，或直接返回營區";
   else nextStepText = rTypes.length ? evDefs.find(e=>e.type===rTypes[0]).label : "—";
 
   const statusBlock = `
@@ -1651,12 +1635,13 @@ function viewTaskDetail(taskId){
     // 單一、沒有多站分岔，不會有這個情況。
     const isNextStop = !isLiaison && draft.type === "ARRIVED_SCENE" && arrivedEvs.length > 0;
     const formTitle = isNextStop ? "抵達下一個地點" : def.label;
-    // 開始返營時，車輛都還沒有移動（人剛在原地回報），里程理論上跟上一筆回報
-    // 的里程一樣，直接帶入避免重複輸入；前往下一個地點時雖然會開車移動，但
-    // 先帶入上一筆已知里程當作起始值，使用者只要接著往上改，不用從零開始
-    // 整串重打一次；抵達營區才是完全空白，需要手動輸入。洽公任務不追蹤里程。
+    // 離開現場、開始返營的當下，車輛都還沒有移動（人剛在原地回報），里程
+    // 理論上跟上一筆回報的里程一樣，直接帶入避免重複輸入；抵達下一個地點
+    // 是移動之後才回報，先帶入上一筆已知里程當作起始值，使用者只要接著往
+    // 上改，不用從零開始整串重打一次；抵達營區才是完全空白，需要手動輸入。
+    // 洽公任務不追蹤里程。
     const lastMileageEv = evs.slice().reverse().find(e => e.mileage != null);
-    const prefillMileage = !isLiaison && (draft.type === "RETURNING" || isNextStop) && lastMileageEv ? lastMileageEv.mileage : null;
+    const prefillMileage = !isLiaison && (draft.type === "RETURNING" || draft.type === "DEPART_SCENE" || isNextStop) && lastMileageEv ? lastMileageEv.mileage : null;
     // 回報表單改用彈窗（跟基礎資料管理的新增/編輯彈窗同一套元件），避免表單
     // 內容被固定在畫面底部的 Sticky Action Bar 擋住看不到。
     // 除了備註以外都是必填欄位，避免漏填造成紀錄不完整。
@@ -1684,16 +1669,20 @@ function viewTaskDetail(taskId){
       </div>`;
   } else if (canDoReport && !draft && rTypes.length === 1) {
     const def = evDefs.find(e=>e.type===rTypes[0]);
+    // 離開現場後回頭要回報的「抵達」是抵達下一個地點，跟第一次抵達現場要分開講清楚。
+    const btnLabel = (!isLiaison && rTypes[0] === "ARRIVED_SCENE" && lastType === "DEPART_SCENE") ? "抵達下一個地點" : def.label;
     stickyBar = `
       <div class="sticky-action-bar">
-        <button class="btn-primary" onclick="window.__startReport('${t.id}','${rTypes[0]}')">${icon(def.icon,20)} ${def.label}</button>
+        <button class="btn-primary" onclick="window.__startReport('${t.id}','${rTypes[0]}')">${icon(def.icon,20)} ${btnLabel}</button>
       </div>
       <div class="sticky-bar-spacer"></div>`;
   } else if (canDoReport && !draft && rTypes.length === 2) {
-    // 唯一的分岔點（僅勤務類任務才會出現）：離開現場之後，前往下一個地點或直接返回營區
+    // 唯一的分岔點（僅勤務類任務才會出現）：抵達現場之後，離開前往下一個地點
+    // （這裡回報的是「離開現場」本身，抵達下一站要等真的到了才另外回報，
+    // 兩者是不同時刻，不能混在同一次動作裡）或直接返回營區。
     stickyBar = `
       <div class="sticky-action-bar">
-        <button class="btn-primary" onclick="window.__startReport('${t.id}','ARRIVED_SCENE')">${icon('pin',20)} 前往下一個地點</button>
+        <button class="btn-primary" onclick="window.__startReport('${t.id}','DEPART_SCENE')">${icon('depart',20)} 前往下一個地點</button>
         <button class="btn-primary green" onclick="window.__startReport('${t.id}','RETURNING')">${icon('home',20)} 返回營區</button>
       </div>
       <div class="sticky-bar-spacer"></div>`;
@@ -2395,16 +2384,11 @@ window.__submitReport = (taskId, type) => {
   if (fuelEl && fuelEl.value) extra.endFuel = fuelEl.value;
   if (timeEl && timeEl.value) extra.timestamp = todayAt(timeEl.value);
   if (locationEl && locationEl.value) extra.location = locationEl.value;
-  const evs = taskEvents(taskId);
-  const lastType = evs.length ? evs[evs.length - 1].type : null;
-  // 從「已抵達現場」狀態選擇前往下一個地點或返回營區時，自動補一筆離開現場。
-  const writeP = (lastType === "ARRIVED_SCENE" && (type === "ARRIVED_SCENE" || type === "RETURNING"))
-    ? reportDepartThenContinue(taskId, type, extra)
-    : addEvent(taskId, type, extra);
   // 寫入成功才關閉彈窗並重繪；失敗（例如權限被拒）要留在原畫面讓使用者看到
   // 錯誤訊息並可重試，不能還沒確認寫入結果就先把草稿清掉。
-  writeP.then(() => { state.reportDraft = null; render(); })
-        .catch(err => showToast(`回報失敗：[${err.code||'?'}] ${err.message||err}`));
+  addEvent(taskId, type, extra)
+    .then(() => { state.reportDraft = null; render(); })
+    .catch(err => showToast(`回報失敗：[${err.code||'?'}] ${err.message||err}`));
 };
 window.__editEvent = (id) => { state.eventEditId = id; render(); };
 window.__cancelEditEvent = () => { state.eventEditId = null; render(); };
