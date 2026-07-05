@@ -143,6 +143,19 @@
   .task-crew{display:flex; flex-direction:column; gap:6px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border); font-size:14px; color:var(--text); font-family:var(--mono); font-weight:500;}
   .empty{color:var(--muted); font-size:15.5px; text-align:center; padding:46px 22px; border:1px dashed var(--border-strong); border-radius:var(--radius-lg);}
 
+  /* ---- 患者狀況：突發狀況時記錄生命徵象/主訴，任務卡片凸顯提示 ---- */
+  .task-card.has-patient{border-color:rgba(255,59,48,0.35); box-shadow:0 0 0 1px rgba(255,59,48,0.16), var(--shadow-sm);}
+  .task-card.has-patient::before{background:var(--red); width:6px;}
+  .patient-badge{
+    display:inline-flex; align-items:center; gap:4px; padding:5px 10px; border-radius:999px;
+    background:var(--red); color:#fff; font-size:12px; font-weight:700; white-space:nowrap;
+  }
+  .patient-card{border-color:rgba(255,59,48,0.3);}
+  .vitals-list{margin-top:10px; display:flex; flex-direction:column; gap:14px;}
+  .vitals-entry{padding-top:10px; border-top:1px solid var(--border);}
+  .vitals-entry:first-child{padding-top:0; border-top:none;}
+  .vitals-grid{display:flex; flex-wrap:wrap; gap:8px 16px; margin-top:5px; font-family:var(--mono); font-size:13.5px; color:var(--text); font-weight:500;}
+
   /* ---- home ---- */
   .home-date{font-size:15px; color:var(--muted); font-weight:600; font-family:var(--mono); margin-bottom:16px;}
   .weather-card{
@@ -397,7 +410,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-83-app-icon";
+const BUILD_TAG = "2026-07-04-84-patient-vitals-hospitals";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -589,14 +602,23 @@ function fuelOptions(sel){
 }
 
 /* =========================================================
+   2e) 患者狀況／醫院資訊：突發狀況時記錄生命徵象與主訴，
+   並提供鄰近急救責任醫院查詢（等級、電話）。
+   ========================================================= */
+const HOSPITAL_LEVELS = ["重度級", "中度級", "一般級"];
+const HOSPITAL_COUNTIES = ["臺中市", "嘉義市", "嘉義縣"];
+
+/* =========================================================
    3) 全域狀態
    ========================================================= */
 const state = {
   user: null, profile: null, tasks: [], events: [],
   personnel: [], vehicles: [], recorders: [],
+  hospitals: [], vitals: [], // 醫院資訊（急救責任等級/電話）、患者生命徵象/主訴紀錄
   route: { name: "home" }, adminTab: "tasks",
   reportDraft: null, // { taskId, type }
   eventEditId: null, // 正在編輯哪一筆已回報事件（時間/里程填錯時修正用）
+  vitalsModal: null, // { taskId, id } | null；id 為 null 代表新增一筆生命徵象紀錄
   recordsFilter: { period: "today", unit: "", vehicle: "", title: "", location: "", status: "", person: "", customDate: "" },
   recordsFiltersExpanded: false,
   recordsApplied: null, // 查詢後的篩選條件快照；null 代表尚未按下查詢
@@ -612,6 +634,7 @@ const state = {
 };
 let tasksPoll = null, eventsPoll = null, profilePoll = null;
 let personnelPoll = null, vehiclesPoll = null, recordersPoll = null;
+let hospitalsPoll = null, vitalsPoll = null;
 // 只有資料真的變動時才重繪畫面，避免每次背景輪詢都整頁重畫造成畫面閃爍/捲動位置跳動。
 const lastJson = {};
 function changedSince(cacheKey, value){
@@ -870,25 +893,48 @@ async function addRecorder(unit, code){
   await fsAddDoc("recorders", { unit, code, active: true });
   showToast("已新增行車紀錄器"); if (recordersPoll) recordersPoll.refreshNow();
 }
-async function toggleBaseDataActive(coll, id, active){
-  await fsSetDoc(`${coll}/${id}`, { active: !active });
+async function addHospital(county, name, level, phone, note){
+  await fsAddDoc("hospitals", { county, name, level, phone: phone||"", note: note||"" });
+  showToast("已新增醫院"); if (hospitalsPoll) hospitalsPoll.refreshNow();
+}
+function refreshBaseDataPoll(coll){
   if (coll === "personnel" && personnelPoll) personnelPoll.refreshNow();
   if (coll === "vehicles" && vehiclesPoll) vehiclesPoll.refreshNow();
   if (coll === "recorders" && recordersPoll) recordersPoll.refreshNow();
+  if (coll === "hospitals" && hospitalsPoll) hospitalsPoll.refreshNow();
+}
+async function toggleBaseDataActive(coll, id, active){
+  await fsSetDoc(`${coll}/${id}`, { active: !active });
+  refreshBaseDataPoll(coll);
 }
 async function deleteBaseData(coll, id){
   await fsDeleteDoc(`${coll}/${id}`);
   showToast("已刪除");
-  if (coll === "personnel" && personnelPoll) personnelPoll.refreshNow();
-  if (coll === "vehicles" && vehiclesPoll) vehiclesPoll.refreshNow();
-  if (coll === "recorders" && recordersPoll) recordersPoll.refreshNow();
+  refreshBaseDataPoll(coll);
 }
 async function updateBaseData(coll, id, fields){
   await fsSetDoc(`${coll}/${id}`, fields);
   showToast("已更新");
-  if (coll === "personnel" && personnelPoll) personnelPoll.refreshNow();
-  if (coll === "vehicles" && vehiclesPoll) vehiclesPoll.refreshNow();
-  if (coll === "recorders" && recordersPoll) recordersPoll.refreshNow();
+  refreshBaseDataPoll(coll);
+}
+/* ---- 患者狀況：突發狀況時記錄生命徵象／主訴，可持續新增觀察病人變化趨勢 ---- */
+async function addVitalsEntry(taskId, data){
+  const task = state.tasks.find(t => t.id === taskId);
+  await fsAddDoc("vitals", {
+    taskId, unit: task ? task.unit : "",
+    timestamp: new Date(),
+    userId: state.user.uid,
+    userName: state.profile.displayName || state.user.displayName || state.user.email,
+    ...data,
+    seq: Date.now()
+  });
+  showToast("已記錄患者狀況");
+  if (vitalsPoll) vitalsPoll.refreshNow();
+}
+async function updateVitalsEntry(id, fields){
+  await fsSetDoc(`vitals/${id}`, fields);
+  showToast("已更新患者紀錄");
+  if (vitalsPoll) vitalsPoll.refreshNow();
 }
 /* =========================================================
    7) Auth 流程
@@ -970,13 +1016,28 @@ function startDataListeners(){
     state.recorders = docs;
     if (changed) safeRender();
   });
+  hospitalsPoll = poll(async () => {
+    const docs = await fsListCollection("hospitals");
+    const changed = changedSince("hospitals", docs);
+    state.hospitals = docs;
+    if (changed) safeRender();
+  });
+  vitalsPoll = poll(async () => {
+    const docs = await fsListCollection("vitals");
+    docs.forEach(d => { d.ts = d.timestamp ? new Date(d.timestamp).getTime() : Date.now(); });
+    docs.sort(eventOrderCompare);
+    const changed = changedSince("vitals", docs);
+    state.vitals = docs;
+    if (changed) safeRender();
+  });
   ensureUnitsSeeded();
 }
 function cleanupListeners(){
-  [tasksPoll, eventsPoll, profilePoll, personnelPoll, vehiclesPoll, recordersPoll].forEach(p => p && p.stop());
+  [tasksPoll, eventsPoll, profilePoll, personnelPoll, vehiclesPoll, recordersPoll, hospitalsPoll, vitalsPoll].forEach(p => p && p.stop());
   for (const k in lastJson) delete lastJson[k];
-  tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = null;
+  tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = hospitalsPoll = vitalsPoll = null;
   state.tasks = []; state.events = []; state.personnel = []; state.vehicles = []; state.recorders = [];
+  state.hospitals = []; state.vitals = [];
   state.previewActive = false; state.realRoleUnit = null;
 }
 // 系統固定為營部／第一連／第二連三個單位；首次啟用時自動補建 units 文件，
@@ -1143,6 +1204,8 @@ function nav(route){
   if (personnelPoll) personnelPoll.refreshNow();
   if (vehiclesPoll) vehiclesPoll.refreshNow();
   if (recordersPoll) recordersPoll.refreshNow();
+  if (hospitalsPoll) hospitalsPoll.refreshNow();
+  if (vitalsPoll) vitalsPoll.refreshNow();
 }
 function esc(s){ return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -1166,7 +1229,9 @@ const ICON_PATHS = {
   rain:    `<path d="M7.5 15a4 4 0 0 1-.7-7.9 5 5 0 0 1 9.6-1.6A4.3 4.3 0 0 1 16.3 15Z"/><path d="M8 18.5 7 21M12.5 18.5 11.5 21M17 18.5 16 21"/>`,
   check:   `<path d="M5 13l4.5 4.5L19 7"/>`,
   chart:   `<path d="M4 20V10"/><path d="M11 20V4"/><path d="M18 20v-7"/>`,
-  chevronDown: `<path d="M5 8.5 12 15.5 19 8.5"/>`
+  chevronDown: `<path d="M5 8.5 12 15.5 19 8.5"/>`,
+  heartbeat: `<path d="M2 12h4l2-6.5 4 15 3-11 2 2.5h5"/>`,
+  hospital: `<rect x="5" y="9" width="14" height="12" rx="1"/><path d="M9.5 21v-5.5h5V21"/><path d="M12 4v4.5M9.8 6.2h4.4"/>`
 };
 function icon(name, size){
   size = size || 20;
@@ -1286,14 +1351,20 @@ function taskCard(t){
     : currentLocation
       ? (inTransit ? `前往 ${esc(currentLocation)} 中` : esc(currentLocation))
       : "";
+  // 有患者記錄的任務要在卡片上凸顯出來，讓人一眼就看得到，不會被其他一般
+  // 任務蓋過去（首頁清單排序見 viewHome，這裡只負責視覺樣式）。
+  const hasPatient = state.vitals.some(v => v.taskId === t.id);
   return `
-  <div class="task-card ${taskCardClass(s)}" onclick="if(!event.target.closest('a')) window.__nav({name:'task', id:'${t.id}'})">
+  <div class="task-card ${taskCardClass(s)}${hasPatient ? ' has-patient' : ''}" onclick="if(!event.target.closest('a')) window.__nav({name:'task', id:'${t.id}'})">
     <div class="task-top">
       <div>
         <p class="task-title">${esc(t.title)}</p>
         <div class="task-meta">${isLiaison ? '洽公' : esc(t.vehicle||'—')} · ${esc(t.location||'—')}</div>
       </div>
-      ${statusBadge(s)}
+      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+        ${hasPatient ? `<span class="patient-badge">${icon('alert',13)} 有患者</span>` : ""}
+        ${statusBadge(s)}
+      </div>
     </div>
     <div class="task-crew">
       ${locationLine ? `<span>目前位置：${locationLine}</span>` : ""}
@@ -1359,9 +1430,15 @@ function viewHome(){
   // 「進行中」統計直接沿用這份清單的數量，確保上面數字跟下面實際列出的
   // 卡片一定對得上；不能只算「今天建立」的任務，否則跨日還在進行中的
   // 勤務（例如昨天出勤、今天還沒返營）會出現在下面清單卻沒被算進數字。
+  // 有患者記錄的任務排最前面，突發狀況不會被其他一般任務蓋過去、漏看。
   const activeTasks = tasks
     .filter(t => deriveStatus(t.id) !== "completed")
-    .sort((a,b) => unitLabel(a.unit).localeCompare(unitLabel(b.unit)));
+    .sort((a,b) => {
+      const pa = state.vitals.some(v=>v.taskId===a.id) ? 0 : 1;
+      const pb = state.vitals.some(v=>v.taskId===b.id) ? 0 : 1;
+      if (pa !== pb) return pa - pb;
+      return unitLabel(a.unit).localeCompare(unitLabel(b.unit));
+    });
   const fleetSection = activeTasks.length
     ? activeTasks.map(taskCard).join("")
     : `<div class="empty">目前沒有車輛執行中</div>`;
@@ -1655,6 +1732,39 @@ function viewTaskDetail(taskId){
       </div>
     </div>`;
 
+  // ---- 患者狀況：任何進行中的任務，遇到突發狀況都能記錄生命徵象／主訴，
+  // 不綁定特定任務類型或當下的勤務進度階段。可持續新增，形成時間序列方便
+  // 看出病人狀況變化。首頁／任務卡片會依此凸顯有患者的任務（見 taskCard）。
+  const taskVitals = state.vitals.filter(v => v.taskId === taskId).sort(eventOrderCompare);
+  const hasPatient = taskVitals.length > 0;
+  const latestComplaint = taskVitals.slice().reverse().find(v => v.complaint)?.complaint || "";
+  const vitalsSection = canDoReport || hasPatient ? `
+    <div class="section-label">患者狀況</div>
+    <div class="detail-head patient-card">
+      ${hasPatient ? `
+        <div class="kv"><div class="k">主訴</div><div class="v">${esc(latestComplaint || '—')}</div></div>
+        <div class="vitals-list">
+          ${taskVitals.map(v => `
+            <div class="vitals-entry">
+              <div class="step-head">
+                <span class="step-meta">${fmtTime(v.ts)} · ${nameWithRank(v.userName, v.unit)}</span>
+                ${canDoReport ? `<button class="tl-edit-btn" onclick="window.__editVitals('${taskId}','${v.id}')">編輯</button>` : ""}
+              </div>
+              <div class="vitals-grid">
+                ${v.bp ? `<span>血壓 ${esc(v.bp)}</span>` : ""}
+                ${v.hr ? `<span>心跳 ${esc(v.hr)}</span>` : ""}
+                ${v.rr ? `<span>呼吸 ${esc(v.rr)}</span>` : ""}
+                ${v.spo2 ? `<span>SpO2 ${esc(v.spo2)}%</span>` : ""}
+                ${v.temp ? `<span>體溫 ${esc(v.temp)}°C</span>` : ""}
+                ${v.gcs ? `<span>GCS ${esc(v.gcs)}</span>` : ""}
+              </div>
+              ${v.note ? `<div class="step-note">${esc(v.note)}</div>` : ""}
+            </div>`).join("")}
+        </div>
+        ${canDoReport ? `<button class="icon-btn primary" style="width:100%;margin-top:10px;" onclick="window.__startVitals('${taskId}')">${icon('heartbeat',16)} 新增生命徵象</button>` : ""}
+      ` : `<button class="icon-btn danger" style="width:100%;" onclick="window.__startVitals('${taskId}')">${icon('alert',18)} 記錄患者狀況</button>`}
+    </div>` : "";
+
   // ---- 回報表單／Sticky Bottom Action Bar ----
   let reportModal = "";
   let stickyBar = "";
@@ -1753,6 +1863,40 @@ function viewTaskDetail(taskId){
     ? t.personnel.map(n => nameWithRank(n, t.unit)).join('、')
     : '';
 
+  // ---- 記錄／編輯生命徵象彈窗 ----
+  const vm = state.vitalsModal && state.vitalsModal.taskId === taskId ? state.vitalsModal : null;
+  let vitalsModal = "";
+  if (vm) {
+    const editingVitals = vm.id ? taskVitals.find(v => v.id === vm.id) : null;
+    const isFirstVitals = !editingVitals && !hasPatient;
+    vitalsModal = `
+      <div class="modal-overlay" onclick="if(event.target===this) window.__cancelVitals()">
+        <div class="modal-sheet">
+          <div class="modal-handle"></div>
+          <div class="modal-title">${icon('heartbeat',19)} ${editingVitals ? '編輯患者紀錄' : '記錄患者狀況'}</div>
+          <form onsubmit="event.preventDefault(); window.__submitVitals('${taskId}'${editingVitals?`,'${editingVitals.id}'`:''})">
+            <div class="field"><label>主訴${isFirstVitals ? '' : '（選填，留空沿用先前主訴）'}</label><input id="vf-complaint" value="${esc(editingVitals?.complaint||'')}" placeholder="例如：胸痛、呼吸困難" ${isFirstVitals?'required':''}></div>
+            <div class="field">
+              <label>時間</label>
+              <div style="display:flex; gap:8px;">
+                <input id="vf-time" type="time" style="flex:1;" value="${hhmmValue(new Date(editingVitals?editingVitals.ts:Date.now()))}" required>
+                <button type="button" class="icon-btn" style="flex-shrink:0;" onclick="window.__resetVitalsTime()">套用目前</button>
+              </div>
+            </div>
+            <div class="field"><label>血壓（選填）</label><input id="vf-bp" placeholder="例如：120/80" value="${esc(editingVitals?.bp||'')}"></div>
+            <div class="field"><label>心跳 次/分（選填）</label><input id="vf-hr" type="number" inputmode="numeric" value="${esc(editingVitals?.hr||'')}"></div>
+            <div class="field"><label>呼吸 次/分（選填）</label><input id="vf-rr" type="number" inputmode="numeric" value="${esc(editingVitals?.rr||'')}"></div>
+            <div class="field"><label>血氧 SpO2 %（選填）</label><input id="vf-spo2" type="number" inputmode="numeric" value="${esc(editingVitals?.spo2||'')}"></div>
+            <div class="field"><label>體溫 °C（選填）</label><input id="vf-temp" type="number" step="0.1" inputmode="decimal" value="${esc(editingVitals?.temp||'')}"></div>
+            <div class="field"><label>意識程度 GCS（選填）</label><input id="vf-gcs" placeholder="例如：E4V5M6 或 15" value="${esc(editingVitals?.gcs||'')}"></div>
+            <div class="field"><label>備註（選填）</label><input id="vf-note" value="${esc(editingVitals?.note||'')}"></div>
+            <button class="btn-primary" type="submit">${editingVitals?'儲存修正':'送出紀錄'}</button>
+            <button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__cancelVitals()">取消</button>
+          </form>
+        </div>
+      </div>`;
+  }
+
   return `
     <div class="back-row" style="justify-content:space-between;">
       <button onclick="window.__nav({name:'tasks'})">‹ 返回列表</button>
@@ -1760,6 +1904,7 @@ function viewTaskDetail(taskId){
     </div>
     ${progressHtml}
     ${statusBlock}
+    ${vitalsSection}
     <div class="detail-head">
       <div class="task-top">
         <p class="task-title">${esc(t.title)}</p>
@@ -1802,6 +1947,7 @@ function viewTaskDetail(taskId){
     ${stickyBar}
     ${reportModal}
     ${eventEditModal}
+    ${vitalsModal}
   `;
 }
 
@@ -2014,6 +2160,7 @@ function viewProfile(){
   const quick = [
     { iconName:"bell", label:"通知", route:{name:"notifications"}, bg:"#FFE9E8", fg:"#C62828" },
     { iconName:"records", label:"勤務紀錄", route:{name:"records"}, bg:"#F2E9FE", fg:"#6B23C7" },
+    { iconName:"hospital", label:"醫院資訊", route:{name:"hospitals"}, bg:"#FFF2E0", fg:"#B45F00" },
     { iconName:"chart", label:"統計分析", route:{name:"stats"}, bg:"#E6F9EC", fg:"#177A34" },
     { iconName:"user", label:"編輯個人資料", action:"window.__editProfile()", bg:"#E8F1FF", fg:"#0056C7" }
   ].filter(q => q.show !== false);
@@ -2054,6 +2201,33 @@ function viewProfile(){
 /* =========================================================
    17b) 畫面：角色權限預覽選單（僅限 admin）
    ========================================================= */
+/* =========================================================
+   17c) 畫面：醫院資訊（急救責任等級／電話查詢，任何在職帳號皆可查看）
+   ========================================================= */
+function viewHospitals(){
+  const p = state.profile;
+  const canEdit = canManageBaseData(p);
+  const rows = state.hospitals.slice().sort((a,b) => HOSPITAL_LEVELS.indexOf(a.level) - HOSPITAL_LEVELS.indexOf(b.level) || (a.name||'').localeCompare(b.name||''));
+  return `
+    <div class="back-row"><button onclick="window.__nav({name:'profile'})">‹ 返回更多</button></div>
+    <div class="section-label">醫院資訊</div>
+    ${canEdit ? `<button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('hospitals', null, '')">${icon('plus',15)} 新增醫院</button>` : ""}
+    ${rows.length ? rows.map(x => `
+      <div class="admin-row">
+        <div>
+          <div class="name">${esc(x.name)}</div>
+          <div class="sub">${esc(x.county||'—')} · ${esc(x.level||'—')}${x.phone?` · <a href="tel:${esc(x.phone)}" class="phone-link" style="text-decoration:none;">${esc(x.phone)}</a>`:''}</div>
+          ${x.note ? `<div class="sub">${esc(x.note)}</div>` : ""}
+        </div>
+        ${canEdit ? `
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="icon-btn" onclick="window.__openBaseDataModal('hospitals','${x.id}','')">編輯</button>
+          <button class="icon-btn danger" onclick="window.__deleteBaseData('hospitals','${x.id}')">刪除</button>
+        </div>` : ""}
+      </div>`).join("") : `<div class="empty">尚無醫院資料${canEdit ? '，請點上方新增' : ''}</div>`}
+  `;
+}
+
 function viewRolePreview(){
   const p = state.profile;
   if (!canManageUsers(p)) return `<div class="empty">您沒有使用此功能的權限</div>`;
@@ -2150,7 +2324,8 @@ function viewAdminTasks(){
 const BASEDATA_TABS = [
   { key:"personnel", label:"人員" },
   { key:"vehicles", label:"車輛" },
-  { key:"recorders", label:"行車紀錄器" }
+  { key:"recorders", label:"行車紀錄器" },
+  { key:"hospitals", label:"醫院" }
 ];
 function viewAdminBaseData(){
   const p = state.profile;
@@ -2159,15 +2334,32 @@ function viewAdminBaseData(){
 
   if (!unit) return `<div class="empty">您尚未被指派單位，請聯繫管理員。</div>`;
 
-  const unitTabs = canSwitch ? `
-    <div class="tabs2">
-      ${UNITS.map(u => `<div class="tab2 ${unit===u.code?'active':''}" onclick="window.__setBaseDataUnit('${u.code}')">${u.label}</div>`).join("")}
-    </div>` : `<div class="section-label">${unitLabel(unit)}</div>`;
-
   const subTabs = `
     <div class="tabs2">
       ${BASEDATA_TABS.map(t => `<div class="tab2 ${state.baseDataTab===t.key?'active':''}" onclick="window.__setBaseDataTab('${t.key}')">${t.label}</div>`).join("")}
     </div>`;
+
+  // 醫院資訊是全營共用的參考資料，不像人員/車輛/行車紀錄器綁定特定單位，
+  // 不需要單位切換頁籤。
+  if (state.baseDataTab === "hospitals") {
+    const rows = state.hospitals.slice().sort((a,b) => HOSPITAL_LEVELS.indexOf(a.level) - HOSPITAL_LEVELS.indexOf(b.level) || (a.name||'').localeCompare(b.name||''));
+    const body = `
+      <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('hospitals', null, '')">${icon('plus',15)} 新增醫院</button>
+      ${rows.length ? rows.map(x => `
+        <div class="admin-row">
+          <div><div class="name">${esc(x.name)}</div><div class="sub">${esc(x.county||'—')} · ${esc(x.level||'—')}${x.phone?' · '+esc(x.phone):''}</div>${x.note?`<div class="sub">${esc(x.note)}</div>`:""}</div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="icon-btn" onclick="window.__openBaseDataModal('hospitals','${x.id}','')">編輯</button>
+            <button class="icon-btn danger" onclick="window.__deleteBaseData('hospitals','${x.id}')">刪除</button>
+          </div>
+        </div>`).join("") : `<div class="empty">尚無醫院資料</div>`}`;
+    return `${subTabs}${body}`;
+  }
+
+  const unitTabs = canSwitch ? `
+    <div class="tabs2">
+      ${UNITS.map(u => `<div class="tab2 ${unit===u.code?'active':''}" onclick="window.__setBaseDataUnit('${u.code}')">${u.label}</div>`).join("")}
+    </div>` : `<div class="section-label">${unitLabel(unit)}</div>`;
 
   let body = "";
   if (state.baseDataTab === "personnel") {
@@ -2221,7 +2413,7 @@ function viewBaseDataModal(){
   const m = state.baseDataModal;
   if (!m) return "";
   const { coll, id, unit } = m;
-  const pool = coll === "personnel" ? state.personnel : coll === "vehicles" ? state.vehicles : state.recorders;
+  const pool = coll === "personnel" ? state.personnel : coll === "vehicles" ? state.vehicles : coll === "hospitals" ? state.hospitals : state.recorders;
   const editing = id ? pool.find(x => x.id === id) : null;
   let title, fields;
   if (coll === "personnel") {
@@ -2245,6 +2437,24 @@ function viewBaseDataModal(){
           ${VEHICLE_TYPES.map(t => `<option value="${t}" ${editing?.type===t?'selected':''}>${t}</option>`).join("")}
         </select>
       </div>`;
+  } else if (coll === "hospitals") {
+    title = editing ? "編輯醫院" : "新增醫院";
+    fields = `
+      <div class="field"><label>醫院名稱</label><input name="name" required value="${esc(editing?.name||'')}"></div>
+      <div class="field"><label>縣市</label>
+        <select name="county" required>
+          <option value="">請選擇縣市</option>
+          ${HOSPITAL_COUNTIES.map(c => `<option value="${c}" ${editing?.county===c?'selected':''}>${c}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field"><label>急救責任等級</label>
+        <select name="level" required>
+          <option value="">請選擇等級</option>
+          ${HOSPITAL_LEVELS.map(l => `<option value="${l}" ${editing?.level===l?'selected':''}>${l}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field"><label>電話</label><input name="phone" type="tel" inputmode="tel" value="${esc(editing?.phone||'')}" placeholder="總機或急診專線"></div>
+      <div class="field"><label>備註（選填）</label><input name="note" value="${esc(editing?.note||'')}" placeholder="例如：電話為總機，急診專線待確認"></div>`;
   } else {
     title = editing ? "編輯行車紀錄器" : "新增行車紀錄器";
     fields = `<div class="field"><label>編號</label><input name="code" required value="${esc(editing?.code||'')}"></div>`;
@@ -2320,6 +2530,7 @@ const ROUTE_VIEWS = {
   notifications: viewNotifications,
   profile: viewProfile,
   rolePreview: viewRolePreview,
+  hospitals: viewHospitals,
   admin: viewAdmin
 };
 const NAV_ITEMS = [
@@ -2342,7 +2553,7 @@ const NAV_ITEMS = [
 function safeRender(){
   const ae = document.activeElement;
   if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT")) return;
-  if (state.profileEditing || state.baseDataModal || state.reportDraft || state.eventEditId) return;
+  if (state.profileEditing || state.baseDataModal || state.reportDraft || state.eventEditId || state.vitalsModal) return;
   render();
 }
 
@@ -2460,6 +2671,33 @@ window.__submitEditEvent = (id) => {
     .then(() => { state.eventEditId = null; render(); })
     .catch(err => showToast(`更新失敗：[${err.code||'?'}] ${err.message||err}`));
 };
+window.__startVitals = (taskId) => { state.vitalsModal = { taskId, id: null }; render(); };
+window.__editVitals = (taskId, id) => { state.vitalsModal = { taskId, id }; render(); };
+window.__cancelVitals = () => { state.vitalsModal = null; render(); };
+window.__resetVitalsTime = () => {
+  const el = document.getElementById("vf-time");
+  if (el) el.value = hhmmValue(new Date());
+};
+window.__submitVitals = (taskId, id) => {
+  const get = (elId) => document.getElementById(elId)?.value || "";
+  const timeVal = get("vf-time");
+  const data = {
+    complaint: get("vf-complaint"), bp: get("vf-bp"), hr: get("vf-hr"), rr: get("vf-rr"),
+    spo2: get("vf-spo2"), temp: get("vf-temp"), gcs: get("vf-gcs"), note: get("vf-note")
+  };
+  let action;
+  if (id) {
+    const existing = state.vitals.find(v => v.id === id);
+    if (timeVal && existing) data.timestamp = dateAt(existing.ts, timeVal);
+    action = updateVitalsEntry(id, data);
+  } else {
+    if (timeVal) data.timestamp = todayAt(timeVal);
+    action = addVitalsEntry(taskId, data);
+  }
+  // 寫入成功才關閉彈窗並重繪；失敗要留在原畫面讓使用者看到錯誤訊息並可重試。
+  action.then(() => { state.vitalsModal = null; render(); })
+        .catch(err => showToast(`儲存失敗：[${err.code||'?'}] ${err.message||err}`));
+};
 window.__setAdminTab = (t) => { state.adminTab = t; state._usersCache = null; render(); };
 window.__deleteTask = (id) => { if (confirm("確定刪除此任務？此動作無法復原。")) deleteTask(id); };
 window.__forceEndTask = (id) => { if (confirm("確定強制結束此勤務？此動作無法復原。")) forceEndTask(id); };
@@ -2482,9 +2720,11 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
   const action = id
     ? (coll === "personnel" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"" })
        : coll === "vehicles" ? updateBaseData(coll, id, { plate: f.get("plate"), type: f.get("type") })
+       : coll === "hospitals" ? updateBaseData(coll, id, { name: f.get("name"), county: f.get("county"), level: f.get("level"), phone: f.get("phone")||"", note: f.get("note")||"" })
        : updateBaseData(coll, id, { code: f.get("code") }))
     : (coll === "personnel" ? addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone"))
        : coll === "vehicles" ? addVehicle(unit, f.get("plate"), f.get("type"))
+       : coll === "hospitals" ? addHospital(f.get("county"), f.get("name"), f.get("level"), f.get("phone"), f.get("note"))
        : addRecorder(unit, f.get("code")));
   action.then(() => { state.baseDataModal = null; render(); }).catch(baseDataErr);
 };
