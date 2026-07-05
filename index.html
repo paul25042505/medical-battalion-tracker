@@ -221,9 +221,10 @@
   .vitals-entry-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:9px;}
   .vitals-entry-time{font-family:var(--mono); font-size:var(--text-xs); color:var(--muted); font-weight:600;}
   /* 主訴是整份紀錄裡最關鍵的一句話：淡紅底、圓角、無粗外框，靠底色跟
-     字重凸顯，不是靠邊框。 */
+     字重凸顯，不是靠邊框。但只有這裡用粗體，其他文字保持一般字重，
+     才能真的凸顯出來，不然全部都粗體等於沒有重點。 */
   .vitals-entry-complaint{
-    font-size:var(--text-base); font-weight:800; color:var(--text); line-height:1.4;
+    font-size:var(--text-base); font-weight:700; color:var(--text); line-height:1.45;
     background:rgba(255,59,48,0.08); border-radius:var(--radius-md);
     padding:11px 13px; margin-bottom:12px;
   }
@@ -237,18 +238,19 @@
   }
   .vitals-stage-tag.alt{background:var(--panel-2); color:var(--muted);}
   .vitals-subdetail{font-size:var(--text-xs); color:var(--muted); line-height:1.7; margin-bottom:9px;}
-  /* 患者身分是重點資訊，不能跟其他次要文字一樣灰灰的不顯眼。 */
+  /* 患者身分是重點資訊，不能跟其他次要文字一樣灰灰的不顯眼，但也不用跟
+     主訴一樣粗，用淺色底＋一般粗體字（600）就足夠區隔。 */
   .vitals-patient-line{
-    display:flex; align-items:center; gap:7px; font-size:var(--text-sm); font-weight:800; color:var(--text);
+    display:flex; align-items:center; gap:7px; font-size:var(--text-sm); font-weight:600; color:var(--text);
     background:rgba(0,102,255,0.06); border-radius:var(--radius-md); padding:8px 10px; margin-bottom:10px;
   }
   .vitals-patient-line svg{color:var(--blue); flex-shrink:0;}
-  /* 主訴細節、過去病史、過敏史這些文字型的重要資訊，改成跟生命徵象數值
-     一樣「標籤淺灰、內容粗體深色」的排法，不要整段都灰灰的看不清楚。 */
+  /* 主訴細節、過去病史、過敏史這些文字型資訊：標籤淺灰小字、內容一般字重
+     （非粗體）、字級跟內文一致即可，不需要跟生命徵象數值搶視覺重量。 */
   .detail-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:10px var(--space-section); margin-bottom:10px;}
   .detail-item{display:flex; flex-direction:column; gap:var(--space-label-gap);}
-  .detail-item .lbl{font-size:var(--text-xs); color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.04em;}
-  .detail-item .val{font-size:var(--text-lg); font-weight:700; color:var(--text); line-height:1.3;}
+  .detail-item .lbl{font-size:var(--text-xs); color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;}
+  .detail-item .val{font-size:var(--text-base); font-weight:500; color:var(--text); line-height:1.4;}
   .gcs-hint-btn{
     display:inline-flex; align-items:center; gap:3px; background:none; border:none; color:var(--blue);
     font-size:var(--text-xs); font-weight:700; font-family:var(--mono); padding:0; margin-left:4px; vertical-align:middle;
@@ -257,12 +259,12 @@
     background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-md);
     padding:12px 14px; margin-bottom:10px; font-size:var(--text-xs); color:var(--text); line-height:1.7;
   }
-  /* 生命徵象：Label 在上（淺灰小字）、數值在下（24px Bold），跟其他
-     頁面的重點數值排法統一。 */
+  /* 生命徵象：Label 在上（淺灰小字）、數值在下，用等寬字體＋略大字級
+     跟一般文字做區隔，字重維持 600（非重粗體），才不會跟主訴搶焦點。 */
   .vitals-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(78px,1fr)); gap:14px var(--space-section);}
   .vitals-item{display:flex; flex-direction:column; gap:var(--space-label-gap);}
-  .vitals-item .lbl{font-size:var(--text-xs); color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.04em;}
-  .vitals-item .val{font-family:var(--mono); font-size:var(--text-lg); font-weight:700; color:var(--text);}
+  .vitals-item .lbl{font-size:var(--text-xs); color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;}
+  .vitals-item .val{font-family:var(--mono); font-size:var(--text-lg); font-weight:600; color:var(--text);}
 
   /* ---- home ---- */
   .home-date{font-size:var(--text-sm); color:var(--muted); font-weight:600; font-family:var(--mono); margin-bottom:16px;}
@@ -538,7 +540,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-05-103-treatments-plain-text-format";
+const BUILD_TAG = "2026-07-05-104-vitals-reduce-boldness";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
