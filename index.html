@@ -563,7 +563,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-113-login-logo";
+const BUILD_TAG = "2026-07-06-114-idle-auto-logout";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1108,10 +1108,36 @@ async function updateVitalsEntry(id, fields){
 function doLogin(){ signInWithPopup(auth, googleProvider).catch(e => showToast("登入失敗：" + e.message)); }
 function doLogout(){ signOut(auth); }
 
+// 閒置 8 小時自動登出：最後操作時間存在 localStorage（不是只靠頁面裡的
+// 計時器），這樣即使把 App 關掉、放在背景很久，甚至換一個分頁開，重新
+// 打開時只要距離上次操作超過 8 小時，一樣會被判定為逾時、強制登出，
+// 不會因為背景分頁計時器被瀏覽器暫停而失效。
+const IDLE_LOGOUT_MS = 8 * 60 * 60 * 1000;
+const IDLE_STORAGE_KEY = "medtrack_lastActivityAt";
+let lastActivityWriteAt = 0;
+function touchActivity(){
+  const now = Date.now();
+  if (now - lastActivityWriteAt < 30000) return; // 節流，不用每次操作都寫 localStorage
+  lastActivityWriteAt = now;
+  try { localStorage.setItem(IDLE_STORAGE_KEY, String(now)); } catch (e) {}
+}
+function isIdleTimedOut(){
+  let last;
+  try { last = Number(localStorage.getItem(IDLE_STORAGE_KEY)); } catch (e) { return false; }
+  return !!last && (Date.now() - last > IDLE_LOGOUT_MS);
+}
+
 onAuthStateChanged(auth, async (user) => {
   cleanupListeners();
+  if (user && isIdleTimedOut()) {
+    state.user = null; state.profile = null; render();
+    signOut(auth);
+    showToast("閒置超過 8 小時，已自動登出，請重新登入");
+    return;
+  }
   state.user = user;
   if (!user) { state.profile = null; render(); return; }
+  touchActivity();
 
   render(); // 立即顯示 spinner，避免畫面停留在登入頁
 
@@ -3372,6 +3398,20 @@ window.__saveTaskEdit = (ev, taskId) => {
     }
     sheet = null; startY = null; dragging = false;
   }, { passive: true });
+})();
+
+// 頁面持續開著（沒有整個關掉重開）時，也要能偵測到「開著但 8 小時沒操作」
+// 的情況：使用者操作就更新最後操作時間，每分鐘檢查一次是否已經超過門檻。
+(function setupIdleAutoLogout(){
+  ["click", "touchstart", "keydown", "scroll"].forEach(ev => {
+    window.addEventListener(ev, () => { if (state.user) touchActivity(); }, { passive: true });
+  });
+  setInterval(() => {
+    if (state.user && isIdleTimedOut()) {
+      doLogout();
+      showToast("閒置超過 8 小時，已自動登出，請重新登入");
+    }
+  }, 60000);
 })();
 
 render();
