@@ -194,6 +194,14 @@
   .vitals-entry-time{font-family:var(--mono); font-size:12.5px; color:var(--muted); font-weight:600;}
   .vitals-entry-complaint{font-size:13.5px; color:var(--text); margin-bottom:9px;}
   .vitals-entry-complaint b{color:var(--red);}
+  .vitals-stage-tag{
+    display:inline-block; padding:2px 7px; border-radius:6px; font-size:10.5px; font-weight:800;
+    background:rgba(0,102,255,0.12); color:var(--blue); margin-right:7px; vertical-align:middle;
+  }
+  .vitals-stage-tag.alt{background:var(--panel-2); color:var(--muted);}
+  .vitals-subdetail{font-size:13px; color:var(--muted); line-height:1.7; margin-bottom:9px;}
+  .vitals-treatments{display:flex; flex-wrap:wrap; gap:6px; margin-top:9px;}
+  .tag-pill{display:inline-block; padding:4px 10px; border-radius:999px; background:var(--panel-2); border:1px solid var(--border); font-size:12px; font-weight:600; color:var(--text);}
   .vitals-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(78px,1fr)); gap:10px 14px;}
   .vitals-item{display:flex; flex-direction:column; gap:2px;}
   .vitals-item .lbl{font-size:10.5px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.04em;}
@@ -465,7 +473,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-05-93-vitals-form-fixes";
+const BUILD_TAG = "2026-07-05-94-vitals-ems-structure";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -665,6 +673,13 @@ function fuelOptions(sel){
    ========================================================= */
 const HOSPITAL_LEVELS = ["重度級", "中度級", "一般級"];
 const HOSPITAL_COUNTIES = ["臺中市", "嘉義市", "嘉義縣"];
+
+// 比照救護紀錄表：意識狀態用 AVPU（清/痛/聲/否），過去病史、過敏史、處置項目
+// 只在初評（第一筆生命徵象紀錄）詢問一次，複測不用每次重填。
+const CONSCIOUSNESS_OPTIONS = ["清", "痛", "聲", "否"];
+const PAST_HISTORY_OPTIONS = ["糖尿病", "高血壓", "心臟疾病", "中風", "氣喘", "慢性阻塞性肺病", "肝臟疾病", "腎臟疾病", "癌症", "癲癇", "精神疾病", "其他", "不清楚", "無"];
+const ALLERGY_OPTIONS = ["藥物", "食物", "其他", "不清楚", "無"];
+const TREATMENT_OPTIONS = ["清洗傷口", "止血、包紮", "止血帶", "骨折固定", "保暖", "給氧", "CPR", "心理支持", "其他"];
 
 /* =========================================================
    3) 全域狀態
@@ -1299,6 +1314,16 @@ function icon(name, size){
   size = size || 20;
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;flex-shrink:0;">${ICON_PATHS[name]||''}</svg>`;
 }
+// 多選（checkbox）/單選（radio）標籤群組，用於過去病史／過敏史／處置項目／意識狀態。
+function chipGroup(name, options, selected, multi){
+  const type = multi ? "checkbox" : "radio";
+  const sel = multi ? (selected||[]) : null;
+  return `<div class="chip-select">${options.map(o => `
+    <label class="chip-option">
+      <input type="${type}" name="${name}" value="${esc(o)}" ${multi ? (sel.includes(o)?'checked':'') : (selected===o?'checked':'')}>
+      <span>${esc(o)}</span>
+    </label>`).join("")}</div>`;
+}
 
 /* =========================================================
    9) 畫面：登入 / 待審核
@@ -1927,6 +1952,10 @@ function viewTaskDetail(taskId){
   if (vm) {
     const editingVitals = vm.id ? taskVitals.find(v => v.id === vm.id) : null;
     const isFirstVitals = !editingVitals && !hasPatient;
+    // 「初評」＝該任務的第一筆生命徵象紀錄，比照救護紀錄表完整記錄結構化
+    // 主訴、過去病史、過敏史；「複測」＝後續紀錄，只需要生命徵象與本次處置，
+    // 病史/過敏史/主訴細節不用每次重問。
+    const isInitialEntry = editingVitals ? taskVitals[0]?.id === editingVitals.id : isFirstVitals;
     // 血壓拆成收縮壓／舒張壓兩格輸入，儲存時仍合併成「收縮/舒張」字串，
     // 沿用既有的 bp 欄位與所有顯示邏輯（時間軸、彈窗歷史列表皆顯示 120/80）。
     const [bpSys, bpDia] = (editingVitals?.bp || "").split("/");
@@ -1944,28 +1973,57 @@ function viewTaskDetail(taskId){
           <div class="modal-title">${icon('heartbeat',19)} ${editingVitals ? '編輯患者紀錄' : (hasPatient ? '患者紀錄' : '記錄患者狀況')}</div>
           ${showHistory ? `
           <div class="vitals-history">
-            ${taskVitals.map(v => `
+            ${taskVitals.map((v,i) => `
               <div class="vitals-entry">
                 <div class="vitals-entry-head">
-                  <span class="vitals-entry-time">${fmtTime(v.ts)} · ${nameWithRank(v.userName, v.unit)}</span>
+                  <span class="vitals-entry-time"><span class="vitals-stage-tag${i===0?'':' alt'}">${i===0?'初評':'複測'}</span>${fmtTime(v.ts)} · ${nameWithRank(v.userName, v.unit)}</span>
                   <button class="tl-edit-btn" type="button" onclick="window.__editVitals('${taskId}','${v.id}')">編輯</button>
                 </div>
                 ${v.complaint ? `<div class="vitals-entry-complaint"><b>主訴</b> ${esc(v.complaint)}</div>` : ""}
+                ${v.complaintQuality || v.complaintDuration || v.complaintOthers || v.spineCheck ? `
+                <div class="vitals-subdetail">
+                  ${v.complaintQuality ? `<div>怎麼不舒服：${esc(v.complaintQuality)}</div>` : ""}
+                  ${v.complaintDuration ? `<div>多久了：${esc(v.complaintDuration)}</div>` : ""}
+                  ${v.complaintOthers ? `<div>其他不適：${esc(v.complaintOthers)}</div>` : ""}
+                  ${v.spineCheck ? `<div>脊椎評估：${esc(v.spineCheck)}</div>` : ""}
+                </div>` : ""}
+                ${(v.pastHistory&&v.pastHistory.length) || (v.allergyHistory&&v.allergyHistory.length) ? `
+                <div class="vitals-subdetail">
+                  ${v.pastHistory&&v.pastHistory.length ? `<div>過去病史：${v.pastHistory.map(esc).join('、')}</div>` : ""}
+                  ${v.allergyHistory&&v.allergyHistory.length ? `<div>過敏史：${v.allergyHistory.map(esc).join('、')}</div>` : ""}
+                </div>` : ""}
                 <div class="vitals-grid">
+                  ${v.consciousness ? `<div class="vitals-item"><span class="lbl">意識</span><span class="val">${esc(v.consciousness)}</span></div>` : ""}
                   ${v.bp ? `<div class="vitals-item"><span class="lbl">血壓</span><span class="val">${esc(v.bp)}</span></div>` : ""}
                   ${v.hr ? `<div class="vitals-item"><span class="lbl">心跳</span><span class="val">${esc(v.hr)}</span></div>` : ""}
                   ${v.rr ? `<div class="vitals-item"><span class="lbl">呼吸</span><span class="val">${esc(v.rr)}</span></div>` : ""}
                   ${v.spo2 ? `<div class="vitals-item"><span class="lbl">SpO2</span><span class="val">${esc(v.spo2)}%</span></div>` : ""}
                   ${v.temp ? `<div class="vitals-item"><span class="lbl">體溫</span><span class="val">${esc(v.temp)}°C</span></div>` : ""}
                   ${v.gcs ? `<div class="vitals-item"><span class="lbl">GCS</span><span class="val">${esc(v.gcs)}</span></div>` : ""}
+                  ${v.glucose ? `<div class="vitals-item"><span class="lbl">血糖</span><span class="val">${esc(v.glucose)}</span></div>` : ""}
                 </div>
+                ${v.treatments&&v.treatments.length ? `<div class="vitals-treatments">${v.treatments.map(x=>`<span class="tag-pill">${esc(x)}</span>`).join("")}</div>` : ""}
                 ${v.note ? `<div class="step-note" style="margin-top:8px;">${esc(v.note)}</div>` : ""}
               </div>`).join("")}
           </div>
           <button class="icon-btn primary" type="button" style="width:100%; justify-content:center; padding:15px; font-size:16px;" onclick="window.__showAddVitalsForm('${taskId}')">${icon('plus',16)} 新增紀錄</button>` : ""}
           ${showForm ? `
           <form onsubmit="event.preventDefault(); window.__submitVitals('${taskId}'${editingVitals?`,'${editingVitals.id}'`:''})">
-            <div class="field"><label>主訴${isFirstVitals ? '' : '（選填，留空沿用先前主訴）'}</label><input id="vf-complaint" value="${esc(editingVitals?.complaint||'')}" placeholder="例如：胸痛、呼吸困難" ${isFirstVitals?'required':''}></div>
+            ${isInitialEntry ? `
+            <div class="section-label tight">主訴</div>
+            <div class="field"><label>1. 感覺哪裡不舒服？</label><input id="vf-complaint" value="${esc(editingVitals?.complaint||'')}" placeholder="例如：胸痛、呼吸困難" required></div>
+            <div class="field"><label>2. 感覺怎麼的不舒服？（選填）</label><input id="vf-complaint-quality" value="${esc(editingVitals?.complaintQuality||'')}" placeholder="例如：悶痛、刺痛"></div>
+            <div class="field"><label>3. 大約不舒服多久了？（選填）</label><input id="vf-complaint-duration" value="${esc(editingVitals?.complaintDuration||'')}" placeholder="例如：約五分鐘"></div>
+            <div class="field"><label>4. 還有其他地方不舒服嗎？（選填）</label><input id="vf-complaint-others" value="${esc(editingVitals?.complaintOthers||'')}" placeholder="沒有／請描述"></div>
+            <div class="field"><label>5. 評估脊椎是否損傷？（創傷患者，選填）</label><input id="vf-spine-check" value="${esc(editingVitals?.spineCheck||'')}" placeholder="例如：頸椎無痠麻痛"></div>
+            <div class="section-label tight">過去病史</div>
+            <div class="field">${chipGroup('vf-past-history', PAST_HISTORY_OPTIONS, editingVitals?.pastHistory||[], true)}</div>
+            <div class="section-label tight">過敏史</div>
+            <div class="field">${chipGroup('vf-allergy-history', ALLERGY_OPTIONS, editingVitals?.allergyHistory||[], true)}</div>
+            ` : `
+            <div class="field"><label>主訴（選填，留空沿用先前主訴）</label><input id="vf-complaint" value="${esc(editingVitals?.complaint||'')}" placeholder="例如：胸痛、呼吸困難"></div>
+            `}
+            <div class="section-label tight">生命徵象</div>
             <div class="field">
               <label>時間</label>
               <div style="display:flex; gap:8px;">
@@ -1973,6 +2031,7 @@ function viewTaskDetail(taskId){
                 <button type="button" class="icon-btn" style="flex-shrink:0;" onclick="window.__resetVitalsTime()">套用目前</button>
               </div>
             </div>
+            <div class="field"><label>意識狀態（選填）</label>${chipGroup('vf-consciousness', CONSCIOUSNESS_OPTIONS, editingVitals?.consciousness||'', false)}</div>
             <div class="field">
               <label>血壓（選填）</label>
               <div style="display:flex; align-items:center; gap:8px;">
@@ -1986,6 +2045,9 @@ function viewTaskDetail(taskId){
             <div class="field"><label>血氧 SpO2 %（選填）</label><input id="vf-spo2" type="text" inputmode="numeric" value="${esc(editingVitals?.spo2||'')}"></div>
             <div class="field"><label>體溫 °C（選填）</label><input id="vf-temp" type="text" inputmode="decimal" value="${esc(editingVitals?.temp||'')}"></div>
             <div class="field"><label>意識程度 GCS（選填）</label><input id="vf-gcs" placeholder="例如：E4V5M6 或 15" value="${esc(editingVitals?.gcs||'')}"></div>
+            <div class="field"><label>血糖值 mg/dL（選填）</label><input id="vf-glucose" type="text" inputmode="numeric" value="${esc(editingVitals?.glucose||'')}"></div>
+            <div class="section-label tight">處置項目</div>
+            <div class="field">${chipGroup('vf-treatments', TREATMENT_OPTIONS, editingVitals?.treatments||[], true)}</div>
             <div class="field"><label>備註（選填）</label><input id="vf-note" value="${esc(editingVitals?.note||'')}"></div>
             <button class="btn-primary" type="submit">${editingVitals?'儲存修正':'送出紀錄'}</button>
             ${backBtn}
@@ -2779,12 +2841,26 @@ window.__resetVitalsTime = () => {
 };
 window.__submitVitals = (taskId, id) => {
   const get = (elId) => document.getElementById(elId)?.value || "";
+  const checkedValues = (name) => [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(el => el.value);
   const timeVal = get("vf-time");
   const bpSys = get("vf-bp-sys"), bpDia = get("vf-bp-dia");
   const data = {
     complaint: get("vf-complaint"), bp: (bpSys || bpDia) ? `${bpSys}/${bpDia}` : "", hr: get("vf-hr"), rr: get("vf-rr"),
-    spo2: get("vf-spo2"), temp: get("vf-temp"), gcs: get("vf-gcs"), note: get("vf-note")
+    spo2: get("vf-spo2"), temp: get("vf-temp"), gcs: get("vf-gcs"), glucose: get("vf-glucose"),
+    consciousness: checkedValues("vf-consciousness")[0] || "",
+    treatments: checkedValues("vf-treatments"),
+    note: get("vf-note")
   };
+  // 主訴細節／過去病史／過敏史只有初評（表單裡才會渲染這些欄位）才需要寫入，
+  // 複測畫面沒有這些欄位，不寫入才不會誤把既有紀錄覆蓋成空白。
+  if (document.getElementById("vf-complaint-quality")) {
+    data.complaintQuality = get("vf-complaint-quality");
+    data.complaintDuration = get("vf-complaint-duration");
+    data.complaintOthers = get("vf-complaint-others");
+    data.spineCheck = get("vf-spine-check");
+    data.pastHistory = checkedValues("vf-past-history");
+    data.allergyHistory = checkedValues("vf-allergy-history");
+  }
   let action;
   if (id) {
     const existing = state.vitals.find(v => v.id === id);
