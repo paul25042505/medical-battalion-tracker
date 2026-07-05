@@ -188,6 +188,18 @@
   }
   .patient-card.has-record .patient-card-action{background:var(--red);}
   .vitals-history{margin-bottom:4px;}
+  /* 患者紀錄改成獨立頁面（不再是彈窗）後，欄位較多，分成一區一區的卡片，
+     比純文字的 section-label 更容易掃視、知道填到哪一段了。 */
+  .form-section{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:18px; margin-bottom:16px; box-shadow:var(--shadow-xs);}
+  .form-section-title{
+    font-size:15.5px; font-weight:800; color:var(--text); margin-bottom:16px; padding-bottom:12px;
+    border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px;
+  }
+  .form-section-title .step-num{
+    width:22px; height:22px; border-radius:50%; background:var(--blue); color:#fff; font-size:12px; font-weight:800;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .form-section .field:last-child{margin-bottom:0;}
   .vitals-entry{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 14px; margin-bottom:10px; box-shadow:var(--shadow-xs);}
   .vitals-entry:last-child{margin-bottom:0;}
   .vitals-entry-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:9px;}
@@ -473,7 +485,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-05-96-patient-basic-info";
+const BUILD_TAG = "2026-07-05-97-vitals-full-page";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -692,7 +704,6 @@ const state = {
   route: { name: "home" }, adminTab: "tasks",
   reportDraft: null, // { taskId, type }
   eventEditId: null, // 正在編輯哪一筆已回報事件（時間/里程填錯時修正用）
-  vitalsModal: null, // { taskId, id } | null；id 為 null 代表新增一筆生命徵象紀錄
   recordsFilter: { period: "today", unit: "", vehicle: "", title: "", location: "", status: "", person: "", customDate: "" },
   recordsFiltersExpanded: false,
   recordsApplied: null, // 查詢後的篩選條件快照；null 代表尚未按下查詢
@@ -1743,6 +1754,154 @@ function viewEditTask(taskId){
 }
 
 /* =========================================================
+   13b) 畫面：患者紀錄（獨立頁面，不是彈窗——欄位比照救護紀錄表補齊後
+   資料量變多，改成一頁一頁分區顯示，比塞在彈窗裡好操作）
+   ========================================================= */
+function viewVitalsPage(taskId, id, adding){
+  const p = state.profile;
+  const t = state.tasks.find(x => x.id === taskId);
+  if (!t) return `<div class="empty">找不到此任務</div>`;
+  const canDoReport = canReport(p, t);
+  const taskVitals = state.vitals.filter(v => v.taskId === taskId).sort(eventOrderCompare);
+  const hasPatient = taskVitals.length > 0;
+  if (!canDoReport && !hasPatient) return `<div class="empty">您沒有記錄患者狀況的權限</div>`;
+
+  const editingVitals = id ? taskVitals.find(v => v.id === id) : null;
+  const isFirstVitals = !editingVitals && !hasPatient;
+  // 「初評」＝該任務的第一筆生命徵象紀錄，比照救護紀錄表完整記錄患者基本
+  // 資料、結構化主訴、過去病史、過敏史；「複測」＝後續紀錄，只需要生命
+  // 徵象與本次處置，前面那些不用每次重問。
+  const isInitialEntry = editingVitals ? taskVitals[0]?.id === editingVitals.id : isFirstVitals;
+  // 血壓拆成收縮壓／舒張壓兩格輸入，儲存時仍合併成「收縮/舒張」字串，
+  // 沿用既有的 bp 欄位與所有顯示邏輯（時間軸、歷史紀錄清單皆顯示 120/80）。
+  const [bpSys, bpDia] = (editingVitals?.bp || "").split("/");
+  // 有既有紀錄時，預設只顯示歷史紀錄本身；新增紀錄改成要另外點按鈕，
+  // 才會切到表單頁面，避免清單跟表單擠在同一畫面。
+  const showHistory = !editingVitals && hasPatient && !adding;
+  const showForm = editingVitals || isFirstVitals || adding;
+  const backBtn = hasPatient
+    ? `<button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__backToVitalsHistory('${taskId}')">返回</button>`
+    : `<button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__nav({name:'task', id:'${taskId}'})">取消</button>`;
+
+  const historyHtml = showHistory ? `
+    <div class="vitals-history">
+      ${taskVitals.map((v,i) => `
+        <div class="vitals-entry">
+          <div class="vitals-entry-head">
+            <span class="vitals-entry-time"><span class="vitals-stage-tag${i===0?'':' alt'}">${i===0?'初評':'複測'}</span>${fmtTime(v.ts)} · ${nameWithRank(v.userName, v.unit)}</span>
+            ${canDoReport ? `<button class="tl-edit-btn" type="button" onclick="window.__editVitals('${taskId}','${v.id}')">編輯</button>` : ""}
+          </div>
+          ${v.patientName || v.patientUnit || v.patientRank || v.patientGender ? `
+          <div class="vitals-subdetail">
+            <div>患者：${[v.patientUnit, v.patientRank, v.patientName].filter(Boolean).map(esc).join('　')}${v.patientGender?`（${esc(v.patientGender)}）`:''}</div>
+          </div>` : ""}
+          ${v.complaint ? `<div class="vitals-entry-complaint"><b>主訴</b> ${esc(v.complaint)}</div>` : ""}
+          ${v.complaintQuality || v.complaintDuration || v.complaintOthers || v.spineCheck ? `
+          <div class="vitals-subdetail">
+            ${v.complaintQuality ? `<div>怎麼不舒服：${esc(v.complaintQuality)}</div>` : ""}
+            ${v.complaintDuration ? `<div>多久了：${esc(v.complaintDuration)}</div>` : ""}
+            ${v.complaintOthers ? `<div>其他不適：${esc(v.complaintOthers)}</div>` : ""}
+            ${v.spineCheck ? `<div>脊椎評估：${esc(v.spineCheck)}</div>` : ""}
+          </div>` : ""}
+          ${(v.pastHistory&&v.pastHistory.length) || (v.allergyHistory&&v.allergyHistory.length) ? `
+          <div class="vitals-subdetail">
+            ${v.pastHistory&&v.pastHistory.length ? `<div>過去病史：${v.pastHistory.map(esc).join('、')}</div>` : ""}
+            ${v.allergyHistory&&v.allergyHistory.length ? `<div>過敏史：${v.allergyHistory.map(esc).join('、')}</div>` : ""}
+          </div>` : ""}
+          <div class="vitals-grid">
+            ${v.consciousness ? `<div class="vitals-item"><span class="lbl">意識</span><span class="val">${esc(v.consciousness)}</span></div>` : ""}
+            ${v.bp ? `<div class="vitals-item"><span class="lbl">血壓</span><span class="val">${esc(v.bp)}</span></div>` : ""}
+            ${v.hr ? `<div class="vitals-item"><span class="lbl">心跳</span><span class="val">${esc(v.hr)}</span></div>` : ""}
+            ${v.rr ? `<div class="vitals-item"><span class="lbl">呼吸</span><span class="val">${esc(v.rr)}</span></div>` : ""}
+            ${v.spo2 ? `<div class="vitals-item"><span class="lbl">SpO2</span><span class="val">${esc(v.spo2)}%</span></div>` : ""}
+            ${v.temp ? `<div class="vitals-item"><span class="lbl">體溫</span><span class="val">${esc(v.temp)}°C</span></div>` : ""}
+            ${v.gcs ? `<div class="vitals-item"><span class="lbl">GCS</span><span class="val">${esc(v.gcs)}</span></div>` : ""}
+            ${v.glucose ? `<div class="vitals-item"><span class="lbl">血糖</span><span class="val">${esc(v.glucose)}</span></div>` : ""}
+          </div>
+          ${v.treatments&&v.treatments.length ? `<div class="vitals-treatments">${v.treatments.map(x=>`<span class="tag-pill">${esc(x)}</span>`).join("")}</div>` : ""}
+          ${v.note ? `<div class="step-note" style="margin-top:8px;">${esc(v.note)}</div>` : ""}
+        </div>`).join("")}
+    </div>
+    ${canDoReport ? `<button class="icon-btn primary" type="button" style="width:100%; justify-content:center; padding:15px; font-size:16px;" onclick="window.__showAddVitalsForm('${taskId}')">${icon('plus',16)} 新增紀錄</button>` : ""}
+  ` : "";
+
+  const formHtml = showForm ? `
+    <form onsubmit="event.preventDefault(); window.__submitVitals('${taskId}'${editingVitals?`,'${editingVitals.id}'`:''})">
+      ${isInitialEntry ? `
+      <div class="form-section">
+        <div class="form-section-title"><span class="step-num">1</span>患者基本資料</div>
+        <div class="field"><label>單位（選填）</label><input id="vf-patient-unit" value="${esc(editingVitals?.patientUnit||'')}" placeholder="例如：第一連"></div>
+        <div class="field"><label>級職（選填）</label><input id="vf-patient-rank" value="${esc(editingVitals?.patientRank||'')}" placeholder="例如：上等兵"></div>
+        <div class="field"><label>姓名（選填）</label><input id="vf-patient-name" value="${esc(editingVitals?.patientName||'')}" placeholder="例如：王小明"></div>
+        <div class="field"><label>性別（選填）</label>${chipGroup('vf-patient-gender', GENDER_OPTIONS, editingVitals?.patientGender||'', false)}</div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title"><span class="step-num">2</span>主訴</div>
+        <div class="field"><label>1. 感覺哪裡不舒服？</label><input id="vf-complaint" value="${esc(editingVitals?.complaint||'')}" placeholder="例如：胸痛、呼吸困難" required></div>
+        <div class="field"><label>2. 感覺怎麼的不舒服？（選填）</label><input id="vf-complaint-quality" value="${esc(editingVitals?.complaintQuality||'')}" placeholder="例如：悶痛、刺痛"></div>
+        <div class="field"><label>3. 大約不舒服多久了？（選填）</label><input id="vf-complaint-duration" value="${esc(editingVitals?.complaintDuration||'')}" placeholder="例如：約五分鐘"></div>
+        <div class="field"><label>4. 還有其他地方不舒服嗎？（選填）</label><input id="vf-complaint-others" value="${esc(editingVitals?.complaintOthers||'')}" placeholder="沒有／請描述"></div>
+        <div class="field"><label>5. 評估脊椎是否損傷？（創傷患者，選填）</label><input id="vf-spine-check" value="${esc(editingVitals?.spineCheck||'')}" placeholder="例如：頸椎無痠麻痛"></div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title"><span class="step-num">3</span>過去病史</div>
+        <div class="field">${chipGroup('vf-past-history', PAST_HISTORY_OPTIONS, editingVitals?.pastHistory||[], true)}</div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title"><span class="step-num">4</span>過敏史</div>
+        <div class="field">${chipGroup('vf-allergy-history', ALLERGY_OPTIONS, editingVitals?.allergyHistory||[], true)}</div>
+      </div>
+      ` : `
+      <div class="form-section">
+        <div class="field" style="margin-bottom:0;"><label>主訴（選填，留空沿用先前主訴）</label><input id="vf-complaint" value="${esc(editingVitals?.complaint||'')}" placeholder="例如：胸痛、呼吸困難"></div>
+      </div>
+      `}
+      <div class="form-section">
+        <div class="form-section-title">${isInitialEntry ? `<span class="step-num">5</span>` : ""}生命徵象</div>
+        <div class="field">
+          <label>時間</label>
+          <div style="display:flex; gap:8px;">
+            <input id="vf-time" type="time" style="flex:1;" value="${hhmmValue(new Date(editingVitals?editingVitals.ts:Date.now()))}" required>
+            <button type="button" class="icon-btn" style="flex-shrink:0;" onclick="window.__resetVitalsTime()">套用目前</button>
+          </div>
+        </div>
+        <div class="field"><label>意識狀態（選填）</label>${chipGroup('vf-consciousness', CONSCIOUSNESS_OPTIONS, editingVitals?.consciousness||'', false)}</div>
+        <div class="field">
+          <label>血壓（選填）</label>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input id="vf-bp-sys" type="text" inputmode="numeric" placeholder="收縮壓 120" style="flex:1;" value="${esc(bpSys||'')}">
+            <span style="color:var(--muted); font-weight:700;">/</span>
+            <input id="vf-bp-dia" type="text" inputmode="numeric" placeholder="舒張壓 80" style="flex:1;" value="${esc(bpDia||'')}">
+          </div>
+        </div>
+        <div class="field"><label>心跳 次/分（選填）</label><input id="vf-hr" type="text" inputmode="numeric" value="${esc(editingVitals?.hr||'')}"></div>
+        <div class="field"><label>呼吸 次/分（選填）</label><input id="vf-rr" type="text" inputmode="numeric" value="${esc(editingVitals?.rr||'')}"></div>
+        <div class="field"><label>血氧 SpO2 %（選填）</label><input id="vf-spo2" type="text" inputmode="numeric" value="${esc(editingVitals?.spo2||'')}"></div>
+        <div class="field"><label>體溫 °C（選填）</label><input id="vf-temp" type="text" inputmode="decimal" value="${esc(editingVitals?.temp||'')}"></div>
+        <div class="field"><label>意識程度 GCS（選填）</label><input id="vf-gcs" placeholder="例如：E4V5M6 或 15" value="${esc(editingVitals?.gcs||'')}"></div>
+        <div class="field"><label>血糖值 mg/dL（選填）</label><input id="vf-glucose" type="text" inputmode="numeric" value="${esc(editingVitals?.glucose||'')}"></div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">${isInitialEntry ? `<span class="step-num">6</span>` : ""}處置項目</div>
+        <div class="field" style="margin-bottom:0;">${chipGroup('vf-treatments', TREATMENT_OPTIONS, editingVitals?.treatments||[], true)}</div>
+      </div>
+      <div class="field"><label>備註（選填）</label><input id="vf-note" value="${esc(editingVitals?.note||'')}"></div>
+      <button class="btn-primary" type="submit">${editingVitals?'儲存修正':'送出紀錄'}</button>
+      ${backBtn}
+    </form>
+  ` : "";
+
+  return `
+    <div class="back-row">
+      <button onclick="window.__nav({name:'task', id:'${taskId}'})">‹ 返回任務詳情</button>
+    </div>
+    <div class="section-label">${icon('heartbeat',17)} ${editingVitals ? '編輯患者紀錄' : (hasPatient ? '患者紀錄' : '記錄患者狀況')}</div>
+    ${historyHtml}
+    ${formHtml}
+  `;
+}
+
+/* =========================================================
    14) 畫面：任務詳情
    ========================================================= */
 function viewTaskDetail(taskId){
@@ -1953,125 +2112,6 @@ function viewTaskDetail(taskId){
     ? t.personnel.map(n => nameWithRank(n, t.unit)).join('、')
     : '';
 
-  // ---- 記錄／編輯生命徵象彈窗 ----
-  const vm = state.vitalsModal && state.vitalsModal.taskId === taskId ? state.vitalsModal : null;
-  let vitalsModal = "";
-  if (vm) {
-    const editingVitals = vm.id ? taskVitals.find(v => v.id === vm.id) : null;
-    const isFirstVitals = !editingVitals && !hasPatient;
-    // 「初評」＝該任務的第一筆生命徵象紀錄，比照救護紀錄表完整記錄結構化
-    // 主訴、過去病史、過敏史；「複測」＝後續紀錄，只需要生命徵象與本次處置，
-    // 病史/過敏史/主訴細節不用每次重問。
-    const isInitialEntry = editingVitals ? taskVitals[0]?.id === editingVitals.id : isFirstVitals;
-    // 血壓拆成收縮壓／舒張壓兩格輸入，儲存時仍合併成「收縮/舒張」字串，
-    // 沿用既有的 bp 欄位與所有顯示邏輯（時間軸、彈窗歷史列表皆顯示 120/80）。
-    const [bpSys, bpDia] = (editingVitals?.bp || "").split("/");
-    // 有既有紀錄時，預設只顯示歷史紀錄本身；新增紀錄改成要另外點按鈕，
-    // 才會進到下一層顯示輸入表單，外層清單不會被表單擠在一起。
-    const showHistory = !editingVitals && hasPatient && !vm.adding;
-    const showForm = editingVitals || isFirstVitals || vm.adding;
-    const backBtn = hasPatient
-      ? `<button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__backToVitalsHistory('${taskId}')">返回</button>`
-      : `<button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__cancelVitals()">取消</button>`;
-    vitalsModal = `
-      <div class="modal-overlay" onclick="if(event.target===this) window.__cancelVitals()">
-        <div class="modal-sheet">
-          <div class="modal-handle"></div>
-          <div class="modal-title">${icon('heartbeat',19)} ${editingVitals ? '編輯患者紀錄' : (hasPatient ? '患者紀錄' : '記錄患者狀況')}</div>
-          ${showHistory ? `
-          <div class="vitals-history">
-            ${taskVitals.map((v,i) => `
-              <div class="vitals-entry">
-                <div class="vitals-entry-head">
-                  <span class="vitals-entry-time"><span class="vitals-stage-tag${i===0?'':' alt'}">${i===0?'初評':'複測'}</span>${fmtTime(v.ts)} · ${nameWithRank(v.userName, v.unit)}</span>
-                  <button class="tl-edit-btn" type="button" onclick="window.__editVitals('${taskId}','${v.id}')">編輯</button>
-                </div>
-                ${v.patientName || v.patientUnit || v.patientRank || v.patientGender ? `
-                <div class="vitals-subdetail">
-                  <div>患者：${[v.patientUnit, v.patientRank, v.patientName].filter(Boolean).map(esc).join('　')}${v.patientGender?`（${esc(v.patientGender)}）`:''}</div>
-                </div>` : ""}
-                ${v.complaint ? `<div class="vitals-entry-complaint"><b>主訴</b> ${esc(v.complaint)}</div>` : ""}
-                ${v.complaintQuality || v.complaintDuration || v.complaintOthers || v.spineCheck ? `
-                <div class="vitals-subdetail">
-                  ${v.complaintQuality ? `<div>怎麼不舒服：${esc(v.complaintQuality)}</div>` : ""}
-                  ${v.complaintDuration ? `<div>多久了：${esc(v.complaintDuration)}</div>` : ""}
-                  ${v.complaintOthers ? `<div>其他不適：${esc(v.complaintOthers)}</div>` : ""}
-                  ${v.spineCheck ? `<div>脊椎評估：${esc(v.spineCheck)}</div>` : ""}
-                </div>` : ""}
-                ${(v.pastHistory&&v.pastHistory.length) || (v.allergyHistory&&v.allergyHistory.length) ? `
-                <div class="vitals-subdetail">
-                  ${v.pastHistory&&v.pastHistory.length ? `<div>過去病史：${v.pastHistory.map(esc).join('、')}</div>` : ""}
-                  ${v.allergyHistory&&v.allergyHistory.length ? `<div>過敏史：${v.allergyHistory.map(esc).join('、')}</div>` : ""}
-                </div>` : ""}
-                <div class="vitals-grid">
-                  ${v.consciousness ? `<div class="vitals-item"><span class="lbl">意識</span><span class="val">${esc(v.consciousness)}</span></div>` : ""}
-                  ${v.bp ? `<div class="vitals-item"><span class="lbl">血壓</span><span class="val">${esc(v.bp)}</span></div>` : ""}
-                  ${v.hr ? `<div class="vitals-item"><span class="lbl">心跳</span><span class="val">${esc(v.hr)}</span></div>` : ""}
-                  ${v.rr ? `<div class="vitals-item"><span class="lbl">呼吸</span><span class="val">${esc(v.rr)}</span></div>` : ""}
-                  ${v.spo2 ? `<div class="vitals-item"><span class="lbl">SpO2</span><span class="val">${esc(v.spo2)}%</span></div>` : ""}
-                  ${v.temp ? `<div class="vitals-item"><span class="lbl">體溫</span><span class="val">${esc(v.temp)}°C</span></div>` : ""}
-                  ${v.gcs ? `<div class="vitals-item"><span class="lbl">GCS</span><span class="val">${esc(v.gcs)}</span></div>` : ""}
-                  ${v.glucose ? `<div class="vitals-item"><span class="lbl">血糖</span><span class="val">${esc(v.glucose)}</span></div>` : ""}
-                </div>
-                ${v.treatments&&v.treatments.length ? `<div class="vitals-treatments">${v.treatments.map(x=>`<span class="tag-pill">${esc(x)}</span>`).join("")}</div>` : ""}
-                ${v.note ? `<div class="step-note" style="margin-top:8px;">${esc(v.note)}</div>` : ""}
-              </div>`).join("")}
-          </div>
-          <button class="icon-btn primary" type="button" style="width:100%; justify-content:center; padding:15px; font-size:16px;" onclick="window.__showAddVitalsForm('${taskId}')">${icon('plus',16)} 新增紀錄</button>` : ""}
-          ${showForm ? `
-          <form onsubmit="event.preventDefault(); window.__submitVitals('${taskId}'${editingVitals?`,'${editingVitals.id}'`:''})">
-            ${isInitialEntry ? `
-            <div class="section-label tight">患者基本資料</div>
-            <div class="field"><label>單位（選填）</label><input id="vf-patient-unit" value="${esc(editingVitals?.patientUnit||'')}" placeholder="例如：第一連"></div>
-            <div class="field"><label>級職（選填）</label><input id="vf-patient-rank" value="${esc(editingVitals?.patientRank||'')}" placeholder="例如：上等兵"></div>
-            <div class="field"><label>姓名（選填）</label><input id="vf-patient-name" value="${esc(editingVitals?.patientName||'')}" placeholder="例如：王小明"></div>
-            <div class="field"><label>性別（選填）</label>${chipGroup('vf-patient-gender', GENDER_OPTIONS, editingVitals?.patientGender||'', false)}</div>
-            <div class="section-label tight">主訴</div>
-            <div class="field"><label>1. 感覺哪裡不舒服？</label><input id="vf-complaint" value="${esc(editingVitals?.complaint||'')}" placeholder="例如：胸痛、呼吸困難" required></div>
-            <div class="field"><label>2. 感覺怎麼的不舒服？（選填）</label><input id="vf-complaint-quality" value="${esc(editingVitals?.complaintQuality||'')}" placeholder="例如：悶痛、刺痛"></div>
-            <div class="field"><label>3. 大約不舒服多久了？（選填）</label><input id="vf-complaint-duration" value="${esc(editingVitals?.complaintDuration||'')}" placeholder="例如：約五分鐘"></div>
-            <div class="field"><label>4. 還有其他地方不舒服嗎？（選填）</label><input id="vf-complaint-others" value="${esc(editingVitals?.complaintOthers||'')}" placeholder="沒有／請描述"></div>
-            <div class="field"><label>5. 評估脊椎是否損傷？（創傷患者，選填）</label><input id="vf-spine-check" value="${esc(editingVitals?.spineCheck||'')}" placeholder="例如：頸椎無痠麻痛"></div>
-            <div class="section-label tight">過去病史</div>
-            <div class="field">${chipGroup('vf-past-history', PAST_HISTORY_OPTIONS, editingVitals?.pastHistory||[], true)}</div>
-            <div class="section-label tight">過敏史</div>
-            <div class="field">${chipGroup('vf-allergy-history', ALLERGY_OPTIONS, editingVitals?.allergyHistory||[], true)}</div>
-            ` : `
-            <div class="field"><label>主訴（選填，留空沿用先前主訴）</label><input id="vf-complaint" value="${esc(editingVitals?.complaint||'')}" placeholder="例如：胸痛、呼吸困難"></div>
-            `}
-            <div class="section-label tight">生命徵象</div>
-            <div class="field">
-              <label>時間</label>
-              <div style="display:flex; gap:8px;">
-                <input id="vf-time" type="time" style="flex:1;" value="${hhmmValue(new Date(editingVitals?editingVitals.ts:Date.now()))}" required>
-                <button type="button" class="icon-btn" style="flex-shrink:0;" onclick="window.__resetVitalsTime()">套用目前</button>
-              </div>
-            </div>
-            <div class="field"><label>意識狀態（選填）</label>${chipGroup('vf-consciousness', CONSCIOUSNESS_OPTIONS, editingVitals?.consciousness||'', false)}</div>
-            <div class="field">
-              <label>血壓（選填）</label>
-              <div style="display:flex; align-items:center; gap:8px;">
-                <input id="vf-bp-sys" type="text" inputmode="numeric" placeholder="收縮壓 120" style="flex:1;" value="${esc(bpSys||'')}">
-                <span style="color:var(--muted); font-weight:700;">/</span>
-                <input id="vf-bp-dia" type="text" inputmode="numeric" placeholder="舒張壓 80" style="flex:1;" value="${esc(bpDia||'')}">
-              </div>
-            </div>
-            <div class="field"><label>心跳 次/分（選填）</label><input id="vf-hr" type="text" inputmode="numeric" value="${esc(editingVitals?.hr||'')}"></div>
-            <div class="field"><label>呼吸 次/分（選填）</label><input id="vf-rr" type="text" inputmode="numeric" value="${esc(editingVitals?.rr||'')}"></div>
-            <div class="field"><label>血氧 SpO2 %（選填）</label><input id="vf-spo2" type="text" inputmode="numeric" value="${esc(editingVitals?.spo2||'')}"></div>
-            <div class="field"><label>體溫 °C（選填）</label><input id="vf-temp" type="text" inputmode="decimal" value="${esc(editingVitals?.temp||'')}"></div>
-            <div class="field"><label>意識程度 GCS（選填）</label><input id="vf-gcs" placeholder="例如：E4V5M6 或 15" value="${esc(editingVitals?.gcs||'')}"></div>
-            <div class="field"><label>血糖值 mg/dL（選填）</label><input id="vf-glucose" type="text" inputmode="numeric" value="${esc(editingVitals?.glucose||'')}"></div>
-            <div class="section-label tight">處置項目</div>
-            <div class="field">${chipGroup('vf-treatments', TREATMENT_OPTIONS, editingVitals?.treatments||[], true)}</div>
-            <div class="field"><label>備註（選填）</label><input id="vf-note" value="${esc(editingVitals?.note||'')}"></div>
-            <button class="btn-primary" type="submit">${editingVitals?'儲存修正':'送出紀錄'}</button>
-            ${backBtn}
-          </form>` : ""}
-        </div>
-      </div>`;
-  }
-
   return `
     <div class="back-row" style="justify-content:space-between;">
       <button onclick="window.__nav({name:'tasks'})">‹ 返回列表</button>
@@ -2121,7 +2161,6 @@ function viewTaskDetail(taskId){
     ${stickyBar}
     ${reportModal}
     ${eventEditModal}
-    ${vitalsModal}
   `;
 }
 
@@ -2699,6 +2738,7 @@ const ROUTE_VIEWS = {
   createTask: viewCreateTask,
   editTask: () => viewEditTask(state.route.id),
   task: () => viewTaskDetail(state.route.id),
+  vitals: () => viewVitalsPage(state.route.taskId, state.route.id, state.route.adding),
   records: viewRecords,
   stats: viewStats,
   notifications: viewNotifications,
@@ -2727,7 +2767,7 @@ const NAV_ITEMS = [
 function safeRender(){
   const ae = document.activeElement;
   if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT")) return;
-  if (state.profileEditing || state.baseDataModal || state.reportDraft || state.eventEditId || state.vitalsModal) return;
+  if (state.profileEditing || state.baseDataModal || state.reportDraft || state.eventEditId) return;
   render();
 }
 
@@ -2846,11 +2886,10 @@ window.__submitEditEvent = (id) => {
     .then(() => { state.eventEditId = null; render(); })
     .catch(err => showToast(`更新失敗：[${err.code||'?'}] ${err.message||err}`));
 };
-window.__startVitals = (taskId) => { state.vitalsModal = { taskId, id: null, adding: false }; render(); };
-window.__editVitals = (taskId, id) => { state.vitalsModal = { taskId, id, adding: false }; render(); };
-window.__showAddVitalsForm = (taskId) => { state.vitalsModal = { taskId, id: null, adding: true }; render(); };
-window.__backToVitalsHistory = (taskId) => { state.vitalsModal = { taskId, id: null, adding: false }; render(); };
-window.__cancelVitals = () => { state.vitalsModal = null; render(); };
+window.__startVitals = (taskId) => nav({ name: 'vitals', taskId, id: null, adding: false });
+window.__editVitals = (taskId, id) => nav({ name: 'vitals', taskId, id, adding: false });
+window.__showAddVitalsForm = (taskId) => nav({ name: 'vitals', taskId, id: null, adding: true });
+window.__backToVitalsHistory = (taskId) => nav({ name: 'vitals', taskId, id: null, adding: false });
 window.__resetVitalsTime = () => {
   const el = document.getElementById("vf-time");
   if (el) el.value = hhmmValue(new Date());
@@ -2890,9 +2929,9 @@ window.__submitVitals = (taskId, id) => {
     if (timeVal) data.timestamp = todayAt(timeVal);
     action = addVitalsEntry(taskId, data);
   }
-  // 寫入成功才跳回上一層（歷史紀錄清單）並重繪；失敗要留在原畫面讓使用者
-  // 看到錯誤訊息並可重試。不直接關閉整個彈窗，避免跳出去又要重新點進來。
-  action.then(() => { state.vitalsModal = { taskId, id: null, adding: false }; render(); })
+  // 寫入成功才跳回上一層（歷史紀錄清單）；失敗要留在原畫面讓使用者看到
+  // 錯誤訊息並可重試，不能還沒確認寫入結果就先跳走。
+  action.then(() => nav({ taskId, id: null, adding: false, name: 'vitals' }))
         .catch(err => showToast(`儲存失敗：[${err.code||'?'}] ${err.message||err}`));
 };
 window.__setAdminTab = (t) => { state.adminTab = t; state._usersCache = null; render(); window.scrollTo(0,0); };
