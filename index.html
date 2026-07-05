@@ -214,6 +214,14 @@
   .vitals-subdetail{font-size:13px; color:var(--muted); line-height:1.7; margin-bottom:9px;}
   .vitals-treatments{display:flex; flex-wrap:wrap; gap:6px; margin-top:9px;}
   .tag-pill{display:inline-block; padding:4px 10px; border-radius:999px; background:var(--panel-2); border:1px solid var(--border); font-size:12px; font-weight:600; color:var(--text);}
+  .gcs-hint-btn{
+    display:inline-flex; align-items:center; gap:3px; background:none; border:none; color:var(--blue);
+    font-size:12.5px; font-weight:700; font-family:var(--mono); padding:0; margin-left:4px; vertical-align:middle;
+  }
+  .gcs-hint-panel{
+    background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-md);
+    padding:12px 14px; margin-bottom:10px; font-size:12.5px; color:var(--text); line-height:1.7;
+  }
   .vitals-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(78px,1fr)); gap:10px 14px;}
   .vitals-item{display:flex; flex-direction:column; gap:2px;}
   .vitals-item .lbl{font-size:10.5px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.04em;}
@@ -485,7 +493,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-05-97-vitals-full-page";
+const BUILD_TAG = "2026-07-05-98-vitals-detail-fields-gcs-hint";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -691,7 +699,8 @@ const HOSPITAL_COUNTIES = ["臺中市", "嘉義市", "嘉義縣"];
 const CONSCIOUSNESS_OPTIONS = ["清", "痛", "聲", "否"];
 const PAST_HISTORY_OPTIONS = ["糖尿病", "高血壓", "心臟疾病", "中風", "氣喘", "慢性阻塞性肺病", "肝臟疾病", "腎臟疾病", "癌症", "癲癇", "精神疾病", "其他", "不清楚", "無"];
 const ALLERGY_OPTIONS = ["藥物", "食物", "其他", "不清楚", "無"];
-const TREATMENT_OPTIONS = ["清洗傷口", "止血、包紮", "止血帶", "骨折固定", "保暖", "給氧", "CPR", "心理支持", "其他"];
+// 處置項目涵蓋創傷與非創傷常見處置，不只是外傷包紮固定這類。
+const TREATMENT_OPTIONS = ["暢通呼吸道", "抽吸", "使用甦醒球（BVM）", "給氧", "使用AED", "CPR", "頸圈固定", "清洗傷口", "止血、包紮", "止血帶", "骨折固定", "姿勢擺位／半坐臥", "血糖處置（給予口服糖分）", "協助服藥", "保暖", "觀察生命徵象", "心理支持", "其他"];
 const GENDER_OPTIONS = ["男", "女"];
 
 /* =========================================================
@@ -1327,14 +1336,21 @@ function icon(name, size){
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;flex-shrink:0;">${ICON_PATHS[name]||''}</svg>`;
 }
 // 多選（checkbox）/單選（radio）標籤群組，用於過去病史／過敏史／處置項目／意識狀態。
-function chipGroup(name, options, selected, multi){
+// triggers（選填）：[{ values:[...], wrapId }]，勾選到指定選項時，只切換對應
+// detail 輸入框容器的顯示/隱藏（呼叫 window.__syncDetailVisibility），不觸發
+// 整頁 render()，避免使用者已經填到一半的其他欄位被清空重繪掉。
+function chipGroup(name, options, selected, multi, triggers){
   const type = multi ? "checkbox" : "radio";
   const sel = multi ? (selected||[]) : null;
-  return `<div class="chip-select">${options.map(o => `
+  return `<div class="chip-select">${options.map(o => {
+    const trig = triggers && triggers.find(tr => tr.values.includes(o));
+    const onchange = trig ? ` onchange='window.__syncDetailVisibility("${trig.wrapId}","${name}",${JSON.stringify(trig.values)})'` : "";
+    return `
     <label class="chip-option">
-      <input type="${type}" name="${name}" value="${esc(o)}" ${multi ? (sel.includes(o)?'checked':'') : (selected===o?'checked':'')}>
+      <input type="${type}" name="${name}" value="${esc(o)}" ${multi ? (sel.includes(o)?'checked':'') : (selected===o?'checked':'')}${onchange}>
       <span>${esc(o)}</span>
-    </label>`).join("")}</div>`;
+    </label>`;
+  }).join("")}</div>`;
 }
 
 /* =========================================================
@@ -1782,6 +1798,13 @@ function viewVitalsPage(taskId, id, adding){
   const backBtn = hasPatient
     ? `<button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__backToVitalsHistory('${taskId}')">返回</button>`
     : `<button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__nav({name:'task', id:'${taskId}'})">取消</button>`;
+  // 勾選「其他」（過敏史另外還有「藥物」「食物」）時，多顯示一個說明輸入框；
+  // 這裡算出頁面載入當下該不該顯示，之後使用者勾選/取消時由
+  // window.__syncDetailVisibility 直接切換 DOM，不用整頁重繪。
+  const pastHistoryOtherChecked = (editingVitals?.pastHistory||[]).includes('其他');
+  const allergyDrugFoodChecked = (editingVitals?.allergyHistory||[]).some(v=>['藥物','食物'].includes(v));
+  const allergyOtherChecked = (editingVitals?.allergyHistory||[]).includes('其他');
+  const treatmentOtherChecked = (editingVitals?.treatments||[]).includes('其他');
 
   const historyHtml = showHistory ? `
     <div class="vitals-history">
@@ -1805,8 +1828,8 @@ function viewVitalsPage(taskId, id, adding){
           </div>` : ""}
           ${(v.pastHistory&&v.pastHistory.length) || (v.allergyHistory&&v.allergyHistory.length) ? `
           <div class="vitals-subdetail">
-            ${v.pastHistory&&v.pastHistory.length ? `<div>過去病史：${v.pastHistory.map(esc).join('、')}</div>` : ""}
-            ${v.allergyHistory&&v.allergyHistory.length ? `<div>過敏史：${v.allergyHistory.map(esc).join('、')}</div>` : ""}
+            ${v.pastHistory&&v.pastHistory.length ? `<div>過去病史：${v.pastHistory.map(esc).join('、')}${v.pastHistoryOtherDetail?`（${esc(v.pastHistoryOtherDetail)}）`:''}</div>` : ""}
+            ${v.allergyHistory&&v.allergyHistory.length ? `<div>過敏史：${v.allergyHistory.map(esc).join('、')}${[v.allergyDrugFoodDetail,v.allergyOtherDetail].filter(Boolean).length?`（${[v.allergyDrugFoodDetail,v.allergyOtherDetail].filter(Boolean).map(esc).join('、')}）`:''}</div>` : ""}
           </div>` : ""}
           <div class="vitals-grid">
             ${v.consciousness ? `<div class="vitals-item"><span class="lbl">意識</span><span class="val">${esc(v.consciousness)}</span></div>` : ""}
@@ -1819,6 +1842,7 @@ function viewVitalsPage(taskId, id, adding){
             ${v.glucose ? `<div class="vitals-item"><span class="lbl">血糖</span><span class="val">${esc(v.glucose)}</span></div>` : ""}
           </div>
           ${v.treatments&&v.treatments.length ? `<div class="vitals-treatments">${v.treatments.map(x=>`<span class="tag-pill">${esc(x)}</span>`).join("")}</div>` : ""}
+          ${v.treatmentOtherDetail ? `<div class="vitals-subdetail" style="margin-top:6px;">其他處置：${esc(v.treatmentOtherDetail)}</div>` : ""}
           ${v.note ? `<div class="step-note" style="margin-top:8px;">${esc(v.note)}</div>` : ""}
         </div>`).join("")}
     </div>
@@ -1845,17 +1869,25 @@ function viewVitalsPage(taskId, id, adding){
       </div>
       <div class="form-section">
         <div class="form-section-title"><span class="step-num">3</span>過去病史</div>
-        <div class="field">${chipGroup('vf-past-history', PAST_HISTORY_OPTIONS, editingVitals?.pastHistory||[], true)}</div>
+        <div class="field">${chipGroup('vf-past-history', PAST_HISTORY_OPTIONS, editingVitals?.pastHistory||[], true, [{values:['其他'], wrapId:'past-history-other-wrap'}])}</div>
+        <div id="past-history-other-wrap" style="display:${pastHistoryOtherChecked?'block':'none'};">
+          <div class="field" style="margin-top:10px; margin-bottom:0;"><label>其他病史說明（選填）</label><input id="vf-past-history-other" value="${esc(editingVitals?.pastHistoryOtherDetail||'')}" placeholder="請說明"></div>
+        </div>
       </div>
       <div class="form-section">
         <div class="form-section-title"><span class="step-num">4</span>過敏史</div>
-        <div class="field">${chipGroup('vf-allergy-history', ALLERGY_OPTIONS, editingVitals?.allergyHistory||[], true)}</div>
+        <div class="field">${chipGroup('vf-allergy-history', ALLERGY_OPTIONS, editingVitals?.allergyHistory||[], true, [
+          {values:['藥物','食物'], wrapId:'allergy-drugfood-wrap'},
+          {values:['其他'], wrapId:'allergy-other-wrap'}
+        ])}</div>
+        <div id="allergy-drugfood-wrap" style="display:${allergyDrugFoodChecked?'block':'none'};">
+          <div class="field" style="margin-top:10px;"><label>過敏詳情（選填，請說明是哪種藥物／食物）</label><input id="vf-allergy-drugfood-detail" value="${esc(editingVitals?.allergyDrugFoodDetail||'')}" placeholder="例如：盤尼西林、花生"></div>
+        </div>
+        <div id="allergy-other-wrap" style="display:${allergyOtherChecked?'block':'none'};">
+          <div class="field" style="margin-bottom:0;"><label>其他過敏說明（選填）</label><input id="vf-allergy-other-detail" value="${esc(editingVitals?.allergyOtherDetail||'')}" placeholder="請說明"></div>
+        </div>
       </div>
-      ` : `
-      <div class="form-section">
-        <div class="field" style="margin-bottom:0;"><label>主訴（選填，留空沿用先前主訴）</label><input id="vf-complaint" value="${esc(editingVitals?.complaint||'')}" placeholder="例如：胸痛、呼吸困難"></div>
-      </div>
-      `}
+      ` : ``}
       <div class="form-section">
         <div class="form-section-title">${isInitialEntry ? `<span class="step-num">5</span>` : ""}生命徵象</div>
         <div class="field">
@@ -1878,12 +1910,24 @@ function viewVitalsPage(taskId, id, adding){
         <div class="field"><label>呼吸 次/分（選填）</label><input id="vf-rr" type="text" inputmode="numeric" value="${esc(editingVitals?.rr||'')}"></div>
         <div class="field"><label>血氧 SpO2 %（選填）</label><input id="vf-spo2" type="text" inputmode="numeric" value="${esc(editingVitals?.spo2||'')}"></div>
         <div class="field"><label>體溫 °C（選填）</label><input id="vf-temp" type="text" inputmode="decimal" value="${esc(editingVitals?.temp||'')}"></div>
-        <div class="field"><label>意識程度 GCS（選填）</label><input id="vf-gcs" placeholder="例如：E4V5M6 或 15" value="${esc(editingVitals?.gcs||'')}"></div>
+        <div class="field">
+          <label>意識程度 GCS（選填） <button type="button" class="gcs-hint-btn" onclick="const el=document.getElementById('gcs-hint'); el.style.display = el.style.display==='block'?'none':'block';">？ 怎麼判定</button></label>
+          <div id="gcs-hint" class="gcs-hint-panel" style="display:none;">
+            <div><b>E 睜眼反應</b>：E4 自動睜眼／E3 呼喚睜眼／E2 疼痛刺激睜眼／E1 無反應</div>
+            <div><b>V 語言反應</b>：V5 對答正確／V4 答非所問／V3 可說出字句（無意義）／V2 僅能發出聲音／V1 無反應</div>
+            <div><b>M 運動反應</b>：M6 遵從指令動作／M5 疼痛能定位／M4 肢體回縮反應／M3 異常屈曲／M2 異常伸直／M1 無反應</div>
+            <div style="margin-top:6px; color:var(--muted);">總分 = E+V+M，滿分 15 分，分數越低意識越差。</div>
+          </div>
+          <input id="vf-gcs" placeholder="例如：E4V5M6 或 15" value="${esc(editingVitals?.gcs||'')}">
+        </div>
         <div class="field"><label>血糖值 mg/dL（選填）</label><input id="vf-glucose" type="text" inputmode="numeric" value="${esc(editingVitals?.glucose||'')}"></div>
       </div>
       <div class="form-section">
         <div class="form-section-title">${isInitialEntry ? `<span class="step-num">6</span>` : ""}處置項目</div>
-        <div class="field" style="margin-bottom:0;">${chipGroup('vf-treatments', TREATMENT_OPTIONS, editingVitals?.treatments||[], true)}</div>
+        <div class="field">${chipGroup('vf-treatments', TREATMENT_OPTIONS, editingVitals?.treatments||[], true, [{values:['其他'], wrapId:'treatment-other-wrap'}])}</div>
+        <div id="treatment-other-wrap" style="display:${treatmentOtherChecked?'block':'none'};">
+          <div class="field" style="margin-top:10px; margin-bottom:0;"><label>其他處置說明（選填）</label><input id="vf-treatment-other-detail" value="${esc(editingVitals?.treatmentOtherDetail||'')}" placeholder="請說明"></div>
+        </div>
       </div>
       <div class="field"><label>備註（選填）</label><input id="vf-note" value="${esc(editingVitals?.note||'')}"></div>
       <button class="btn-primary" type="submit">${editingVitals?'儲存修正':'送出紀錄'}</button>
@@ -2894,6 +2938,13 @@ window.__resetVitalsTime = () => {
   const el = document.getElementById("vf-time");
   if (el) el.value = hhmmValue(new Date());
 };
+// 勾選過去病史/過敏史/處置項目的「其他」（或過敏史的「藥物」「食物」）時，
+// 顯示對應的詳細說明輸入框；純 DOM 顯示/隱藏，不觸發整頁 render()。
+window.__syncDetailVisibility = (wrapId, groupName, triggerValues) => {
+  const anyChecked = triggerValues.some(v => document.querySelector(`input[name="${groupName}"][value="${v}"]`)?.checked);
+  const el = document.getElementById(wrapId);
+  if (el) el.style.display = anyChecked ? "block" : "none";
+};
 window.__submitVitals = (taskId, id) => {
   const get = (elId) => document.getElementById(elId)?.value || "";
   const checkedValues = (name) => [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(el => el.value);
@@ -2904,6 +2955,7 @@ window.__submitVitals = (taskId, id) => {
     spo2: get("vf-spo2"), temp: get("vf-temp"), gcs: get("vf-gcs"), glucose: get("vf-glucose"),
     consciousness: checkedValues("vf-consciousness")[0] || "",
     treatments: checkedValues("vf-treatments"),
+    treatmentOtherDetail: get("vf-treatment-other-detail"),
     note: get("vf-note")
   };
   // 主訴細節／過去病史／過敏史只有初評（表單裡才會渲染這些欄位）才需要寫入，
@@ -2918,7 +2970,10 @@ window.__submitVitals = (taskId, id) => {
     data.complaintOthers = get("vf-complaint-others");
     data.spineCheck = get("vf-spine-check");
     data.pastHistory = checkedValues("vf-past-history");
+    data.pastHistoryOtherDetail = get("vf-past-history-other");
     data.allergyHistory = checkedValues("vf-allergy-history");
+    data.allergyDrugFoodDetail = get("vf-allergy-drugfood-detail");
+    data.allergyOtherDetail = get("vf-allergy-other-detail");
   }
   let action;
   if (id) {
