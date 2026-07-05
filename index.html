@@ -439,7 +439,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-05-85-ux-polish-batch";
+const BUILD_TAG = "2026-07-05-86-scroll-top-fix";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -2729,7 +2729,7 @@ window.__submitVitals = (taskId, id) => {
   action.then(() => { state.vitalsModal = null; render(); })
         .catch(err => showToast(`儲存失敗：[${err.code||'?'}] ${err.message||err}`));
 };
-window.__setAdminTab = (t) => { state.adminTab = t; state._usersCache = null; render(); };
+window.__setAdminTab = (t) => { state.adminTab = t; state._usersCache = null; render(); window.scrollTo(0,0); };
 window.__deleteTask = (id) => { if (confirm("確定刪除此任務？此動作無法復原。")) deleteTask(id); };
 window.__forceEndTask = (id) => { if (confirm("確定強制結束此勤務？此動作無法復原。")) forceEndTask(id); };
 window.__exportTasks = () => exportTasksCsv();
@@ -2738,8 +2738,8 @@ window.__setRole = (uid) => {
   const unit = document.getElementById(`unit-${uid}`).value;
   setUserRole(uid, role, unit).then(() => { state._usersCache = null; render(); });
 };
-window.__setBaseDataUnit = (code) => { state.baseDataUnit = code; state.baseDataModal = null; render(); };
-window.__setBaseDataTab = (key) => { state.baseDataTab = key; state.baseDataModal = null; render(); };
+window.__setBaseDataUnit = (code) => { state.baseDataUnit = code; state.baseDataModal = null; render(); window.scrollTo(0,0); };
+window.__setBaseDataTab = (key) => { state.baseDataTab = key; state.baseDataModal = null; render(); window.scrollTo(0,0); };
 function baseDataErr(err){ showToast(`操作失敗：[${err.code||'?'}] ${err.message||err}`); console.error("基礎資料操作失敗", err); }
 window.__toggleBaseData = (coll, id, active) => toggleBaseDataActive(coll, id, active).catch(baseDataErr);
 window.__deleteBaseData = (coll, id) => { if (confirm("確定刪除此筆資料？此動作無法復原。")) deleteBaseData(coll, id).catch(baseDataErr); };
@@ -2776,8 +2776,8 @@ window.__clearRecordsQuery = () => {
   state.recordsApplied = null;
   render();
 };
-window.__setTasksTab = (key) => { state.tasksTab = key; render(); };
-window.__setStatsPeriod = (key) => { state.statsPeriod = key; render(); };
+window.__setTasksTab = (key) => { state.tasksTab = key; render(); window.scrollTo(0,0); };
+window.__setStatsPeriod = (key) => { state.statsPeriod = key; render(); window.scrollTo(0,0); };
 window.__setCreateTaskUnit = (code) => { state.createTaskUnit = code; render(); };
 window.__setCreateTaskType = (key) => { state.createTaskType = key; render(); };
 window.__createTask = (ev, unit, type) => {
@@ -2858,7 +2858,10 @@ window.__saveTaskEdit = (ev, taskId) => {
 
   window.addEventListener('touchstart', (e) => {
     if (refreshing) return;
-    startY = window.scrollY <= 0 ? e.touches[0].clientY : null;
+    // 彈窗（.modal-sheet）有自己獨立的滾動區域，跟外層頁面的 scrollY 無關；
+    // 在彈窗內手勢不應誤觸外層下拉重新整理。
+    const inModal = e.target.closest && e.target.closest('.modal-sheet');
+    startY = (!inModal && window.scrollY <= 0) ? e.touches[0].clientY : null;
   }, { passive: true });
 
   window.addEventListener('touchmove', (e) => {
