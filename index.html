@@ -540,7 +540,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-05-105-vitals-unify-value-size";
+const BUILD_TAG = "2026-07-05-106-pull-to-refresh-full-reload";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -3163,11 +3163,6 @@ window.__saveTaskEdit = (ev, taskId) => {
     indicator.style.opacity = '0';
     startY = null; pulling = false; currentDist = 0;
   }
-  function refreshAllNow(){
-    [tasksPoll, eventsPoll, personnelPoll, vehiclesPoll, recordersPoll, hospitalsPoll, vitalsPoll, profilePoll]
-      .forEach(pl => pl && pl.refreshNow());
-  }
-
   window.addEventListener('touchstart', (e) => {
     if (refreshing) return;
     // 彈窗（.modal-sheet）跟底部導覽列都有各自獨立的互動區域，跟外層頁面的
@@ -3199,8 +3194,8 @@ window.__saveTaskEdit = (ev, taskId) => {
       spinner.classList.add('spin');
       indicator.style.transform = `translateX(-50%) translateY(${THRESHOLD}px)`;
       indicator.style.opacity = '1';
-      refreshAllNow();
-      setTimeout(() => { refreshing = false; spinner.classList.remove('spin'); reset(); }, 700);
+      // 直接整頁重新載入（而不是只重抓資料），確保拿到最新部署的版本。
+      window.location.reload();
     } else {
       reset();
     }
