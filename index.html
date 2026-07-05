@@ -212,6 +212,18 @@
   }
   .vitals-stage-tag.alt{background:var(--panel-2); color:var(--muted);}
   .vitals-subdetail{font-size:13px; color:var(--muted); line-height:1.7; margin-bottom:9px;}
+  /* 患者身分是重點資訊，不能跟其他次要文字一樣灰灰的不顯眼。 */
+  .vitals-patient-line{
+    display:flex; align-items:center; gap:7px; font-size:14.5px; font-weight:800; color:var(--text);
+    background:rgba(0,102,255,0.06); border-radius:var(--radius-sm); padding:8px 10px; margin-bottom:10px;
+  }
+  .vitals-patient-line svg{color:var(--blue); flex-shrink:0;}
+  /* 主訴細節、過去病史、過敏史這些文字型的重要資訊，改成跟生命徵象數值
+     一樣「標籤淺灰、內容粗體深色」的排法，不要整段都灰灰的看不清楚。 */
+  .detail-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:10px 14px; margin-bottom:10px;}
+  .detail-item{display:flex; flex-direction:column; gap:2px;}
+  .detail-item .lbl{font-size:10.5px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.04em;}
+  .detail-item .val{font-size:14px; font-weight:700; color:var(--text); line-height:1.4;}
   .vitals-treatments{display:flex; flex-wrap:wrap; gap:6px; margin-top:9px;}
   .tag-pill{display:inline-block; padding:4px 10px; border-radius:999px; background:var(--panel-2); border:1px solid var(--border); font-size:12px; font-weight:600; color:var(--text);}
   .gcs-hint-btn{
@@ -493,7 +505,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-05-98-vitals-detail-fields-gcs-hint";
+const BUILD_TAG = "2026-07-05-99-vitals-history-readability";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1815,21 +1827,22 @@ function viewVitalsPage(taskId, id, adding){
             ${canDoReport ? `<button class="tl-edit-btn" type="button" onclick="window.__editVitals('${taskId}','${v.id}')">編輯</button>` : ""}
           </div>
           ${v.patientName || v.patientUnit || v.patientRank || v.patientGender ? `
-          <div class="vitals-subdetail">
-            <div>患者：${[v.patientUnit, v.patientRank, v.patientName].filter(Boolean).map(esc).join('　')}${v.patientGender?`（${esc(v.patientGender)}）`:''}</div>
+          <div class="vitals-patient-line">
+            ${icon('user',16)}
+            <span>${[v.patientUnit, v.patientRank, v.patientName].filter(Boolean).map(esc).join('　')}${v.patientGender?`（${esc(v.patientGender)}）`:''}</span>
           </div>` : ""}
           ${v.complaint ? `<div class="vitals-entry-complaint"><b>主訴</b> ${esc(v.complaint)}</div>` : ""}
           ${v.complaintQuality || v.complaintDuration || v.complaintOthers || v.spineCheck ? `
-          <div class="vitals-subdetail">
-            ${v.complaintQuality ? `<div>怎麼不舒服：${esc(v.complaintQuality)}</div>` : ""}
-            ${v.complaintDuration ? `<div>多久了：${esc(v.complaintDuration)}</div>` : ""}
-            ${v.complaintOthers ? `<div>其他不適：${esc(v.complaintOthers)}</div>` : ""}
-            ${v.spineCheck ? `<div>脊椎評估：${esc(v.spineCheck)}</div>` : ""}
+          <div class="detail-grid">
+            ${v.complaintQuality ? `<div class="detail-item"><span class="lbl">怎麼不舒服</span><span class="val">${esc(v.complaintQuality)}</span></div>` : ""}
+            ${v.complaintDuration ? `<div class="detail-item"><span class="lbl">多久了</span><span class="val">${esc(v.complaintDuration)}</span></div>` : ""}
+            ${v.complaintOthers ? `<div class="detail-item"><span class="lbl">其他不適</span><span class="val">${esc(v.complaintOthers)}</span></div>` : ""}
+            ${v.spineCheck ? `<div class="detail-item"><span class="lbl">脊椎評估</span><span class="val">${esc(v.spineCheck)}</span></div>` : ""}
           </div>` : ""}
           ${(v.pastHistory&&v.pastHistory.length) || (v.allergyHistory&&v.allergyHistory.length) ? `
-          <div class="vitals-subdetail">
-            ${v.pastHistory&&v.pastHistory.length ? `<div>過去病史：${v.pastHistory.map(esc).join('、')}${v.pastHistoryOtherDetail?`（${esc(v.pastHistoryOtherDetail)}）`:''}</div>` : ""}
-            ${v.allergyHistory&&v.allergyHistory.length ? `<div>過敏史：${v.allergyHistory.map(esc).join('、')}${[v.allergyDrugFoodDetail,v.allergyOtherDetail].filter(Boolean).length?`（${[v.allergyDrugFoodDetail,v.allergyOtherDetail].filter(Boolean).map(esc).join('、')}）`:''}</div>` : ""}
+          <div class="detail-grid">
+            ${v.pastHistory&&v.pastHistory.length ? `<div class="detail-item"><span class="lbl">過去病史</span><span class="val">${v.pastHistory.map(esc).join('、')}${v.pastHistoryOtherDetail?`（${esc(v.pastHistoryOtherDetail)}）`:''}</span></div>` : ""}
+            ${v.allergyHistory&&v.allergyHistory.length ? `<div class="detail-item"><span class="lbl">過敏史</span><span class="val">${v.allergyHistory.map(esc).join('、')}${[v.allergyDrugFoodDetail,v.allergyOtherDetail].filter(Boolean).length?`（${[v.allergyDrugFoodDetail,v.allergyOtherDetail].filter(Boolean).map(esc).join('、')}）`:''}</span></div>` : ""}
           </div>` : ""}
           <div class="vitals-grid">
             ${v.consciousness ? `<div class="vitals-item"><span class="lbl">意識</span><span class="val">${esc(v.consciousness)}</span></div>` : ""}
@@ -1842,7 +1855,7 @@ function viewVitalsPage(taskId, id, adding){
             ${v.glucose ? `<div class="vitals-item"><span class="lbl">血糖</span><span class="val">${esc(v.glucose)}</span></div>` : ""}
           </div>
           ${v.treatments&&v.treatments.length ? `<div class="vitals-treatments">${v.treatments.map(x=>`<span class="tag-pill">${esc(x)}</span>`).join("")}</div>` : ""}
-          ${v.treatmentOtherDetail ? `<div class="vitals-subdetail" style="margin-top:6px;">其他處置：${esc(v.treatmentOtherDetail)}</div>` : ""}
+          ${v.treatmentOtherDetail ? `<div class="detail-item" style="margin-top:9px;"><span class="lbl">其他處置</span><span class="val">${esc(v.treatmentOtherDetail)}</span></div>` : ""}
           ${v.note ? `<div class="step-note" style="margin-top:8px;">${esc(v.note)}</div>` : ""}
         </div>`).join("")}
     </div>
