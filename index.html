@@ -465,7 +465,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-05-91-vitals-modal-history-swipe-dismiss";
+const BUILD_TAG = "2026-07-05-92-vitals-add-button-swipe-relax";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1922,7 +1922,13 @@ function viewTaskDetail(taskId){
   if (vm) {
     const editingVitals = vm.id ? taskVitals.find(v => v.id === vm.id) : null;
     const isFirstVitals = !editingVitals && !hasPatient;
-    const showHistory = !editingVitals && hasPatient;
+    // 有既有紀錄時，預設只顯示歷史紀錄本身；新增紀錄改成要另外點按鈕，
+    // 才會進到下一層顯示輸入表單，外層清單不會被表單擠在一起。
+    const showHistory = !editingVitals && hasPatient && !vm.adding;
+    const showForm = editingVitals || isFirstVitals || vm.adding;
+    const backBtn = hasPatient
+      ? `<button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__backToVitalsHistory('${taskId}')">返回</button>`
+      : `<button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__cancelVitals()">取消</button>`;
     vitalsModal = `
       <div class="modal-overlay" onclick="if(event.target===this) window.__cancelVitals()">
         <div class="modal-sheet">
@@ -1948,7 +1954,8 @@ function viewTaskDetail(taskId){
                 ${v.note ? `<div class="step-note" style="margin-top:8px;">${esc(v.note)}</div>` : ""}
               </div>`).join("")}
           </div>
-          <div class="section-label tight">新增生命徵象</div>` : ""}
+          <button class="icon-btn primary" type="button" style="width:100%; justify-content:center; padding:15px; font-size:16px;" onclick="window.__showAddVitalsForm('${taskId}')">${icon('plus',16)} 新增紀錄</button>` : ""}
+          ${showForm ? `
           <form onsubmit="event.preventDefault(); window.__submitVitals('${taskId}'${editingVitals?`,'${editingVitals.id}'`:''})">
             <div class="field"><label>主訴${isFirstVitals ? '' : '（選填，留空沿用先前主訴）'}</label><input id="vf-complaint" value="${esc(editingVitals?.complaint||'')}" placeholder="例如：胸痛、呼吸困難" ${isFirstVitals?'required':''}></div>
             <div class="field">
@@ -1966,8 +1973,8 @@ function viewTaskDetail(taskId){
             <div class="field"><label>意識程度 GCS（選填）</label><input id="vf-gcs" placeholder="例如：E4V5M6 或 15" value="${esc(editingVitals?.gcs||'')}"></div>
             <div class="field"><label>備註（選填）</label><input id="vf-note" value="${esc(editingVitals?.note||'')}"></div>
             <button class="btn-primary" type="submit">${editingVitals?'儲存修正':'送出紀錄'}</button>
-            <button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__cancelVitals()">取消</button>
-          </form>
+            ${backBtn}
+          </form>` : ""}
         </div>
       </div>`;
   }
@@ -2746,8 +2753,10 @@ window.__submitEditEvent = (id) => {
     .then(() => { state.eventEditId = null; render(); })
     .catch(err => showToast(`更新失敗：[${err.code||'?'}] ${err.message||err}`));
 };
-window.__startVitals = (taskId) => { state.vitalsModal = { taskId, id: null }; render(); };
-window.__editVitals = (taskId, id) => { state.vitalsModal = { taskId, id }; render(); };
+window.__startVitals = (taskId) => { state.vitalsModal = { taskId, id: null, adding: false }; render(); };
+window.__editVitals = (taskId, id) => { state.vitalsModal = { taskId, id, adding: false }; render(); };
+window.__showAddVitalsForm = (taskId) => { state.vitalsModal = { taskId, id: null, adding: true }; render(); };
+window.__backToVitalsHistory = (taskId) => { state.vitalsModal = { taskId, id: null, adding: false }; render(); };
 window.__cancelVitals = () => { state.vitalsModal = null; render(); };
 window.__resetVitalsTime = () => {
   const el = document.getElementById("vf-time");
@@ -2941,28 +2950,25 @@ window.__saveTaskEdit = (ev, taskId) => {
 
 /* =========================================================
    彈窗下滑關閉：所有 .modal-sheet（記錄患者狀況、編輯回報、基礎資料等）
-   都比照 iOS 原生底部彈窗，手指從彈窗內容最上方往下拉超過門檻、放開
-   就關閉彈窗；沿用彈窗背景遮罩既有的 onclick 判斷式來關閉，不用另外
-   為每個彈窗寫關閉邏輯。
+   都比照 iOS 原生底部彈窗，手指在彈窗任何地方只要往下滑就會觸發（不用
+   先捲到最上面），超過門檻放開就關閉彈窗；沿用彈窗背景遮罩既有的
+   onclick 判斷式來關閉，不用另外為每個彈窗寫關閉邏輯。
    ========================================================= */
 (function setupModalSwipeToDismiss(){
-  let sheet = null, startY = null, startScrollTop = 0, dragging = false;
+  let sheet = null, startY = null, dragging = false;
 
   window.addEventListener('touchstart', (e) => {
     const s = e.target.closest && e.target.closest('.modal-sheet');
     if (!s) { sheet = null; startY = null; dragging = false; return; }
     sheet = s;
     startY = e.touches[0].clientY;
-    startScrollTop = s.scrollTop;
     dragging = false;
   }, { passive: true });
 
   window.addEventListener('touchmove', (e) => {
     if (!sheet || startY == null) return;
     const dy = e.touches[0].clientY - startY;
-    // 只有手指往下滑、且彈窗內容本身已經捲到最上面時，才視為「下滑關閉」
-    // 手勢；否則保留使用者原本在彈窗內捲動查看內容的動作。
-    if (dy <= 0 || startScrollTop > 0 || sheet.scrollTop > 0) {
+    if (dy <= 0) {
       if (dragging) { sheet.style.transition = ''; sheet.style.transform = ''; dragging = false; }
       return;
     }
