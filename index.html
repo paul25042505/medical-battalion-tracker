@@ -570,7 +570,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-108-weather-summary-tip";
+const BUILD_TAG = "2026-07-06-109-auto-seed-hospitals";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1204,6 +1204,7 @@ function startDataListeners(){
     if (changed) safeRender();
   });
   ensureUnitsSeeded();
+  ensureHospitalsSeeded();
 }
 function cleanupListeners(){
   [tasksPoll, eventsPoll, profilePoll, personnelPoll, vehiclesPoll, recordersPoll, hospitalsPoll, vitalsPoll].forEach(p => p && p.stop());
@@ -1226,6 +1227,33 @@ async function ensureUnitsSeeded(){
       if (!have.has(u.code)) await fsSetDoc(`units/${u.code}`, { name: u.label, order: UNITS.indexOf(u) });
     }
   } catch (e) { console.error("初始化單位資料失敗", e); }
+}
+// 預先整理好的急救責任醫院清單（電話多半只查得到總機，急診專線待現場
+// 確認後再到「基礎資料管理 → 醫院」更新）。首次啟用時自動補進 hospitals
+// 集合；用縣市＋醫院名稱判斷是否已存在，只補齊清單裡還沒有的項目，
+// 不會蓋掉使用者已經手動新增或修改過的資料。
+const HOSPITAL_SEED = [
+  { county:"臺中市", name:"中國醫藥大學附設醫院", level:"重度級", phone:"04-22052121", note:"總機，急診專線待確認" },
+  { county:"臺中市", name:"臺中榮民總醫院", level:"重度級", phone:"04-23592525", note:"總機，急診專線待確認" },
+  { county:"臺中市", name:"中山醫學大學附設醫院", level:"重度級", phone:"", note:"電話待確認" },
+  { county:"臺中市", name:"童綜合醫院", level:"重度級", phone:"", note:"電話待確認" },
+  { county:"臺中市", name:"澄清醫院中港院區", level:"重度級", phone:"", note:"電話待確認" },
+  { county:"臺中市", name:"光田綜合醫院大甲院區", level:"重度級", phone:"04-26885599", note:"總機，急診專線待確認" },
+  { county:"嘉義市", name:"嘉義基督教醫院", level:"重度級", phone:"", note:"電話待確認" },
+  { county:"嘉義縣", name:"長庚紀念醫院嘉義院區", level:"重度級", phone:"", note:"電話待確認" }
+];
+let hospitalsSeeded = false;
+async function ensureHospitalsSeeded(){
+  if (hospitalsSeeded) return;
+  hospitalsSeeded = true;
+  try {
+    const existing = await fsListCollection("hospitals");
+    const have = new Set(existing.map(h => `${h.county}|${h.name}`));
+    for (const h of HOSPITAL_SEED) {
+      if (!have.has(`${h.county}|${h.name}`)) await fsAddDoc("hospitals", h);
+    }
+    if (hospitalsPoll) await hospitalsPoll.refreshNow();
+  } catch (e) { console.error("初始化醫院資料失敗", e); }
 }
 
 /* =========================================================
