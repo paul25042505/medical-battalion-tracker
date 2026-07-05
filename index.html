@@ -562,7 +562,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-110-more-hub-drop-icon-grid";
+const BUILD_TAG = "2026-07-06-111-pending-profile-form";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1467,14 +1467,26 @@ function viewLogin(){
   </div>`;
 }
 function viewPending(){
+  const p = state.profile;
   return `
   <div class="login-wrap">
     <div class="login-mark">PHOENIX · DISPATCH</div>
     <h1 class="login-title" style="font-size:var(--text-lg);">帳號待審核</h1>
     <div class="pending-box">
-      <p>您的帳號（${esc(state.user.email)}）已建立，但尚未指派角色。<br><br>請聯繫系統管理員開通權限後再登入。</p>
+      <p>您的帳號（${esc(state.user.email)}）已建立，但尚未指派角色與單位。<br><br>可以先填寫下方個人資料，方便管理員審核；單位與角色仍須由管理員指派。</p>
     </div>
-    <button class="icon-btn" style="margin-top:20px;" onclick="window.__refreshProfile()">重新整理</button>
+    <form onsubmit="window.__savePendingProfile(event)" style="text-align:left; margin-top:6px; width:100%; max-width:360px;">
+      <div class="field"><label>姓名</label><input name="displayName" value="${esc(p.displayName||'')}"></div>
+      <div class="field"><label>階級</label>
+        <select name="rank">
+          <option value="">請選擇階級</option>
+          ${RANKS.map(r => `<option value="${r}" ${p.rank===r?'selected':''}>${r}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field"><label>電話</label><input name="phone" type="tel" inputmode="tel" value="${esc(p.phone||'')}" placeholder="例如：0912345678"></div>
+      <button class="btn-primary" type="submit">儲存個人資料</button>
+    </form>
+    <button class="icon-btn" style="margin-top:14px;" onclick="window.__refreshProfile()">重新整理</button>
     <button class="icon-btn" style="margin-top:10px;" onclick="window.__logout()">登出</button>
   </div>`;
 }
@@ -3171,6 +3183,15 @@ window.__saveProfile = (ev) => {
   updateOwnProfile(f.get("displayName"), f.get("rank"), f.get("phone")).then(() => {
     state.profileEditing = false; render();
   }).catch(err => showToast(`個人資料儲存失敗：[${err.code||'?'}] ${err.message||err}`));
+};
+// 帳號待審核期間也能先填好姓名/階級/電話，方便管理員審核時就看得到，不用等
+// 核准後才回頭補資料；角色與單位維持由管理員指派，這裡不提供這兩個欄位。
+window.__savePendingProfile = (ev) => {
+  ev.preventDefault();
+  const f = new FormData(ev.target);
+  updateOwnProfile(f.get("displayName"), f.get("rank"), f.get("phone")).then(() => {
+    render();
+  }).catch(err => showToast(`儲存失敗：[${err.code||'?'}] ${err.message||err}`));
 };
 window.__setRecordsFilter = (key, value) => { state.recordsFilter[key] = value; render(); };
 window.__toggleRecordsFilters = () => { state.recordsFiltersExpanded = !state.recordsFiltersExpanded; render(); };
