@@ -562,7 +562,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-111-pending-profile-form";
+const BUILD_TAG = "2026-07-06-112-rebrand-medtrack";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1456,9 +1456,9 @@ function chipGroup(name, options, selected, multi, triggers){
 function viewLogin(){
   return `
   <div class="login-wrap">
-    <div class="login-mark">PHOENIX · DISPATCH</div>
+    <div class="login-mark">MEDTRACK</div>
     <h1 class="login-title">衛生營車輛人員<br>動態管制系統</h1>
-    <p class="login-sub">Event-driven 任務追蹤 · 即時同步</p>
+    <p class="login-sub">Personnel · Vehicles · Operations</p>
     <button class="btn-google" onclick="window.__login()">
       <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.9 32.3 29.4 35 24 35c-6.1 0-11-4.9-11-11s4.9-11 11-11c2.8 0 5.3 1 7.3 2.7l5.7-5.7C33.6 6.5 29 4.5 24 4.5 13.2 4.5 4.5 13.2 4.5 24S13.2 43.5 24 43.5 43.5 34.8 43.5 24c0-1.2-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 16 19 13 24 13c2.8 0 5.3 1 7.3 2.7l5.7-5.7C33.6 6.5 29 4.5 24 4.5c-7.6 0-14.1 4.3-17.7 10.2z"/><path fill="#4CAF50" d="M24 43.5c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 34.6 26.7 35.5 24 35.5c-5.3 0-9.8-3.6-11.4-8.4l-6.5 5C9.7 39.1 16.3 43.5 24 43.5z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.7 2-2 3.7-3.7 5l6.2 5.2C41 34.8 43.5 30 43.5 24c0-1.2-.1-2.3-.4-3.5z"/></svg>
       使用 Google 帳號登入
@@ -1470,7 +1470,7 @@ function viewPending(){
   const p = state.profile;
   return `
   <div class="login-wrap">
-    <div class="login-mark">PHOENIX · DISPATCH</div>
+    <div class="login-mark">MEDTRACK</div>
     <h1 class="login-title" style="font-size:var(--text-lg);">帳號待審核</h1>
     <div class="pending-box">
       <p>您的帳號（${esc(state.user.email)}）已建立，但尚未指派角色與單位。<br><br>可以先填寫下方個人資料，方便管理員審核；單位與角色仍須由管理員指派。</p>
@@ -1493,7 +1493,7 @@ function viewPending(){
 function viewDisabled(){
   return `
   <div class="login-wrap">
-    <div class="login-mark">PHOENIX · DISPATCH</div>
+    <div class="login-mark">MEDTRACK</div>
     <h1 class="login-title" style="font-size:var(--text-lg);">帳號已停用</h1>
     <div class="pending-box">
       <p>您的帳號（${esc(state.user.email)}）已被系統管理員停用。<br><br>如有疑問請聯繫系統管理員。</p>
