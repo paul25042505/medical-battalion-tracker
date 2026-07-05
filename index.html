@@ -465,7 +465,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-05-92-vitals-add-button-swipe-relax";
+const BUILD_TAG = "2026-07-05-93-vitals-form-fixes";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -574,7 +574,10 @@ function poll(fn){
   tick();
   return {
     stop(){ stopped = true; },
-    refreshNow(){ if (!stopped) tick(); }
+    // 回傳 tick() 的 promise，讓少數需要「確定資料已刷新完成才繼續」的呼叫端
+    // （例如新增患者紀錄後要等最新清單回來才切換畫面）可以 await；其餘既有
+    // 呼叫端沒有接這個回傳值，行為不受影響，仍是 fire-and-forget。
+    refreshNow(){ return stopped ? Promise.resolve() : tick(); }
   };
 }
 
@@ -984,12 +987,14 @@ async function addVitalsEntry(taskId, data){
     seq: Date.now()
   });
   showToast("已記錄患者狀況");
-  if (vitalsPoll) vitalsPoll.refreshNow();
+  // 等最新清單真的抓回來才 resolve，呼叫端（送出後跳回歷史紀錄畫面）才不會
+  // 因為 state.vitals 還沒更新，誤判成「還沒有任何紀錄」而又跳回新增表單。
+  if (vitalsPoll) await vitalsPoll.refreshNow();
 }
 async function updateVitalsEntry(id, fields){
   await fsSetDoc(`vitals/${id}`, fields);
   showToast("已更新患者紀錄");
-  if (vitalsPoll) vitalsPoll.refreshNow();
+  if (vitalsPoll) await vitalsPoll.refreshNow();
 }
 /* =========================================================
    7) Auth 流程
@@ -1922,6 +1927,9 @@ function viewTaskDetail(taskId){
   if (vm) {
     const editingVitals = vm.id ? taskVitals.find(v => v.id === vm.id) : null;
     const isFirstVitals = !editingVitals && !hasPatient;
+    // 血壓拆成收縮壓／舒張壓兩格輸入，儲存時仍合併成「收縮/舒張」字串，
+    // 沿用既有的 bp 欄位與所有顯示邏輯（時間軸、彈窗歷史列表皆顯示 120/80）。
+    const [bpSys, bpDia] = (editingVitals?.bp || "").split("/");
     // 有既有紀錄時，預設只顯示歷史紀錄本身；新增紀錄改成要另外點按鈕，
     // 才會進到下一層顯示輸入表單，外層清單不會被表單擠在一起。
     const showHistory = !editingVitals && hasPatient && !vm.adding;
@@ -1965,11 +1973,18 @@ function viewTaskDetail(taskId){
                 <button type="button" class="icon-btn" style="flex-shrink:0;" onclick="window.__resetVitalsTime()">套用目前</button>
               </div>
             </div>
-            <div class="field"><label>血壓（選填）</label><input id="vf-bp" placeholder="例如：120/80" value="${esc(editingVitals?.bp||'')}"></div>
-            <div class="field"><label>心跳 次/分（選填）</label><input id="vf-hr" type="number" inputmode="numeric" value="${esc(editingVitals?.hr||'')}"></div>
-            <div class="field"><label>呼吸 次/分（選填）</label><input id="vf-rr" type="number" inputmode="numeric" value="${esc(editingVitals?.rr||'')}"></div>
-            <div class="field"><label>血氧 SpO2 %（選填）</label><input id="vf-spo2" type="number" inputmode="numeric" value="${esc(editingVitals?.spo2||'')}"></div>
-            <div class="field"><label>體溫 °C（選填）</label><input id="vf-temp" type="number" step="0.1" inputmode="decimal" value="${esc(editingVitals?.temp||'')}"></div>
+            <div class="field">
+              <label>血壓（選填）</label>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <input id="vf-bp-sys" type="text" inputmode="numeric" placeholder="收縮壓 120" style="flex:1;" value="${esc(bpSys||'')}">
+                <span style="color:var(--muted); font-weight:700;">/</span>
+                <input id="vf-bp-dia" type="text" inputmode="numeric" placeholder="舒張壓 80" style="flex:1;" value="${esc(bpDia||'')}">
+              </div>
+            </div>
+            <div class="field"><label>心跳 次/分（選填）</label><input id="vf-hr" type="text" inputmode="numeric" value="${esc(editingVitals?.hr||'')}"></div>
+            <div class="field"><label>呼吸 次/分（選填）</label><input id="vf-rr" type="text" inputmode="numeric" value="${esc(editingVitals?.rr||'')}"></div>
+            <div class="field"><label>血氧 SpO2 %（選填）</label><input id="vf-spo2" type="text" inputmode="numeric" value="${esc(editingVitals?.spo2||'')}"></div>
+            <div class="field"><label>體溫 °C（選填）</label><input id="vf-temp" type="text" inputmode="decimal" value="${esc(editingVitals?.temp||'')}"></div>
             <div class="field"><label>意識程度 GCS（選填）</label><input id="vf-gcs" placeholder="例如：E4V5M6 或 15" value="${esc(editingVitals?.gcs||'')}"></div>
             <div class="field"><label>備註（選填）</label><input id="vf-note" value="${esc(editingVitals?.note||'')}"></div>
             <button class="btn-primary" type="submit">${editingVitals?'儲存修正':'送出紀錄'}</button>
@@ -2765,8 +2780,9 @@ window.__resetVitalsTime = () => {
 window.__submitVitals = (taskId, id) => {
   const get = (elId) => document.getElementById(elId)?.value || "";
   const timeVal = get("vf-time");
+  const bpSys = get("vf-bp-sys"), bpDia = get("vf-bp-dia");
   const data = {
-    complaint: get("vf-complaint"), bp: get("vf-bp"), hr: get("vf-hr"), rr: get("vf-rr"),
+    complaint: get("vf-complaint"), bp: (bpSys || bpDia) ? `${bpSys}/${bpDia}` : "", hr: get("vf-hr"), rr: get("vf-rr"),
     spo2: get("vf-spo2"), temp: get("vf-temp"), gcs: get("vf-gcs"), note: get("vf-note")
   };
   let action;
@@ -2778,8 +2794,9 @@ window.__submitVitals = (taskId, id) => {
     if (timeVal) data.timestamp = todayAt(timeVal);
     action = addVitalsEntry(taskId, data);
   }
-  // 寫入成功才關閉彈窗並重繪；失敗要留在原畫面讓使用者看到錯誤訊息並可重試。
-  action.then(() => { state.vitalsModal = null; render(); })
+  // 寫入成功才跳回上一層（歷史紀錄清單）並重繪；失敗要留在原畫面讓使用者
+  // 看到錯誤訊息並可重試。不直接關閉整個彈窗，避免跳出去又要重新點進來。
+  action.then(() => { state.vitalsModal = { taskId, id: null, adding: false }; render(); })
         .catch(err => showToast(`儲存失敗：[${err.code||'?'}] ${err.message||err}`));
 };
 window.__setAdminTab = (t) => { state.adminTab = t; state._usersCache = null; render(); window.scrollTo(0,0); };
