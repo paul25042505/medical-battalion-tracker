@@ -176,6 +176,21 @@
   .vitals-item{display:flex; flex-direction:column; gap:2px;}
   .vitals-item .lbl{font-size:10.5px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.04em;}
   .vitals-item .val{font-family:var(--mono); font-size:15px; font-weight:700; color:var(--text);}
+  .patient-cta{
+    display:flex; align-items:center; gap:14px; width:100%; margin-bottom:14px;
+    background:linear-gradient(180deg, rgba(255,59,48,0.11), rgba(255,59,48,0.04));
+    border:1.5px solid rgba(255,59,48,0.32); border-radius:var(--radius-lg);
+    padding:16px 16px; text-align:left; box-shadow:var(--shadow-xs);
+  }
+  .patient-cta:active{transform:scale(0.98);}
+  .patient-cta-icon{
+    width:46px; height:46px; border-radius:50%; background:rgba(255,59,48,0.15); color:var(--red);
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .patient-cta-text{flex:1; min-width:0;}
+  .patient-cta-title{font-size:16.5px; font-weight:800; color:var(--red);}
+  .patient-cta-sub{font-size:13px; color:var(--muted); margin-top:3px; line-height:1.5;}
+  .patient-cta-chev{color:var(--red); opacity:0.55; flex-shrink:0;}
 
   /* ---- home ---- */
   .home-date{font-size:15px; color:var(--muted); font-weight:600; font-family:var(--mono); margin-bottom:16px;}
@@ -443,7 +458,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-05-88-fix-scroll-tracking-root-cause";
+const BUILD_TAG = "2026-07-05-89-patient-cta-card";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1266,7 +1281,8 @@ const ICON_PATHS = {
   heartbeat: `<path d="M2 12h4l2-6.5 4 15 3-11 2 2.5h5"/>`,
   hospital: `<rect x="5" y="9" width="14" height="12" rx="1"/><path d="M9.5 21v-5.5h5V21"/><path d="M12 4v4.5M9.8 6.2h4.4"/>`,
   logout: `<path d="M14 4H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6"/><path d="M10 12h10m0 0-3.5-3.5M20 12l-3.5 3.5"/>`,
-  refresh: `<path d="M4 12a8 8 0 0 1 14-5.2M20 12a8 8 0 0 1-14 5.2"/><path d="M18 3v4h-4M6 21v-4h4"/>`
+  refresh: `<path d="M4 12a8 8 0 0 1 14-5.2M20 12a8 8 0 0 1-14 5.2"/><path d="M18 3v4h-4M6 21v-4h4"/>`,
+  chevronRight: `<path d="M8.5 5 15.5 12 8.5 19"/>`
 };
 function icon(name, size){
   size = size || 20;
@@ -1798,7 +1814,16 @@ function viewTaskDetail(taskId){
           ${v.note ? `<div class="step-note" style="margin-top:8px;">${esc(v.note)}</div>` : ""}
         </div>`).join("")}
       ${canDoReport ? `<button class="icon-btn danger" style="width:100%;margin-top:2px;" onclick="window.__startVitals('${taskId}')">${icon('heartbeat',16)} 新增生命徵象</button>` : ""}
-    </div>` : `<button class="icon-btn danger" style="width:100%;margin-top:14px;" onclick="window.__startVitals('${taskId}')">${icon('alert',18)} 記錄患者狀況</button>`) : "";
+    </div>` : `
+    <div class="section-label">患者狀況</div>
+    <button class="patient-cta" onclick="window.__startVitals('${taskId}')">
+      <div class="patient-cta-icon">${icon('alert',22)}</div>
+      <div class="patient-cta-text">
+        <div class="patient-cta-title">記錄患者狀況</div>
+        <div class="patient-cta-sub">如遇突發傷病患，點此記錄主訴與生命徵象</div>
+      </div>
+      ${icon('chevronRight',20).replace('<svg ', '<svg class="patient-cta-chev" ')}
+    </button>`) : "";
 
   // ---- 回報表單／Sticky Bottom Action Bar ----
   let reportModal = "";
