@@ -41,9 +41,25 @@
     --card-shadow: var(--shadow-sm);
     --mono:'JetBrains Mono', ui-monospace, monospace;
     --sans:-apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+    /* ---- Typography tokens（比照 iOS 26 / Apple Health · Wallet · Reminders 的字級節奏）----
+       全站一律從這 6 級挑，不要再各頁面自己開字級，資訊層級靠字重/顏色/留白，不要靠一堆
+       微調過的字級（13.5px、14.5px...）。 */
+    --text-xs: 13px;   /* Label、meta 小字、時間戳記 */
+    --text-sm: 15px;   /* 次要文字（灰色說明、輔助資訊） */
+    --text-base: 17px; /* 內文、表單輸入、按鈕文字 */
+    --text-lg: 20px;   /* 次級標題 */
+    --text-xl: 22px;   /* 頁面／卡片主標題 */
+    --text-2xl: 24px;  /* 生命徵象等重點數值 */
+    /* ---- 8pt 間距節奏：卡片內距 20px（2.5x8）、區塊間距 24px（3x8）、
+       Label 與內容固定間距 6px（接近 1x8 的細節間距，維持既有密度）。 ---- */
+    --space-card: 20px;
+    --space-section: 24px;
+    --space-label-gap: 6px;
+    --btn-height: 56px;
+    --radius-btn: 18px;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
-  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:var(--sans); font-size:17px; overflow-x:hidden; max-width:100%; -webkit-font-smoothing:antialiased;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:var(--sans); font-size:var(--text-base); overflow-x:hidden; max-width:100%; -webkit-font-smoothing:antialiased;}
   html{height:100%;}
   /* 注意：body 這裡務必用 min-height 而不是 height —— 兩者都設 height:100% 會讓
      body 變成自己獨立捲動（body.scrollTop 捲動），導致 window.scrollY 永遠停在 0，
@@ -62,10 +78,10 @@
     background:var(--amber); color:#1A1200;
     padding:10px 14px; padding-top:calc(10px + env(safe-area-inset-top));
     display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;
-    font-size:13px; font-weight:700; text-align:center;
+    font-size:var(--text-xs); font-weight:700; text-align:center;
   }
   .preview-banner button{
-    background:#1A1200; color:#fff; border:none; border-radius:8px; padding:6px 12px; font-size:12.5px; font-weight:700;
+    background:#1A1200; color:#fff; border:none; border-radius:8px; padding:6px 12px; font-size:var(--text-xs); font-weight:700;
   }
 
   /* ---- 電話號碼 ---- */
@@ -91,9 +107,9 @@
     color:var(--text); min-width:0;
     display:flex; align-items:center; gap:9px;
   }
-  .topbar-sub .name{font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:21px; font-weight:700;}
+  .topbar-sub .name{font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:var(--text-xl); font-weight:700;}
   .topbar-sub .rank{
-    font-family:var(--sans); font-size:12px; font-weight:700; color:var(--muted);
+    font-family:var(--sans); font-size:var(--text-xs); font-weight:700; color:var(--muted);
     background:var(--panel-2); padding:3px 10px; border-radius:999px; letter-spacing:0.02em;
   }
   .topbar-icon-btn{background:var(--panel-2); border:none; color:var(--text); width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;}
@@ -103,20 +119,20 @@
 
   /* ---- login ---- */
   .login-wrap{min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; text-align:center;}
-  .login-mark{font-family:var(--mono); font-size:13px; letter-spacing:0.25em; color:var(--blue); margin-bottom:12px;}
+  .login-mark{font-family:var(--mono); font-size:var(--text-xs); letter-spacing:0.25em; color:var(--blue); margin-bottom:12px;}
   .login-title{font-size:32px; font-weight:800; line-height:1.3; margin:0 0 8px 0; letter-spacing:-0.01em;}
-  .login-sub{color:var(--muted); font-size:16.5px; margin-bottom:38px;}
+  .login-sub{color:var(--muted); font-size:var(--text-sm); margin-bottom:38px;}
   .btn-google{
     display:flex; align-items:center; justify-content:center; gap:10px;
-    background:#fff; color:#1F2937; font-weight:600; font-size:17.5px;
+    background:#fff; color:#1F2937; font-weight:600; font-size:var(--text-base);
     padding:17px 23px; border-radius:var(--radius-md); border:1px solid var(--border); width:100%; max-width:340px;
     box-shadow:var(--shadow-sm);
   }
   .pending-box{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:24px; max-width:360px; margin-top:22px; box-shadow:var(--shadow-sm);}
-  .pending-box p{color:var(--text); font-size:15.5px; line-height:1.7; margin:0;}
+  .pending-box p{color:var(--text); font-size:var(--text-sm); line-height:1.7; margin:0;}
 
   /* ---- cards ---- */
-  .section-label{font-family:var(--mono); font-size:12.5px; font-weight:700; color:var(--muted); letter-spacing:0.09em; text-transform:uppercase; margin:26px 4px 13px 4px;}
+  .section-label{font-family:var(--mono); font-size:var(--text-xs); font-weight:700; color:var(--muted); letter-spacing:0.09em; text-transform:uppercase; margin:var(--space-section) 4px 13px 4px;}
   .section-label.tight{margin-top:6px;}
   .section-label:first-child{margin-top:0;}
   .task-card{
@@ -131,10 +147,10 @@
   .task-card.s-returning::before{background:var(--blue);}
   .task-card.s-completed::before{background:var(--green);}
   .task-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
-  .task-title{font-size:19px; font-weight:700; margin:0 0 4px 0; letter-spacing:-0.01em;}
-  .task-meta{color:var(--muted); font-size:14.5px; font-family:var(--mono); font-weight:500;}
+  .task-title{font-size:var(--text-lg); font-weight:700; margin:0 0 4px 0; letter-spacing:-0.01em;}
+  .task-meta{color:var(--muted); font-size:var(--text-sm); font-family:var(--mono); font-weight:500;}
   .badge{
-    display:inline-flex; align-items:center; gap:6px; font-size:13px; font-family:var(--mono); font-weight:700;
+    display:inline-flex; align-items:center; gap:6px; font-size:var(--text-xs); font-family:var(--mono); font-weight:700;
     padding:7px 13px; border-radius:var(--radius-sm); white-space:nowrap;
   }
   .badge .dot{width:6px; height:6px; border-radius:50%; background:currentColor; flex-shrink:0;}
@@ -144,16 +160,16 @@
   .badge.transit{background:rgba(107,35,199,0.12); color:#6B23C7;}
   .badge.returning{background:rgba(0,102,255,0.12); color:var(--blue);}
   .badge.completed{background:rgba(52,199,89,0.13); color:#177A34;}
-  .task-foot{display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:13.5px; color:var(--muted);}
-  .task-crew{display:flex; flex-direction:column; gap:6px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border); font-size:14px; color:var(--text); font-family:var(--mono); font-weight:500;}
-  .empty{color:var(--muted); font-size:15.5px; text-align:center; padding:46px 22px; border:1px dashed var(--border-strong); border-radius:var(--radius-lg);}
+  .task-foot{display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:var(--text-xs); color:var(--muted);}
+  .task-crew{display:flex; flex-direction:column; gap:6px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border); font-size:var(--text-sm); color:var(--text); font-family:var(--mono); font-weight:500;}
+  .empty{color:var(--muted); font-size:var(--text-sm); text-align:center; padding:46px 22px; border:1px dashed var(--border-strong); border-radius:var(--radius-lg);}
 
   /* ---- 患者狀況：突發狀況時記錄生命徵象/主訴，任務卡片凸顯提示 ---- */
   .task-card.has-patient{border-color:rgba(255,59,48,0.35); box-shadow:0 0 0 1px rgba(255,59,48,0.16), var(--shadow-sm);}
   .task-card.has-patient::before{background:var(--red); width:6px;}
   .patient-badge{
     display:inline-flex; align-items:center; gap:4px; padding:5px 10px; border-radius:999px;
-    background:var(--red); color:#fff; font-size:12px; font-weight:700; white-space:nowrap;
+    background:var(--red); color:#fff; font-size:var(--text-xs); font-weight:700; white-space:nowrap;
   }
   @keyframes patientCardIn{from{opacity:0; transform:translateY(3px);} to{opacity:1; transform:translateY(0);}}
   .patient-card{
@@ -164,7 +180,7 @@
   }
   .patient-card:active{transform:scale(0.99);}
   .patient-card.has-record{background:rgba(255,59,48,0.045); border-color:rgba(255,59,48,0.24);}
-  .patient-card-top{display:flex; align-items:flex-start; gap:13px; padding:16px 16px 4px 16px;}
+  .patient-card-top{display:flex; align-items:flex-start; gap:13px; padding:var(--space-card) var(--space-card) 4px var(--space-card);}
   .patient-card-icon{
     width:44px; height:44px; border-radius:50%; flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
@@ -173,86 +189,89 @@
   .patient-card.has-record .patient-card-icon{background:rgba(255,59,48,0.14); color:var(--red);}
   .patient-card-body{flex:1; min-width:0; padding-top:3px;}
   .patient-card-title-row{display:flex; align-items:center; justify-content:space-between; gap:8px;}
-  .patient-card-title{font-size:16px; font-weight:800; color:var(--text);}
+  .patient-card-title{font-size:var(--text-base); font-weight:800; color:var(--text);}
   .patient-card-badge{
     display:inline-flex; align-items:center; gap:4px; padding:4px 9px; border-radius:999px;
-    background:var(--red); color:#fff; font-size:11px; font-weight:700; white-space:nowrap; flex-shrink:0;
+    background:var(--red); color:#fff; font-size:var(--text-xs); font-weight:700; white-space:nowrap; flex-shrink:0;
   }
-  .patient-card-sub{font-size:13.5px; font-weight:700; color:var(--muted); margin-top:3px;}
-  .patient-card-desc{font-size:13px; color:var(--muted); line-height:1.5; margin-top:5px;}
+  .patient-card-sub{font-size:var(--text-xs); font-weight:700; color:var(--muted); margin-top:3px;}
+  .patient-card-desc{font-size:var(--text-sm); color:var(--muted); line-height:1.5; margin-top:5px;}
   .patient-card.has-record .patient-card-desc{color:#8a5450;}
   .patient-card-action{
-    display:flex; align-items:center; justify-content:center; gap:6px;
-    margin:14px 16px 16px 16px; padding:12px; border-radius:var(--radius-md);
-    font-size:14.5px; font-weight:700; color:#fff; background:var(--blue);
+    display:flex; align-items:center; justify-content:center; gap:6px; min-height:var(--btn-height);
+    margin:14px var(--space-card) var(--space-card) var(--space-card); border-radius:var(--radius-btn);
+    font-size:var(--text-base); font-weight:600; color:#fff; background:var(--blue);
   }
   .patient-card.has-record .patient-card-action{background:var(--red);}
   .vitals-history{margin-bottom:4px;}
   /* 患者紀錄改成獨立頁面（不再是彈窗）後，欄位較多，分成一區一區的卡片，
      比純文字的 section-label 更容易掃視、知道填到哪一段了。 */
-  .form-section{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:18px; margin-bottom:16px; box-shadow:var(--shadow-xs);}
+  .form-section{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:var(--space-card); margin-bottom:var(--space-section); box-shadow:var(--shadow-xs);}
   .form-section-title{
-    font-size:15.5px; font-weight:800; color:var(--text); margin-bottom:16px; padding-bottom:12px;
+    font-size:var(--text-sm); font-weight:800; color:var(--text); margin-bottom:16px; padding-bottom:12px;
     border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px;
   }
   .form-section-title .step-num{
-    width:22px; height:22px; border-radius:50%; background:var(--blue); color:#fff; font-size:12px; font-weight:800;
+    width:22px; height:22px; border-radius:50%; background:var(--blue); color:#fff; font-size:var(--text-xs); font-weight:800;
     display:flex; align-items:center; justify-content:center; flex-shrink:0;
   }
   .form-section .field:last-child{margin-bottom:0;}
   .vitals-entry{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 14px; margin-bottom:10px; box-shadow:var(--shadow-xs);}
   .vitals-entry:last-child{margin-bottom:0;}
   .vitals-entry-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:9px;}
-  .vitals-entry-time{font-family:var(--mono); font-size:12.5px; color:var(--muted); font-weight:600;}
-  /* 主訴是整份紀錄裡最關鍵的一句話，不能跟旁邊的內容一樣不起眼；
-     改成獨立的紅色系提示框，比照患者身分那行的「凸顯區塊」做法。 */
+  .vitals-entry-time{font-family:var(--mono); font-size:var(--text-xs); color:var(--muted); font-weight:600;}
+  /* 主訴是整份紀錄裡最關鍵的一句話：淡紅底、圓角、無粗外框，靠底色跟
+     字重凸顯，不是靠邊框。 */
   .vitals-entry-complaint{
-    font-size:17px; font-weight:800; color:var(--text); line-height:1.4;
-    background:rgba(255,59,48,0.06); border:1px solid rgba(255,59,48,0.18); border-radius:var(--radius-sm);
+    font-size:var(--text-base); font-weight:800; color:var(--text); line-height:1.4;
+    background:rgba(255,59,48,0.08); border-radius:var(--radius-md);
     padding:11px 13px; margin-bottom:12px;
   }
   .vitals-entry-complaint b{
-    display:block; font-size:10.5px; font-weight:700; color:var(--red); text-transform:uppercase;
-    letter-spacing:0.05em; margin-bottom:4px;
+    display:block; font-size:var(--text-xs); font-weight:700; color:var(--red); text-transform:uppercase;
+    letter-spacing:0.05em; margin-bottom:var(--space-label-gap);
   }
   .vitals-stage-tag{
-    display:inline-block; padding:2px 7px; border-radius:6px; font-size:10.5px; font-weight:800;
+    display:inline-block; padding:2px 7px; border-radius:6px; font-size:var(--text-xs); font-weight:800;
     background:rgba(0,102,255,0.12); color:var(--blue); margin-right:7px; vertical-align:middle;
   }
   .vitals-stage-tag.alt{background:var(--panel-2); color:var(--muted);}
-  .vitals-subdetail{font-size:13px; color:var(--muted); line-height:1.7; margin-bottom:9px;}
+  .vitals-subdetail{font-size:var(--text-xs); color:var(--muted); line-height:1.7; margin-bottom:9px;}
   /* 患者身分是重點資訊，不能跟其他次要文字一樣灰灰的不顯眼。 */
   .vitals-patient-line{
-    display:flex; align-items:center; gap:7px; font-size:14.5px; font-weight:800; color:var(--text);
-    background:rgba(0,102,255,0.06); border-radius:var(--radius-sm); padding:8px 10px; margin-bottom:10px;
+    display:flex; align-items:center; gap:7px; font-size:var(--text-sm); font-weight:800; color:var(--text);
+    background:rgba(0,102,255,0.06); border-radius:var(--radius-md); padding:8px 10px; margin-bottom:10px;
   }
   .vitals-patient-line svg{color:var(--blue); flex-shrink:0;}
   /* 主訴細節、過去病史、過敏史這些文字型的重要資訊，改成跟生命徵象數值
      一樣「標籤淺灰、內容粗體深色」的排法，不要整段都灰灰的看不清楚。 */
-  .detail-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:10px 14px; margin-bottom:10px;}
-  .detail-item{display:flex; flex-direction:column; gap:2px;}
-  .detail-item .lbl{font-size:10.5px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.04em;}
-  .detail-item .val{font-size:14px; font-weight:700; color:var(--text); line-height:1.4;}
+  .detail-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:10px var(--space-section); margin-bottom:10px;}
+  .detail-item{display:flex; flex-direction:column; gap:var(--space-label-gap);}
+  .detail-item .lbl{font-size:var(--text-xs); color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.04em;}
+  .detail-item .val{font-size:var(--text-sm); font-weight:700; color:var(--text); line-height:1.4;}
   .vitals-treatments{display:flex; flex-wrap:wrap; gap:6px; margin-top:9px;}
-  .tag-pill{display:inline-block; padding:4px 10px; border-radius:999px; background:var(--panel-2); border:1px solid var(--border); font-size:12.5px; font-weight:700; color:var(--text);}
+  /* 處置項目：Filled Chip，淺灰底、無外框，比較接近原生 iOS 標籤樣式。 */
+  .tag-pill{display:inline-block; padding:6px 12px; border-radius:999px; background:var(--panel-2); border:none; font-size:var(--text-xs); font-weight:700; color:var(--text);}
   .gcs-hint-btn{
     display:inline-flex; align-items:center; gap:3px; background:none; border:none; color:var(--blue);
-    font-size:12.5px; font-weight:700; font-family:var(--mono); padding:0; margin-left:4px; vertical-align:middle;
+    font-size:var(--text-xs); font-weight:700; font-family:var(--mono); padding:0; margin-left:4px; vertical-align:middle;
   }
   .gcs-hint-panel{
     background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-md);
-    padding:12px 14px; margin-bottom:10px; font-size:12.5px; color:var(--text); line-height:1.7;
+    padding:12px 14px; margin-bottom:10px; font-size:var(--text-xs); color:var(--text); line-height:1.7;
   }
-  .vitals-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(78px,1fr)); gap:10px 14px;}
-  .vitals-item{display:flex; flex-direction:column; gap:2px;}
-  .vitals-item .lbl{font-size:10.5px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.04em;}
-  .vitals-item .val{font-family:var(--mono); font-size:15px; font-weight:700; color:var(--text);}
+  /* 生命徵象：Label 在上（淺灰小字）、數值在下（24px Bold），跟其他
+     頁面的重點數值排法統一。 */
+  .vitals-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(78px,1fr)); gap:14px var(--space-section);}
+  .vitals-item{display:flex; flex-direction:column; gap:var(--space-label-gap);}
+  .vitals-item .lbl{font-size:var(--text-xs); color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.04em;}
+  .vitals-item .val{font-family:var(--mono); font-size:var(--text-2xl); font-weight:700; color:var(--text);}
 
   /* ---- home ---- */
-  .home-date{font-size:15px; color:var(--muted); font-weight:600; font-family:var(--mono); margin-bottom:16px;}
+  .home-date{font-size:var(--text-sm); color:var(--muted); font-weight:600; font-family:var(--mono); margin-bottom:16px;}
   .weather-card{
     display:flex; align-items:center; gap:14px; background:var(--panel); border:1px solid var(--border);
-    border-radius:var(--radius-md); padding:16px 18px; margin-bottom:18px; color:var(--muted); font-size:14px; box-shadow:var(--shadow-xs);
+    border-radius:var(--radius-md); padding:16px 18px; margin-bottom:18px; color:var(--muted); font-size:var(--text-sm); box-shadow:var(--shadow-xs);
   }
   .weather-card .emoji{font-size:30px;}
   .hazard-banner{margin-bottom:14px;}
@@ -263,12 +282,12 @@
   }
   .hazard-row:last-child{margin-bottom:0;}
   .hazard-txt{flex:1; min-width:0;}
-  .hazard-name{font-weight:700; font-size:14.5px; color:var(--text);}
-  .hazard-time{font-size:12.5px; color:var(--muted); font-family:var(--mono); margin-top:2px;}
+  .hazard-name{font-weight:700; font-size:var(--text-sm); color:var(--text);}
+  .hazard-time{font-size:var(--text-xs); color:var(--muted); font-family:var(--mono); margin-top:2px;}
   .stat-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:8px;}
   .stat-tile{border-radius:var(--radius-md); padding:18px 10px; text-align:center; box-shadow:var(--shadow-xs); border:1px solid transparent;}
-  .stat-tile .num{font-size:27px; font-weight:800; font-family:var(--mono); letter-spacing:-0.02em;}
-  .stat-tile .lbl{font-size:13px; font-weight:600; margin-top:5px;}
+  .stat-tile .num{font-size:var(--text-2xl); font-weight:800; font-family:var(--mono); letter-spacing:-0.02em;}
+  .stat-tile .lbl{font-size:var(--text-xs); font-weight:600; margin-top:5px;}
   .stat-tile.t-blue{background:#EAF1FF;} .stat-tile.t-blue .num{color:#0052E0;} .stat-tile.t-blue .lbl{color:#0052E0; opacity:0.7;}
   .stat-tile.t-orange{background:#FFF3E3;} .stat-tile.t-orange .num{color:#B45F00;} .stat-tile.t-orange .lbl{color:#B45F00; opacity:0.7;}
   .stat-tile.t-green{background:#E9F9EF;} .stat-tile.t-green .num{color:#177A34;} .stat-tile.t-green .lbl{color:#177A34; opacity:0.7;}
@@ -276,7 +295,7 @@
   .quick-btn{
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px;
     background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md); padding:18px 8px;
-    color:var(--text); font-size:13.5px; font-weight:600; box-shadow:var(--shadow-xs);
+    color:var(--text); font-size:var(--text-xs); font-weight:600; box-shadow:var(--shadow-xs);
   }
   .quick-icon-wrap{width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center;}
   .quick-btn .navicon{font-size:26px;}
@@ -287,15 +306,15 @@
   }
 
   /* ---- task detail ---- */
-  .back-row{display:flex; align-items:center; gap:8px; margin-bottom:16px; color:var(--blue); font-size:15.5px; font-weight:600;}
-  .back-row button{background:none; border:none; color:var(--blue); font-size:15.5px; font-weight:600; padding:6px 0; font-family:var(--sans);}
-  .detail-head{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; margin-bottom:18px; box-shadow:var(--shadow-sm);}
-  .detail-head .task-title{font-size:20px;}
-  .kv{display:grid; grid-template-columns:96px 1fr; gap:12px 12px; margin-top:14px; font-size:15px;}
-  .kv .k{color:var(--muted); font-weight:600; font-family:var(--mono); font-size:12px; padding-top:2px; text-transform:uppercase; letter-spacing:0.04em;}
+  .back-row{display:flex; align-items:center; gap:8px; margin-bottom:16px; color:var(--blue); font-size:var(--text-sm); font-weight:600;}
+  .back-row button{background:none; border:none; color:var(--blue); font-size:var(--text-sm); font-weight:600; padding:6px 0; font-family:var(--sans);}
+  .detail-head{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:var(--space-card); margin-bottom:var(--space-section); box-shadow:var(--shadow-sm);}
+  .detail-head .task-title{font-size:var(--text-lg);}
+  .kv{display:grid; grid-template-columns:96px 1fr; gap:12px 12px; margin-top:14px; font-size:var(--text-sm);}
+  .kv .k{color:var(--muted); font-weight:600; font-family:var(--mono); font-size:var(--text-xs); padding-top:2px; text-transform:uppercase; letter-spacing:0.04em;}
   .kv .v{color:var(--text);}
 
-  .no-permission{color:var(--muted); font-size:14.5px; text-align:center; padding:16px; border:1px dashed var(--border-strong); border-radius:var(--radius-md); margin-bottom:20px;}
+  .no-permission{color:var(--muted); font-size:var(--text-sm); text-align:center; padding:16px; border:1px dashed var(--border-strong); border-radius:var(--radius-md); margin-bottom:20px;}
 
   /* ---- 勤務進度 Stepper（融合實際回報內容＋未來步驟預覽） ---- */
   .stepper{position:relative; padding-left:32px; margin:14px 0 20px 0;}
@@ -309,13 +328,13 @@
   }
   .step-item.done .step-dot{background:var(--green); border-color:var(--green);}
   .step-item.current .step-dot{background:var(--blue); border-color:var(--blue); box-shadow:0 0 0 4px rgba(0,102,255,0.16);}
-  .step-label{font-size:14.5px; font-weight:600; color:var(--muted);}
+  .step-label{font-size:var(--text-sm); font-weight:600; color:var(--muted);}
   .step-item.done .step-label{color:var(--text);}
   .step-item.current .step-label{color:var(--blue); font-weight:700;}
   .step-body{flex:1; min-width:0; padding-top:1px;}
   .step-head{display:flex; align-items:center; justify-content:space-between; gap:8px;}
-  .step-meta{font-family:var(--mono); font-size:13px; color:var(--muted); font-weight:500; margin-top:3px;}
-  .step-note{font-size:14px; color:var(--text); margin-top:5px;}
+  .step-meta{font-family:var(--mono); font-size:var(--text-xs); color:var(--muted); font-weight:500; margin-top:3px;}
+  .step-note{font-size:var(--text-sm); color:var(--text); margin-top:5px;}
 
   /* ---- Sticky Bottom Action Bar：主要回報按鈕固定在畫面底部，方便單手操作 ---- */
   .sticky-action-bar{
@@ -325,20 +344,24 @@
     padding:12px 16px; display:flex; gap:10px;
   }
   .sticky-action-bar .btn-primary, .sticky-action-bar .btn-ghost{
-    flex:1; margin-top:0; padding:16px; font-size:16px; display:flex; align-items:center; justify-content:center; gap:8px;
+    flex:1; margin-top:0;
   }
   .btn-primary.green{background:var(--green); box-shadow:0 4px 14px rgba(52,199,89,0.25);}
   .sticky-bar-spacer{height:78px;}
-  .btn-ghost{background:none; border:1.5px solid var(--border); color:var(--text); font-weight:600; border-radius:var(--radius-sm); padding:15px; font-size:16px; font-family:var(--sans);}
+  .btn-ghost{
+    background:none; border:1.5px solid var(--border); color:var(--text); font-weight:600;
+    border-radius:var(--radius-btn); min-height:var(--btn-height); padding:0 20px; font-size:var(--text-base); font-family:var(--sans);
+    display:flex; align-items:center; justify-content:center; gap:8px;
+  }
 
-  .tl-edit-btn{background:none; border:none; color:var(--blue); font-size:13px; font-weight:600; padding:2px 0; flex-shrink:0;}
+  .tl-edit-btn{background:none; border:none; color:var(--blue); font-size:var(--text-xs); font-weight:600; padding:2px 0; flex-shrink:0;}
 
   /* ---- forms / admin ---- */
   .field{margin-bottom:14px;}
-  .field label{display:block; font-size:13px; font-weight:700; color:var(--muted); margin-bottom:7px; font-family:var(--mono); letter-spacing:0.02em;}
+  .field label{display:block; font-size:var(--text-xs); font-weight:700; color:var(--muted); margin-bottom:var(--space-label-gap); font-family:var(--mono); letter-spacing:0.02em;}
   .field input, .field select, .field textarea{
     width:100%; background:var(--panel-2); border:1px solid var(--border); color:var(--text);
-    padding:13px 14px; border-radius:var(--radius-sm); font-size:16px; font-family:var(--sans);
+    padding:13px 14px; border-radius:var(--radius-sm); font-size:var(--text-base); font-family:var(--sans);
     transition:border-color 0.15s ease, box-shadow 0.15s ease;
   }
   .field input:focus, .field select:focus, .field textarea:focus{
@@ -350,7 +373,7 @@
   .seg-toggle{display:flex; gap:8px;}
   .seg-toggle button{
     flex:1; padding:12px; border-radius:var(--radius-sm); border:1.5px solid var(--border);
-    background:var(--panel-2); color:var(--text); font-weight:700; font-size:15px; font-family:var(--sans);
+    background:var(--panel-2); color:var(--text); font-weight:700; font-size:var(--text-base); font-family:var(--sans);
   }
   .seg-toggle button.active{background:var(--blue); border-color:var(--blue); color:#fff;}
   /* 洽公任務：人員多選改用可勾選的標籤（chip），行動裝置上比原生 multi-select 好操作 */
@@ -359,31 +382,35 @@
   .chip-option input{position:absolute; opacity:0; width:0; height:0; pointer-events:none;}
   .chip-option span{
     display:inline-block; padding:9px 16px; border-radius:999px; border:1.5px solid var(--border);
-    font-size:14px; font-weight:600; color:var(--text); background:var(--panel-2); transition:all .15s ease;
+    font-size:var(--text-xs); font-weight:600; color:var(--text); background:var(--panel-2); transition:all .15s ease;
   }
   .chip-option:has(input:checked) span{background:var(--blue); border-color:var(--blue); color:#fff;}
   /* iOS Safari 的 time/date 原生控制項有時會忽略外層寬度限制而撐出版面，強制鎖定尺寸 */
   input[type="date"], input[type="time"]{
-    font-size:16px !important;
+    font-size:var(--text-base) !important;
     box-sizing:border-box !important;
     -webkit-appearance:none !important;
     width:100% !important;
     height:44px;
     display:block;
   }
-  .btn-primary{width:100%; background:var(--blue); color:#fff; font-weight:700; border:none; padding:15px; border-radius:var(--radius-sm); font-size:16px; margin-top:4px; box-shadow:0 4px 14px rgba(0,102,255,0.25);}
+  .btn-primary{
+    width:100%; min-height:var(--btn-height); background:var(--blue); color:#fff; font-weight:600;
+    border:none; padding:0 20px; border-radius:var(--radius-btn); font-size:var(--text-base); margin-top:4px;
+    box-shadow:0 4px 14px rgba(0,102,255,0.25); display:flex; align-items:center; justify-content:center; gap:8px;
+  }
   .admin-row{display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; background:var(--panel); border:1px solid var(--border); padding:14px 16px; border-radius:var(--radius-md); margin-bottom:10px; box-shadow:var(--shadow-xs);}
-  .admin-row .name{font-size:15px; font-weight:600; word-break:break-word;}
-  .admin-row .sub{font-size:13.5px; color:var(--muted); font-family:var(--mono); word-break:break-word;}
+  .admin-row .name{font-size:var(--text-sm); font-weight:600; word-break:break-word;}
+  .admin-row .sub{font-size:var(--text-xs); color:var(--muted); font-family:var(--mono); word-break:break-word;}
   .admin-row > div:first-child{min-width:0; flex:1 1 160px;}
-  .icon-btn{background:var(--panel-2); border:1px solid var(--border); color:var(--text); font-weight:600; border-radius:var(--radius-sm); padding:9px 13px; font-size:14px; display:inline-flex; align-items:center; gap:5px;}
+  .icon-btn{background:var(--panel-2); border:1px solid var(--border); color:var(--text); font-weight:600; border-radius:var(--radius-sm); padding:9px 13px; font-size:var(--text-sm); display:inline-flex; align-items:center; gap:5px;}
   .icon-btn.danger{color:var(--red); border-color:rgba(255,59,48,0.25); background:rgba(255,59,48,0.06);}
   .icon-btn.primary{color:#fff; background:var(--blue); border-color:var(--blue);}
-  .role-select{background:var(--panel-2); border:1px solid var(--border); color:var(--text); font-size:13.5px; border-radius:var(--radius-sm); padding:8px 10px; font-family:var(--mono); min-width:0; max-width:100%;}
+  .role-select{background:var(--panel-2); border:1px solid var(--border); color:var(--text); font-size:var(--text-xs); border-radius:var(--radius-sm); padding:8px 10px; font-family:var(--mono); min-width:0; max-width:100%;}
   .role-controls{display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; width:100%;}
   .role-controls select{flex:1 1 120px; min-width:0;}
   .tabs2{display:flex; gap:4px; margin-bottom:18px; background:var(--panel-2); padding:4px; border-radius:var(--radius-md);}
-  .tab2{flex:1; text-align:center; padding:10px; border-radius:calc(var(--radius-md) - 4px); font-size:13.5px; font-weight:600; color:var(--muted); white-space:nowrap;}
+  .tab2{flex:1; text-align:center; padding:10px; border-radius:calc(var(--radius-md) - 4px); font-size:var(--text-xs); font-weight:600; color:var(--muted); white-space:nowrap;}
   .tab2.active{background:var(--panel); color:var(--text); box-shadow:var(--shadow-xs);}
   .tab2-count{margin-left:5px; opacity:0.65; font-weight:700;}
   /* 頁籤數量較多（例如任務狀態篩選）時改成可橫向滑動的膠囊列，每個頁籤依內容寬度排列，
@@ -399,14 +426,14 @@
   .pill-row{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;}
   .pill{
     background:var(--panel); border:1px solid var(--border); color:var(--muted);
-    font-weight:600; font-size:13.5px; padding:8px 15px; border-radius:var(--radius-sm); font-family:var(--sans);
+    font-weight:600; font-size:var(--text-xs); padding:8px 15px; border-radius:var(--radius-sm); font-family:var(--sans);
     box-shadow:var(--shadow-xs);
   }
   .pill.active{background:var(--blue); border-color:var(--blue); color:#fff; box-shadow:0 3px 10px rgba(0,102,255,0.25);}
   .filters-toggle{
     display:flex; align-items:center; justify-content:center; gap:6px; width:100%;
     background:none; border:none; padding:6px 2px; margin-bottom:2px;
-    color:var(--muted); font-weight:600; font-size:14px; font-family:var(--sans);
+    color:var(--muted); font-weight:600; font-size:var(--text-sm); font-family:var(--sans);
   }
   .filters-toggle .chev{transition:transform 0.2s;}
   .filters-toggle.open .chev{transform:rotate(180deg);}
@@ -414,36 +441,36 @@
   /* ---- profile / 更多 ---- */
   .hub-head{display:flex; flex-direction:column; align-items:center; text-align:center; padding:14px 0 10px 0;}
   .hub-avatar{width:88px; height:88px; border-radius:50%; object-fit:cover; box-shadow:var(--shadow-sm); background:var(--panel-2); display:flex; align-items:center; justify-content:center; color:var(--muted);}
-  .hub-name{margin-top:14px; font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:22px; font-weight:700; color:var(--text);}
-  .hub-sub{margin-top:4px; font-size:14px; color:var(--muted);}
+  .hub-name{margin-top:14px; font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:var(--text-xl); font-weight:700; color:var(--text);}
+  .hub-sub{margin-top:4px; font-size:var(--text-sm); color:var(--muted);}
   .hub-icon-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:22px 0;}
   .service-row{display:flex; align-items:center; gap:14px; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md); padding:15px 16px; margin-bottom:10px; box-shadow:var(--shadow-xs); cursor:pointer;}
   .service-row .icon-wrap{width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
   .service-row .txt{flex:1; min-width:0;}
-  .service-row .txt .t1{font-weight:600; font-size:15px; color:var(--text);}
-  .service-row .txt .t2{font-size:12.5px; color:var(--muted); margin-top:2px;}
+  .service-row .txt .t1{font-weight:600; font-size:var(--text-sm); color:var(--text);}
+  .service-row .txt .t2{font-size:var(--text-xs); color:var(--muted); margin-top:2px;}
   .service-row .chev{color:var(--muted); flex-shrink:0; font-size:20px;}
 
   /* ---- stats / charts ---- */
-  .chart-card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:18px; margin-bottom:18px; box-shadow:var(--shadow-sm);}
-  .chart-title{font-size:14.5px; font-weight:700; margin-bottom:16px; color:var(--text);}
-  .bar-row{display:flex; align-items:center; gap:12px; margin-bottom:14px; font-size:14px;}
-  .bar-row .bar-label{width:88px; flex-shrink:0; color:var(--muted); font-weight:600; font-family:var(--mono); font-size:13px;}
+  .chart-card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:var(--space-card); margin-bottom:var(--space-section); box-shadow:var(--shadow-sm);}
+  .chart-title{font-size:var(--text-sm); font-weight:700; margin-bottom:16px; color:var(--text);}
+  .bar-row{display:flex; align-items:center; gap:12px; margin-bottom:14px; font-size:var(--text-sm);}
+  .bar-row .bar-label{width:88px; flex-shrink:0; color:var(--muted); font-weight:600; font-family:var(--mono); font-size:var(--text-xs);}
   .bar-row .bar-track{flex:1; background:var(--panel-2); border-radius:6px; height:18px; position:relative; overflow:hidden;}
   .bar-row .bar-fill{position:absolute; left:0; top:0; bottom:0; background:var(--blue); border-radius:6px;}
   .bar-row .bar-val{width:34px; text-align:right; font-family:var(--mono); font-weight:700; flex-shrink:0;}
-  .rank-row{display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid var(--border); font-size:14.5px;}
+  .rank-row{display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid var(--border); font-size:var(--text-sm);}
   .rank-row:last-child{border-bottom:none;}
-  .rank-row .rank-num{width:22px; height:22px; border-radius:50%; background:var(--panel-2); color:var(--muted); font-family:var(--mono); font-weight:700; font-size:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .rank-row .rank-num{width:22px; height:22px; border-radius:50%; background:var(--panel-2); color:var(--muted); font-family:var(--mono); font-weight:700; font-size:var(--text-xs); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
   .rank-row .rank-name{flex:1;}
-  .rank-row .rank-count{color:var(--text); font-weight:600; font-family:var(--mono); font-size:14px;}
+  .rank-row .rank-count{color:var(--text); font-weight:600; font-family:var(--mono); font-size:var(--text-sm);}
   .stackbar{display:flex; height:20px; border-radius:8px; overflow:hidden; background:var(--panel-2); margin-bottom:14px;}
   .stackbar .seg{height:100%;}
   .stack-legend{display:flex; flex-direction:column; gap:8px;}
-  .stack-legend .leg-row{display:flex; align-items:center; gap:9px; font-size:14px;}
+  .stack-legend .leg-row{display:flex; align-items:center; gap:9px; font-size:var(--text-sm);}
   .stack-legend .leg-dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
   .stack-legend .leg-name{flex:1; color:var(--text);}
-  .stack-legend .leg-val{color:var(--muted); font-weight:600; font-family:var(--mono); font-size:13.5px;}
+  .stack-legend .leg-val{color:var(--muted); font-weight:600; font-family:var(--mono); font-size:var(--text-xs);}
 
   /* ---- bottom nav ---- */
   .bottomnav{
@@ -453,13 +480,13 @@
   }
   .navbtn{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:11px 4px 10px 4px; color:var(--muted); background:none; border:none; font-family:var(--sans);}
   .navbtn .navicon{font-size:23px; transition:transform 0.15s ease;}
-  .navbtn .navlabel{font-size:11.5px; font-weight:700;}
+  .navbtn .navlabel{font-size:var(--text-xs); font-weight:700;}
   .navbtn.active{color:var(--blue);}
   .navbtn.active .navicon{transform:translateY(-1px);}
 
   .toast{
     position:fixed; bottom:92px; left:50%; transform:translateX(-50%); z-index:70;
-    background:#1C1C1E; border:1px solid rgba(255,255,255,0.08); color:#fff; font-size:14px; font-weight:500;
+    background:#1C1C1E; border:1px solid rgba(255,255,255,0.08); color:#fff; font-size:var(--text-sm); font-weight:500;
     padding:12px 20px; border-radius:var(--radius-sm); box-shadow:0 12px 32px rgba(0,0,0,0.28);
     opacity:0; pointer-events:none; transition:opacity 0.25s, transform 0.25s;
   }
@@ -470,7 +497,7 @@
     position:fixed; top:0; left:50%; transform:translateX(-50%) translateY(-40px);
     display:flex; align-items:center; gap:8px; padding:9px 16px; margin-top:10px;
     background:var(--panel); border:1px solid var(--border); border-radius:999px; box-shadow:var(--shadow-md);
-    font-size:13px; font-weight:700; color:var(--muted); z-index:80; opacity:0; pointer-events:none;
+    font-size:var(--text-xs); font-weight:700; color:var(--muted); z-index:80; opacity:0; pointer-events:none;
   }
   #pull-indicator.show{transition:none;}
   .pull-spinner{display:flex; color:var(--blue);}
@@ -492,7 +519,7 @@
     box-shadow:0 -12px 40px rgba(0,0,0,0.2); animation:modalSlideUp 0.24s cubic-bezier(.22,1,.36,1);
   }
   .modal-handle{width:36px; height:5px; border-radius:3px; background:var(--border-strong); margin:0 auto 16px auto;}
-  .modal-title{font-size:17px; font-weight:700; margin-bottom:16px;}
+  .modal-title{font-size:var(--text-lg); font-weight:700; margin-bottom:16px;}
   @keyframes modalFade{from{opacity:0;} to{opacity:1;}}
   @keyframes modalSlideUp{from{transform:translateY(28px); opacity:0;} to{transform:translateY(0); opacity:1;}}
   @media (min-width:560px){
@@ -514,7 +541,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-05-100-vitals-complaint-treatment-polish";
+const BUILD_TAG = "2026-07-05-101-design-system-typography-spacing";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1387,14 +1414,14 @@ function viewLogin(){
       <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.9 32.3 29.4 35 24 35c-6.1 0-11-4.9-11-11s4.9-11 11-11c2.8 0 5.3 1 7.3 2.7l5.7-5.7C33.6 6.5 29 4.5 24 4.5 13.2 4.5 4.5 13.2 4.5 24S13.2 43.5 24 43.5 43.5 34.8 43.5 24c0-1.2-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 16 19 13 24 13c2.8 0 5.3 1 7.3 2.7l5.7-5.7C33.6 6.5 29 4.5 24 4.5c-7.6 0-14.1 4.3-17.7 10.2z"/><path fill="#4CAF50" d="M24 43.5c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 34.6 26.7 35.5 24 35.5c-5.3 0-9.8-3.6-11.4-8.4l-6.5 5C9.7 39.1 16.3 43.5 24 43.5z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.7 2-2 3.7-3.7 5l6.2 5.2C41 34.8 43.5 30 43.5 24c0-1.2-.1-2.3-.4-3.5z"/></svg>
       使用 Google 帳號登入
     </button>
-    <div style="margin-top:24px;color:var(--muted);font-size:11px;font-family:var(--mono);">build ${BUILD_TAG}</div>
+    <div style="margin-top:24px;color:var(--muted);font-size:var(--text-xs);font-family:var(--mono);">build ${BUILD_TAG}</div>
   </div>`;
 }
 function viewPending(){
   return `
   <div class="login-wrap">
     <div class="login-mark">PHOENIX · DISPATCH</div>
-    <h1 class="login-title" style="font-size:20px;">帳號待審核</h1>
+    <h1 class="login-title" style="font-size:var(--text-lg);">帳號待審核</h1>
     <div class="pending-box">
       <p>您的帳號（${esc(state.user.email)}）已建立，但尚未指派角色。<br><br>請聯繫系統管理員開通權限後再登入。</p>
     </div>
@@ -1406,7 +1433,7 @@ function viewDisabled(){
   return `
   <div class="login-wrap">
     <div class="login-mark">PHOENIX · DISPATCH</div>
-    <h1 class="login-title" style="font-size:20px;">帳號已停用</h1>
+    <h1 class="login-title" style="font-size:var(--text-lg);">帳號已停用</h1>
     <div class="pending-box">
       <p>您的帳號（${esc(state.user.email)}）已被系統管理員停用。<br><br>如有疑問請聯繫系統管理員。</p>
     </div>
@@ -1527,7 +1554,7 @@ function renderWeatherCard(unit){
     <div class="weather-card">
       <span class="emoji">${icon(weatherIconFor(w.wx),30)}</span>
       <div>
-        <div style="color:var(--text); font-weight:700; font-size:15px;">${esc(county)} · ${esc(w.wx)}</div>
+        <div style="color:var(--text); font-weight:700; font-size:var(--text-sm);">${esc(county)} · ${esc(w.wx)}</div>
         <div style="margin-top:2px;">${range}${w.pop!=null ? (range?' · ':'')+'降雨機率 '+w.pop+'%' : ''}</div>
       </div>
     </div>`;
@@ -1691,14 +1718,14 @@ function viewCreateTask(){
               <span>${esc(x.name)}${x.title?' '+esc(x.title):''}</span>
             </label>`).join("")}
         </div>
-        ${!personnelOpts.length ? `<div style="color:var(--muted);font-size:13px;margin-top:6px;">此單位尚未建立人員資料，請至「基礎資料管理」新增</div>` : ""}
+        ${!personnelOpts.length ? `<div style="color:var(--muted);font-size:var(--text-xs);margin-top:6px;">此單位尚未建立人員資料，請至「基礎資料管理」新增</div>` : ""}
       </div>` : `
       <div class="field"><label>車號</label>
         <select name="vehicle">
           <option value="">請選擇車輛</option>
           ${vehicleOpts.map(v => `<option value="${esc(v.plate)}">${esc(v.plate)}${v.type?' · '+esc(v.type):''}</option>`).join("")}
         </select>
-        ${!vehicleOpts.length ? `<div style="color:var(--muted);font-size:13px;margin-top:6px;">此單位尚未建立車輛資料，請至「基礎資料管理」新增</div>` : ""}
+        ${!vehicleOpts.length ? `<div style="color:var(--muted);font-size:var(--text-xs);margin-top:6px;">此單位尚未建立車輛資料，請至「基礎資料管理」新增</div>` : ""}
       </div>
       <div class="field"><label>車長</label>
         <select name="crewLeader">
@@ -1872,7 +1899,7 @@ function viewVitalsPage(taskId, id, adding){
           ${v.note ? `<div class="step-note" style="margin-top:8px;">${esc(v.note)}</div>` : ""}
         </div>`).join("")}
     </div>
-    ${canDoReport ? `<button class="icon-btn primary" type="button" style="width:100%; justify-content:center; padding:15px; font-size:16px;" onclick="window.__showAddVitalsForm('${taskId}')">${icon('plus',16)} 新增紀錄</button>` : ""}
+    ${canDoReport ? `<button class="btn-primary" type="button" onclick="window.__showAddVitalsForm('${taskId}')">${icon('plus',16)} 新增紀錄</button>` : ""}
   ` : "";
 
   const formHtml = showForm ? `
@@ -2431,7 +2458,7 @@ function viewProfile(){
         <div class="field"><label>單位</label><input value="${unitLabel(p.unit)}" disabled></div>
         <div class="field"><label>Email</label><input value="${esc(p.email||'—')}" disabled></div>
         <div class="field"><label>角色</label><input value="${ROLE_LABEL[myRole(p)]||p.role}" disabled></div>
-        <div style="color:var(--muted); font-size:13px; margin:-6px 0 14px 0;">單位與角色由管理員於帳號管理指派，如需變更請聯繫管理員。</div>
+        <div style="color:var(--muted); font-size:var(--text-xs); margin:-6px 0 14px 0;">單位與角色由管理員於帳號管理指派，如需變更請聯繫管理員。</div>
         <button class="btn-primary" type="submit">儲存</button>
         <button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__cancelEditProfile()">取消</button>
       </form>
