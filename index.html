@@ -473,7 +473,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-05-94-vitals-ems-structure";
+const BUILD_TAG = "2026-07-05-95-modal-swipe-scrolltop-fix";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -3043,25 +3043,31 @@ window.__saveTaskEdit = (ev, taskId) => {
 
 /* =========================================================
    彈窗下滑關閉：所有 .modal-sheet（記錄患者狀況、編輯回報、基礎資料等）
-   都比照 iOS 原生底部彈窗，手指在彈窗任何地方只要往下滑就會觸發（不用
-   先捲到最上面），超過門檻放開就關閉彈窗；沿用彈窗背景遮罩既有的
-   onclick 判斷式來關閉，不用另外為每個彈窗寫關閉邏輯。
+   都比照 iOS 原生底部彈窗，手指從彈窗內容「已經捲到最上面」的狀態下
+   繼續往下滑才會觸發關閉；如果彈窗內容比較長、還沒捲到頂，下滑手勢
+   要保留給使用者正常捲動內容用，不能讓整個彈窗跟著往下拖走。
+   超過門檻放開就關閉彈窗；沿用彈窗背景遮罩既有的 onclick 判斷式來
+   關閉，不用另外為每個彈窗寫關閉邏輯。
    ========================================================= */
 (function setupModalSwipeToDismiss(){
-  let sheet = null, startY = null, dragging = false;
+  let sheet = null, startY = null, startScrollTop = 0, dragging = false;
 
   window.addEventListener('touchstart', (e) => {
     const s = e.target.closest && e.target.closest('.modal-sheet');
     if (!s) { sheet = null; startY = null; dragging = false; return; }
     sheet = s;
     startY = e.touches[0].clientY;
+    startScrollTop = s.scrollTop;
     dragging = false;
   }, { passive: true });
 
   window.addEventListener('touchmove', (e) => {
     if (!sheet || startY == null) return;
     const dy = e.touches[0].clientY - startY;
-    if (dy <= 0) {
+    // 只有手指往下滑、且彈窗內容一開始就已經捲到最上面時，才視為「下滑
+    // 關閉」手勢；否則放行讓使用者正常捲動彈窗內較長的內容（例如患者
+    // 紀錄表單）。
+    if (dy <= 0 || startScrollTop > 0 || sheet.scrollTop > 0) {
       if (dragging) { sheet.style.transition = ''; sheet.style.transform = ''; dragging = false; }
       return;
     }
