@@ -439,7 +439,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-05-86-scroll-top-fix";
+const BUILD_TAG = "2026-07-05-87-pull-refresh-bottomnav-fix";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -2858,10 +2858,14 @@ window.__saveTaskEdit = (ev, taskId) => {
 
   window.addEventListener('touchstart', (e) => {
     if (refreshing) return;
-    // 彈窗（.modal-sheet）有自己獨立的滾動區域，跟外層頁面的 scrollY 無關；
-    // 在彈窗內手勢不應誤觸外層下拉重新整理。
-    const inModal = e.target.closest && e.target.closest('.modal-sheet');
-    startY = (!inModal && window.scrollY <= 0) ? e.touches[0].clientY : null;
+    // 彈窗（.modal-sheet）跟底部導覽列都有各自獨立的互動區域，跟外層頁面的
+    // scrollY 無關；在這些區域內手勢不應誤觸外層下拉重新整理。
+    const inModal = e.target.closest && e.target.closest('.modal-sheet, .bottomnav');
+    // 內容較短、一畫面就顯示完的頁面（例如首頁任務不多時）scrollY 永遠是 0，
+    // 光靠 scrollY 無法區分「在畫面最上方」跟「在畫面最下方」；額外限制手勢
+    // 必須從畫面上半部開始，避免在畫面下方（含底部導覽列附近）下拉也誤觸重新整理。
+    const startedNearTop = e.touches[0].clientY < window.innerHeight * 0.6;
+    startY = (!inModal && startedNearTop && window.scrollY <= 0) ? e.touches[0].clientY : null;
   }, { passive: true });
 
   window.addEventListener('touchmove', (e) => {
