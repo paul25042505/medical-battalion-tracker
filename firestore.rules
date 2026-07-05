@@ -85,5 +85,24 @@ service cloud.firestore {
                     (isSignedIn() && myRole() == 'member' && sameUnit(get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.unit));
       allow delete: if false;
     }
+
+    match /vitals/{id} {
+      // 患者生命徵象/主訴紀錄，權限比照 events：綁定 taskId 對應的勤務單位，
+      // 誰能回報（admin、該單位一般成員）就能修正自己填錯的內容；不開放刪除，
+      // 避免病歷紀錄憑空消失。
+      allow read: if isStaff() || sameUnit(get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.unit);
+      allow create: if isAdmin() ||
+                    (isSignedIn() && myRole() == 'member' && sameUnit(get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.unit));
+      allow update: if isAdmin() ||
+                    (isSignedIn() && myRole() == 'member' && sameUnit(get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.unit));
+      allow delete: if false;
+    }
+
+    // 醫院資訊（急救責任等級/電話）是全營共用的參考資料，不綁定特定單位；
+    // 任何在職帳號都能查詢，維護權限比照基礎資料管理（admin、高勤官、主官管）。
+    match /hospitals/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isStaff() || isCommander();
+    }
   }
 }
