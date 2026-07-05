@@ -473,7 +473,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-05-95-modal-swipe-scrolltop-fix";
+const BUILD_TAG = "2026-07-05-96-patient-basic-info";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -680,6 +680,7 @@ const CONSCIOUSNESS_OPTIONS = ["清", "痛", "聲", "否"];
 const PAST_HISTORY_OPTIONS = ["糖尿病", "高血壓", "心臟疾病", "中風", "氣喘", "慢性阻塞性肺病", "肝臟疾病", "腎臟疾病", "癌症", "癲癇", "精神疾病", "其他", "不清楚", "無"];
 const ALLERGY_OPTIONS = ["藥物", "食物", "其他", "不清楚", "無"];
 const TREATMENT_OPTIONS = ["清洗傷口", "止血、包紮", "止血帶", "骨折固定", "保暖", "給氧", "CPR", "心理支持", "其他"];
+const GENDER_OPTIONS = ["男", "女"];
 
 /* =========================================================
    3) 全域狀態
@@ -1826,6 +1827,12 @@ function viewTaskDetail(taskId){
   const taskVitals = state.vitals.filter(v => v.taskId === taskId).sort(eventOrderCompare);
   const hasPatient = taskVitals.length > 0;
   const latestComplaint = taskVitals.slice().reverse().find(v => v.complaint)?.complaint || "";
+  // 患者基本資料（單位／級職／姓名／性別）只在初評（第一筆紀錄）詢問，
+  // 卡片摘要沿用那一筆的資料顯示。
+  const initialVitals = taskVitals[0];
+  const patientLabel = initialVitals
+    ? [initialVitals.patientUnit, initialVitals.patientRank, initialVitals.patientName].filter(Boolean).join('　') + (initialVitals.patientGender ? `（${initialVitals.patientGender}）` : '')
+    : '';
   const patientCardTag = canDoReport ? "button" : "div";
   const patientCardClickAttr = canDoReport ? ` onclick="window.__startVitals('${taskId}')"` : "";
   const vitalsSection = canDoReport || hasPatient ? `
@@ -1838,7 +1845,7 @@ function viewTaskDetail(taskId){
             <div class="patient-card-title">患者狀況</div>
             ${hasPatient ? `<span class="patient-card-badge">患者紀錄中</span>` : ""}
           </div>
-          ${hasPatient ? "" : `<div class="patient-card-sub">尚未建立患者紀錄</div>`}
+          ${hasPatient ? (patientLabel ? `<div class="patient-card-sub">${esc(patientLabel)}</div>` : "") : `<div class="patient-card-sub">尚未建立患者紀錄</div>`}
           <div class="patient-card-desc">${hasPatient
             ? (latestComplaint ? `主訴：${esc(latestComplaint)}。請持續更新生命徵象及處置內容。` : "已建立患者紀錄。請持續更新主訴、生命徵象及處置內容。")
             : "勤務過程中若發現患者需要救護，可點擊建立患者紀錄。"}</div>
@@ -1979,6 +1986,10 @@ function viewTaskDetail(taskId){
                   <span class="vitals-entry-time"><span class="vitals-stage-tag${i===0?'':' alt'}">${i===0?'初評':'複測'}</span>${fmtTime(v.ts)} · ${nameWithRank(v.userName, v.unit)}</span>
                   <button class="tl-edit-btn" type="button" onclick="window.__editVitals('${taskId}','${v.id}')">編輯</button>
                 </div>
+                ${v.patientName || v.patientUnit || v.patientRank || v.patientGender ? `
+                <div class="vitals-subdetail">
+                  <div>患者：${[v.patientUnit, v.patientRank, v.patientName].filter(Boolean).map(esc).join('　')}${v.patientGender?`（${esc(v.patientGender)}）`:''}</div>
+                </div>` : ""}
                 ${v.complaint ? `<div class="vitals-entry-complaint"><b>主訴</b> ${esc(v.complaint)}</div>` : ""}
                 ${v.complaintQuality || v.complaintDuration || v.complaintOthers || v.spineCheck ? `
                 <div class="vitals-subdetail">
@@ -2010,6 +2021,11 @@ function viewTaskDetail(taskId){
           ${showForm ? `
           <form onsubmit="event.preventDefault(); window.__submitVitals('${taskId}'${editingVitals?`,'${editingVitals.id}'`:''})">
             ${isInitialEntry ? `
+            <div class="section-label tight">患者基本資料</div>
+            <div class="field"><label>單位（選填）</label><input id="vf-patient-unit" value="${esc(editingVitals?.patientUnit||'')}" placeholder="例如：第一連"></div>
+            <div class="field"><label>級職（選填）</label><input id="vf-patient-rank" value="${esc(editingVitals?.patientRank||'')}" placeholder="例如：上等兵"></div>
+            <div class="field"><label>姓名（選填）</label><input id="vf-patient-name" value="${esc(editingVitals?.patientName||'')}" placeholder="例如：王小明"></div>
+            <div class="field"><label>性別（選填）</label>${chipGroup('vf-patient-gender', GENDER_OPTIONS, editingVitals?.patientGender||'', false)}</div>
             <div class="section-label tight">主訴</div>
             <div class="field"><label>1. 感覺哪裡不舒服？</label><input id="vf-complaint" value="${esc(editingVitals?.complaint||'')}" placeholder="例如：胸痛、呼吸困難" required></div>
             <div class="field"><label>2. 感覺怎麼的不舒服？（選填）</label><input id="vf-complaint-quality" value="${esc(editingVitals?.complaintQuality||'')}" placeholder="例如：悶痛、刺痛"></div>
@@ -2854,6 +2870,10 @@ window.__submitVitals = (taskId, id) => {
   // 主訴細節／過去病史／過敏史只有初評（表單裡才會渲染這些欄位）才需要寫入，
   // 複測畫面沒有這些欄位，不寫入才不會誤把既有紀錄覆蓋成空白。
   if (document.getElementById("vf-complaint-quality")) {
+    data.patientUnit = get("vf-patient-unit");
+    data.patientRank = get("vf-patient-rank");
+    data.patientName = get("vf-patient-name");
+    data.patientGender = checkedValues("vf-patient-gender")[0] || "";
     data.complaintQuality = get("vf-complaint-quality");
     data.complaintDuration = get("vf-complaint-duration");
     data.complaintOthers = get("vf-complaint-others");
