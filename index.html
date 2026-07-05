@@ -43,8 +43,12 @@
     --sans:-apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
-  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:var(--sans); height:100%; font-size:17px; overflow-x:hidden; max-width:100%; -webkit-font-smoothing:antialiased;}
-  body{ padding-bottom:env(safe-area-inset-bottom); }
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:var(--sans); font-size:17px; overflow-x:hidden; max-width:100%; -webkit-font-smoothing:antialiased;}
+  html{height:100%;}
+  /* 注意：body 這裡務必用 min-height 而不是 height —— 兩者都設 height:100% 會讓
+     body 變成自己獨立捲動（body.scrollTop 捲動），導致 window.scrollY 永遠停在 0，
+     下拉重新整理／換頁捲回頂端等所有靠 window.scrollY 判斷的邏輯都會失效。 */
+  body{ min-height:100%; padding-bottom:env(safe-area-inset-bottom); }
   #app{min-height:100vh; display:flex; flex-direction:column;}
   button{font-family:var(--sans); cursor:pointer; transition:transform 0.12s ease, opacity 0.12s ease;}
   button:active{transform:scale(0.96);}
@@ -439,7 +443,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-05-87-pull-refresh-bottomnav-fix";
+const BUILD_TAG = "2026-07-05-88-fix-scroll-tracking-root-cause";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -2861,11 +2865,12 @@ window.__saveTaskEdit = (ev, taskId) => {
     // 彈窗（.modal-sheet）跟底部導覽列都有各自獨立的互動區域，跟外層頁面的
     // scrollY 無關；在這些區域內手勢不應誤觸外層下拉重新整理。
     const inModal = e.target.closest && e.target.closest('.modal-sheet, .bottomnav');
-    // 內容較短、一畫面就顯示完的頁面（例如首頁任務不多時）scrollY 永遠是 0，
-    // 光靠 scrollY 無法區分「在畫面最上方」跟「在畫面最下方」；額外限制手勢
-    // 必須從畫面上半部開始，避免在畫面下方（含底部導覽列附近）下拉也誤觸重新整理。
-    const startedNearTop = e.touches[0].clientY < window.innerHeight * 0.6;
-    startY = (!inModal && startedNearTop && window.scrollY <= 0) ? e.touches[0].clientY : null;
+    // 頁面內容不足一螢幕（例如首頁任務不多時）根本沒有可捲動的空間，scrollY
+    // 永遠是 0，這種情況下「頁面最上方」跟「頁面最下方」沒有實質區別——只
+    // 靠 scrollY 判斷會導致在畫面任何位置下拉都被誤判成「已在頂端」。因此
+    // 下拉重新整理只在頁面「真的可以捲動」時才允許觸發，且必須確實捲到頂部。
+    const canScroll = document.documentElement.scrollHeight > window.innerHeight + 1;
+    startY = (!inModal && canScroll && window.scrollY <= 0) ? e.touches[0].clientY : null;
   }, { passive: true });
 
   window.addEventListener('touchmove', (e) => {
