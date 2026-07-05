@@ -204,8 +204,17 @@
   .vitals-entry:last-child{margin-bottom:0;}
   .vitals-entry-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:9px;}
   .vitals-entry-time{font-family:var(--mono); font-size:12.5px; color:var(--muted); font-weight:600;}
-  .vitals-entry-complaint{font-size:13.5px; color:var(--text); margin-bottom:9px;}
-  .vitals-entry-complaint b{color:var(--red);}
+  /* 主訴是整份紀錄裡最關鍵的一句話，不能跟旁邊的內容一樣不起眼；
+     改成獨立的紅色系提示框，比照患者身分那行的「凸顯區塊」做法。 */
+  .vitals-entry-complaint{
+    font-size:17px; font-weight:800; color:var(--text); line-height:1.4;
+    background:rgba(255,59,48,0.06); border:1px solid rgba(255,59,48,0.18); border-radius:var(--radius-sm);
+    padding:11px 13px; margin-bottom:12px;
+  }
+  .vitals-entry-complaint b{
+    display:block; font-size:10.5px; font-weight:700; color:var(--red); text-transform:uppercase;
+    letter-spacing:0.05em; margin-bottom:4px;
+  }
   .vitals-stage-tag{
     display:inline-block; padding:2px 7px; border-radius:6px; font-size:10.5px; font-weight:800;
     background:rgba(0,102,255,0.12); color:var(--blue); margin-right:7px; vertical-align:middle;
@@ -225,7 +234,7 @@
   .detail-item .lbl{font-size:10.5px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.04em;}
   .detail-item .val{font-size:14px; font-weight:700; color:var(--text); line-height:1.4;}
   .vitals-treatments{display:flex; flex-wrap:wrap; gap:6px; margin-top:9px;}
-  .tag-pill{display:inline-block; padding:4px 10px; border-radius:999px; background:var(--panel-2); border:1px solid var(--border); font-size:12px; font-weight:600; color:var(--text);}
+  .tag-pill{display:inline-block; padding:4px 10px; border-radius:999px; background:var(--panel-2); border:1px solid var(--border); font-size:12.5px; font-weight:700; color:var(--text);}
   .gcs-hint-btn{
     display:inline-flex; align-items:center; gap:3px; background:none; border:none; color:var(--blue);
     font-size:12.5px; font-weight:700; font-family:var(--mono); padding:0; margin-left:4px; vertical-align:middle;
@@ -505,7 +514,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-05-99-vitals-history-readability";
+const BUILD_TAG = "2026-07-05-100-vitals-complaint-treatment-polish";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1854,7 +1863,11 @@ function viewVitalsPage(taskId, id, adding){
             ${v.gcs ? `<div class="vitals-item"><span class="lbl">GCS</span><span class="val">${esc(v.gcs)}</span></div>` : ""}
             ${v.glucose ? `<div class="vitals-item"><span class="lbl">血糖</span><span class="val">${esc(v.glucose)}</span></div>` : ""}
           </div>
-          ${v.treatments&&v.treatments.length ? `<div class="vitals-treatments">${v.treatments.map(x=>`<span class="tag-pill">${esc(x)}</span>`).join("")}</div>` : ""}
+          ${v.treatments&&v.treatments.length ? `
+          <div class="detail-item" style="margin-top:9px;">
+            <span class="lbl">處置項目</span>
+            <div class="vitals-treatments">${v.treatments.map(x=>`<span class="tag-pill">${esc(x)}</span>`).join("")}</div>
+          </div>` : ""}
           ${v.treatmentOtherDetail ? `<div class="detail-item" style="margin-top:9px;"><span class="lbl">其他處置</span><span class="val">${esc(v.treatmentOtherDetail)}</span></div>` : ""}
           ${v.note ? `<div class="step-note" style="margin-top:8px;">${esc(v.note)}</div>` : ""}
         </div>`).join("")}
