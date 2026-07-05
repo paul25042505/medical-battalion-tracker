@@ -119,6 +119,7 @@
 
   /* ---- login ---- */
   .login-wrap{min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; text-align:center;}
+  .login-logo{width:84px; height:84px; border-radius:50%; box-shadow:var(--shadow-sm); margin-bottom:16px;}
   .login-mark{font-family:var(--mono); font-size:var(--text-xs); letter-spacing:0.25em; color:var(--blue); margin-bottom:12px;}
   .login-title{font-size:32px; font-weight:800; line-height:1.3; margin:0 0 8px 0; letter-spacing:-0.01em;}
   .login-sub{color:var(--muted); font-size:var(--text-sm); margin-bottom:38px;}
@@ -562,7 +563,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-112-rebrand-medtrack";
+const BUILD_TAG = "2026-07-06-113-login-logo";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1456,6 +1457,7 @@ function chipGroup(name, options, selected, multi, triggers){
 function viewLogin(){
   return `
   <div class="login-wrap">
+    <img class="login-logo" src="icons/icon-192.png" alt="單位徽章">
     <div class="login-mark">MEDTRACK</div>
     <h1 class="login-title">衛生營車輛人員<br>動態管制系統</h1>
     <p class="login-sub">Personnel · Vehicles · Operations</p>
@@ -1470,6 +1472,7 @@ function viewPending(){
   const p = state.profile;
   return `
   <div class="login-wrap">
+    <img class="login-logo" src="icons/icon-192.png" alt="單位徽章">
     <div class="login-mark">MEDTRACK</div>
     <h1 class="login-title" style="font-size:var(--text-lg);">帳號待審核</h1>
     <div class="pending-box">
@@ -1493,6 +1496,7 @@ function viewPending(){
 function viewDisabled(){
   return `
   <div class="login-wrap">
+    <img class="login-logo" src="icons/icon-192.png" alt="單位徽章">
     <div class="login-mark">MEDTRACK</div>
     <h1 class="login-title" style="font-size:var(--text-lg);">帳號已停用</h1>
     <div class="pending-box">
