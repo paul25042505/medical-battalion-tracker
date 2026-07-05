@@ -113,6 +113,7 @@
 
   /* ---- cards ---- */
   .section-label{font-family:var(--mono); font-size:12.5px; font-weight:700; color:var(--muted); letter-spacing:0.09em; text-transform:uppercase; margin:26px 4px 13px 4px;}
+  .section-label.tight{margin-top:6px;}
   .section-label:first-child{margin-top:0;}
   .task-card{
     background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg);
@@ -150,11 +151,27 @@
     display:inline-flex; align-items:center; gap:4px; padding:5px 10px; border-radius:999px;
     background:var(--red); color:#fff; font-size:12px; font-weight:700; white-space:nowrap;
   }
-  .patient-card{border-color:rgba(255,59,48,0.3);}
-  .vitals-list{margin-top:10px; display:flex; flex-direction:column; gap:14px;}
-  .vitals-entry{padding-top:10px; border-top:1px solid var(--border);}
-  .vitals-entry:first-child{padding-top:0; border-top:none;}
-  .vitals-grid{display:flex; flex-wrap:wrap; gap:8px 16px; margin-top:5px; font-family:var(--mono); font-size:13.5px; color:var(--text); font-weight:500;}
+  .patient-panel{
+    background:linear-gradient(180deg, rgba(255,59,48,0.07), rgba(255,59,48,0.02));
+    border:1.5px solid rgba(255,59,48,0.28); border-radius:var(--radius-lg);
+    padding:16px; margin-bottom:14px;
+  }
+  .patient-complaint{
+    display:flex; align-items:flex-start; gap:10px; color:var(--red); font-size:16px; font-weight:700;
+    margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid rgba(255,59,48,0.2);
+  }
+  .patient-complaint .tag{
+    display:block; font-size:11px; font-weight:700; color:var(--red); text-transform:uppercase;
+    letter-spacing:0.06em; margin-bottom:2px; opacity:0.75;
+  }
+  .vitals-entry{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 14px; margin-bottom:10px; box-shadow:var(--shadow-xs);}
+  .vitals-entry:last-child{margin-bottom:0;}
+  .vitals-entry-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:9px;}
+  .vitals-entry-time{font-family:var(--mono); font-size:12.5px; color:var(--muted); font-weight:600;}
+  .vitals-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(78px,1fr)); gap:10px 14px;}
+  .vitals-item{display:flex; flex-direction:column; gap:2px;}
+  .vitals-item .lbl{font-size:10.5px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.04em;}
+  .vitals-item .val{font-family:var(--mono); font-size:15px; font-weight:700; color:var(--text);}
 
   /* ---- home ---- */
   .home-date{font-size:15px; color:var(--muted); font-weight:600; font-family:var(--mono); margin-bottom:16px;}
@@ -373,6 +390,18 @@
   }
   .toast.show{opacity:1; transform:translateX(-50%) translateY(-4px);}
 
+  /* ---- 下拉重新整理指示條 ---- */
+  #pull-indicator{
+    position:fixed; top:0; left:50%; transform:translateX(-50%) translateY(-40px);
+    display:flex; align-items:center; gap:8px; padding:9px 16px; margin-top:10px;
+    background:var(--panel); border:1px solid var(--border); border-radius:999px; box-shadow:var(--shadow-md);
+    font-size:13px; font-weight:700; color:var(--muted); z-index:80; opacity:0; pointer-events:none;
+  }
+  #pull-indicator.show{transition:none;}
+  .pull-spinner{display:flex; color:var(--blue);}
+  .pull-spinner.spin{animation:pullSpin 0.7s linear infinite;}
+  @keyframes pullSpin{ to { transform:rotate(360deg); } }
+
   .spinner{width:22px; height:22px; border:2.5px solid var(--border); border-top-color:var(--blue); border-radius:50%; animation:spin 0.8s linear infinite; margin:60px auto;}
   @keyframes spin{to{transform:rotate(360deg);}}
 
@@ -410,7 +439,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-04-84-patient-vitals-hospitals";
+const BUILD_TAG = "2026-07-05-85-ux-polish-batch";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1231,7 +1260,9 @@ const ICON_PATHS = {
   chart:   `<path d="M4 20V10"/><path d="M11 20V4"/><path d="M18 20v-7"/>`,
   chevronDown: `<path d="M5 8.5 12 15.5 19 8.5"/>`,
   heartbeat: `<path d="M2 12h4l2-6.5 4 15 3-11 2 2.5h5"/>`,
-  hospital: `<rect x="5" y="9" width="14" height="12" rx="1"/><path d="M9.5 21v-5.5h5V21"/><path d="M12 4v4.5M9.8 6.2h4.4"/>`
+  hospital: `<rect x="5" y="9" width="14" height="12" rx="1"/><path d="M9.5 21v-5.5h5V21"/><path d="M12 4v4.5M9.8 6.2h4.4"/>`,
+  logout: `<path d="M14 4H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6"/><path d="M10 12h10m0 0-3.5-3.5M20 12l-3.5 3.5"/>`,
+  refresh: `<path d="M4 12a8 8 0 0 1 14-5.2M20 12a8 8 0 0 1-14 5.2"/><path d="M18 3v4h-4M6 21v-4h4"/>`
 };
 function icon(name, size){
   size = size || 20;
@@ -1439,9 +1470,14 @@ function viewHome(){
       if (pa !== pb) return pa - pb;
       return unitLabel(a.unit).localeCompare(unitLabel(b.unit));
     });
-  const fleetSection = activeTasks.length
-    ? activeTasks.map(taskCard).join("")
-    : `<div class="empty">目前沒有車輛執行中</div>`;
+  // 勤務（車輛派遣）跟洽公性質不同，分開列成兩個小節，不要混在同一份清單裡
+  // 讓人分不清楚哪些是真的派車出去的勤務。
+  const dutyActive = activeTasks.filter(t => t.type !== "liaison");
+  const liaisonActive = activeTasks.filter(t => t.type === "liaison");
+  const fleetSection = activeTasks.length ? `
+    ${dutyActive.length ? `<div class="section-label tight">勤務</div>${dutyActive.map(taskCard).join("")}` : ""}
+    ${liaisonActive.length ? `<div class="section-label tight">洽公</div>${liaisonActive.map(taskCard).join("")}` : ""}
+  ` : `<div class="empty">目前沒有車輛執行中</div>`;
 
   return `
     <div class="home-date">${fmtDate(today)}</div>
@@ -1494,9 +1530,17 @@ function viewTasks(){
       }).join("")}
     </div>`;
 
+  // 勤務跟洽公分開列成兩個小節，不要混在同一份清單裡分不清楚。
+  const dutyShown = shown.filter(t => t.type !== "liaison");
+  const liaisonShown = shown.filter(t => t.type === "liaison");
+  const listHtml = shown.length ? `
+    ${dutyShown.length ? `<div class="section-label tight">勤務</div>${dutyShown.map(taskCard).join("")}` : ""}
+    ${liaisonShown.length ? `<div class="section-label tight">洽公</div>${liaisonShown.map(taskCard).join("")}` : ""}
+  ` : `<div class="empty">目前沒有符合條件的勤務</div>`;
+
   return `
     ${tabs}
-    ${shown.length ? shown.map(taskCard).join("") : `<div class="empty">目前沒有符合條件的勤務</div>`}
+    ${listHtml}
     ${canCreateTask(p) ? `<button class="fab" onclick="window.__nav({name:'createTask'})">${icon('plus',26)}</button>` : ""}
   `;
 }
@@ -1716,21 +1760,9 @@ function viewTaskDetail(taskId){
         </div>`).join("")}
     </div>`;
 
-  // ---- 目前狀態／下一步（純資訊，任何看得到此任務的人都看得到，不受回報權限影響）----
+  // rTypes 決定回報表單/Sticky Bar 要顯示的動作按鈕（見下方），勤務進度 Stepper
+  // 本身已經看得出目前狀態與下一步，不需要再另外一張卡片重複顯示一次。
   const rTypes = canDoReport ? reportableTypes(taskId) : [];
-  let nextStepText;
-  if (!canDoReport) nextStepText = "—（沒有回報權限）";
-  else if (s === "completed") nextStepText = isLiaison ? "洽公已完成" : "勤務已完成";
-  else if (!isLiaison && lastType === "ARRIVED_SCENE") nextStepText = "前往下一個地點，或直接返回營區";
-  else nextStepText = rTypes.length ? evDefs.find(e=>e.type===rTypes[0]).label : "—";
-
-  const statusBlock = `
-    <div class="detail-head">
-      <div class="kv">
-        <div class="k">目前狀態</div><div class="v">${STATUS_LABEL[s]}</div>
-        <div class="k">下一步</div><div class="v">${esc(nextStepText)}</div>
-      </div>
-    </div>`;
 
   // ---- 患者狀況：任何進行中的任務，遇到突發狀況都能記錄生命徵象／主訴，
   // 不綁定特定任務類型或當下的勤務進度階段。可持續新增，形成時間序列方便
@@ -1738,32 +1770,31 @@ function viewTaskDetail(taskId){
   const taskVitals = state.vitals.filter(v => v.taskId === taskId).sort(eventOrderCompare);
   const hasPatient = taskVitals.length > 0;
   const latestComplaint = taskVitals.slice().reverse().find(v => v.complaint)?.complaint || "";
-  const vitalsSection = canDoReport || hasPatient ? `
+  const vitalsSection = canDoReport || hasPatient ? (hasPatient ? `
     <div class="section-label">患者狀況</div>
-    <div class="detail-head patient-card">
-      ${hasPatient ? `
-        <div class="kv"><div class="k">主訴</div><div class="v">${esc(latestComplaint || '—')}</div></div>
-        <div class="vitals-list">
-          ${taskVitals.map(v => `
-            <div class="vitals-entry">
-              <div class="step-head">
-                <span class="step-meta">${fmtTime(v.ts)} · ${nameWithRank(v.userName, v.unit)}</span>
-                ${canDoReport ? `<button class="tl-edit-btn" onclick="window.__editVitals('${taskId}','${v.id}')">編輯</button>` : ""}
-              </div>
-              <div class="vitals-grid">
-                ${v.bp ? `<span>血壓 ${esc(v.bp)}</span>` : ""}
-                ${v.hr ? `<span>心跳 ${esc(v.hr)}</span>` : ""}
-                ${v.rr ? `<span>呼吸 ${esc(v.rr)}</span>` : ""}
-                ${v.spo2 ? `<span>SpO2 ${esc(v.spo2)}%</span>` : ""}
-                ${v.temp ? `<span>體溫 ${esc(v.temp)}°C</span>` : ""}
-                ${v.gcs ? `<span>GCS ${esc(v.gcs)}</span>` : ""}
-              </div>
-              ${v.note ? `<div class="step-note">${esc(v.note)}</div>` : ""}
-            </div>`).join("")}
-        </div>
-        ${canDoReport ? `<button class="icon-btn primary" style="width:100%;margin-top:10px;" onclick="window.__startVitals('${taskId}')">${icon('heartbeat',16)} 新增生命徵象</button>` : ""}
-      ` : `<button class="icon-btn danger" style="width:100%;" onclick="window.__startVitals('${taskId}')">${icon('alert',18)} 記錄患者狀況</button>`}
-    </div>` : "";
+    <div class="patient-panel">
+      <div class="patient-complaint">
+        ${icon('alert',20)}
+        <div><span class="tag">主訴</span>${esc(latestComplaint || '—')}</div>
+      </div>
+      ${taskVitals.map(v => `
+        <div class="vitals-entry">
+          <div class="vitals-entry-head">
+            <span class="vitals-entry-time">${fmtTime(v.ts)} · ${nameWithRank(v.userName, v.unit)}</span>
+            ${canDoReport ? `<button class="tl-edit-btn" onclick="window.__editVitals('${taskId}','${v.id}')">編輯</button>` : ""}
+          </div>
+          <div class="vitals-grid">
+            ${v.bp ? `<div class="vitals-item"><span class="lbl">血壓</span><span class="val">${esc(v.bp)}</span></div>` : ""}
+            ${v.hr ? `<div class="vitals-item"><span class="lbl">心跳</span><span class="val">${esc(v.hr)}</span></div>` : ""}
+            ${v.rr ? `<div class="vitals-item"><span class="lbl">呼吸</span><span class="val">${esc(v.rr)}</span></div>` : ""}
+            ${v.spo2 ? `<div class="vitals-item"><span class="lbl">SpO2</span><span class="val">${esc(v.spo2)}%</span></div>` : ""}
+            ${v.temp ? `<div class="vitals-item"><span class="lbl">體溫</span><span class="val">${esc(v.temp)}°C</span></div>` : ""}
+            ${v.gcs ? `<div class="vitals-item"><span class="lbl">GCS</span><span class="val">${esc(v.gcs)}</span></div>` : ""}
+          </div>
+          ${v.note ? `<div class="step-note" style="margin-top:8px;">${esc(v.note)}</div>` : ""}
+        </div>`).join("")}
+      ${canDoReport ? `<button class="icon-btn danger" style="width:100%;margin-top:2px;" onclick="window.__startVitals('${taskId}')">${icon('heartbeat',16)} 新增生命徵象</button>` : ""}
+    </div>` : `<button class="icon-btn danger" style="width:100%;margin-top:14px;" onclick="window.__startVitals('${taskId}')">${icon('alert',18)} 記錄患者狀況</button>`) : "";
 
   // ---- 回報表單／Sticky Bottom Action Bar ----
   let reportModal = "";
@@ -1903,7 +1934,6 @@ function viewTaskDetail(taskId){
       ${canEditTask(p, t) ? `<button class="icon-btn" onclick="window.__nav({name:'editTask', id:'${t.id}'})">編輯勤務</button>` : ""}
     </div>
     ${progressHtml}
-    ${statusBlock}
     ${vitalsSection}
     <div class="detail-head">
       <div class="task-top">
@@ -2587,7 +2617,7 @@ function render(){
           </div>
           <div class="topbar-icons">
             <button class="topbar-icon-btn" onclick="window.__nav({name:'notifications'})">${icon('bell',25)}</button>
-            <button class="topbar-icon-btn" onclick="window.__nav({name:'profile'})">${icon('user',25)}</button>
+            <button class="topbar-icon-btn" onclick="window.__confirmLogout()">${icon('logout',25)}</button>
           </div>
         </div>
       </div>
@@ -2609,6 +2639,7 @@ function render(){
    ========================================================= */
 window.__login = doLogin;
 window.__logout = doLogout;
+window.__confirmLogout = () => { if (confirm("確定要登出嗎？")) doLogout(); };
 window.__refreshProfile = () => { if (profilePoll) profilePoll.refreshNow(); };
 window.__nav = nav;
 window.__startRolePreview = (role, unit) => startRolePreview(role, unit);
@@ -2790,6 +2821,71 @@ window.__saveTaskEdit = (ev, taskId) => {
     .then(() => nav({ name: "task", id: taskId }))
     .catch(err => showToast(`更新失敗：[${err.code||'?'}] ${err.message}`));
 };
+
+/* =========================================================
+   21) 下拉重新整理
+   加到主畫面後是獨立 App 模式，沒有瀏覽器原生的下拉更新頁面可用，
+   自己刻一個：在頁面最頂端往下拉超過門檻、放開就重新抓取所有資料。
+   ========================================================= */
+(function setupPullToRefresh(){
+  const THRESHOLD = 68;
+  let startY = null, pulling = false, refreshing = false, currentDist = 0;
+  const indicator = document.createElement('div');
+  indicator.id = 'pull-indicator';
+  indicator.innerHTML = `<span class="pull-spinner">${icon('refresh',18)}</span><span class="pull-text">下拉重新整理</span>`;
+  document.body.appendChild(indicator);
+  const spinner = indicator.querySelector('.pull-spinner');
+  const text = indicator.querySelector('.pull-text');
+
+  function setDist(dist){
+    currentDist = dist;
+    const clamped = Math.min(dist, THRESHOLD * 1.4);
+    indicator.style.transform = `translateX(-50%) translateY(${clamped}px)`;
+    indicator.style.opacity = Math.min(dist / THRESHOLD, 1);
+    spinner.style.transform = `rotate(${dist * 2.4}deg)`;
+    text.textContent = dist >= THRESHOLD ? '放開重新整理' : '下拉重新整理';
+  }
+  function reset(){
+    indicator.classList.remove('show');
+    indicator.style.transform = 'translateX(-50%) translateY(-40px)';
+    indicator.style.opacity = '0';
+    startY = null; pulling = false; currentDist = 0;
+  }
+  function refreshAllNow(){
+    [tasksPoll, eventsPoll, personnelPoll, vehiclesPoll, recordersPoll, hospitalsPoll, vitalsPoll, profilePoll]
+      .forEach(pl => pl && pl.refreshNow());
+  }
+
+  window.addEventListener('touchstart', (e) => {
+    if (refreshing) return;
+    startY = window.scrollY <= 0 ? e.touches[0].clientY : null;
+  }, { passive: true });
+
+  window.addEventListener('touchmove', (e) => {
+    if (startY == null || refreshing) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy <= 0 || window.scrollY > 0) { if (pulling) reset(); return; }
+    pulling = true;
+    indicator.classList.add('show');
+    setDist(dy * 0.5);
+    e.preventDefault();
+  }, { passive: false });
+
+  window.addEventListener('touchend', () => {
+    if (!pulling) { startY = null; return; }
+    if (currentDist >= THRESHOLD) {
+      refreshing = true;
+      text.textContent = '重新整理中…';
+      spinner.classList.add('spin');
+      indicator.style.transform = `translateX(-50%) translateY(${THRESHOLD}px)`;
+      indicator.style.opacity = '1';
+      refreshAllNow();
+      setTimeout(() => { refreshing = false; spinner.classList.remove('spin'); reset(); }, 700);
+    } else {
+      reset();
+    }
+  }, { passive: true });
+})();
 
 render();
 </script>
