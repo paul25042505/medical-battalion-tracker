@@ -187,7 +187,7 @@
     font-size:14.5px; font-weight:700; color:#fff; background:var(--blue);
   }
   .patient-card.has-record .patient-card-action{background:var(--red);}
-  .patient-history{margin-bottom:14px;}
+  .vitals-history{margin-bottom:4px;}
   .vitals-entry{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 14px; margin-bottom:10px; box-shadow:var(--shadow-xs);}
   .vitals-entry:last-child{margin-bottom:0;}
   .vitals-entry-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:9px;}
@@ -465,7 +465,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-05-90-patient-card-redesign";
+const BUILD_TAG = "2026-07-05-91-vitals-modal-history-swipe-dismiss";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1816,26 +1816,6 @@ function viewTaskDetail(taskId){
       </div>
       ${canDoReport ? `<div class="patient-card-action">${hasPatient ? icon('heartbeat',16) : icon('plus',16)} ${hasPatient ? '查看／更新紀錄' : '開始記錄'}</div>` : ""}
     </${patientCardTag}>
-    ${hasPatient ? `
-    <div class="patient-history">
-      ${taskVitals.map(v => `
-        <div class="vitals-entry">
-          <div class="vitals-entry-head">
-            <span class="vitals-entry-time">${fmtTime(v.ts)} · ${nameWithRank(v.userName, v.unit)}</span>
-            ${canDoReport ? `<button class="tl-edit-btn" onclick="window.__editVitals('${taskId}','${v.id}')">編輯</button>` : ""}
-          </div>
-          ${v.complaint ? `<div class="vitals-entry-complaint"><b>主訴</b> ${esc(v.complaint)}</div>` : ""}
-          <div class="vitals-grid">
-            ${v.bp ? `<div class="vitals-item"><span class="lbl">血壓</span><span class="val">${esc(v.bp)}</span></div>` : ""}
-            ${v.hr ? `<div class="vitals-item"><span class="lbl">心跳</span><span class="val">${esc(v.hr)}</span></div>` : ""}
-            ${v.rr ? `<div class="vitals-item"><span class="lbl">呼吸</span><span class="val">${esc(v.rr)}</span></div>` : ""}
-            ${v.spo2 ? `<div class="vitals-item"><span class="lbl">SpO2</span><span class="val">${esc(v.spo2)}%</span></div>` : ""}
-            ${v.temp ? `<div class="vitals-item"><span class="lbl">體溫</span><span class="val">${esc(v.temp)}°C</span></div>` : ""}
-            ${v.gcs ? `<div class="vitals-item"><span class="lbl">GCS</span><span class="val">${esc(v.gcs)}</span></div>` : ""}
-          </div>
-          ${v.note ? `<div class="step-note" style="margin-top:8px;">${esc(v.note)}</div>` : ""}
-        </div>`).join("")}
-    </div>` : ""}
   ` : "";
 
   // ---- 回報表單／Sticky Bottom Action Bar ----
@@ -1942,11 +1922,33 @@ function viewTaskDetail(taskId){
   if (vm) {
     const editingVitals = vm.id ? taskVitals.find(v => v.id === vm.id) : null;
     const isFirstVitals = !editingVitals && !hasPatient;
+    const showHistory = !editingVitals && hasPatient;
     vitalsModal = `
       <div class="modal-overlay" onclick="if(event.target===this) window.__cancelVitals()">
         <div class="modal-sheet">
           <div class="modal-handle"></div>
-          <div class="modal-title">${icon('heartbeat',19)} ${editingVitals ? '編輯患者紀錄' : '記錄患者狀況'}</div>
+          <div class="modal-title">${icon('heartbeat',19)} ${editingVitals ? '編輯患者紀錄' : (hasPatient ? '患者紀錄' : '記錄患者狀況')}</div>
+          ${showHistory ? `
+          <div class="vitals-history">
+            ${taskVitals.map(v => `
+              <div class="vitals-entry">
+                <div class="vitals-entry-head">
+                  <span class="vitals-entry-time">${fmtTime(v.ts)} · ${nameWithRank(v.userName, v.unit)}</span>
+                  <button class="tl-edit-btn" type="button" onclick="window.__editVitals('${taskId}','${v.id}')">編輯</button>
+                </div>
+                ${v.complaint ? `<div class="vitals-entry-complaint"><b>主訴</b> ${esc(v.complaint)}</div>` : ""}
+                <div class="vitals-grid">
+                  ${v.bp ? `<div class="vitals-item"><span class="lbl">血壓</span><span class="val">${esc(v.bp)}</span></div>` : ""}
+                  ${v.hr ? `<div class="vitals-item"><span class="lbl">心跳</span><span class="val">${esc(v.hr)}</span></div>` : ""}
+                  ${v.rr ? `<div class="vitals-item"><span class="lbl">呼吸</span><span class="val">${esc(v.rr)}</span></div>` : ""}
+                  ${v.spo2 ? `<div class="vitals-item"><span class="lbl">SpO2</span><span class="val">${esc(v.spo2)}%</span></div>` : ""}
+                  ${v.temp ? `<div class="vitals-item"><span class="lbl">體溫</span><span class="val">${esc(v.temp)}°C</span></div>` : ""}
+                  ${v.gcs ? `<div class="vitals-item"><span class="lbl">GCS</span><span class="val">${esc(v.gcs)}</span></div>` : ""}
+                </div>
+                ${v.note ? `<div class="step-note" style="margin-top:8px;">${esc(v.note)}</div>` : ""}
+              </div>`).join("")}
+          </div>
+          <div class="section-label tight">新增生命徵象</div>` : ""}
           <form onsubmit="event.preventDefault(); window.__submitVitals('${taskId}'${editingVitals?`,'${editingVitals.id}'`:''})">
             <div class="field"><label>主訴${isFirstVitals ? '' : '（選填，留空沿用先前主訴）'}</label><input id="vf-complaint" value="${esc(editingVitals?.complaint||'')}" placeholder="例如：胸痛、呼吸困難" ${isFirstVitals?'required':''}></div>
             <div class="field">
@@ -2934,6 +2936,58 @@ window.__saveTaskEdit = (ev, taskId) => {
     } else {
       reset();
     }
+  }, { passive: true });
+})();
+
+/* =========================================================
+   彈窗下滑關閉：所有 .modal-sheet（記錄患者狀況、編輯回報、基礎資料等）
+   都比照 iOS 原生底部彈窗，手指從彈窗內容最上方往下拉超過門檻、放開
+   就關閉彈窗；沿用彈窗背景遮罩既有的 onclick 判斷式來關閉，不用另外
+   為每個彈窗寫關閉邏輯。
+   ========================================================= */
+(function setupModalSwipeToDismiss(){
+  let sheet = null, startY = null, startScrollTop = 0, dragging = false;
+
+  window.addEventListener('touchstart', (e) => {
+    const s = e.target.closest && e.target.closest('.modal-sheet');
+    if (!s) { sheet = null; startY = null; dragging = false; return; }
+    sheet = s;
+    startY = e.touches[0].clientY;
+    startScrollTop = s.scrollTop;
+    dragging = false;
+  }, { passive: true });
+
+  window.addEventListener('touchmove', (e) => {
+    if (!sheet || startY == null) return;
+    const dy = e.touches[0].clientY - startY;
+    // 只有手指往下滑、且彈窗內容本身已經捲到最上面時，才視為「下滑關閉」
+    // 手勢；否則保留使用者原本在彈窗內捲動查看內容的動作。
+    if (dy <= 0 || startScrollTop > 0 || sheet.scrollTop > 0) {
+      if (dragging) { sheet.style.transition = ''; sheet.style.transform = ''; dragging = false; }
+      return;
+    }
+    dragging = true;
+    sheet.style.transition = 'none';
+    sheet.style.transform = `translateY(${dy}px)`;
+    e.preventDefault();
+  }, { passive: false });
+
+  window.addEventListener('touchend', () => {
+    if (!sheet) return;
+    const s = sheet;
+    if (dragging) {
+      const m = /translateY\(([-.\d]+)px\)/.exec(s.style.transform);
+      const dy = m ? parseFloat(m[1]) : 0;
+      s.style.transition = 'transform 0.22s ease';
+      if (dy > 90) {
+        s.style.transform = 'translateY(100%)';
+        const overlay = s.closest('.modal-overlay');
+        setTimeout(() => { overlay && overlay.click(); }, 180);
+      } else {
+        s.style.transform = '';
+      }
+    }
+    sheet = null; startY = null; dragging = false;
   }, { passive: true });
 })();
 
