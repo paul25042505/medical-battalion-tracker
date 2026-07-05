@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>醫院資料匯入工具（一次性，用完即刪）</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; max-width:640px; margin:40px auto; padding:0 20px; color:#15161B;}
+  h2{margin-bottom:4px;}
+  p{color:#555; line-height:1.6;}
+  button{padding:14px 24px; font-size:16px; border-radius:8px; border:none; background:#0066FF; color:#fff; font-weight:700; cursor:pointer; margin:8px 8px 8px 0;}
+  button:disabled{background:#aaa; cursor:not-allowed;}
+  table{border-collapse:collapse; width:100%; margin-top:16px;}
+  td,th{border:1px solid #ddd; padding:6px 10px; font-size:14px; text-align:left;}
+  #log{white-space:pre-wrap; font-family:ui-monospace,monospace; font-size:13px; background:#f4f4f4; padding:12px; border-radius:8px; margin-top:16px; max-height:400px; overflow:auto;}
+  #userInfo{font-size:14px; color:#177A34;}
+</style>
+</head>
+<body>
+<h2>醫院資料匯入工具</h2>
+<p>一次性的匯入工具，把預先整理好的急救責任醫院資料寫入 Firestore 的 <code>hospitals</code> 集合。確認匯入成功、資料在 App「更多 → 醫院資訊」顯示無誤後，這個檔案就可以請開發者刪除了。</p>
+<div id="authArea">
+  <button id="loginBtn">使用 Google 登入</button>
+  <span id="userInfo"></span>
+</div>
+<table>
+  <thead><tr><th>縣市</th><th>醫院</th><th>等級</th><th>電話</th><th>備註</th></tr></thead>
+  <tbody id="previewBody"></tbody>
+</table>
+<div style="margin-top:16px;">
+  <button id="importBtn" disabled>開始匯入</button>
+</div>
+<div id="log"></div>
+
+<script>
+// 台中、嘉義幾家重度級急救責任醫院；電話多半只查得到總機，急診專線待現場確認後
+// 再到「基礎資料管理 → 醫院」頁籤更新，不確定的先標註在備註欄。
+// 放在一般 script（非 module）裡，這樣預覽表格不必等 Firebase SDK 載入完成就能先顯示。
+window.HOSPITALS = [
+  { county:"臺中市", name:"中國醫藥大學附設醫院", level:"重度級", phone:"04-22052121", note:"總機，急診專線待確認" },
+  { county:"臺中市", name:"臺中榮民總醫院", level:"重度級", phone:"04-23592525", note:"總機，急診專線待確認" },
+  { county:"臺中市", name:"中山醫學大學附設醫院", level:"重度級", phone:"", note:"電話待確認" },
+  { county:"臺中市", name:"童綜合醫院", level:"重度級", phone:"", note:"電話待確認" },
+  { county:"臺中市", name:"澄清醫院中港院區", level:"重度級", phone:"", note:"電話待確認" },
+  { county:"臺中市", name:"光田綜合醫院大甲院區", level:"重度級", phone:"04-26885599", note:"總機，急診專線待確認" },
+  { county:"嘉義市", name:"嘉義基督教醫院", level:"重度級", phone:"", note:"電話待確認" },
+  { county:"嘉義縣", name:"長庚紀念醫院嘉義院區", level:"重度級", phone:"", note:"電話待確認" }
+];
+const previewBody = document.getElementById('previewBody');
+window.HOSPITALS.forEach(h => {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td>${h.county}</td><td>${h.name}</td><td>${h.level}</td><td>${h.phone||'—'}</td><td>${h.note||''}</td>`;
+  previewBody.appendChild(tr);
+});
+</script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
+  authDomain: "medical-battalion-tracker.firebaseapp.com",
+  projectId: "medical-battalion-tracker",
+  storageBucket: "medical-battalion-tracker.firebasestorage.app",
+  messagingSenderId: "442272611220",
+  appId: "1:442272611220:web:88ef96f7789200c27ded81"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
+const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents`;
+const HOSPITALS = window.HOSPITALS;
+
+function toFsValue(v){
+  if (v === null || v === undefined || v === "") return { nullValue: null };
+  return { stringValue: String(v) };
+}
+function toFsFields(obj){
+  const out = {};
+  for (const k in obj) if (obj[k] !== undefined) out[k] = toFsValue(obj[k]);
+  return out;
+}
+
+const loginBtn = document.getElementById('loginBtn');
+const importBtn = document.getElementById('importBtn');
+const userInfo = document.getElementById('userInfo');
+const log = document.getElementById('log');
+function appendLog(msg){ log.textContent += msg + "\n"; log.scrollTop = log.scrollHeight; }
+
+loginBtn.onclick = () => signInWithPopup(auth, provider).catch(e => appendLog('登入失敗：' + e.message));
+
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    userInfo.textContent = ` 已登入：${user.displayName || user.email}`;
+    loginBtn.style.display = 'none';
+    importBtn.disabled = false;
+  } else {
+    userInfo.textContent = '';
+    loginBtn.style.display = 'inline-block';
+    importBtn.disabled = true;
+  }
+});
+
+importBtn.onclick = async () => {
+  importBtn.disabled = true;
+  appendLog('開始匯入...');
+  const idToken = await auth.currentUser.getIdToken();
+  let success = 0, fail = 0;
+  for (const h of HOSPITALS) {
+    try {
+      const res = await fetch(`${FIRESTORE_BASE}/hospitals`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${idToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: toFsFields(h) })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(()=>({}));
+        throw new Error((Array.isArray(err)?err[0]:err).error?.message || res.statusText);
+      }
+      success++;
+      appendLog(`✓ 已新增：${h.name}`);
+    } catch (e) {
+      fail++;
+      appendLog(`✗ 失敗：${h.name} — ${e.message}`);
+    }
+  }
+  appendLog(`匯入完成：成功 ${success} 筆，失敗 ${fail} 筆。`);
+  if (fail > 0) appendLog('若顯示權限相關錯誤，代表目前登入帳號不是 admin/高勤官/主官管，請改用有權限的帳號登入後再匯入。');
+  appendLog('請到 App 的「更多 → 醫院資訊」確認資料正確後，再請開發者刪除這個檔案。');
+  importBtn.disabled = false;
+};
+</script>
+</body>
+</html>
