@@ -297,6 +297,12 @@
     background:rgba(255,255,255,0.24); font-size:var(--text-xs); font-weight:700;
   }
   .weather-card.wx-muted .weather-card-pop{background:var(--panel-2);}
+  .weather-tip{
+    display:flex; align-items:flex-start; gap:8px; background:var(--panel); border:1px solid var(--border);
+    border-radius:var(--radius-md); padding:12px 14px; margin-bottom:18px;
+    font-size:var(--text-sm); color:var(--muted); line-height:1.6; box-shadow:var(--shadow-xs);
+  }
+  .weather-tip svg{color:var(--blue); flex-shrink:0; margin-top:1px;}
   .hazard-banner{margin-bottom:14px;}
   .hazard-row{
     display:flex; align-items:flex-start; gap:10px; color:var(--red);
@@ -564,7 +570,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-05-107-weather-redesign-custom-daterange";
+const BUILD_TAG = "2026-07-06-108-weather-summary-tip";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -1593,6 +1599,34 @@ function renderWeatherCard(unit){
       </div>
     </div>`;
 }
+// 用兩三句話把今天天氣＋該注意的事項講清楚：第一句是概況（地點/天氣/溫度/
+// 降雨機率），第二句依數值門檻（高溫、高降雨機率、日夜溫差大）挑出對應的
+// 提醒，若當下有生效中的天氣特報也一併提醒，沒有特別狀況則給一句安全提醒。
+function renderWeatherTip(unit){
+  const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
+  const w = state.weather;
+  if (!w || w.error || w.county !== county) return "";
+  let overview = `今日${esc(county)}${esc(w.wx)}`;
+  if (w.minT!=null && w.maxT!=null) overview += `，氣溫約 ${w.minT}°–${w.maxT}°C`;
+  if (w.pop!=null) overview += `，降雨機率 ${w.pop}%`;
+  overview += "。";
+
+  const tips = [];
+  if (w.maxT!=null && w.maxT >= 33) tips.push("高溫炎熱，執勤請注意補水防曬、慎防中暑");
+  if (w.pop!=null && w.pop >= 50) tips.push("降雨機率高，請攜帶雨具並留意行車安全");
+  if (w.minT!=null && w.maxT!=null && (w.maxT - w.minT) >= 8) tips.push("日夜溫差大，請留意保暖");
+  const h = state.hazards;
+  if (h && h.county === county && !h.error && h.list && h.list.length) {
+    tips.push(`${esc(county)}目前有${esc(h.list[0].phenomena)}生效中，請提高警覺`);
+  }
+  if (!tips.length) tips.push("天氣穩定，依標準程序執行今日勤務即可");
+
+  return `
+    <div class="weather-tip">
+      ${icon('bell',16)}
+      <div>${overview}${tips.join("；")}。</div>
+    </div>`;
+}
 function renderHazardBanner(unit){
   const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
   const h = state.hazards;
@@ -1649,6 +1683,7 @@ function viewHome(){
     <div class="home-date">${fmtDate(today)}</div>
     ${renderHazardBanner(unit)}
     ${renderWeatherCard(unit)}
+    ${renderWeatherTip(unit)}
     <div class="section-label">今日概況</div>
     <div class="stat-grid">
       <div class="stat-tile t-blue"><div class="num">${todayTasks.length}</div><div class="lbl">今日勤務數</div></div>
