@@ -331,11 +331,14 @@
   /* ---- task detail ---- */
   .back-row{display:flex; align-items:center; gap:8px; margin-bottom:16px; color:var(--blue); font-size:var(--text-sm); font-weight:600;}
   .back-row button{background:none; border:none; color:var(--blue); font-size:var(--text-sm); font-weight:600; padding:6px 0; font-family:var(--sans);}
-  /* iOS 風格返回鍵：純圖示（圓圈裡放「‹」），不接文字，全站統一。 */
+  /* iOS 風格返回鍵：純圖示（圓圈裡放「‹」），不接文字，全站統一。
+     圓圈底色不能用 --panel-2（跟頁面底色 --bg 幾乎同色，肉眼看不出來，
+     會變成只看到一個「‹」符號飄在畫面上，沒有圓圈感），改用對比明顯的
+     --border 當底色。 */
   .back-btn{display:inline-flex; align-items:center; background:none; border:none; padding:2px 0; color:var(--blue); font-family:var(--sans); cursor:pointer;}
   .back-btn-circle{
     display:flex; align-items:center; justify-content:center; flex-shrink:0;
-    width:28px; height:28px; border-radius:50%; background:var(--panel-2); color:var(--blue);
+    width:28px; height:28px; border-radius:50%; background:var(--border); color:var(--blue);
     font-size:19px; font-weight:700; line-height:1;
   }
   .detail-head{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:var(--space-card); margin-bottom:var(--space-section); box-shadow:var(--shadow-sm);}
@@ -626,7 +629,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-127-backbtn-fix-icon-only-version-rule";
+const BUILD_TAG = "2026-07-06-128-backbtn-circle-contrast-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -912,7 +915,7 @@ const HOSPITAL_COUNTIES = ["臺中市", "嘉義市", "嘉義縣"];
 // 補一筆當天的異動摘要，讓這頁跟著實際出貨內容走，不是寫死不會更新的文字
 // （這個做法也記在 CLAUDE.md 的出貨檢查清單裡）。
 const RELEASE_NOTES = [
-  { date: "2026/07/06", summary: "新增「關於系統」頁面（使用條款/隱私權政策/開源授權/更新紀錄子頁面，系統版本改為主.次.修訂架構並隨 Build 自動更新）；意見回饋改列為使用者功能項目、一律具名顯示姓名，並支援四種類別（建議/問題回報/功能請求/其他），管理後台新增查看介面；全站返回鍵統一改成 iOS 風格純圖示按鈕（圓圈＋‹，不接文字），管理後台補上原本缺少的返回鍵，並修正返回鍵在部分頁面點擊沒反應的問題；更多頁改版為使用者功能/管理功能/系統資訊三大分區；患者紀錄新增現場狀況（創傷/非創傷）分類；車輛支援跨單位借用；車長/駕駛改為跨單位搜尋選擇器；閒置 8 小時自動登出；帳號待審核可自選單位；天氣卡片重新設計；下拉重新整理改為整頁重新整理且修正為重新整理後留在原本頁面（不會被彈回首頁）；急救責任醫院資料自動匯入；車輛依車種分組排序。" },
+  { date: "2026/07/06", summary: "新增「關於系統」頁面（使用條款/隱私權政策/開源授權/更新紀錄子頁面，系統版本改為主.次.修訂架構並隨 Build 自動更新）；意見回饋改列為使用者功能項目、一律具名顯示姓名，並支援四種類別（建議/問題回報/功能請求/其他），管理後台新增查看介面；全站返回鍵統一改成 iOS 風格純圖示按鈕（圓圈＋‹，不接文字），管理後台補上原本缺少的返回鍵，並修正返回鍵在部分頁面點擊沒反應、以及圓圈底色跟頁面背景太接近導致看不出圓圈的問題；更多頁改版為使用者功能/管理功能/系統資訊三大分區；患者紀錄新增現場狀況（創傷/非創傷）分類；車輛支援跨單位借用；車長/駕駛改為跨單位搜尋選擇器；閒置 8 小時自動登出；帳號待審核可自選單位；天氣卡片重新設計；下拉重新整理改為整頁重新整理且修正為重新整理後留在原本頁面（不會被彈回首頁）；急救責任醫院資料自動匯入；車輛依車種分組排序。" },
   { date: "2026/07/04 以前", summary: "建立車輛人員動態管制核心功能：勤務建立與追蹤、車輛／人員／行車紀錄器基礎資料管理、帳號權限（RBAC）、患者生命徵象紀錄、勤務紀錄查詢與統計分析。" }
 ];
 
