@@ -592,7 +592,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-119-cross-unit-vehicle-borrow";
+const BUILD_TAG = "2026-07-06-120-scene-trauma-nontrauma";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -857,6 +857,11 @@ const ALLERGY_OPTIONS = ["藥物", "食物", "其他", "不清楚", "無"];
 // 處置項目涵蓋創傷與非創傷常見處置，不只是外傷包紮固定這類。
 const TREATMENT_OPTIONS = ["暢通呼吸道", "抽吸", "使用甦醒球（BVM）", "給氧", "使用AED", "CPR", "頸圈固定", "清洗傷口", "止血、包紮", "止血帶", "骨折固定", "姿勢擺位／半坐臥", "血糖處置（給予口服糖分）", "協助服藥", "保暖", "觀察生命徵象", "心理支持", "其他"];
 const GENDER_OPTIONS = ["男", "女"];
+// 現場狀況：比照救護紀錄表分成非創傷／創傷兩大類，各自有一組常見情況勾選，
+// 只在初評問一次（跟過去病史/過敏史一樣，複測不用每次重填）。
+const SCENE_TYPES = ["非創傷", "創傷"];
+const NON_TRAUMA_OPTIONS = ["呼吸問題（喘／呼吸急促）", "呼吸道問題（異物哽塞）", "昏迷（意識不清）", "胸痛／悶", "腹痛", "一般疾病", "頭痛／頭暈／昏倒／昏厥", "發燒", "噁心／嘔吐／腹瀉", "肢體無力", "疑似毒藥物中毒", "疑似一氧化碳中毒", "癲癇／抽搐", "路倒", "行為急症／精神異常", "孕婦急產", "到院前心肺功能停止", "其他"];
+const TRAUMA_OPTIONS = ["一般外傷", "頭部外傷", "胸部外傷", "腹部外傷", "背部外傷", "肢體外傷", "溺水", "摔跌傷", "墜落傷", "穿刺傷", "燒燙傷", "電擊傷", "生物咬螫傷", "到院前心肺功能停止", "其他"];
 
 /* =========================================================
    3) 全域狀態
@@ -2102,6 +2107,9 @@ function viewVitalsPage(taskId, id, adding){
   const allergyDrugFoodChecked = (editingVitals?.allergyHistory||[]).some(v=>['藥物','食物'].includes(v));
   const allergyOtherChecked = (editingVitals?.allergyHistory||[]).includes('其他');
   const treatmentOtherChecked = (editingVitals?.treatments||[]).includes('其他');
+  const sceneType = editingVitals?.sceneType || '';
+  const sceneNonTraumaOtherChecked = sceneType === '非創傷' && (editingVitals?.sceneFindings||[]).includes('其他');
+  const sceneTraumaOtherChecked = sceneType === '創傷' && (editingVitals?.sceneFindings||[]).includes('其他');
 
   const historyHtml = showHistory ? `
     <div class="vitals-history">
@@ -2115,6 +2123,10 @@ function viewVitalsPage(taskId, id, adding){
           <div class="vitals-patient-line">
             ${icon('user',16)}
             <span>${[v.patientUnit, v.patientRank, v.patientName].filter(Boolean).map(esc).join('　')}${v.patientGender?`（${esc(v.patientGender)}）`:''}</span>
+          </div>` : ""}
+          ${v.sceneType ? `
+          <div class="detail-grid">
+            <div class="detail-item"><span class="lbl">現場狀況</span><span class="val">${esc(v.sceneType)}${v.sceneFindings&&v.sceneFindings.length?'：'+v.sceneFindings.map(esc).join('、'):''}${v.sceneFindingsOtherDetail?`（${esc(v.sceneFindingsOtherDetail)}）`:''}</span></div>
           </div>` : ""}
           ${v.complaint ? `<div class="vitals-entry-complaint"><b>主訴</b> ${esc(v.complaint)}</div>` : ""}
           ${v.complaintQuality || v.complaintDuration || v.complaintOthers || v.spineCheck ? `
@@ -2162,7 +2174,29 @@ function viewVitalsPage(taskId, id, adding){
         <div class="field"><label>性別（選填）</label>${chipGroup('vf-patient-gender', GENDER_OPTIONS, editingVitals?.patientGender||'', false)}</div>
       </div>
       <div class="form-section">
-        <div class="form-section-title"><span class="step-num">2</span>主訴</div>
+        <div class="form-section-title"><span class="step-num">2</span>現場狀況</div>
+        <div class="field"><label>現場是創傷還是非創傷？</label>
+          <div class="chip-select">${SCENE_TYPES.map(o => `
+            <label class="chip-option">
+              <input type="radio" name="vf-scene-type" value="${o}" ${sceneType===o?'checked':''} onchange="window.__syncSceneType('${o}')">
+              <span>${o}</span>
+            </label>`).join("")}</div>
+        </div>
+        <div id="scene-non-trauma-wrap" style="display:${sceneType==='非創傷'?'block':'none'};">
+          <div class="field">${chipGroup('vf-scene-nontrauma', NON_TRAUMA_OPTIONS, editingVitals?.sceneFindings||[], true, [{values:['其他'], wrapId:'scene-nontrauma-other-wrap'}])}</div>
+          <div id="scene-nontrauma-other-wrap" style="display:${sceneNonTraumaOtherChecked?'block':'none'};">
+            <div class="field" style="margin-top:10px; margin-bottom:0;"><label>其他說明（選填）</label><input id="vf-scene-nontrauma-other" value="${esc(sceneType==='非創傷'?(editingVitals?.sceneFindingsOtherDetail||''):'')}" placeholder="請說明"></div>
+          </div>
+        </div>
+        <div id="scene-trauma-wrap" style="display:${sceneType==='創傷'?'block':'none'};">
+          <div class="field">${chipGroup('vf-scene-trauma', TRAUMA_OPTIONS, editingVitals?.sceneFindings||[], true, [{values:['其他'], wrapId:'scene-trauma-other-wrap'}])}</div>
+          <div id="scene-trauma-other-wrap" style="display:${sceneTraumaOtherChecked?'block':'none'};">
+            <div class="field" style="margin-top:10px; margin-bottom:0;"><label>其他說明（選填）</label><input id="vf-scene-trauma-other" value="${esc(sceneType==='創傷'?(editingVitals?.sceneFindingsOtherDetail||''):'')}" placeholder="請說明"></div>
+          </div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title"><span class="step-num">3</span>主訴</div>
         <div class="field"><label>1. 感覺哪裡不舒服？</label><input id="vf-complaint" value="${esc(editingVitals?.complaint||'')}" placeholder="例如：胸痛、呼吸困難" required></div>
         <div class="field"><label>2. 感覺怎麼的不舒服？（選填）</label><input id="vf-complaint-quality" value="${esc(editingVitals?.complaintQuality||'')}" placeholder="例如：悶痛、刺痛"></div>
         <div class="field"><label>3. 大約不舒服多久了？（選填）</label><input id="vf-complaint-duration" value="${esc(editingVitals?.complaintDuration||'')}" placeholder="例如：約五分鐘"></div>
@@ -2170,14 +2204,14 @@ function viewVitalsPage(taskId, id, adding){
         <div class="field"><label>5. 評估脊椎是否損傷？（創傷患者，選填）</label><input id="vf-spine-check" value="${esc(editingVitals?.spineCheck||'')}" placeholder="例如：頸椎無痠麻痛"></div>
       </div>
       <div class="form-section">
-        <div class="form-section-title"><span class="step-num">3</span>過去病史</div>
+        <div class="form-section-title"><span class="step-num">4</span>過去病史</div>
         <div class="field">${chipGroup('vf-past-history', PAST_HISTORY_OPTIONS, editingVitals?.pastHistory||[], true, [{values:['其他'], wrapId:'past-history-other-wrap'}])}</div>
         <div id="past-history-other-wrap" style="display:${pastHistoryOtherChecked?'block':'none'};">
           <div class="field" style="margin-top:10px; margin-bottom:0;"><label>其他病史說明（選填）</label><input id="vf-past-history-other" value="${esc(editingVitals?.pastHistoryOtherDetail||'')}" placeholder="請說明"></div>
         </div>
       </div>
       <div class="form-section">
-        <div class="form-section-title"><span class="step-num">4</span>過敏史</div>
+        <div class="form-section-title"><span class="step-num">5</span>過敏史</div>
         <div class="field">${chipGroup('vf-allergy-history', ALLERGY_OPTIONS, editingVitals?.allergyHistory||[], true, [
           {values:['藥物','食物'], wrapId:'allergy-drugfood-wrap'},
           {values:['其他'], wrapId:'allergy-other-wrap'}
@@ -2191,7 +2225,7 @@ function viewVitalsPage(taskId, id, adding){
       </div>
       ` : ``}
       <div class="form-section">
-        <div class="form-section-title">${isInitialEntry ? `<span class="step-num">5</span>` : ""}生命徵象</div>
+        <div class="form-section-title">${isInitialEntry ? `<span class="step-num">6</span>` : ""}生命徵象</div>
         <div class="field">
           <label>時間</label>
           <div style="display:flex; gap:8px;">
@@ -2225,7 +2259,7 @@ function viewVitalsPage(taskId, id, adding){
         <div class="field"><label>血糖值 mg/dL（選填）</label><input id="vf-glucose" type="text" inputmode="numeric" value="${esc(editingVitals?.glucose||'')}"></div>
       </div>
       <div class="form-section">
-        <div class="form-section-title">${isInitialEntry ? `<span class="step-num">6</span>` : ""}處置項目</div>
+        <div class="form-section-title">${isInitialEntry ? `<span class="step-num">7</span>` : ""}處置項目</div>
         <div class="field">${chipGroup('vf-treatments', TREATMENT_OPTIONS, editingVitals?.treatments||[], true, [{values:['其他'], wrapId:'treatment-other-wrap'}])}</div>
         <div id="treatment-other-wrap" style="display:${treatmentOtherChecked?'block':'none'};">
           <div class="field" style="margin-top:10px; margin-bottom:0;"><label>其他處置說明（選填）</label><input id="vf-treatment-other-detail" value="${esc(editingVitals?.treatmentOtherDetail||'')}" placeholder="請說明"></div>
@@ -3249,6 +3283,15 @@ window.__syncDetailVisibility = (wrapId, groupName, triggerValues) => {
   const el = document.getElementById(wrapId);
   if (el) el.style.display = anyChecked ? "block" : "none";
 };
+// 現場狀況（非創傷／創傷）是單選，兩邊的勾選清單互斥：選了哪邊就只顯示
+// 哪邊的清單，跟其他欄位共用的 __syncDetailVisibility（只管「顯示」，
+// 不管「互斥隱藏另一邊」）不同，所以另外寫一個小函式處理兩邊同時切換。
+window.__syncSceneType = (value) => {
+  const nonTraumaWrap = document.getElementById("scene-non-trauma-wrap");
+  const traumaWrap = document.getElementById("scene-trauma-wrap");
+  if (nonTraumaWrap) nonTraumaWrap.style.display = value === "非創傷" ? "block" : "none";
+  if (traumaWrap) traumaWrap.style.display = value === "創傷" ? "block" : "none";
+};
 /* =========================================================
    車長／駕駛人員選擇器：可跨單位、可打字搜尋。純 DOM 彈窗，不觸發
    render()，避免打開選人彈窗時，把使用者已經填到一半的其他欄位
@@ -3352,6 +3395,10 @@ window.__submitVitals = (taskId, id) => {
     data.patientRank = get("vf-patient-rank");
     data.patientName = get("vf-patient-name");
     data.patientGender = checkedValues("vf-patient-gender")[0] || "";
+    const sceneTypeVal = checkedValues("vf-scene-type")[0] || "";
+    data.sceneType = sceneTypeVal;
+    data.sceneFindings = sceneTypeVal === "創傷" ? checkedValues("vf-scene-trauma") : sceneTypeVal === "非創傷" ? checkedValues("vf-scene-nontrauma") : [];
+    data.sceneFindingsOtherDetail = sceneTypeVal === "創傷" ? get("vf-scene-trauma-other") : sceneTypeVal === "非創傷" ? get("vf-scene-nontrauma-other") : "";
     data.complaintQuality = get("vf-complaint-quality");
     data.complaintDuration = get("vf-complaint-duration");
     data.complaintOthers = get("vf-complaint-others");
