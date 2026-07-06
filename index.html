@@ -639,7 +639,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-136-scope-field-reorder-home-merge-liaison-picker";
+const BUILD_TAG = "2026-07-06-137-liaison-picker-default-same-unit";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1061,7 +1061,8 @@ const RELEASE_NOTES = [
     "返回鍵旁邊的頁面標題改回不顯示（維持純圖示），箭頭改細字重＋圓體並確保在圓圈裡水平垂直置中",
     "建立/編輯勤務選車號時，選項會標出該車目前可派遣／派遣中；首頁新增「營內車／營外車／洽公中人數」統計，高勤官一眼就看得出目前車輛動態",
     "修正營內／營外統計的定義：改成建立勤務時勾選「這趟勤務營內／營外」，首頁統計依此欄位計算，不再用車輛名冊總數去推算（原本會把整批沒出勤的車也算進「營內」，數字失真）",
-    "「營內／營外」選項移到建立勤務頁最上方、緊接在任務類型下面；首頁「今日概況」跟「車輛動態」合併成同一區塊，不再重複顯示相近的統計數字；洽公人員選擇改成跟車長/駕駛一樣可跨單位搜尋選人（可複選）",
+    "「營內／營外」選項移到建立勤務頁最上方、緊接在任務類型下面；首頁「今日概況」跟「車輛動態」合併成同一區塊，不再重複顯示相近的統計數字；洽公人員選擇改成跟車長/駕駛一樣可搜尋選人（可複選）",
+    "洽公人員選人預設只列自己單位（洽公通常不跨單位），勾選「跨單位選人」才展開列出其他單位；編輯既有的跨單位洽公時會自動展開，不會讓已選的其他單位人員從畫面上消失",
   ] },
   { date: "2026/07/04 以前", items: [
     "建立車輛人員動態管制核心功能：勤務建立與追蹤",
@@ -2257,8 +2258,8 @@ function viewCreateTask(){
       <div class="field"><label>任務名稱 *</label><input name="title" required placeholder="${isLiaison?'例如：軍公民任務現勘':'例如：OHCA 患者搶救'}"></div>
       <div class="field"><label>地點${isLiaison?'（可多個，用頓號分隔）':''}</label><input name="location" placeholder="${isLiaison?'例如：烏日高鐵站、福田水資源回收中心、天后宮':'例如：潭子區豐興路一段'}"></div>
       ${isLiaison ? `
-      <div class="field"><label>人員（可複選，可跨單位）*</label>
-        <button type="button" class="picker-field" onclick="window.__openMultiPersonPicker(this)">
+      <div class="field"><label>人員（可複選）*</label>
+        <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openMultiPersonPicker(this)">
           <span class="picker-field-text placeholder">請選擇人員</span>${icon('chevronDown',16)}
         </button>
         <div class="personnel-hidden-checkboxes"></div>
@@ -2333,8 +2334,8 @@ function viewEditTask(taskId){
       <div class="field"><label>任務名稱 *</label><input name="title" required value="${esc(t.title||'')}"></div>
       <div class="field"><label>地點${isLiaison?'（可多個，用頓號分隔）':''}</label><input name="location" value="${esc(t.location||'')}"></div>
       ${isLiaison ? `
-      <div class="field"><label>人員（可複選，可跨單位）*</label>
-        <button type="button" class="picker-field" onclick="window.__openMultiPersonPicker(this)">
+      <div class="field"><label>人員（可複選）*</label>
+        <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openMultiPersonPicker(this)">
           <span class="picker-field-text${currentPersonnel.length?'':' placeholder'}">${currentPersonnel.length ? esc(currentPersonnel.join('、')) : '請選擇人員'}</span>${icon('chevronDown',16)}
         </button>
         <div class="personnel-hidden-checkboxes">${currentPersonnel.map(name => `<input type="checkbox" name="personnel" value="${esc(name)}" checked style="display:none">`).join("")}</div>
@@ -3888,17 +3889,21 @@ window.__filterPersonPicker = (query) => {
   wirePersonPickerOptions(list);
 };
 /* =========================================================
-   洽公人員選擇器：跟車長／駕駛選擇器同一套彈窗邏輯，但可複選、跨單位
-   （洽公本來就常常混多個單位的人一起出去），選完按「完成」才關閉，
-   而不是點一下就關掉。選取狀態存在 multiPersonPickerCtx.selected，
-   搜尋過濾時已勾選但被篩掉的人不會被忘記（在 Set 裡持續保留）。
+   洽公人員選擇器：跟車長／駕駛選擇器同一套彈窗邏輯，但可複選。洽公不常
+   跨單位選人，預設只列自己單位的人（比照「跨單位借車」預設不勾選同一個
+   邏輯），勾選「跨單位選人」才展開列出三個單位全部人員；如果編輯既有
+   洽公、原本已經選了其他單位的人，一開始就自動勾選展開，不然那些人會
+   在清單裡消失、看起來像被取消選取。選完按「完成」才關閉，不是點一下
+   就關掉。選取狀態存在 multiPersonPickerCtx.selected，搜尋/切換單位範圍
+   過濾時已勾選但被篩掉的人不會被忘記（在 Set 裡持續保留）。
    ========================================================= */
-let multiPersonPickerCtx = null; // { pool, selected: Set<string>, fieldWrap }
-function personMultiPickerRows(pool, query, selected){
+let multiPersonPickerCtx = null; // { pool, unit, selected: Set<string>, fieldWrap }
+function personMultiPickerRows(pool, unit, crossUnit, query, selected){
+  const scoped = crossUnit ? pool : pool.filter(x => x.unit === unit);
   const q = (query||"").trim().toLowerCase();
-  const filtered = q ? pool.filter(x =>
+  const filtered = q ? scoped.filter(x =>
     x.name.toLowerCase().includes(q) || (x.title||"").toLowerCase().includes(q) || unitLabel(x.unit).toLowerCase().includes(q)
-  ) : pool;
+  ) : scoped;
   if (!filtered.length) return `<div class="empty" style="padding:28px 0;">找不到符合的人員</div>`;
   let html = "", curUnit = null;
   for (const x of filtered) {
@@ -3930,31 +3935,49 @@ function closeMultiPersonPicker(){
 }
 window.__openMultiPersonPicker = (triggerBtn) => {
   const fieldWrap = triggerBtn.closest(".field");
+  const unit = triggerBtn.dataset.unit;
   const currentNames = [...fieldWrap.querySelectorAll('input[name="personnel"]:checked')].map(el => el.value);
   const pool = state.personnel
     .filter(x => x.active !== false || currentNames.includes(x.name))
     .slice()
     .sort((a,b) => unitWeight(a.unit) - unitWeight(b.unit) || rankWeight(a.title) - rankWeight(b.title));
   const selected = new Set(currentNames);
+  // 已選的人裡如果有人不屬於這個單位，代表這筆洽公本來就跨單位，一開始
+  // 就展開列出全部單位，避免這些人從畫面上消失。
+  const crossUnit = currentNames.some(name => {
+    const x = state.personnel.find(p => p.name === name);
+    return x && x.unit !== unit;
+  });
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay multi-person-picker-overlay";
   overlay.onclick = (e) => { if (e.target === overlay) closeMultiPersonPicker(); };
   overlay.innerHTML = `
     <div class="modal-sheet">
       <div class="modal-handle"></div>
-      <div class="modal-title">選擇人員（可複選、可跨單位）</div>
+      <div class="modal-title">選擇人員（可複選）</div>
       <input type="text" class="picker-search" placeholder="輸入姓名、階級或單位搜尋" oninput="window.__filterMultiPersonPicker(this.value)">
-      <div id="multi-person-picker-list">${personMultiPickerRows(pool, "", selected)}</div>
+      <label class="checkbox-inline" style="margin:8px 0;"><input type="checkbox" ${crossUnit?'checked':''} onchange="window.__toggleMultiPersonCrossUnit(this)"> 跨單位選人</label>
+      <div id="multi-person-picker-list">${personMultiPickerRows(pool, unit, crossUnit, "", selected)}</div>
       <button type="button" class="btn-primary" style="margin-top:14px;" onclick="window.__commitMultiPersonPicker()">完成</button>
     </div>`;
   document.body.appendChild(overlay);
-  multiPersonPickerCtx = { pool, selected, fieldWrap };
+  multiPersonPickerCtx = { pool, unit, crossUnit, selected, fieldWrap };
   wireMultiPersonPickerOptions(overlay);
 };
 window.__filterMultiPersonPicker = (query) => {
   if (!multiPersonPickerCtx) return;
+  const { pool, unit, crossUnit, selected } = multiPersonPickerCtx;
   const list = document.getElementById("multi-person-picker-list");
-  list.innerHTML = personMultiPickerRows(multiPersonPickerCtx.pool, query, multiPersonPickerCtx.selected);
+  list.innerHTML = personMultiPickerRows(pool, unit, crossUnit, query, selected);
+  wireMultiPersonPickerOptions(list);
+};
+window.__toggleMultiPersonCrossUnit = (checkbox) => {
+  if (!multiPersonPickerCtx) return;
+  multiPersonPickerCtx.crossUnit = checkbox.checked;
+  const { pool, unit, selected } = multiPersonPickerCtx;
+  const list = document.getElementById("multi-person-picker-list");
+  const query = checkbox.closest(".modal-sheet")?.querySelector(".picker-search")?.value || "";
+  list.innerHTML = personMultiPickerRows(pool, unit, checkbox.checked, query, selected);
   wireMultiPersonPickerOptions(list);
 };
 window.__commitMultiPersonPicker = () => {
