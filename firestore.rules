@@ -21,12 +21,16 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create: if isSignedIn() && request.auth.uid == uid
                     && request.resource.data.role == 'pending';
-      // 使用者可編輯自己的姓名/階級等資料，但不能自己改 role 或 unit；
-      // role、unit 只能由管理員（isAdmin）異動，對應「帳號管理僅限 Admin」的規則。
+      // 使用者可編輯自己的姓名/階級等資料，但不能自己改 role；已核准後也不能
+      // 自己改 unit（只能由管理員 isAdmin 異動）。帳號還在待審核（pending）
+      // 階段例外：可以自己選/改單位，方便註冊時先選好單位給管理員審核，
+      // 反正待審核狀態本來就沒有任何實際資料存取權限，不构成安全疑慮。
       allow update: if isAdmin()
                     || (isSignedIn() && request.auth.uid == uid
                         && request.resource.data.role == resource.data.role
-                        && request.resource.data.unit == resource.data.unit);
+                        && request.resource.data.unit == resource.data.unit)
+                    || (isSignedIn() && request.auth.uid == uid
+                        && resource.data.role == 'pending' && request.resource.data.role == 'pending');
       allow delete: if false;
     }
 
