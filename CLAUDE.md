@@ -8,8 +8,10 @@
 1. 修改 `index.html`
 2. Bump `BUILD_TAG`（格式 `"YYYY-MM-DD-NN-短描述"`）
 3. 在 `RELEASE_NOTES`（`index.html` 內，`FEEDBACK_CATEGORY_LABEL` 附近）補一筆
-   當天的異動摘要——同一天有多筆出貨就更新同一筆日期的 `summary`，不要
-   重複開新的日期項目。這樣「關於系統 → 更新紀錄」才會跟著實際出貨內容走。
+   當天的異動項目——`items` 是條列式短句陣列（畫面上排成清單），不要寫成
+   一大段連續文字擠在一起看不清楚；同一天有多筆出貨就往同一筆日期的
+   `items` 陣列後面加，不要重複開新的日期項目。這樣「關於系統 → 更新
+   紀錄」才會跟著實際出貨內容走。
    - 系統版本／Build／發布日期／最後更新已經改成從 `BUILD_TAG` 自動解析
      （見 `appVersion()`／`buildTagDate()`）。系統版本是「主.次.修訂」
      （`APP_MAJOR_MINOR` + BUILD_TAG 流水號），修訂號每次出貨自動加一，
@@ -19,9 +21,14 @@
 5. 用 Playwright 對照修改到的畫面做離線驗證（複製到 scratchpad、抽掉
    Firebase import、注入 debug hook 後開瀏覽器測試）；牽涉到互動元件
    （按鈕、連結、表單送出）時，要實際模擬點擊並確認結果（例如導覽後
-   路由真的變了），不能只檢查畫面上有沒有渲染出文字/元素——只查渲染
-   結果會漏掉像是 onclick 屬性裡雙引號互相截斷這種「畫面看起來正常、
-   點下去沒反應」的 bug。
+   路由真的變了），並且要監聽 `pageerror`／console error——不能只檢查
+   畫面上有沒有渲染出文字/元素。只查渲染結果會漏掉「畫面看起來正常、
+   點下去沒反應」這類 bug，常見的兩種成因：
+   - onclick 屬性裡雙引號互相截斷（屬性用雙引號包、裡面又塞雙引號字串）。
+   - 函式內部宣告了跟全域共用函式同名的區域變數（例如 `const backBtn =
+     ...`），把同一個 render 函式裡後面對該全域函式的呼叫也一併蓋掉，
+     呼叫到一半才在瀏覽器丟出 `TypeError`，但畫面初次渲染沒事、肉眼看不
+     出來。
 6. commit → rebase origin/main → push → 開 PR → squash merge
 
 ## 主/次版號怎麼判斷（`APP_MAJOR_MINOR`）
