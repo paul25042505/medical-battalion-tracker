@@ -337,8 +337,12 @@
   .kv .k{color:var(--muted); font-weight:600; font-family:var(--mono); font-size:var(--text-xs); padding-top:2px; text-transform:uppercase; letter-spacing:0.04em;}
   .kv .v{color:var(--text);}
   /* ---- 關於系統 ---- */
-  .about-list-row{padding:13px 2px; font-size:var(--text-sm); color:var(--text); border-bottom:1px solid var(--border);}
+  .about-list-row{
+    display:flex; align-items:center; justify-content:space-between; gap:8px; cursor:pointer;
+    padding:13px 2px; font-size:var(--text-sm); color:var(--text); border-bottom:1px solid var(--border);
+  }
   .about-list-row:last-child{border-bottom:none;}
+  .about-list-row .chev{color:var(--muted); flex-shrink:0; font-size:18px;}
   .about-copyright{margin-top:var(--space-section); padding:0 4px; color:var(--muted); font-size:var(--text-xs); line-height:1.7; text-align:center;}
 
   .no-permission{color:var(--muted); font-size:var(--text-sm); text-align:center; padding:16px; border:1px dashed var(--border-strong); border-radius:var(--radius-md); margin-bottom:20px;}
@@ -596,7 +600,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-121-about-page";
+const BUILD_TAG = "2026-07-06-122-about-page-content-filled";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -851,6 +855,7 @@ function fuelOptions(sel){
    並提供鄰近急救責任醫院查詢（等級、電話）。
    ========================================================= */
 const HOSPITAL_LEVELS = ["重度級", "中度級", "一般級"];
+const FEEDBACK_TYPE_LABEL = { issue: "問題回報", suggestion: "功能建議" };
 const HOSPITAL_COUNTIES = ["臺中市", "嘉義市", "嘉義縣"];
 
 // 比照救護紀錄表：意識狀態用 AVPU（清/痛/聲/否），過去病史、過敏史、處置項目
@@ -1163,6 +1168,16 @@ async function addRecorder(unit, code){
 async function addHospital(county, name, level, phone, note){
   await fsAddDoc("hospitals", { county, name, level, phone: phone||"", note: note||"" });
   showToast("已新增醫院"); if (hospitalsPoll) hospitalsPoll.refreshNow();
+}
+// 問題回報／功能建議：任何在職帳號都能送出，只有 admin 能在管理後台
+// 「意見回饋」頁籤檢視，不提供列表輪詢（很少人會用到，開啟該頁籤時
+// 現抓一次就好，比照帳號權限頁籤 state._usersCache 的做法）。
+async function submitFeedback(type, message){
+  const p = state.profile;
+  await fsAddDoc("feedback", {
+    type, message, userId: state.user.uid, userName: p.displayName || p.email || "",
+    unit: p.unit || "", rank: p.rank || "", createdAt: new Date()
+  });
 }
 function refreshBaseDataPoll(coll){
   if (coll === "personnel" && personnelPoll) personnelPoll.refreshNow();
@@ -2834,20 +2849,79 @@ function viewAbout(){
     </div>
     <div class="section-label">法律資訊</div>
     <div class="detail-head" style="padding-top:2px; padding-bottom:2px;">
-      <div class="about-list-row">使用條款（Terms of Use）</div>
-      <div class="about-list-row">隱私權政策（Privacy Policy）</div>
-      <div class="about-list-row">開源授權（Open Source Licenses）</div>
+      <div class="about-list-row" onclick="window.__nav({name:'aboutTerms'})">使用條款（Terms of Use）<span class="chev">›</span></div>
+      <div class="about-list-row" onclick="window.__nav({name:'aboutPrivacy'})">隱私權政策（Privacy Policy）<span class="chev">›</span></div>
+      <div class="about-list-row" onclick="window.__nav({name:'aboutLicenses'})">開源授權（Open Source Licenses）<span class="chev">›</span></div>
     </div>
     <div class="section-label">支援</div>
     <div class="detail-head" style="padding-top:2px; padding-bottom:2px;">
-      <div class="about-list-row">更新紀錄（Release Notes）</div>
-      <div class="about-list-row">問題回報</div>
-      <div class="about-list-row">功能建議</div>
+      <div class="about-list-row" onclick="window.__nav({name:'aboutReleaseNotes'})">更新紀錄（Release Notes）<span class="chev">›</span></div>
+      <div class="about-list-row" onclick="window.__nav({name:'feedback', type:'issue'})">問題回報<span class="chev">›</span></div>
+      <div class="about-list-row" onclick="window.__nav({name:'feedback', type:'suggestion'})">功能建議<span class="chev">›</span></div>
     </div>
     <div class="about-copyright">
       Copyright © 2026 MEDTRACK. All Rights Reserved.<br><br>
       本系統為衛生營內部勤務管理使用，未經授權不得擅自複製、散布、修改或提供予第三方。所有系統內容、介面設計及相關資料均受著作權及相關法律保護。
     </div>
+  `;
+}
+// 關於系統底下的文字型子頁面共用同一種版面：返回列＋標題＋一張卡片放內文。
+function viewAboutContentPage(title, bodyHtml){
+  return `
+    <div class="back-row"><button onclick="window.__nav({name:'about'})">‹ 返回</button></div>
+    <div class="section-label">${title}</div>
+    <div class="detail-head" style="text-align:left; font-size:var(--text-sm); line-height:1.8; color:var(--text);">
+      ${bodyHtml}
+    </div>
+  `;
+}
+function viewAboutTerms(){
+  return viewAboutContentPage("使用條款", `
+    <p>本使用條款規範衛生營車輛人員動態管制系統（MEDTRACK，以下稱「本系統」）之使用方式，帳號登入即視為同意下列條款。</p>
+    <p><b>1. 系統用途</b><br>本系統僅供衛生營內部勤務管理使用，包含車輛動態追蹤、人員派遣、勤務回報、患者生命徵象紀錄等功能，不得作其他用途使用。</p>
+    <p><b>2. 帳號使用</b><br>使用者應以本人真實身份登入，不得將帳號提供予他人使用；帳號之角色與單位由系統管理員依職務指派，使用者不得自行變更。</p>
+    <p><b>3. 資料真實性</b><br>使用者填寫勤務、車輛、患者相關資訊時，應確保內容真實正確，不得虛偽登載或惡意竄改紀錄。</p>
+    <p><b>4. 禁止行為</b><br>不得利用本系統從事與勤務無關之用途，不得嘗試規避系統存取權限管制或未經授權存取他人資料。</p>
+    <p><b>5. 服務調整</b><br>本系統得因應勤務需求調整功能或暫停服務進行維護，將盡可能提前於系統內公告。</p>
+    <p><b>6. 條款修訂</b><br>本使用條款如有修訂，將於系統內公告，公告後繼續使用本系統視為同意修訂後之條款。</p>
+  `);
+}
+function viewAboutPrivacy(){
+  return viewAboutContentPage("隱私權政策", `
+    <p>衛生營車輛人員動態管制系統（MEDTRACK）重視使用者之個人資料保護，說明如下。</p>
+    <p><b>1. 蒐集之資料</b><br>登入帳號基本資料（Google 帳號 email、姓名）、階級、聯絡電話、單位、勤務紀錄、患者生命徵象與主訴紀錄等。</p>
+    <p><b>2. 使用目的</b><br>僅用於衛生營內部勤務管理、人員車輛派遣調度、患者救護紀錄留存與勤務品質檢討，不做其他用途，不會提供予第三方。</p>
+    <p><b>3. 資料存取權限</b><br>依角色分級管理（管理員／高勤官／主官管／一般成員），僅開放必要人員檢視對應職務範圍之資料。</p>
+    <p><b>4. 資料保存</b><br>勤務與患者紀錄將依內部規定保存，作為勤務歷程與救護品質檢討之用。</p>
+    <p><b>5. 資料安全</b><br>系統採用 Firebase 雲端服務並設定存取規則（Security Rules），依帳號角色與單位限制資料讀取／寫入範圍，防止未授權存取。</p>
+    <p><b>6. 聯絡窗口</b><br>如對個人資料之蒐集、處理或利用有任何疑義，請洽系統管理員。</p>
+  `);
+}
+function viewAboutLicenses(){
+  return viewAboutContentPage("開源授權", `
+    <p>本系統開發時使用以下第三方服務／函式庫：</p>
+    <p><b>Firebase</b>（Firebase Authentication、Cloud Firestore、Firebase Hosting）<br>由 Google LLC 提供，依 Firebase 服務條款授權使用。</p>
+    <p style="margin-top:16px; color:var(--muted);">除上述雲端服務外，本系統前端介面與邏輯皆為衛生營自行開發之原始程式碼（單一 HTML 檔案、原生 JavaScript／CSS 撰寫），未使用其他前端框架或第三方 UI 套件。</p>
+  `);
+}
+function viewAboutReleaseNotes(){
+  return viewAboutContentPage("更新紀錄", `
+    <p><b>2026/07/06</b><br>新增「關於系統」頁面；患者紀錄新增現場狀況（創傷／非創傷）分類；車輛支援跨單位借用；車長／駕駛改為跨單位搜尋選擇器；閒置 8 小時自動登出；帳號待審核可自選單位。</p>
+    <p><b>2026/07/05</b><br>天氣卡片重新設計；下拉重新整理改為整頁重新整理；急救責任醫院資料自動匯入；車輛依車種分組排序；患者紀錄卡片版面與字級多次調整。</p>
+    <p><b>2026/07/04 以前</b><br>建立車輛人員動態管制核心功能：勤務建立與追蹤、車輛／人員／行車紀錄器基礎資料管理、帳號權限（RBAC）、患者生命徵象紀錄、勤務紀錄查詢與統計分析。</p>
+  `);
+}
+function viewFeedbackForm(type){
+  const isIssue = type !== "suggestion";
+  const label = isIssue ? "問題回報" : "功能建議";
+  const placeholder = isIssue ? "請描述您遇到的問題，例如：在哪個頁面、操作步驟、預期結果與實際結果" : "請描述您希望新增或改善的功能";
+  return `
+    <div class="back-row"><button onclick="window.__nav({name:'about'})">‹ 返回</button></div>
+    <div class="section-label">${label}</div>
+    <form onsubmit="window.__submitFeedbackForm(event, '${isIssue?'issue':'suggestion'}')">
+      <div class="field"><label>內容</label><textarea id="fb-message" required placeholder="${placeholder}" style="min-height:160px;"></textarea></div>
+      <button class="btn-primary" type="submit">送出</button>
+    </form>
   `;
 }
 
@@ -2913,10 +2987,14 @@ function viewAdmin(){
       <div class="tab2 ${state.adminTab==='tasks'?'active':''}" onclick="window.__setAdminTab('tasks')">任務管理</div>
       ${canManageBaseData(p) ? `<div class="tab2 ${state.adminTab==='basedata'?'active':''}" onclick="window.__setAdminTab('basedata')">基礎資料</div>` : ""}
       ${canManageUsers(p) ? `<div class="tab2 ${state.adminTab==='users'?'active':''}" onclick="window.__setAdminTab('users')">帳號權限</div>` : ""}
+      ${canManageUsers(p) ? `<div class="tab2 ${state.adminTab==='feedback'?'active':''}" onclick="window.__setAdminTab('feedback')">意見回饋</div>` : ""}
     </div>`;
 
   if (state.adminTab === "users" && canManageUsers(p)) {
     return overview + tabs + viewAdminUsers();
+  }
+  if (state.adminTab === "feedback" && canManageUsers(p)) {
+    return overview + tabs + viewAdminFeedback();
   }
   if (state.adminTab === "basedata" && canManageBaseData(p)) {
     return overview + tabs + viewAdminBaseData();
@@ -3168,6 +3246,40 @@ function viewAdminUsers(){
     }).join("")}
   `;
 }
+// 意見回饋清單僅 admin 可見，比照帳號權限頁籤的做法：開啟頁籤時現抓一次，
+// 不另外建立輪詢（回報頻率低，不需要即時同步）。
+function viewAdminFeedback(){
+  if (!state._feedbackCache) {
+    state._feedbackCache = "loading";
+    fsListCollection("feedback").then(list => {
+      list.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0));
+      state._feedbackCache = list;
+      render();
+    }).catch(err => {
+      console.error("讀取意見回饋失敗", err);
+      showToast(`讀取意見回饋失敗：[${err.code||'?'}] ${err.message}`);
+      state._feedbackCache = [];
+      render();
+    });
+    return `<div class="spinner"></div>`;
+  }
+  if (state._feedbackCache === "loading") return `<div class="spinner"></div>`;
+
+  return `
+    <div class="section-label">意見回饋 · ${state._feedbackCache.length}</div>
+    ${state._feedbackCache.length ? state._feedbackCache.map(f => `
+      <div class="admin-row" style="align-items:flex-start;">
+        <div style="flex:1; min-width:0;">
+          <div class="name">
+            <span class="vitals-stage-tag${f.type==='issue'?'':' alt'}">${esc(FEEDBACK_TYPE_LABEL[f.type]||f.type)}</span>
+            ${esc(f.userName||'—')}${f.rank?' '+esc(f.rank):''}${f.unit?' · '+esc(unitLabel(f.unit)):''}
+          </div>
+          <div class="sub" style="margin-top:6px; color:var(--text); white-space:pre-wrap;">${esc(f.message||'')}</div>
+          <div class="sub" style="margin-top:6px;">${f.createdAt ? fmtTime(new Date(f.createdAt).getTime()) : ''}</div>
+        </div>
+      </div>`).join("") : `<div class="empty">目前尚無意見回饋</div>`}
+  `;
+}
 
 /* =========================================================
    19) 主渲染
@@ -3184,6 +3296,11 @@ const ROUTE_VIEWS = {
   notifications: viewNotifications,
   profile: viewProfile,
   about: viewAbout,
+  aboutTerms: viewAboutTerms,
+  aboutPrivacy: viewAboutPrivacy,
+  aboutLicenses: viewAboutLicenses,
+  aboutReleaseNotes: viewAboutReleaseNotes,
+  feedback: () => viewFeedbackForm(state.route.type),
   rolePreview: viewRolePreview,
   hospitals: viewHospitals,
   admin: viewAdmin
@@ -3482,7 +3599,7 @@ window.__submitVitals = (taskId, id) => {
   action.then(() => nav({ taskId, id: null, adding: false, name: 'vitals' }))
         .catch(err => showToast(`儲存失敗：[${err.code||'?'}] ${err.message||err}`));
 };
-window.__setAdminTab = (t) => { state.adminTab = t; state._usersCache = null; render(); window.scrollTo(0,0); };
+window.__setAdminTab = (t) => { state.adminTab = t; state._usersCache = null; state._feedbackCache = null; render(); window.scrollTo(0,0); };
 window.__deleteTask = (id) => { if (confirm("確定刪除此任務？此動作無法復原。")) deleteTask(id); };
 window.__forceEndTask = (id) => { if (confirm("確定強制結束此勤務？此動作無法復原。")) forceEndTask(id); };
 window.__exportTasks = () => exportTasksCsv();
@@ -3530,6 +3647,15 @@ window.__savePendingProfile = (ev) => {
   updatePendingProfile(f.get("unit"), f.get("displayName"), f.get("rank"), f.get("phone")).then(() => {
     render();
   }).catch(err => showToast(`儲存失敗：[${err.code||'?'}] ${err.message||err}`));
+};
+window.__submitFeedbackForm = (ev, type) => {
+  ev.preventDefault();
+  const message = (document.getElementById("fb-message").value || "").trim();
+  if (!message) return;
+  submitFeedback(type, message).then(() => {
+    showToast("已送出，謝謝您的回饋");
+    window.__nav({name:'about'});
+  }).catch(err => showToast(`送出失敗：[${err.code||'?'}] ${err.message||err}`));
 };
 window.__setRecordsFilter = (key, value) => { state.recordsFilter[key] = value; render(); };
 window.__toggleRecordsFilters = () => { state.recordsFiltersExpanded = !state.recordsFiltersExpanded; render(); };

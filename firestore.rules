@@ -108,5 +108,13 @@ service cloud.firestore {
       allow read: if isActive();
       allow create, update, delete: if isStaff() || isCommander();
     }
+
+    // 問題回報／功能建議：任何在職帳號都能送出，只有 admin 能檢視（管理後台
+    // 「意見回饋」頁籤），送出後不開放使用者自己修改或刪除，避免爭議。
+    match /feedback/{id} {
+      allow read: if isAdmin();
+      allow create: if isActive() && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if false;
+    }
   }
 }
