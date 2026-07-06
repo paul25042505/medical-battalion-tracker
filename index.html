@@ -392,6 +392,11 @@
   }
   .field textarea{resize:vertical; min-height:72px;}
   .field input:disabled{color:var(--muted); background:var(--bg);}
+  .checkbox-inline{
+    display:flex; align-items:center; gap:8px; margin-top:8px;
+    font-size:var(--text-sm); color:var(--muted); font-weight:600;
+  }
+  .checkbox-inline input{width:auto; padding:0; accent-color:var(--blue);}
   /* 建立勤務：勤務／洽公 任務類型切換 */
   .seg-toggle{display:flex; gap:8px;}
   .seg-toggle button{
@@ -587,7 +592,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-118-crew-picker-and-pending-unit";
+const BUILD_TAG = "2026-07-06-119-cross-unit-vehicle-borrow";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -806,6 +811,29 @@ function vehicleOptionsByType(vehicles, renderOption){
     html += renderOption(v);
   }
   if (curType !== null) html += "</optgroup>";
+  return html;
+}
+// 車輛跨單位借用不常發生，預設車號下拉只列自己單位的車（依車種分組）；
+// 勾選「跨單位借車」才展開列出三個單位全部車輛，依單位分組（車種改成
+// 附註在車號後面），純 DOM 換掉 <select> 的內容，不觸發整頁 render()。
+function vehicleSelectOptionsSameUnit(unit, currentPlate){
+  const opts = sortVehicles(state.vehicles.filter(x => x.unit === unit && x.active !== false));
+  return `<option value="">請選擇車輛</option>` + vehicleOptionsByType(opts, v =>
+    `<option value="${esc(v.plate)}" ${v.plate===currentPlate?'selected':''}>${esc(v.plate)}</option>`);
+}
+function vehicleSelectOptionsAllUnits(currentPlate){
+  const opts = state.vehicles.filter(x => x.active !== false).slice()
+    .sort((a,b) => unitWeight(a.unit) - unitWeight(b.unit) || vehicleTypeWeight(a.type) - vehicleTypeWeight(b.type) || (a.plate||'').localeCompare(b.plate||''));
+  let html = `<option value="">請選擇車輛</option>`, curUnit = null;
+  for (const v of opts) {
+    if (v.unit !== curUnit) {
+      if (curUnit !== null) html += "</optgroup>";
+      html += `<optgroup label="${esc(unitLabel(v.unit))}">`;
+      curUnit = v.unit;
+    }
+    html += `<option value="${esc(v.plate)}" ${v.plate===currentPlate?'selected':''}>${esc(v.plate)}${v.type?' · '+esc(v.type):''}</option>`;
+  }
+  if (curUnit !== null) html += "</optgroup>";
   return html;
 }
 
@@ -1934,10 +1962,11 @@ function viewCreateTask(){
         ${!personnelOpts.length ? `<div style="color:var(--muted);font-size:var(--text-xs);margin-top:6px;">此單位尚未建立人員資料，請至「基礎資料管理」新增</div>` : ""}
       </div>` : `
       <div class="field"><label>車號</label>
-        <select name="vehicle">
+        <select name="vehicle" data-unit="${unit}">
           <option value="">請選擇車輛</option>
           ${vehicleOptionsByType(vehicleOpts, v => `<option value="${esc(v.plate)}">${esc(v.plate)}</option>`)}
         </select>
+        <label class="checkbox-inline"><input type="checkbox" onchange="window.__toggleCrossUnitVehicle(this)"> 跨單位借車</label>
         ${!vehicleOpts.length ? `<div style="color:var(--muted);font-size:var(--text-xs);margin-top:6px;">此單位尚未建立車輛資料，請至「基礎資料管理」新增</div>` : ""}
       </div>
       <div class="field"><label>車長</label>
@@ -1983,6 +2012,11 @@ function viewEditTask(taskId){
   const recorderOpts = state.recorders.filter(x => x.unit === unit && x.active !== false);
   const currentRecorders = t.recorders || [];
   const currentPersonnel = t.personnel || [];
+  // 車輛跨單位借用不常見，但既有勤務可能早就借了別的單位的車，編輯時要
+  // 判斷目前指派的車是不是跨單位借來的，是的話「跨單位借車」預設打勾、
+  // 車號下拉也要一開始就展開列出所有單位的車，不然選單裡會找不到它。
+  const currentVehicleRecord = t.vehicle ? state.vehicles.find(v => v.plate === t.vehicle) : null;
+  const isCrossUnitVehicle = !!(currentVehicleRecord && currentVehicleRecord.unit !== unit);
 
   return `
     <div class="back-row"><button onclick="window.__nav({name:'task', id:'${taskId}'})">‹ 返回任務詳情</button></div>
@@ -2002,10 +2036,10 @@ function viewEditTask(taskId){
         </div>
       </div>` : `
       <div class="field"><label>車號</label>
-        <select name="vehicle">
-          <option value="">請選擇車輛</option>
-          ${vehicleOptionsByType(vehicleOpts, v => `<option value="${esc(v.plate)}" ${t.vehicle===v.plate?'selected':''}>${esc(v.plate)}</option>`)}
+        <select name="vehicle" data-unit="${unit}">
+          ${isCrossUnitVehicle ? vehicleSelectOptionsAllUnits(t.vehicle) : `<option value="">請選擇車輛</option>` + vehicleOptionsByType(vehicleOpts, v => `<option value="${esc(v.plate)}" ${t.vehicle===v.plate?'selected':''}>${esc(v.plate)}</option>`)}
         </select>
+        <label class="checkbox-inline"><input type="checkbox" ${isCrossUnitVehicle?'checked':''} onchange="window.__toggleCrossUnitVehicle(this)"> 跨單位借車</label>
       </div>
       <div class="field"><label>車長</label>
         <button type="button" class="picker-field" onclick="window.__openPersonPicker('crewLeader', this)">
@@ -3287,6 +3321,16 @@ window.__filterPersonPicker = (query) => {
   const list = document.getElementById("person-picker-list");
   list.innerHTML = personPickerRows(personPickerCtx.pool, query);
   wirePersonPickerOptions(list);
+};
+// 「跨單位借車」勾選框：純 DOM 換掉車號 <select> 的內容，不觸發整頁
+// render()，理由跟人員選擇器一樣——避免把其他還沒送出的欄位清空。
+window.__toggleCrossUnitVehicle = (checkbox) => {
+  const field = checkbox.closest(".field");
+  const select = field.querySelector('select[name="vehicle"]');
+  const currentPlate = select.value;
+  select.innerHTML = checkbox.checked
+    ? vehicleSelectOptionsAllUnits(currentPlate)
+    : vehicleSelectOptionsSameUnit(select.dataset.unit, currentPlate);
 };
 window.__submitVitals = (taskId, id) => {
   const get = (elId) => document.getElementById(elId)?.value || "";
