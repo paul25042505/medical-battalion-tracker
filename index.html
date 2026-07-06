@@ -639,7 +639,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-137-liaison-picker-default-same-unit";
+const BUILD_TAG = "2026-07-06-138-admin-hub-restructure";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1063,6 +1063,7 @@ const RELEASE_NOTES = [
     "修正營內／營外統計的定義：改成建立勤務時勾選「這趟勤務營內／營外」，首頁統計依此欄位計算，不再用車輛名冊總數去推算（原本會把整批沒出勤的車也算進「營內」，數字失真）",
     "「營內／營外」選項移到建立勤務頁最上方、緊接在任務類型下面；首頁「今日概況」跟「車輛動態」合併成同一區塊，不再重複顯示相近的統計數字；洽公人員選擇改成跟車長/駕駛一樣可搜尋選人（可複選）",
     "洽公人員選人預設只列自己單位（洽公通常不跨單位），勾選「跨單位選人」才展開列出其他單位；編輯既有的跨單位洽公時會自動展開，不會讓已選的其他單位人員從畫面上消失",
+    "管理後台改版：原本擠在一起的六個橫向頁籤（勤務管理/基礎資料/成員管理/訊息管理/系統設定/意見回饋）改成分區列表入口，每個子功能都是獨立頁面，之後陸續加新功能只要在對應分區加一列，不會讓頁籤越擠越亂",
   ] },
   { date: "2026/07/04 以前", items: [
     "建立車輛人員動態管制核心功能：勤務建立與追蹤",
@@ -1094,7 +1095,7 @@ const state = {
   user: null, profile: null, tasks: [], events: [],
   personnel: [], vehicles: [], recorders: [],
   hospitals: [], vitals: [], // 醫院資訊（急救責任等級/電話）、患者生命徵象/主訴紀錄
-  route: { name: "home" }, adminTab: "tasks",
+  route: { name: "home" },
   reportDraft: null, // { taskId, type }
   eventEditId: null, // 正在編輯哪一筆已回報事件（時間/里程填錯時修正用）
   recordsFilter: { period: "today", unit: "", vehicle: "", title: "", location: "", status: "", person: "", customDateFrom: "", customDateTo: "" },
@@ -1797,10 +1798,18 @@ const ROUTE_REFRESH = {
   records: ['tasks','events','vitals','personnel','vehicles'],
   stats: ['tasks','events'],
   hospitals: ['hospitals'],
-  admin: ['tasks','events','personnel','vehicles','recorders','hospitals'],
+  // 管理後台改成分區列表入口＋各自獨立路由後，每個子頁只重抓自己真的會
+  // 用到的集合，不用像以前那樣進管理後台就整批重抓（hub 本身不用抓）。
+  adminTasks: ['tasks','events'],
+  adminBaseData: ['personnel','vehicles','recorders','hospitals'],
 };
 function nav(route){
   state.route = route; state.reportDraft = null;
+  // 成員管理／意見回饋是進頁籤時現抓一次的簡易快取（見 viewAdminUsers／
+  // viewAdminFeedback），不是輪詢；每次導覽過去都清掉快取強制重抓一次，
+  // 才看得到最新的角色/單位異動或剛送出的意見回饋。
+  if (route.name === "adminUsers") state._usersCache = null;
+  if (route.name === "adminFeedback") state._feedbackCache = null;
   render(); window.scrollTo(0,0);
   const polls = { tasks: tasksPoll, events: eventsPoll, personnel: personnelPoll, vehicles: vehiclesPoll, recorders: recordersPoll, hospitals: hospitalsPoll, vitals: vitalsPoll };
   (ROUTE_REFRESH[route.name] || []).forEach(key => { if (polls[key]) polls[key].refreshNow(); });
@@ -3303,42 +3312,70 @@ function viewRolePreview(){
 
 /* =========================================================
    18) 畫面：管理後台
+   管理後台本身是一個入口（hub），跟「更多」頁同一套 settingsRow／
+   settingsSection 分區列表模式，不是頁籤——子功能未來還會持續增加，
+   攤平的橫向頁籤數量沒有上限、只會越擠越亂；改成分區列表後，新增子
+   功能只要在對應分區多加一列，不會影響既有的頁籤排版。每個子功能都
+   是獨立路由（各自的返回鍵回這一頁），不是共用一頁換內容。
    ========================================================= */
 function viewAdmin(){
   const p = state.profile;
   if (!canManageTasks(p)) return `<div class="empty">您沒有管理權限</div>`;
   ensureAdminPersonnelSync(p);
 
-  const overview = `<div class="back-row">${backBtn({name:'profile'})}</div><div class="section-label">管理後台${canSeeAllUnits(p) ? '' : ' · ' + unitLabel(myUnit(p))}</div>`;
+  const taskRows = [
+    settingsRow({icon:'tasks', bg:'#E8F1FF', fg:'#0056C7', title:'勤務管理', subtitle:'查看/編輯/強制結束/刪除勤務，匯出 CSV', onclick:"window.__nav({name:'adminTasks'})"}),
+  ];
+  const dataRows = canManageBaseData(p) ? [
+    settingsRow({icon:'records', bg:'#FFF2E0', fg:'#B45F00', title:'基礎資料', subtitle:'人員／車輛／行車紀錄器／醫院', onclick:"window.__nav({name:'adminBaseData'})"}),
+  ] : [];
+  const memberRows = canManageUsers(p) ? [
+    settingsRow({icon:'user', bg:'#E9F9EF', fg:'#177A34', title:'成員管理', subtitle:'指派角色與單位', onclick:"window.__nav({name:'adminUsers'})"}),
+    settingsRow({icon:'bell', bg:'#F2E9FE', fg:'#6B23C7', title:'訊息管理', onclick:"window.__nav({name:'adminMessages'})"}),
+  ] : [];
+  const systemRows = canManageUsers(p) ? [
+    settingsRow({icon:'check', bg:'#EAF1FF', fg:'#0052E0', title:'系統設定', onclick:"window.__nav({name:'adminSettings'})"}),
+    settingsRow({icon:'chat', bg:'#FFF2E0', fg:'#B45F00', title:'意見回饋', onclick:"window.__nav({name:'adminFeedback'})"}),
+  ] : [];
 
-  // 子選單項目變多（成員管理／訊息管理／系統設定都是新加的），改用可
-  // 橫向捲動的 tabs2（.scroll），避免六個頁籤擠在一行裡各自被壓得太窄。
-  const tabs = `
-    <div class="tabs2 scroll">
-      <div class="tab2 ${state.adminTab==='tasks'?'active':''}" onclick="window.__setAdminTab('tasks')">勤務管理</div>
-      ${canManageBaseData(p) ? `<div class="tab2 ${state.adminTab==='basedata'?'active':''}" onclick="window.__setAdminTab('basedata')">基礎資料</div>` : ""}
-      ${canManageUsers(p) ? `<div class="tab2 ${state.adminTab==='users'?'active':''}" onclick="window.__setAdminTab('users')">成員管理</div>` : ""}
-      ${canManageUsers(p) ? `<div class="tab2 ${state.adminTab==='messages'?'active':''}" onclick="window.__setAdminTab('messages')">訊息管理</div>` : ""}
-      ${canManageUsers(p) ? `<div class="tab2 ${state.adminTab==='settings'?'active':''}" onclick="window.__setAdminTab('settings')">系統設定</div>` : ""}
-      ${canManageUsers(p) ? `<div class="tab2 ${state.adminTab==='feedback'?'active':''}" onclick="window.__setAdminTab('feedback')">意見回饋</div>` : ""}
-    </div>`;
-
-  if (state.adminTab === "users" && canManageUsers(p)) {
-    return overview + tabs + viewAdminUsers();
-  }
-  if (state.adminTab === "messages" && canManageUsers(p)) {
-    return overview + tabs + viewAdminMessages();
-  }
-  if (state.adminTab === "settings" && canManageUsers(p)) {
-    return overview + tabs + viewAdminSystemSettings();
-  }
-  if (state.adminTab === "feedback" && canManageUsers(p)) {
-    return overview + tabs + viewAdminFeedback();
-  }
-  if (state.adminTab === "basedata" && canManageBaseData(p)) {
-    return overview + tabs + viewAdminBaseData();
-  }
-  return overview + tabs + viewAdminTasks();
+  return `
+    <div class="back-row">${backBtn({name:'profile'})}</div>
+    <div class="section-label">管理後台${canSeeAllUnits(p) ? '' : ' · ' + unitLabel(myUnit(p))}</div>
+    ${settingsSection('勤務', taskRows)}
+    ${settingsSection('基礎資料', dataRows)}
+    ${settingsSection('成員與訊息', memberRows)}
+    ${settingsSection('系統', systemRows)}
+  `;
+}
+function viewAdminTasksPage(){
+  const p = state.profile;
+  if (!canManageTasks(p)) return `<div class="empty">您沒有管理權限</div>`;
+  return `<div class="back-row">${backBtn({name:'admin'})}</div>${viewAdminTasks()}`;
+}
+function viewAdminBaseDataPage(){
+  const p = state.profile;
+  if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
+  return `<div class="back-row">${backBtn({name:'admin'})}</div><div class="section-label">基礎資料</div>${viewAdminBaseData()}`;
+}
+function viewAdminUsersPage(){
+  const p = state.profile;
+  if (!canManageUsers(p)) return `<div class="empty">您沒有管理權限</div>`;
+  return `<div class="back-row">${backBtn({name:'admin'})}</div>${viewAdminUsers()}`;
+}
+function viewAdminMessagesPage(){
+  const p = state.profile;
+  if (!canManageUsers(p)) return `<div class="empty">您沒有管理權限</div>`;
+  return `<div class="back-row">${backBtn({name:'admin'})}</div>${viewAdminMessages()}`;
+}
+function viewAdminSettingsPage(){
+  const p = state.profile;
+  if (!canManageUsers(p)) return `<div class="empty">您沒有管理權限</div>`;
+  return `<div class="back-row">${backBtn({name:'admin'})}</div>${viewAdminSystemSettings()}`;
+}
+function viewAdminFeedbackPage(){
+  const p = state.profile;
+  if (!canManageUsers(p)) return `<div class="empty">您沒有管理權限</div>`;
+  return `<div class="back-row">${backBtn({name:'admin'})}</div>${viewAdminFeedback()}`;
 }
 
 function taskToCsvRow(t){
@@ -3588,10 +3625,10 @@ function viewAdminUsers(){
 // 訊息管理、系統設定目前尚未有實際內容，先放開發中的預留頁面，
 // 之後有實際的通知中心／系統層級設定需求時再填入。
 function viewAdminMessages(){
-  return `<div class="empty">${icon('bell',32)}<div style="margin-top:10px;">通知中心開發中，之後將顯示新勤務／完成／系統公告等通知。</div></div>`;
+  return `<div class="section-label">訊息管理</div><div class="empty">${icon('bell',32)}<div style="margin-top:10px;">通知中心開發中，之後將顯示新勤務／完成／系統公告等通知。</div></div>`;
 }
 function viewAdminSystemSettings(){
-  return `<div class="empty">${icon('check',32)}<div style="margin-top:10px;">系統設定開發中，之後將提供系統層級的參數設定。</div></div>`;
+  return `<div class="section-label">系統設定</div><div class="empty">${icon('check',32)}<div style="margin-top:10px;">系統設定開發中，之後將提供系統層級的參數設定。</div></div>`;
 }
 // 意見回饋清單僅 admin 可見，比照帳號權限頁籤的做法：開啟頁籤時現抓一次，
 // 不另外建立輪詢（回報頻率低，不需要即時同步）。
@@ -3650,7 +3687,13 @@ const ROUTE_VIEWS = {
   feedback: viewFeedbackForm,
   rolePreview: viewRolePreview,
   hospitals: viewHospitals,
-  admin: viewAdmin
+  admin: viewAdmin,
+  adminTasks: viewAdminTasksPage,
+  adminBaseData: viewAdminBaseDataPage,
+  adminUsers: viewAdminUsersPage,
+  adminMessages: viewAdminMessagesPage,
+  adminSettings: viewAdminSettingsPage,
+  adminFeedback: viewAdminFeedbackPage
 };
 const NAV_ITEMS = [
   { name:"home", iconName:"home", label:"首頁", accent:"#007AFF" },
@@ -4053,7 +4096,6 @@ window.__submitVitals = (taskId, id) => {
   action.then(() => nav({ taskId, id: null, adding: false, name: 'vitals' }))
         .catch(err => showToast(`儲存失敗：[${err.code||'?'}] ${err.message||err}`));
 };
-window.__setAdminTab = (t) => { state.adminTab = t; state._usersCache = null; state._feedbackCache = null; render(); window.scrollTo(0,0); };
 window.__deleteTask = (id) => { if (confirm("確定刪除此任務？此動作無法復原。")) deleteTask(id); };
 window.__forceEndTask = (id) => { if (confirm("確定強制結束此勤務？此動作無法復原。")) forceEndTask(id); };
 window.__exportTasks = () => exportTasksCsv();
