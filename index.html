@@ -548,6 +548,30 @@
     .modal-overlay{align-items:center;}
     .modal-sheet{border-radius:var(--radius-lg); max-height:80vh;}
   }
+
+  /* ---- 人員選擇器（車長／駕駛，跨單位＋搜尋） ---- */
+  .picker-field{
+    display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%;
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-sm);
+    padding:12px 14px; font-size:var(--text-base); color:var(--text); text-align:left;
+  }
+  .picker-field .picker-field-text.placeholder{color:var(--muted);}
+  .picker-field svg{color:var(--muted); flex-shrink:0;}
+  .picker-search{
+    width:100%; background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-sm);
+    padding:12px 14px; font-size:var(--text-base); color:var(--text);
+  }
+  .picker-group{margin-top:14px;}
+  .picker-group-label{
+    font-size:var(--text-xs); color:var(--muted); font-weight:700; text-transform:uppercase;
+    letter-spacing:0.04em; margin-bottom:6px; padding:0 2px;
+  }
+  .picker-option{
+    display:block; width:100%; text-align:left; padding:12px 10px; border-radius:var(--radius-sm);
+    font-size:var(--text-base); color:var(--text); border-bottom:1px solid var(--border);
+  }
+  .picker-option:last-child{border-bottom:none;}
+  .picker-option-sub{color:var(--muted); font-size:var(--text-sm); margin-left:6px;}
 </style>
 </head>
 <body>
@@ -563,7 +587,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-117-crew-leader-driver-exclusions";
+const BUILD_TAG = "2026-07-06-118-crew-picker-and-pending-unit";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -729,6 +753,7 @@ const UNITS = [
   { code: "co2", label: "第二連" }
 ];
 function unitLabel(code){ return (UNITS.find(u => u.code === code) || {}).label || code || "未設定"; }
+function unitWeight(code){ const i = UNITS.findIndex(u => u.code === code); return i === -1 ? UNITS.length : i; }
 
 // 任務類型：勤務＝車輛派遣（追蹤里程/油量/車長駕駛），洽公＝現勘、開會等
 // 無車輛派遣性質的外出（追蹤出席人員，不追蹤里程油量）。
@@ -1073,6 +1098,15 @@ async function updateOwnProfile(displayName, rank, phone){
       return;
     }
   }
+  showToast("個人資料已更新");
+}
+// 待審核（pending）階段專用：這個階段可以自己選/改單位（firestore.rules
+// 允許 role 仍是 pending 時自行改 unit），跟已核准後只能改姓名/階級/電話、
+// 不能碰 unit 的 updateOwnProfile 分開，避免共用同一個函式又要額外判斷
+// 現在是不是 pending 階段。
+async function updatePendingProfile(unit, displayName, rank, phone){
+  await fsSetDoc(`users/${state.user.uid}`, { unit, displayName, rank, phone });
+  state.profile = { ...state.profile, unit, displayName, rank, phone };
   showToast("個人資料已更新");
 }
 
@@ -1534,9 +1568,15 @@ function viewPending(){
     <div class="login-mark">MEDTRACK</div>
     <h1 class="login-title" style="font-size:var(--text-lg);">帳號待審核</h1>
     <div class="pending-box">
-      <p>您的帳號（${esc(state.user.email)}）已建立，但尚未指派角色與單位。<br><br>可以先填寫下方個人資料，方便管理員審核；單位與角色仍須由管理員指派。</p>
+      <p>您的帳號（${esc(state.user.email)}）已建立，但尚未核准。<br><br>可以先選擇單位、填寫下方個人資料，方便管理員審核；角色仍須由管理員指派。</p>
     </div>
     <form onsubmit="window.__savePendingProfile(event)" style="text-align:left; margin-top:6px; width:100%; max-width:360px;">
+      <div class="field"><label>單位</label>
+        <select name="unit">
+          <option value="">請選擇單位</option>
+          ${UNITS.map(u => `<option value="${u.code}" ${p.unit===u.code?'selected':''}>${u.label}</option>`).join("")}
+        </select>
+      </div>
       <div class="field"><label>姓名</label><input name="displayName" value="${esc(p.displayName||'')}"></div>
       <div class="field"><label>階級</label>
         <select name="rank">
@@ -1595,6 +1635,14 @@ function nameWithRank(name, unit){
   const match = findPersonnel(name, unit);
   const rank = (match && match.title && !name.includes(match.title)) ? ' ' + match.title : '';
   return esc(name) + esc(rank);
+}
+// 編輯勤務頁面「車長／駕駛」欄位目前已指派人選的顯示文字：車長／駕駛現在
+// 可以跨單位選人，光顯示姓名不夠清楚，補上階級＋單位（例如「林伯霖 · 上士 ·
+// 第一連」），讓人一眼看出這是不是跨單位借調的人員。
+function crewDisplayLabel(name, taskUnit){
+  const match = findPersonnel(name, taskUnit);
+  if (!match) return name;
+  return `${match.name}${match.title ? ' · ' + match.title : ''}${match.unit ? ' · ' + unitLabel(match.unit) : ''}`;
 }
 // 姓名 + 階級 + 電話（可點擊撥打），給車長/駕駛這種需要聯絡方式的欄位用。
 // iOS Safari 對 tel: 連結一律會跳出「已阻擋此網站自動開始通話」的系統提示，不管
@@ -1852,9 +1900,9 @@ function viewCreateTask(){
 
   const taskType = state.createTaskType || "duty";
   const isLiaison = taskType === "liaison";
+  // 車長／駕駛可跨單位選人，車長駕駛人員選擇器（personPickerCtx）會在打開時
+  // 直接讀取當下的 state.personnel 動態建立候選名單，這裡不用先篩好。
   const personnelOpts = state.personnel.filter(x => x.unit === unit && x.active !== false).slice().sort((a,b) => rankWeight(a.title) - rankWeight(b.title));
-  const crewLeaderOpts = personnelOpts.filter(eligibleForCrewLeader);
-  const driverOpts = personnelOpts.filter(eligibleForDriver);
   const vehicleOpts = sortVehicles(state.vehicles.filter(x => x.unit === unit && x.active !== false));
   const recorderOpts = state.recorders.filter(x => x.unit === unit && x.active !== false);
 
@@ -1893,16 +1941,16 @@ function viewCreateTask(){
         ${!vehicleOpts.length ? `<div style="color:var(--muted);font-size:var(--text-xs);margin-top:6px;">此單位尚未建立車輛資料，請至「基礎資料管理」新增</div>` : ""}
       </div>
       <div class="field"><label>車長</label>
-        <select name="crewLeader">
-          <option value="">請選擇車長</option>
-          ${crewLeaderOpts.map(x => `<option value="${esc(x.name)}">${esc(x.name)}${x.title?' '+esc(x.title):''}</option>`).join("")}
-        </select>
+        <button type="button" class="picker-field" onclick="window.__openPersonPicker('crewLeader', this)">
+          <span class="picker-field-text placeholder">請選擇車長</span>${icon('chevronDown',16)}
+        </button>
+        <input type="hidden" name="crewLeader" value="">
       </div>
       <div class="field"><label>駕駛</label>
-        <select name="driver">
-          <option value="">請選擇駕駛</option>
-          ${driverOpts.map(x => `<option value="${esc(x.name)}">${esc(x.name)}${x.title?' '+esc(x.title):''}</option>`).join("")}
-        </select>
+        <button type="button" class="picker-field" onclick="window.__openPersonPicker('driver', this)">
+          <span class="picker-field-text placeholder">請選擇駕駛</span>${icon('chevronDown',16)}
+        </button>
+        <input type="hidden" name="driver" value="">
       </div>
       <div class="field"><label>行車紀錄器（可多選）</label>
         <select name="recorders" multiple size="${Math.min(4, Math.max(2, recorderOpts.length || 2))}">
@@ -1928,11 +1976,9 @@ function viewEditTask(taskId){
 
   const isLiaison = t.type === "liaison";
   const unit = t.unit;
+  // 車長／駕駛可跨單位選人，人員選擇器打開時會直接讀取當下的 state.personnel
+  // 動態建立候選名單（並保留目前已指派的人選，即使現在被排除規則擋住）。
   const personnelOpts = state.personnel.filter(x => x.unit === unit && x.active !== false).slice().sort((a,b) => rankWeight(a.title) - rankWeight(b.title));
-  // 排除規則是後來才加的，既有勤務可能早就指派了現在會被排除的人員；編輯時
-  // 保留目前已指派的人選在選單裡，不能讓下拉選單直接把既有資料「消失」掉。
-  const crewLeaderOpts = personnelOpts.filter(x => eligibleForCrewLeader(x) || x.name === t.crewLeader);
-  const driverOpts = personnelOpts.filter(x => eligibleForDriver(x) || x.name === t.driver);
   const vehicleOpts = sortVehicles(state.vehicles.filter(x => x.unit === unit && x.active !== false));
   const recorderOpts = state.recorders.filter(x => x.unit === unit && x.active !== false);
   const currentRecorders = t.recorders || [];
@@ -1962,16 +2008,16 @@ function viewEditTask(taskId){
         </select>
       </div>
       <div class="field"><label>車長</label>
-        <select name="crewLeader">
-          <option value="">請選擇車長</option>
-          ${crewLeaderOpts.map(x => `<option value="${esc(x.name)}" ${t.crewLeader===x.name?'selected':''}>${esc(x.name)}${x.title?' '+esc(x.title):''}</option>`).join("")}
-        </select>
+        <button type="button" class="picker-field" onclick="window.__openPersonPicker('crewLeader', this)">
+          <span class="picker-field-text${t.crewLeader?'':' placeholder'}">${t.crewLeader ? esc(crewDisplayLabel(t.crewLeader, unit)) : '請選擇車長'}</span>${icon('chevronDown',16)}
+        </button>
+        <input type="hidden" name="crewLeader" value="${esc(t.crewLeader||'')}">
       </div>
       <div class="field"><label>駕駛</label>
-        <select name="driver">
-          <option value="">請選擇駕駛</option>
-          ${driverOpts.map(x => `<option value="${esc(x.name)}" ${t.driver===x.name?'selected':''}>${esc(x.name)}${x.title?' '+esc(x.title):''}</option>`).join("")}
-        </select>
+        <button type="button" class="picker-field" onclick="window.__openPersonPicker('driver', this)">
+          <span class="picker-field-text${t.driver?'':' placeholder'}">${t.driver ? esc(crewDisplayLabel(t.driver, unit)) : '請選擇駕駛'}</span>${icon('chevronDown',16)}
+        </button>
+        <input type="hidden" name="driver" value="${esc(t.driver||'')}">
       </div>
       <div class="field"><label>行車紀錄器（可多選）</label>
         <select name="recorders" multiple size="${Math.min(4, Math.max(2, recorderOpts.length || 2))}">
@@ -3169,6 +3215,79 @@ window.__syncDetailVisibility = (wrapId, groupName, triggerValues) => {
   const el = document.getElementById(wrapId);
   if (el) el.style.display = anyChecked ? "block" : "none";
 };
+/* =========================================================
+   車長／駕駛人員選擇器：可跨單位、可打字搜尋。純 DOM 彈窗，不觸發
+   render()，避免打開選人彈窗時，把使用者已經填到一半的其他欄位
+   （任務名稱、地點等未受控的 input）整頁重繪掉。
+   ========================================================= */
+let personPickerCtx = null; // { pool, hiddenInput, triggerBtn }
+function personPickerRows(pool, query){
+  const q = (query||"").trim().toLowerCase();
+  const filtered = q ? pool.filter(x =>
+    x.name.toLowerCase().includes(q) || (x.title||"").toLowerCase().includes(q) || unitLabel(x.unit).toLowerCase().includes(q)
+  ) : pool;
+  if (!filtered.length) return `<div class="empty" style="padding:28px 0;">找不到符合的人員</div>`;
+  let html = "", curUnit = null;
+  for (const x of filtered) {
+    if (x.unit !== curUnit) {
+      if (curUnit !== null) html += `</div>`;
+      html += `<div class="picker-group"><div class="picker-group-label">${esc(unitLabel(x.unit))}</div>`;
+      curUnit = x.unit;
+    }
+    html += `<button type="button" class="picker-option" data-id="${esc(x.id)}">${esc(x.name)}${x.title ? `<span class="picker-option-sub">${esc(x.title)}</span>` : ""}</button>`;
+  }
+  if (curUnit !== null) html += `</div>`;
+  return html;
+}
+function wirePersonPickerOptions(container){
+  container.querySelectorAll(".picker-option").forEach(btn => {
+    btn.onclick = () => selectPersonFromPicker(btn.dataset.id);
+  });
+}
+function selectPersonFromPicker(id){
+  if (!personPickerCtx) return;
+  const x = personPickerCtx.pool.find(p => p.id === id);
+  if (x) {
+    personPickerCtx.hiddenInput.value = x.name;
+    const textEl = personPickerCtx.triggerBtn.querySelector(".picker-field-text");
+    textEl.textContent = `${x.name}${x.title ? ' · ' + x.title : ''}${x.unit ? ' · ' + unitLabel(x.unit) : ''}`;
+    textEl.classList.remove("placeholder");
+  }
+  closePersonPicker();
+}
+function closePersonPicker(){
+  const overlay = document.querySelector(".person-picker-overlay");
+  if (overlay) overlay.remove();
+  personPickerCtx = null;
+}
+window.__openPersonPicker = (fieldName, triggerBtn) => {
+  const hiddenInput = triggerBtn.parentElement.querySelector(`input[name="${fieldName}"]`);
+  const currentValue = hiddenInput.value;
+  const eligible = fieldName === "crewLeader" ? eligibleForCrewLeader : eligibleForDriver;
+  const pool = state.personnel
+    .filter(x => x.active !== false && (eligible(x) || x.name === currentValue))
+    .slice()
+    .sort((a,b) => unitWeight(a.unit) - unitWeight(b.unit) || rankWeight(a.title) - rankWeight(b.title));
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay person-picker-overlay";
+  overlay.onclick = (e) => { if (e.target === overlay) closePersonPicker(); };
+  overlay.innerHTML = `
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-title">${fieldName === "crewLeader" ? "選擇車長" : "選擇駕駛"}</div>
+      <input type="text" class="picker-search" placeholder="輸入姓名、階級或單位搜尋" oninput="window.__filterPersonPicker(this.value)">
+      <div id="person-picker-list">${personPickerRows(pool, "")}</div>
+    </div>`;
+  document.body.appendChild(overlay);
+  personPickerCtx = { pool, hiddenInput, triggerBtn };
+  wirePersonPickerOptions(overlay);
+};
+window.__filterPersonPicker = (query) => {
+  if (!personPickerCtx) return;
+  const list = document.getElementById("person-picker-list");
+  list.innerHTML = personPickerRows(personPickerCtx.pool, query);
+  wirePersonPickerOptions(list);
+};
 window.__submitVitals = (taskId, id) => {
   const get = (elId) => document.getElementById(elId)?.value || "";
   const checkedValues = (name) => [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(el => el.value);
@@ -3252,12 +3371,13 @@ window.__saveProfile = (ev) => {
     state.profileEditing = false; render();
   }).catch(err => showToast(`個人資料儲存失敗：[${err.code||'?'}] ${err.message||err}`));
 };
-// 帳號待審核期間也能先填好姓名/階級/電話，方便管理員審核時就看得到，不用等
-// 核准後才回頭補資料；角色與單位維持由管理員指派，這裡不提供這兩個欄位。
+// 帳號待審核期間也能先選單位、填好姓名/階級/電話，方便管理員審核時就看得到，
+// 不用等核准後才回頭補資料。單位在這個階段可以自己選（firestore.rules 允許
+// role 仍是 pending 時自行改 unit），但角色一律由管理員指派，這裡不提供。
 window.__savePendingProfile = (ev) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
-  updateOwnProfile(f.get("displayName"), f.get("rank"), f.get("phone")).then(() => {
+  updatePendingProfile(f.get("unit"), f.get("displayName"), f.get("rank"), f.get("phone")).then(() => {
     render();
   }).catch(err => showToast(`儲存失敗：[${err.code||'?'}] ${err.message||err}`));
 };
