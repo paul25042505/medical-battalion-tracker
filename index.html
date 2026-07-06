@@ -344,6 +344,30 @@
   .about-list-row:last-child{border-bottom:none;}
   .about-list-row .chev{color:var(--muted); flex-shrink:0; font-size:18px;}
   .about-copyright{margin-top:var(--space-section); padding:0 4px; color:var(--muted); font-size:var(--text-xs); line-height:1.7; text-align:center;}
+  /* ---- 意見回饋表單：留言者（大卡片）／類別（小方塊）選擇 ---- */
+  .feedback-anon-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .feedback-anon-option{
+    position:relative; cursor:pointer; text-align:center; padding:22px 10px;
+    background:var(--panel); border:2px solid var(--border); border-radius:var(--radius-md);
+  }
+  .feedback-anon-option input{position:absolute; opacity:0; width:0; height:0; pointer-events:none;}
+  .feedback-anon-option .fo-icon{display:block; color:var(--muted); margin-bottom:10px;}
+  .feedback-anon-option .fo-label{font-weight:700; font-size:var(--text-base); color:var(--text);}
+  .feedback-anon-option .fo-sub{font-size:var(--text-xs); color:var(--muted); margin-top:3px;}
+  .feedback-anon-option:has(input:checked){border-color:var(--blue); background:rgba(0,102,255,0.06);}
+  .feedback-anon-option:has(input:checked) .fo-icon,
+  .feedback-anon-option:has(input:checked) .fo-label{color:var(--blue);}
+  .feedback-category-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .feedback-category-option{
+    position:relative; cursor:pointer; display:flex; align-items:center; gap:9px;
+    padding:13px 14px; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-sm);
+  }
+  .feedback-category-option input{position:absolute; opacity:0; width:0; height:0; pointer-events:none;}
+  .feedback-category-option .fo-icon{color:var(--muted); flex-shrink:0;}
+  .feedback-category-option .fo-label{font-weight:600; font-size:var(--text-sm); color:var(--text);}
+  .feedback-category-option:has(input:checked){border-color:var(--blue); background:rgba(0,102,255,0.06);}
+  .feedback-category-option:has(input:checked) .fo-icon,
+  .feedback-category-option:has(input:checked) .fo-label{color:var(--blue);}
 
   .no-permission{color:var(--muted); font-size:var(--text-sm); text-align:center; padding:16px; border:1px dashed var(--border-strong); border-radius:var(--radius-md); margin-bottom:20px;}
 
@@ -607,7 +631,15 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-123-more-page-sections-redesign";
+const BUILD_TAG = "2026-07-06-124-feedback-redesign-auto-about-info";
+// 語意化版本號單獨維護（重大改版才手動調整），不像 BUILD_TAG 每次出貨都變；
+// 「關於系統」頁的 Build／發布日期／最後更新都直接從 BUILD_TAG 解析出來，
+// 不用每次出貨都手動回頭改「關於系統」裡的靜態文字。
+const APP_VERSION = "v1.0.0";
+function buildTagDate(){
+  const m = BUILD_TAG.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[1]}/${m[2]}/${m[3]}` : "";
+}
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -862,8 +894,21 @@ function fuelOptions(sel){
    並提供鄰近急救責任醫院查詢（等級、電話）。
    ========================================================= */
 const HOSPITAL_LEVELS = ["重度級", "中度級", "一般級"];
-const FEEDBACK_TYPE_LABEL = { issue: "問題回報", suggestion: "功能建議" };
+const FEEDBACK_CATEGORIES = [
+  { key: "suggestion", label: "建議", icon: "lightbulb" },
+  { key: "issue", label: "問題回報", icon: "alert" },
+  { key: "feature", label: "功能請求", icon: "sparkle" },
+  { key: "other", label: "其他", icon: "chat" }
+];
+const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => [c.key, c.label]));
 const HOSPITAL_COUNTIES = ["臺中市", "嘉義市", "嘉義縣"];
+// 「關於系統 → 更新紀錄」的內容來源：每次出貨（bump BUILD_TAG）都要在最上面
+// 補一筆當天的異動摘要，讓這頁跟著實際出貨內容走，不是寫死不會更新的文字
+// （這個做法也記在 CLAUDE.md 的出貨檢查清單裡）。
+const RELEASE_NOTES = [
+  { date: "2026/07/06", summary: "新增「關於系統」頁面（使用條款/隱私權政策/開源授權/更新紀錄子頁面，系統版本資訊隨 Build 自動更新）；意見回饋改列為使用者功能項目，支援匿名/具名留言與四種類別（建議/問題回報/功能請求/其他）；更多頁改版為使用者功能/管理功能/系統資訊三大分區；患者紀錄新增現場狀況（創傷/非創傷）分類；車輛支援跨單位借用；車長/駕駛改為跨單位搜尋選擇器；閒置 8 小時自動登出；帳號待審核可自選單位；天氣卡片重新設計；下拉重新整理改為整頁重新整理；急救責任醫院資料自動匯入；車輛依車種分組排序。" },
+  { date: "2026/07/04 以前", summary: "建立車輛人員動態管制核心功能：勤務建立與追蹤、車輛／人員／行車紀錄器基礎資料管理、帳號權限（RBAC）、患者生命徵象紀錄、勤務紀錄查詢與統計分析。" }
+];
 
 // 比照救護紀錄表：意識狀態用 AVPU（清/痛/聲/否），過去病史、過敏史、處置項目
 // 只在初評（第一筆生命徵象紀錄）詢問一次，複測不用每次重填。
@@ -1176,13 +1221,15 @@ async function addHospital(county, name, level, phone, note){
   await fsAddDoc("hospitals", { county, name, level, phone: phone||"", note: note||"" });
   showToast("已新增醫院"); if (hospitalsPoll) hospitalsPoll.refreshNow();
 }
-// 問題回報／功能建議：任何在職帳號都能送出，只有 admin 能在管理後台
-// 「意見回饋」頁籤檢視，不提供列表輪詢（很少人會用到，開啟該頁籤時
-// 現抓一次就好，比照帳號權限頁籤 state._usersCache 的做法）。
-async function submitFeedback(type, message){
+// 意見回饋：任何在職帳號都能送出，只有 admin 能在管理後台「意見回饋」
+// 頁籤檢視，不提供列表輪詢（很少人會用到，開啟該頁籤時現抓一次就好，
+// 比照帳號權限頁籤 state._usersCache 的做法）。userId/userName 一律都會
+// 寫入（保留可追溯性），anonymous 只控制管理後台清單「顯示」時是否隱藏
+// 姓名，不是真的不記錄是誰送出的。
+async function submitFeedback(category, message, anonymous){
   const p = state.profile;
   await fsAddDoc("feedback", {
-    type, message, userId: state.user.uid, userName: p.displayName || p.email || "",
+    category, message, anonymous: !!anonymous, userId: state.user.uid, userName: p.displayName || p.email || "",
     unit: p.unit || "", rank: p.rank || "", createdAt: new Date()
   });
 }
@@ -1578,7 +1625,11 @@ const ICON_PATHS = {
   heartbeat: `<path d="M2 12h4l2-6.5 4 15 3-11 2 2.5h5"/>`,
   hospital: `<rect x="5" y="9" width="14" height="12" rx="1"/><path d="M9.5 21v-5.5h5V21"/><path d="M12 4v4.5M9.8 6.2h4.4"/>`,
   logout: `<path d="M14 4H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6"/><path d="M10 12h10m0 0-3.5-3.5M20 12l-3.5 3.5"/>`,
-  refresh: `<path d="M4 12a8 8 0 0 1 14-5.2M20 12a8 8 0 0 1-14 5.2"/><path d="M18 3v4h-4M6 21v-4h4"/>`
+  refresh: `<path d="M4 12a8 8 0 0 1 14-5.2M20 12a8 8 0 0 1-14 5.2"/><path d="M18 3v4h-4M6 21v-4h4"/>`,
+  lightbulb: `<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8 1 .8 1.6v.5h5.4v-.5c0-.6.3-1.2.8-1.6A6 6 0 0 0 12 3Z"/>`,
+  sparkle: `<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/>`,
+  chat: `<path d="M4 5h16v11H8l-4 4V5Z"/>`,
+  incognito: `<path d="M3 12c1.5-2 3.5-3 5-3s3 1 4 2c1-1 2.5-2 4-2s3.5 1 5 3"/><circle cx="7" cy="13" r="2.2"/><circle cx="17" cy="13" r="2.2"/><path d="M9.2 13h5.6"/>`
 };
 function icon(name, size){
   size = size || 20;
@@ -2803,6 +2854,7 @@ function viewProfile(){
   const userRows = [
     settingsRow({icon:'hospital', bg:'#FFF2E0', fg:'#B45F00', title:'醫院資訊', onclick:"window.__nav({name:'hospitals'})"}),
     settingsRow({icon:'user', bg:'#E8F1FF', fg:'#0056C7', title:'個人資料', onclick:"window.__editProfile()"}),
+    settingsRow({icon:'chat', bg:'#E9F9EF', fg:'#177A34', title:'意見回饋', onclick:"window.__nav({name:'feedback'})"}),
   ];
   // Section 2：管理功能，只有能進管理後台的角色（admin／高勤官／連級主官管）
   // 才看得到；角色權限預覽再更進一步限縮成只有 admin 看得到，且預覽模式
@@ -2858,10 +2910,10 @@ function viewAbout(){
     <div class="section-label">系統資訊</div>
     <div class="detail-head">
       <div class="kv" style="margin-top:0;">
-        <div class="k">系統版本</div><div class="v">v1.0.0</div>
-        <div class="k">Build</div><div class="v">20260706</div>
-        <div class="k">發布日期</div><div class="v">2026/07/06</div>
-        <div class="k">最後更新</div><div class="v">2026/07/06</div>
+        <div class="k">系統版本</div><div class="v">${APP_VERSION}</div>
+        <div class="k">Build</div><div class="v">${esc(BUILD_TAG)}</div>
+        <div class="k">發布日期</div><div class="v">${buildTagDate()}</div>
+        <div class="k">最後更新</div><div class="v">${buildTagDate()}</div>
       </div>
     </div>
     <div class="section-label">開發資訊</div>
@@ -2881,8 +2933,6 @@ function viewAbout(){
     <div class="section-label">支援</div>
     <div class="detail-head" style="padding-top:2px; padding-bottom:2px;">
       <div class="about-list-row" onclick="window.__nav({name:'aboutReleaseNotes'})">更新紀錄（Release Notes）<span class="chev">›</span></div>
-      <div class="about-list-row" onclick="window.__nav({name:'feedback', type:'issue'})">問題回報<span class="chev">›</span></div>
-      <div class="about-list-row" onclick="window.__nav({name:'feedback', type:'suggestion'})">功能建議<span class="chev">›</span></div>
     </div>
     <div class="about-copyright">
       Copyright © 2026 MEDTRACK. All Rights Reserved.<br><br>
@@ -2930,22 +2980,41 @@ function viewAboutLicenses(){
   `);
 }
 function viewAboutReleaseNotes(){
-  return viewAboutContentPage("更新紀錄", `
-    <p><b>2026/07/06</b><br>新增「關於系統」頁面；患者紀錄新增現場狀況（創傷／非創傷）分類；車輛支援跨單位借用；車長／駕駛改為跨單位搜尋選擇器；閒置 8 小時自動登出；帳號待審核可自選單位。</p>
-    <p><b>2026/07/05</b><br>天氣卡片重新設計；下拉重新整理改為整頁重新整理；急救責任醫院資料自動匯入；車輛依車種分組排序；患者紀錄卡片版面與字級多次調整。</p>
-    <p><b>2026/07/04 以前</b><br>建立車輛人員動態管制核心功能：勤務建立與追蹤、車輛／人員／行車紀錄器基礎資料管理、帳號權限（RBAC）、患者生命徵象紀錄、勤務紀錄查詢與統計分析。</p>
-  `);
+  return viewAboutContentPage("更新紀錄", RELEASE_NOTES.map(n => `<p><b>${esc(n.date)}</b><br>${esc(n.summary)}</p>`).join(""));
 }
-function viewFeedbackForm(type){
-  const isIssue = type !== "suggestion";
-  const label = isIssue ? "問題回報" : "功能建議";
-  const placeholder = isIssue ? "請描述您遇到的問題，例如：在哪個頁面、操作步驟、預期結果與實際結果" : "請描述您希望新增或改善的功能";
+function viewFeedbackForm(){
   return `
-    <div class="back-row"><button onclick="window.__nav({name:'about'})">‹ 返回</button></div>
-    <div class="section-label">${label}</div>
-    <form onsubmit="window.__submitFeedbackForm(event, '${isIssue?'issue':'suggestion'}')">
-      <div class="field"><label>內容</label><textarea id="fb-message" required placeholder="${placeholder}" style="min-height:160px;"></textarea></div>
-      <button class="btn-primary" type="submit">送出</button>
+    <div class="back-row"><button onclick="window.__nav({name:'profile'})">‹ 返回</button></div>
+    <div class="section-label">意見回饋</div>
+    <form onsubmit="window.__submitFeedbackForm(event)">
+      <div class="field"><label>留言者</label>
+        <div class="feedback-anon-grid">
+          <label class="feedback-anon-option">
+            <input type="radio" name="fb-anon" value="1" checked>
+            <span class="fo-icon">${icon('incognito',28)}</span>
+            <div class="fo-label">匿名</div>
+            <div class="fo-sub">不顯示姓名</div>
+          </label>
+          <label class="feedback-anon-option">
+            <input type="radio" name="fb-anon" value="0">
+            <span class="fo-icon">${icon('user',28)}</span>
+            <div class="fo-label">具名</div>
+            <div class="fo-sub">顯示成員姓名</div>
+          </label>
+        </div>
+      </div>
+      <div class="field"><label>類別</label>
+        <div class="feedback-category-grid">
+          ${FEEDBACK_CATEGORIES.map((c,i) => `
+          <label class="feedback-category-option">
+            <input type="radio" name="fb-category" value="${c.key}" ${i===0?'checked':''}>
+            <span class="fo-icon">${icon(c.icon,18)}</span>
+            <div class="fo-label">${c.label}</div>
+          </label>`).join("")}
+        </div>
+      </div>
+      <div class="field"><label>內容 *</label><textarea id="fb-message" required placeholder="請填寫您的意見或建議…" style="min-height:160px;"></textarea></div>
+      <button class="btn-primary" type="submit">送出意見</button>
     </form>
   `;
 }
@@ -3314,8 +3383,8 @@ function viewAdminFeedback(){
       <div class="admin-row" style="align-items:flex-start;">
         <div style="flex:1; min-width:0;">
           <div class="name">
-            <span class="vitals-stage-tag${f.type==='issue'?'':' alt'}">${esc(FEEDBACK_TYPE_LABEL[f.type]||f.type)}</span>
-            ${esc(f.userName||'—')}${f.rank?' '+esc(f.rank):''}${f.unit?' · '+esc(unitLabel(f.unit)):''}
+            <span class="vitals-stage-tag">${esc(FEEDBACK_CATEGORY_LABEL[f.category]||f.category||'—')}</span>
+            ${f.anonymous ? '匿名' : `${esc(f.userName||'—')}${f.rank?' '+esc(f.rank):''}${f.unit?' · '+esc(unitLabel(f.unit)):''}`}
           </div>
           <div class="sub" style="margin-top:6px; color:var(--text); white-space:pre-wrap;">${esc(f.message||'')}</div>
           <div class="sub" style="margin-top:6px;">${f.createdAt ? fmtTime(new Date(f.createdAt).getTime()) : ''}</div>
@@ -3343,7 +3412,7 @@ const ROUTE_VIEWS = {
   aboutPrivacy: viewAboutPrivacy,
   aboutLicenses: viewAboutLicenses,
   aboutReleaseNotes: viewAboutReleaseNotes,
-  feedback: () => viewFeedbackForm(state.route.type),
+  feedback: viewFeedbackForm,
   rolePreview: viewRolePreview,
   hospitals: viewHospitals,
   admin: viewAdmin
@@ -3691,13 +3760,15 @@ window.__savePendingProfile = (ev) => {
     render();
   }).catch(err => showToast(`儲存失敗：[${err.code||'?'}] ${err.message||err}`));
 };
-window.__submitFeedbackForm = (ev, type) => {
+window.__submitFeedbackForm = (ev) => {
   ev.preventDefault();
   const message = (document.getElementById("fb-message").value || "").trim();
   if (!message) return;
-  submitFeedback(type, message).then(() => {
+  const anonymous = document.querySelector('input[name="fb-anon"]:checked').value === "1";
+  const category = document.querySelector('input[name="fb-category"]:checked').value;
+  submitFeedback(category, message, anonymous).then(() => {
     showToast("已送出，謝謝您的回饋");
-    window.__nav({name:'about'});
+    window.__nav({name:'profile'});
   }).catch(err => showToast(`送出失敗：[${err.code||'?'}] ${err.message||err}`));
 };
 window.__setRecordsFilter = (key, value) => { state.recordsFilter[key] = value; render(); };
