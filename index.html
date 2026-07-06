@@ -334,11 +334,11 @@
   /* iOS 風格返回鍵：純圖示（圓圈裡放「‹」），不接文字，全站統一。
      圓圈底色不能用 --panel-2（跟頁面底色 --bg 幾乎同色，肉眼看不出來，
      會變成只看到一個「‹」符號飄在畫面上，沒有圓圈感），改用對比明顯的
-     --border 當底色。 */
-  .back-btn{display:inline-flex; align-items:center; background:none; border:none; padding:2px 0; color:var(--blue); font-family:var(--sans); cursor:pointer;}
+     --border 當底色；箭頭改用 --text（黑色）而不是藍色，跟灰底更搭。 */
+  .back-btn{display:inline-flex; align-items:center; background:none; border:none; padding:2px 0; color:var(--text); font-family:var(--sans); cursor:pointer;}
   .back-btn-circle{
     display:flex; align-items:center; justify-content:center; flex-shrink:0;
-    width:28px; height:28px; border-radius:50%; background:var(--border); color:var(--blue);
+    width:28px; height:28px; border-radius:50%; background:var(--border); color:var(--text);
     font-size:19px; font-weight:700; line-height:1;
   }
   /* 返回鍵右側緊接的頁面標題，跟返回鍵同一列，比照 iOS 導覽列排版。 */
@@ -638,7 +638,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-130-login-quota-fix-backbtn-title-row";
+const BUILD_TAG = "2026-07-06-131-backbtn-gray-circle-black-chevron";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -941,6 +941,7 @@ const RELEASE_NOTES = [
     "更新紀錄頁面改為條列式呈現，不再整段文字擠在一起",
     "修正切換畫面時無條件重抓全部 7 個集合資料，導致 Firestore 讀取量過大、觸發配額限制連登入都失敗的問題，改成只重抓該畫面實際會用到的資料",
     "返回鍵旁邊改為直接顯示頁面標題（跟返回鍵同一列），不再另外拆一行顯示",
+    "返回鍵箭頭改為黑色，跟灰底圓圈更搭",
   ] },
   { date: "2026/07/04 以前", items: [
     "建立車輛人員動態管制核心功能：勤務建立與追蹤",
