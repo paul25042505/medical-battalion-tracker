@@ -336,6 +336,10 @@
   .kv{display:grid; grid-template-columns:96px 1fr; gap:12px 12px; margin-top:14px; font-size:var(--text-sm);}
   .kv .k{color:var(--muted); font-weight:600; font-family:var(--mono); font-size:var(--text-xs); padding-top:2px; text-transform:uppercase; letter-spacing:0.04em;}
   .kv .v{color:var(--text);}
+  /* ---- 關於系統 ---- */
+  .about-list-row{padding:13px 2px; font-size:var(--text-sm); color:var(--text); border-bottom:1px solid var(--border);}
+  .about-list-row:last-child{border-bottom:none;}
+  .about-copyright{margin-top:var(--space-section); padding:0 4px; color:var(--muted); font-size:var(--text-xs); line-height:1.7; text-align:center;}
 
   .no-permission{color:var(--muted); font-size:var(--text-sm); text-align:center; padding:16px; border:1px dashed var(--border-strong); border-radius:var(--radius-md); margin-bottom:20px;}
 
@@ -592,7 +596,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-120-scene-trauma-nontrauma";
+const BUILD_TAG = "2026-07-06-121-about-page";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -2785,11 +2789,65 @@ function viewProfile(){
       <div class="txt"><div class="t1">角色權限預覽</div><div class="t2">檢視各角色/單位登入後預設看到的畫面</div></div>
       <span class="chev">›</span>
     </div>` : ""}
-    <div class="service-row" style="cursor:default;">
+    <div class="service-row" onclick="window.__nav({name:'about'})">
       <span class="icon-wrap" style="background:#F2E9FE; color:#6B23C7;">${icon('check',20)}</span>
-      <div class="txt"><div class="t1">系統版本</div><div class="t2">build ${BUILD_TAG}</div></div>
+      <div class="txt"><div class="t1">關於系統</div><div class="t2">build ${BUILD_TAG}</div></div>
+      <span class="chev">›</span>
     </div>
     <button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="window.__logout()">登出</button>
+  `;
+}
+
+/* =========================================================
+   17a-2) 畫面：關於系統
+   ========================================================= */
+function viewAbout(){
+  return `
+    <div class="back-row"><button onclick="window.__nav({name:'profile'})">‹ 返回</button></div>
+    <div class="section-label">關於系統</div>
+    <div class="login-wrap" style="min-height:auto; padding:10px 0 6px 0;">
+      <img class="login-logo" src="icons/icon-192.png" alt="單位徽章" style="width:64px; height:64px;">
+      <div class="login-mark">MEDTRACK</div>
+      <div class="login-sub" style="margin-bottom:0;">Personnel · Vehicles · Operations</div>
+    </div>
+    <div class="detail-head" style="text-align:center;">
+      <div class="hub-name" style="font-size:var(--text-lg);">衛生營車輛人員動態管制系統</div>
+      <div style="color:var(--muted); font-size:var(--text-xs); font-family:var(--mono); margin-top:2px;">Medical Battalion Vehicle &amp; Personnel Management System</div>
+      <p style="margin-top:14px; color:var(--text); font-size:var(--text-sm); line-height:1.7; text-align:left;">提供衛生營人員、車輛與勤務任務的整合管理，支援即時動態追蹤、勤務回報、任務管理及資訊同步，提升勤務效率與指揮管制能力。</p>
+    </div>
+    <div class="section-label">系統資訊</div>
+    <div class="detail-head">
+      <div class="kv" style="margin-top:0;">
+        <div class="k">系統版本</div><div class="v">v1.0.0</div>
+        <div class="k">Build</div><div class="v">20260706</div>
+        <div class="k">發布日期</div><div class="v">2026/07/06</div>
+        <div class="k">最後更新</div><div class="v">2026/07/06</div>
+      </div>
+    </div>
+    <div class="section-label">開發資訊</div>
+    <div class="detail-head">
+      <div class="kv" style="margin-top:0;">
+        <div class="k">開發單位</div><div class="v">衛生營</div>
+        <div class="k">系統維護</div><div class="v">管理員</div>
+        <div class="k">技術支援</div><div class="v">系統管理員</div>
+      </div>
+    </div>
+    <div class="section-label">法律資訊</div>
+    <div class="detail-head" style="padding-top:2px; padding-bottom:2px;">
+      <div class="about-list-row">使用條款（Terms of Use）</div>
+      <div class="about-list-row">隱私權政策（Privacy Policy）</div>
+      <div class="about-list-row">開源授權（Open Source Licenses）</div>
+    </div>
+    <div class="section-label">支援</div>
+    <div class="detail-head" style="padding-top:2px; padding-bottom:2px;">
+      <div class="about-list-row">更新紀錄（Release Notes）</div>
+      <div class="about-list-row">問題回報</div>
+      <div class="about-list-row">功能建議</div>
+    </div>
+    <div class="about-copyright">
+      Copyright © 2026 MEDTRACK. All Rights Reserved.<br><br>
+      本系統為衛生營內部勤務管理使用，未經授權不得擅自複製、散布、修改或提供予第三方。所有系統內容、介面設計及相關資料均受著作權及相關法律保護。
+    </div>
   `;
 }
 
@@ -3125,6 +3183,7 @@ const ROUTE_VIEWS = {
   stats: viewStats,
   notifications: viewNotifications,
   profile: viewProfile,
+  about: viewAbout,
   rolePreview: viewRolePreview,
   hospitals: viewHospitals,
   admin: viewAdmin
