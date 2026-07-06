@@ -638,7 +638,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-131-backbtn-gray-circle-black-chevron";
+const BUILD_TAG = "2026-07-06-132-recent-window-reads-deep-query";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -753,6 +753,101 @@ async function fsListCollection(collectionPath){
   const data = await res.json();
   return (data.documents||[]).map(d => ({ id: d.name.split("/").pop(), ...fromFsFields(d.fields) }));
 }
+// 用 Firestore 結構化查詢（:runQuery）在「伺服器端」就先篩掉不需要的文件，
+// 真正減少讀取數（跟 fsListCollection 抓全部再前端篩選不同，那樣篩選前
+// 每一筆都已經算一次讀取了）。目前只用來依單一時間欄位篩「>= 某個時間」，
+// 每日/每週回報累積下去，勤務／事件／患者紀錄這幾個集合的文件數只會越來
+// 越多，若每次登入都整個抓一次，讀取量會隨歷史資料量無限成長；改成只抓
+// 最近一段期間，讀取量才會維持在一個固定範圍。
+async function fsQuerySince(collectionId, field, sinceDate, limit){
+  const idToken = await auth.currentUser.getIdToken();
+  const body = {
+    structuredQuery: {
+      from: [{ collectionId }],
+      where: { fieldFilter: { field: { fieldPath: field }, op: "GREATER_THAN_OR_EQUAL", value: { timestampValue: sinceDate.toISOString() } } },
+      limit: limit || 300
+    }
+  };
+  const res = await fetch(`${FIRESTORE_BASE}:runQuery`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    let msg = res.statusText;
+    try { const j = await res.json(); msg = (Array.isArray(j)?j[0]:j).error?.message || msg; } catch(e){}
+    const err = new Error(msg); err.code = res.status;
+    throw err;
+  }
+  const data = await res.json();
+  return (data||[]).filter(d => d.document).map(d => ({ id: d.document.name.split("/").pop(), ...fromFsFields(d.document.fields) }));
+}
+// 「紀錄」頁自訂日期查詢若往回查超過 RECENT_WINDOW_DAYS（平常沒預載那麼久
+// 以前的資料），才需要另外針對該區間單獨查一次；查完的勤務／事件／患者
+// 紀錄直接併入現有的 state 陣列（用 id 去重），維持既有畫面邏輯不用另外
+// 處理一套「額外資料」的顯示路徑。
+async function fsQueryRange(collectionId, field, fromDate, toDate, limit){
+  const idToken = await auth.currentUser.getIdToken();
+  const body = {
+    structuredQuery: {
+      from: [{ collectionId }],
+      where: { compositeFilter: { op: "AND", filters: [
+        { fieldFilter: { field: { fieldPath: field }, op: "GREATER_THAN_OR_EQUAL", value: { timestampValue: fromDate.toISOString() } } },
+        { fieldFilter: { field: { fieldPath: field }, op: "LESS_THAN_OR_EQUAL", value: { timestampValue: toDate.toISOString() } } }
+      ] } },
+      limit: limit || 300
+    }
+  };
+  const res = await fetch(`${FIRESTORE_BASE}:runQuery`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    let msg = res.statusText;
+    try { const j = await res.json(); msg = (Array.isArray(j)?j[0]:j).error?.message || msg; } catch(e){}
+    const err = new Error(msg); err.code = res.status;
+    throw err;
+  }
+  const data = await res.json();
+  return (data||[]).filter(d => d.document).map(d => ({ id: d.document.name.split("/").pop(), ...fromFsFields(d.document.fields) }));
+}
+// 依 taskId 批次查詢 events／vitals（Firestore IN 最多 30 個值一組，
+// 超過就分批查完再合併），用於「查詢更早的資料」把某批舊勤務對應的事件
+// ／患者紀錄一起補齊，不然舊勤務進到詳情頁會看起來完全沒有回報紀錄。
+async function fsQueryByTaskIds(collectionId, taskIds){
+  if (!taskIds.length) return [];
+  const idToken = await auth.currentUser.getIdToken();
+  const batches = [];
+  for (let i = 0; i < taskIds.length; i += 30) batches.push(taskIds.slice(i, i+30));
+  const results = [];
+  for (const batch of batches) {
+    const body = {
+      structuredQuery: {
+        from: [{ collectionId }],
+        where: { fieldFilter: { field: { fieldPath: "taskId" }, op: "IN", value: { arrayValue: { values: batch.map(id => ({ stringValue: id })) } } } },
+        limit: 300
+      }
+    };
+    const res = await fetch(`${FIRESTORE_BASE}:runQuery`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      let msg = res.statusText;
+      try { const j = await res.json(); msg = (Array.isArray(j)?j[0]:j).error?.message || msg; } catch(e){}
+      const err = new Error(msg); err.code = res.status;
+      throw err;
+    }
+    const data = await res.json();
+    results.push(...(data||[]).filter(d => d.document).map(d => ({ id: d.document.name.split("/").pop(), ...fromFsFields(d.document.fields) })));
+  }
+  return results;
+}
+const RECENT_WINDOW_DAYS = 30;
+function recentCutoffDate(){ return new Date(Date.now() - RECENT_WINDOW_DAYS*24*60*60*1000); }
+function isoDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
 // 不再定時自動輪詢（使用者反應一直背景更新很干擾）。改成只在建立時抓一次，
 // 之後只有畫面切換／使用者做出寫入動作時才會呼叫 refreshNow() 手動刷新一次，
@@ -942,6 +1037,7 @@ const RELEASE_NOTES = [
     "修正切換畫面時無條件重抓全部 7 個集合資料，導致 Firestore 讀取量過大、觸發配額限制連登入都失敗的問題，改成只重抓該畫面實際會用到的資料",
     "返回鍵旁邊改為直接顯示頁面標題（跟返回鍵同一列），不再另外拆一行顯示",
     "返回鍵箭頭改為黑色，跟灰底圓圈更搭",
+    "登入後只預先讀取最近 30 天的勤務／事件／患者紀錄，不再每次登入都讀取全部歷史資料，避免 Firestore 讀取量隨歷史資料無限成長；紀錄頁自訂日期查詢超過 30 天前，會提示可另外「查詢更早的資料」",
   ] },
   { date: "2026/07/04 以前", items: [
     "建立車輛人員動態管制核心功能：勤務建立與追蹤",
@@ -987,7 +1083,12 @@ const state = {
   createTaskType: "duty", // 建立勤務頁面：勤務（車輛派遣）或洽公（無車輛/里程追蹤）
   previewActive: false, realRoleUnit: null, // 角色權限預覽（僅限 admin）
   weather: null, // 首頁氣象預報（依單位對應縣市，見 ensureWeatherLoaded）
-  hazards: null // 首頁天氣特報／陸上警報（依單位對應縣市，見 ensureHazardsLoaded）
+  hazards: null, // 首頁天氣特報／陸上警報（依單位對應縣市，見 ensureHazardsLoaded）
+  // 「紀錄」頁自訂日期查詢往回查超過 RECENT_WINDOW_DAYS 時另外抓的舊資料，
+  // 累積在這裡跟平常只抓最近期間的 tasks/events/vitals 合併，不然下一次
+  // 背景刷新（只抓最近期間）會把這些額外查到的舊資料整個蓋掉。
+  deepTasks: [], deepEvents: [], deepVitals: [],
+  recordsDeepQuery: null // { loading, from, to } | null：目前是否正在查詢/已查過超出預載範圍的自訂日期
 };
 let tasksPoll = null, eventsPoll = null, profilePoll = null;
 let personnelPoll = null, vehiclesPoll = null, recordersPoll = null;
@@ -1403,21 +1504,30 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
+// 合併「最近期間」查到的文件跟「紀錄」頁另外深度查詢過的舊文件，用 id 去重
+// （深度查詢的優先，避免同一筆文件在兩份清單裡新舊內容打架）。
+function mergeById(recentDocs, extraDocs){
+  if (!extraDocs.length) return recentDocs;
+  const ids = new Set(recentDocs.map(d => d.id));
+  return recentDocs.concat(extraDocs.filter(d => !ids.has(d.id)));
+}
 function startDataListeners(){
   if (tasksPoll || eventsPoll) return;
   tasksPoll = poll(async () => {
-    const docs = await fsListCollection("tasks");
-    docs.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0));
-    const changed = changedSince("tasks", docs);
-    state.tasks = docs;
+    const docs = await fsQuerySince("tasks", "createdAt", recentCutoffDate());
+    const merged = mergeById(docs, state.deepTasks);
+    merged.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0));
+    const changed = changedSince("tasks", merged);
+    state.tasks = merged;
     if (changed) safeRender();
   });
   eventsPoll = poll(async () => {
-    const docs = await fsListCollection("events");
-    docs.forEach(d => { d.ts = d.timestamp ? new Date(d.timestamp).getTime() : Date.now(); });
-    docs.sort(eventOrderCompare);
-    const changed = changedSince("events", docs);
-    state.events = docs;
+    const docs = await fsQuerySince("events", "timestamp", recentCutoffDate());
+    const merged = mergeById(docs, state.deepEvents);
+    merged.forEach(d => { d.ts = d.timestamp ? new Date(d.timestamp).getTime() : Date.now(); });
+    merged.sort(eventOrderCompare);
+    const changed = changedSince("events", merged);
+    state.events = merged;
     if (changed) safeRender();
   });
   personnelPoll = poll(async () => {
@@ -1445,11 +1555,12 @@ function startDataListeners(){
     if (changed) safeRender();
   });
   vitalsPoll = poll(async () => {
-    const docs = await fsListCollection("vitals");
-    docs.forEach(d => { d.ts = d.timestamp ? new Date(d.timestamp).getTime() : Date.now(); });
-    docs.sort(eventOrderCompare);
-    const changed = changedSince("vitals", docs);
-    state.vitals = docs;
+    const docs = await fsQuerySince("vitals", "timestamp", recentCutoffDate());
+    const merged = mergeById(docs, state.deepVitals);
+    merged.forEach(d => { d.ts = d.timestamp ? new Date(d.timestamp).getTime() : Date.now(); });
+    merged.sort(eventOrderCompare);
+    const changed = changedSince("vitals", merged);
+    state.vitals = merged;
     if (changed) safeRender();
   });
   ensureUnitsSeeded();
@@ -1461,6 +1572,7 @@ function cleanupListeners(){
   tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = hospitalsPoll = vitalsPoll = null;
   state.tasks = []; state.events = []; state.personnel = []; state.vehicles = []; state.recorders = [];
   state.hospitals = []; state.vitals = [];
+  state.deepTasks = []; state.deepEvents = []; state.deepVitals = []; state.recordsDeepQuery = null;
   state.previewActive = false; state.realRoleUnit = null;
 }
 // 系統固定為營部／第一連／第二連三個單位；首次啟用時自動補建 units 文件，
@@ -2752,6 +2864,20 @@ function viewRecords(){
   const applied = state.recordsApplied;
   const tasks = applied ? runRecordsFilter(p, applied) : [];
 
+  // 自訂日期若往回查超過平常預載的最近 RECENT_WINDOW_DAYS 天，那段期間的
+  // 資料一開始沒被抓下來，查詢結果可能不完整；提供「查詢更早的資料」讓
+  // 使用者自己決定要不要多花一次查詢把那段期間的資料也補齊，而不是每次
+  // 登入都預先抓那麼久以前的資料。
+  const dq = state.recordsDeepQuery;
+  const needsDeepQuery = applied && applied.period === "custom" && applied.customDateFrom
+    && applied.customDateFrom < isoDate(recentCutoffDate())
+    && !(dq && dq.done && dq.from === applied.customDateFrom && dq.to === applied.customDateTo);
+  const deepQueryBanner = needsDeepQuery ? `
+    <div class="empty" style="text-align:left; padding:14px 16px; margin-bottom:14px;">
+      ${dq && dq.loading ? `查詢中…` : `查詢範圍早於最近 ${RECENT_WINDOW_DAYS} 天，畫面上的結果可能不完整。`}
+      ${dq && dq.loading ? "" : `<button class="btn-ghost" style="margin-top:8px;" onclick="window.__runRecordsDeepQuery()">查詢更早的資料</button>`}
+    </div>` : "";
+
   return `
     ${periodPills}
     ${unitPills}
@@ -2771,6 +2897,7 @@ function viewRecords(){
       <button class="btn-primary" style="flex:1; margin-top:0;" onclick="window.__runRecordsQuery()">查詢</button>
     </div>
     ${!applied ? `<div class="empty">${icon('records',32)}<div style="margin-top:10px;">選擇篩選條件後按「查詢」</div></div>` : `
+      ${deepQueryBanner}
       <div class="section-label">結果 · ${tasks.length}</div>
       ${tasks.length ? tasks.map(taskCard).join("") : `<div class="empty">找不到符合條件的勤務紀錄</div>`}
     `}
@@ -3837,10 +3964,47 @@ window.__submitFeedbackForm = (ev) => {
 };
 window.__setRecordsFilter = (key, value) => { state.recordsFilter[key] = value; render(); };
 window.__toggleRecordsFilters = () => { state.recordsFiltersExpanded = !state.recordsFiltersExpanded; render(); };
-window.__runRecordsQuery = () => { state.recordsApplied = { ...state.recordsFilter }; render(); };
+window.__runRecordsQuery = () => { state.recordsApplied = { ...state.recordsFilter }; state.recordsDeepQuery = null; render(); };
 window.__clearRecordsQuery = () => {
   state.recordsFilter = { period: "today", unit: "", vehicle: "", title: "", location: "", status: "", person: "", customDateFrom: "", customDateTo: "" };
   state.recordsApplied = null;
+  state.recordsDeepQuery = null;
+  render();
+};
+// 自訂日期查詢若往回查超過平常預載的最近 RECENT_WINDOW_DAYS 天，該範圍的
+// 舊資料一開始並不在 state.tasks/events/vitals 裡，需要另外查一次；查到的
+// 勤務連同對應的事件／患者紀錄一起併入現有資料，讓詳情頁一樣看得到完整
+// 進度，不會像只查勤務本身那樣看起來沒有任何回報紀錄。
+window.__runRecordsDeepQuery = async () => {
+  const f = state.recordsApplied;
+  if (!f || f.period !== "custom" || !f.customDateFrom) return;
+  const from = new Date(`${f.customDateFrom}T00:00:00`);
+  const to = f.customDateTo ? new Date(`${f.customDateTo}T23:59:59`) : new Date();
+  state.recordsDeepQuery = { loading: true, from: f.customDateFrom, to: f.customDateTo };
+  render();
+  try {
+    const taskDocs = await fsQueryRange("tasks", "createdAt", from, to);
+    const taskIds = taskDocs.map(t => t.id);
+    const [eventDocs, vitalDocs] = await Promise.all([
+      fsQueryByTaskIds("events", taskIds),
+      fsQueryByTaskIds("vitals", taskIds)
+    ]);
+    state.deepTasks = mergeById(state.deepTasks, taskDocs);
+    state.deepEvents = mergeById(state.deepEvents, eventDocs);
+    state.deepVitals = mergeById(state.deepVitals, vitalDocs);
+    state.tasks = mergeById(state.tasks, taskDocs);
+    state.events = mergeById(state.events, eventDocs);
+    state.vitals = mergeById(state.vitals, vitalDocs);
+    state.tasks.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0));
+    state.events.forEach(d => { if (d.ts == null) d.ts = d.timestamp ? new Date(d.timestamp).getTime() : Date.now(); });
+    state.events.sort(eventOrderCompare);
+    state.vitals.forEach(d => { if (d.ts == null) d.ts = d.timestamp ? new Date(d.timestamp).getTime() : Date.now(); });
+    state.vitals.sort(eventOrderCompare);
+    state.recordsDeepQuery = { loading: false, from: f.customDateFrom, to: f.customDateTo, done: true };
+  } catch (err) {
+    state.recordsDeepQuery = null;
+    showToast(`查詢更早的資料失敗：[${err.code||'?'}] ${err.message}`);
+  }
   render();
 };
 window.__setTasksTab = (key) => { state.tasksTab = key; render(); window.scrollTo(0,0); };
