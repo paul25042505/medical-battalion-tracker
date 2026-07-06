@@ -638,7 +638,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-133-backbtn-no-title-thin-rounded-chevron";
+const BUILD_TAG = "2026-07-06-134-vehicle-in-out-camp-status-home-stats";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -646,7 +646,7 @@ const BUILD_TAG = "2026-07-06-133-backbtn-no-title-thin-rounded-chevron";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "1.1";
+const APP_MAJOR_MINOR = "1.2";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -952,6 +952,19 @@ function eligibleForCrewLeader(x){ return eligibleForDriver(x) && !CREW_LEADER_E
 
 const VEHICLE_TYPES = ["城市型救護車","野戰型救護車","悍馬型救護車","輕型戰術輪車","中型戰術輪車","1.75貨車"];
 function vehicleTypeWeight(type){ const i = VEHICLE_TYPES.indexOf(type); return i === -1 ? VEHICLE_TYPES.length : i; }
+// 車輛「營內／營外」：不另外存欄位，直接從目前進行中的勤務（type !== liaison
+// 且尚未結束）推算——車號有掛在這種任務上就是營外，否則就是營內。跟首頁
+// 「車輛動態」統計共用同一份推算邏輯，兩處數字才會對得起來。
+function outVehiclePlates(){
+  const set = new Set();
+  state.tasks.forEach(t => {
+    if (t.type !== "liaison" && t.vehicle && deriveStatus(t.id) !== "completed") set.add(t.vehicle);
+  });
+  return set;
+}
+// 建立/編輯勤務選車號時，直接在選項文字標出該車目前營內／營外，選車的當下
+// 就能避免選到已經在執行其他勤務的車。
+function vehicleOptionLabel(plate, outSet){ return `${plate}（${outSet.has(plate) ? '營外' : '營內'}）`; }
 function sortVehicles(list){
   return list.slice().sort((a,b) => vehicleTypeWeight(a.type) - vehicleTypeWeight(b.type) || (a.plate||'').localeCompare(b.plate||''));
 }
@@ -978,12 +991,14 @@ function vehicleOptionsByType(vehicles, renderOption){
 // 附註在車號後面），純 DOM 換掉 <select> 的內容，不觸發整頁 render()。
 function vehicleSelectOptionsSameUnit(unit, currentPlate){
   const opts = sortVehicles(state.vehicles.filter(x => x.unit === unit && x.active !== false));
+  const outSet = outVehiclePlates();
   return `<option value="">請選擇車輛</option>` + vehicleOptionsByType(opts, v =>
-    `<option value="${esc(v.plate)}" ${v.plate===currentPlate?'selected':''}>${esc(v.plate)}</option>`);
+    `<option value="${esc(v.plate)}" ${v.plate===currentPlate?'selected':''}>${esc(vehicleOptionLabel(v.plate, outSet))}</option>`);
 }
 function vehicleSelectOptionsAllUnits(currentPlate){
   const opts = state.vehicles.filter(x => x.active !== false).slice()
     .sort((a,b) => unitWeight(a.unit) - unitWeight(b.unit) || vehicleTypeWeight(a.type) - vehicleTypeWeight(b.type) || (a.plate||'').localeCompare(b.plate||''));
+  const outSet = outVehiclePlates();
   let html = `<option value="">請選擇車輛</option>`, curUnit = null;
   for (const v of opts) {
     if (v.unit !== curUnit) {
@@ -991,7 +1006,7 @@ function vehicleSelectOptionsAllUnits(currentPlate){
       html += `<optgroup label="${esc(unitLabel(v.unit))}">`;
       curUnit = v.unit;
     }
-    html += `<option value="${esc(v.plate)}" ${v.plate===currentPlate?'selected':''}>${esc(v.plate)}${v.type?' · '+esc(v.type):''}</option>`;
+    html += `<option value="${esc(v.plate)}" ${v.plate===currentPlate?'selected':''}>${esc(vehicleOptionLabel(v.plate, outSet))}${v.type?' · '+esc(v.type):''}</option>`;
   }
   if (curUnit !== null) html += "</optgroup>";
   return html;
@@ -1039,6 +1054,7 @@ const RELEASE_NOTES = [
     "返回鍵箭頭改為黑色，跟灰底圓圈更搭",
     "登入後只預先讀取最近 30 天的勤務／事件／患者紀錄，不再每次登入都讀取全部歷史資料，避免 Firestore 讀取量隨歷史資料無限成長；紀錄頁自訂日期查詢超過 30 天前，會提示可另外「查詢更早的資料」",
     "返回鍵旁邊的頁面標題改回不顯示（維持純圖示），箭頭改細字重＋圓體並確保在圓圈裡水平垂直置中",
+    "建立/編輯勤務選車號時，選項會標出該車目前營內／營外；首頁新增「營內車／營外車／洽公中人數」統計，高勤官一眼就看得出目前車輛動態",
   ] },
   { date: "2026/07/04 以前", items: [
     "建立車輛人員動態管制核心功能：勤務建立與追蹤",
@@ -2119,6 +2135,15 @@ function viewHome(){
     ${liaisonActive.length ? `<div class="section-label tight">洽公</div>${liaisonActive.map(taskCard).join("")}` : ""}
   ` : `<div class="empty">目前沒有車輛執行中</div>`;
 
+  // 高勤官最在意的「一眼看出」統計：營內／營外車輛數（跟建立勤務頁的車號
+  // 下拉共用 outVehiclePlates() 推算邏輯，兩處數字一定對得上），以及目前
+  // 洽公在外的人數（不重複計算同一人同時掛在多筆洽公的情況）。
+  const visibleVehicles = state.vehicles.filter(v => v.active !== false && (canSeeAllUnits(p) || v.unit === myUnit(p)));
+  const outSet = outVehiclePlates();
+  const outCampCount = visibleVehicles.filter(v => outSet.has(v.plate)).length;
+  const inCampCount = visibleVehicles.length - outCampCount;
+  const liaisonPeopleCount = new Set(liaisonActive.flatMap(t => Array.isArray(t.personnel) ? t.personnel : [])).size;
+
   return `
     <div class="home-date">${fmtDate(today)}</div>
     ${renderHazardBanner(unit)}
@@ -2131,6 +2156,11 @@ function viewHome(){
       <div class="stat-tile t-green"><div class="num">${todayDone.length}</div><div class="lbl">已完成</div></div>
     </div>
     <div class="section-label">車輛動態</div>
+    <div class="stat-grid">
+      <div class="stat-tile t-green"><div class="num">${inCampCount}</div><div class="lbl">營內車</div></div>
+      <div class="stat-tile t-orange"><div class="num">${outCampCount}</div><div class="lbl">營外車</div></div>
+      <div class="stat-tile t-purple"><div class="num">${liaisonPeopleCount}</div><div class="lbl">洽公中人數</div></div>
+    </div>
     ${fleetSection}
   `;
 }
@@ -2203,6 +2233,7 @@ function viewCreateTask(){
   const personnelOpts = state.personnel.filter(x => x.unit === unit && x.active !== false).slice().sort((a,b) => rankWeight(a.title) - rankWeight(b.title));
   const vehicleOpts = sortVehicles(state.vehicles.filter(x => x.unit === unit && x.active !== false));
   const recorderOpts = state.recorders.filter(x => x.unit === unit && x.active !== false);
+  const outSet = outVehiclePlates();
 
   return `
     <div class="section-label">建立勤務</div>
@@ -2234,7 +2265,7 @@ function viewCreateTask(){
       <div class="field"><label>車號</label>
         <select name="vehicle" data-unit="${unit}">
           <option value="">請選擇車輛</option>
-          ${vehicleOptionsByType(vehicleOpts, v => `<option value="${esc(v.plate)}">${esc(v.plate)}</option>`)}
+          ${vehicleOptionsByType(vehicleOpts, v => `<option value="${esc(v.plate)}">${esc(vehicleOptionLabel(v.plate, outSet))}</option>`)}
         </select>
         <label class="checkbox-inline"><input type="checkbox" onchange="window.__toggleCrossUnitVehicle(this)"> 跨單位借車</label>
         ${!vehicleOpts.length ? `<div style="color:var(--muted);font-size:var(--text-xs);margin-top:6px;">此單位尚未建立車輛資料，請至「基礎資料管理」新增</div>` : ""}
@@ -2280,6 +2311,7 @@ function viewEditTask(taskId){
   const personnelOpts = state.personnel.filter(x => x.unit === unit && x.active !== false).slice().sort((a,b) => rankWeight(a.title) - rankWeight(b.title));
   const vehicleOpts = sortVehicles(state.vehicles.filter(x => x.unit === unit && x.active !== false));
   const recorderOpts = state.recorders.filter(x => x.unit === unit && x.active !== false);
+  const outSet = outVehiclePlates();
   const currentRecorders = t.recorders || [];
   const currentPersonnel = t.personnel || [];
   // 車輛跨單位借用不常見，但既有勤務可能早就借了別的單位的車，編輯時要
@@ -2307,7 +2339,7 @@ function viewEditTask(taskId){
       </div>` : `
       <div class="field"><label>車號</label>
         <select name="vehicle" data-unit="${unit}">
-          ${isCrossUnitVehicle ? vehicleSelectOptionsAllUnits(t.vehicle) : `<option value="">請選擇車輛</option>` + vehicleOptionsByType(vehicleOpts, v => `<option value="${esc(v.plate)}" ${t.vehicle===v.plate?'selected':''}>${esc(v.plate)}</option>`)}
+          ${isCrossUnitVehicle ? vehicleSelectOptionsAllUnits(t.vehicle) : `<option value="">請選擇車輛</option>` + vehicleOptionsByType(vehicleOpts, v => `<option value="${esc(v.plate)}" ${t.vehicle===v.plate?'selected':''}>${esc(vehicleOptionLabel(v.plate, outSet))}</option>`)}
         </select>
         <label class="checkbox-inline"><input type="checkbox" ${isCrossUnitVehicle?'checked':''} onchange="window.__toggleCrossUnitVehicle(this)"> 跨單位借車</label>
       </div>
