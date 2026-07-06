@@ -341,6 +341,8 @@
     width:28px; height:28px; border-radius:50%; background:var(--border); color:var(--blue);
     font-size:19px; font-weight:700; line-height:1;
   }
+  /* 返回鍵右側緊接的頁面標題，跟返回鍵同一列，比照 iOS 導覽列排版。 */
+  .back-row-title{font-size:var(--text-xl); font-weight:700; color:var(--text); letter-spacing:-0.01em;}
   .detail-head{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:var(--space-card); margin-bottom:var(--space-section); box-shadow:var(--shadow-sm);}
   .detail-head .task-title{font-size:var(--text-lg);}
   .kv{display:grid; grid-template-columns:96px 1fr; gap:12px 12px; margin-top:14px; font-size:var(--text-sm);}
@@ -636,7 +638,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-129-vitals-backbtn-fix-release-notes-list-minor-bump";
+const BUILD_TAG = "2026-07-06-130-login-quota-fix-backbtn-title-row";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -937,6 +939,8 @@ const RELEASE_NOTES = [
     "下拉重新整理改為整頁重新整理，並修正重新整理後會被彈回首頁的問題（改成留在原本頁面）",
     "急救責任醫院資料自動匯入；車輛依車種分組排序",
     "更新紀錄頁面改為條列式呈現，不再整段文字擠在一起",
+    "修正切換畫面時無條件重抓全部 7 個集合資料，導致 Firestore 讀取量過大、觸發配額限制連登入都失敗的問題，改成只重抓該畫面實際會用到的資料",
+    "返回鍵旁邊改為直接顯示頁面標題（跟返回鍵同一列），不再另外拆一行顯示",
   ] },
   { date: "2026/07/04 以前", items: [
     "建立車輛人員動態管制核心功能：勤務建立與追蹤",
@@ -1639,18 +1643,29 @@ function showToast(msg){
   clearTimeout(showToast._tm);
   showToast._tm = setTimeout(()=>t.classList.remove("show"), 2200);
 }
+// 每個路由切換時只重抓「這個畫面真的會用到」的集合，不要每次切換畫面都
+// 把 7 個集合整個重抓一次——那樣讀取量太大，實測會把 Firestore 免費方案
+// 的配額用到爆（連登入時讀自己的 profile 這種單一文件讀取都被 429 Quota
+// exceeded 擋下來）。人員/車輛/行車紀錄器這類異動不頻繁的基礎資料，只在
+// 真的會顯示/選用最新名冊的頁面才重抓；不在清單裡的路由（關於系統子頁、
+// 意見回饋、角色預覽、個人資料等）完全不重抓，沿用登入時的初始資料就好。
+const ROUTE_REFRESH = {
+  home: ['tasks','events','vitals'],
+  tasks: ['tasks','events'],
+  task: ['tasks','events','vitals'],
+  vitals: ['tasks','events','vitals'],
+  editTask: ['tasks','events','personnel','vehicles','recorders'],
+  createTask: ['personnel','vehicles','recorders'],
+  records: ['tasks','events','vitals','personnel','vehicles'],
+  stats: ['tasks','events'],
+  hospitals: ['hospitals'],
+  admin: ['tasks','events','personnel','vehicles','recorders','hospitals'],
+};
 function nav(route){
   state.route = route; state.reportDraft = null;
   render(); window.scrollTo(0,0);
-  // 沒有背景計時器會自動刷新資料了，改成每次切換畫面時抓一次最新資料
-  // （包含再次點同一個分頁也會刷新），確保看到的內容不會太舊。
-  if (tasksPoll) tasksPoll.refreshNow();
-  if (eventsPoll) eventsPoll.refreshNow();
-  if (personnelPoll) personnelPoll.refreshNow();
-  if (vehiclesPoll) vehiclesPoll.refreshNow();
-  if (recordersPoll) recordersPoll.refreshNow();
-  if (hospitalsPoll) hospitalsPoll.refreshNow();
-  if (vitalsPoll) vitalsPoll.refreshNow();
+  const polls = { tasks: tasksPoll, events: eventsPoll, personnel: personnelPoll, vehicles: vehiclesPoll, recorders: recordersPoll, hospitals: hospitalsPoll, vitals: vitalsPoll };
+  (ROUTE_REFRESH[route.name] || []).forEach(key => { if (polls[key]) polls[key].refreshNow(); });
 }
 function esc(s){ return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -1691,8 +1706,10 @@ function icon(name, size){
 // 不要再依頁面各自寫「返回列表」「返回更多」等。onclick 屬性務必用單引號
 // 包起來，因為裡面的 JSON.stringify(route) 輸出是雙引號字串，跟雙引號屬性
 // 會互相截斷（曾造成整個返回鍵完全沒反應的 bug）。
-function backBtn(route){
-  return `<button class="back-btn" onclick='window.__nav(${JSON.stringify(route)})'><span class="back-btn-circle">‹</span></button>`;
+// title（選填）：跟返回鍵放在同一列的頁面標題，比照 iOS 導覽列（返回鍵在
+// 左、標題緊接在右，同一行），不要再把標題拆成下面另起一行的 section-label。
+function backBtn(route, title){
+  return `<button class="back-btn" onclick='window.__nav(${JSON.stringify(route)})'><span class="back-btn-circle">‹</span></button>${title ? `<span class="back-row-title">${title}</span>` : ''}`;
 }
 // 多選（checkbox）/單選（radio）標籤群組，用於過去病史／過敏史／處置項目／意識狀態。
 // triggers（選填）：[{ values:[...], wrapId }]，勾選到指定選項時，只切換對應
@@ -2160,8 +2177,7 @@ function viewEditTask(taskId){
   const isCrossUnitVehicle = !!(currentVehicleRecord && currentVehicleRecord.unit !== unit);
 
   return `
-    <div class="back-row">${backBtn({name:'task', id:taskId})}</div>
-    <div class="section-label">編輯${isLiaison?'洽公':'勤務'}</div>
+    <div class="back-row">${backBtn({name:'task', id:taskId}, `編輯${isLiaison?'洽公':'勤務'}`)}</div>
     <form onsubmit="window.__saveTaskEdit(event,'${taskId}')">
       <div class="field"><label>單位</label><input value="${unitLabel(unit)}" disabled></div>
       <div class="field"><label>任務名稱 *</label><input name="title" required value="${esc(t.title||'')}"></div>
@@ -2408,8 +2424,7 @@ function viewVitalsPage(taskId, id, adding){
   ` : "";
 
   return `
-    <div class="back-row">${backBtn({name:'task', id:taskId})}</div>
-    <div class="section-label">${icon('heartbeat',17)} ${editingVitals ? '編輯患者紀錄' : (hasPatient ? '患者紀錄' : '記錄患者狀況')}</div>
+    <div class="back-row">${backBtn({name:'task', id:taskId}, `${icon('heartbeat',17)} ${editingVitals ? '編輯患者紀錄' : (hasPatient ? '患者紀錄' : '記錄患者狀況')}`)}</div>
     ${historyHtml}
     ${formHtml}
   `;
@@ -2840,8 +2855,7 @@ function viewStats(){
     </div>`;
 
   return `
-    <div class="back-row">${backBtn({name:'profile'})}</div>
-    <div class="section-label">統計分析</div>
+    <div class="back-row">${backBtn({name:'profile'}, `統計分析`)}</div>
     <div class="tabs2">
       ${periods.map(pd => `<div class="tab2 ${state.statsPeriod===pd.key?'active':''}" onclick="window.__setStatsPeriod('${pd.key}')">${pd.label}</div>`).join("")}
     </div>
@@ -2952,8 +2966,7 @@ function viewProfile(){
    ========================================================= */
 function viewAbout(){
   return `
-    <div class="back-row">${backBtn({name:'profile'})}</div>
-    <div class="section-label">關於系統</div>
+    <div class="back-row">${backBtn({name:'profile'}, `關於系統`)}</div>
     <div class="login-wrap" style="min-height:auto; padding:10px 0 6px 0;">
       <img class="login-logo" src="icons/icon-192.png" alt="單位徽章" style="width:64px; height:64px;">
       <div class="login-mark">MEDTRACK</div>
@@ -3000,8 +3013,7 @@ function viewAbout(){
 // 關於系統底下的文字型子頁面共用同一種版面：返回列＋標題＋一張卡片放內文。
 function viewAboutContentPage(title, bodyHtml){
   return `
-    <div class="back-row">${backBtn({name:'about'})}</div>
-    <div class="section-label">${title}</div>
+    <div class="back-row">${backBtn({name:'about'}, title)}</div>
     <div class="detail-head" style="text-align:left; font-size:var(--text-sm); line-height:1.8; color:var(--text);">
       ${bodyHtml}
     </div>
@@ -3047,8 +3059,7 @@ function viewAboutReleaseNotes(){
 function viewFeedbackForm(){
   const p = state.profile;
   return `
-    <div class="back-row">${backBtn({name:'profile'})}</div>
-    <div class="section-label">意見回饋</div>
+    <div class="back-row">${backBtn({name:'profile'}, `意見回饋`)}</div>
     <form onsubmit="window.__submitFeedbackForm(event)">
       <div class="field"><label>留言者</label>
         <div class="settings-group">
@@ -3085,8 +3096,7 @@ function viewHospitals(){
   const canEdit = canManageBaseData(p);
   const rows = state.hospitals.slice().sort((a,b) => HOSPITAL_LEVELS.indexOf(a.level) - HOSPITAL_LEVELS.indexOf(b.level) || (a.name||'').localeCompare(b.name||''));
   return `
-    <div class="back-row">${backBtn({name:'profile'})}</div>
-    <div class="section-label">醫院資訊</div>
+    <div class="back-row">${backBtn({name:'profile'}, `醫院資訊`)}</div>
     ${canEdit ? `<button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('hospitals', null, '')">${icon('plus',15)} 新增醫院</button>` : ""}
     ${rows.length ? rows.map(x => `
       <div class="admin-row">
@@ -3108,8 +3118,7 @@ function viewRolePreview(){
   const p = state.profile;
   if (!canManageUsers(p)) return `<div class="empty">您沒有使用此功能的權限</div>`;
   return `
-    <div class="back-row">${backBtn({name:'profile'})}</div>
-    <div class="section-label">選擇要預覽的角色</div>
+    <div class="back-row">${backBtn({name:'profile'}, `選擇要預覽的角色`)}</div>
     <div class="empty" style="text-align:left; padding:16px;">
       預覽僅切換畫面顯示內容，方便確認各角色能看到哪些功能／資料；不會變更任何帳號的實際權限，Firestore 讀寫仍以您目前登入帳號的真實身份判斷。
     </div>
@@ -3129,7 +3138,7 @@ function viewAdmin(){
   if (!canManageTasks(p)) return `<div class="empty">您沒有管理權限</div>`;
   ensureAdminPersonnelSync(p);
 
-  const overview = `<div class="back-row">${backBtn({name:'profile'})}</div><div class="section-label">管理後台${canSeeAllUnits(p) ? '' : ' · ' + unitLabel(myUnit(p))}</div>`;
+  const overview = `<div class="back-row">${backBtn({name:'profile'}, `管理後台${canSeeAllUnits(p) ? '' : ' · ' + unitLabel(myUnit(p))}`)}</div>`;
 
   // 子選單項目變多（成員管理／訊息管理／系統設定都是新加的），改用可
   // 橫向捲動的 tabs2（.scroll），避免六個頁籤擠在一行裡各自被壓得太窄。
