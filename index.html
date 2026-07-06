@@ -479,7 +479,14 @@
   .hub-avatar{width:88px; height:88px; border-radius:50%; object-fit:cover; box-shadow:var(--shadow-sm); background:var(--panel-2); display:flex; align-items:center; justify-content:center; color:var(--muted);}
   .hub-name{margin-top:14px; font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:var(--text-xl); font-weight:700; color:var(--text);}
   .hub-sub{margin-top:4px; font-size:var(--text-sm); color:var(--muted);}
-  .service-row{display:flex; align-items:center; gap:14px; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md); padding:15px 16px; margin-bottom:10px; box-shadow:var(--shadow-xs); cursor:pointer;}
+  /* 更多頁改成 iOS 設定頁的分組卡片樣式：同一 section 的項目放在同一張
+     卡片裡，項目之間用分隔線區隔，而不是每一列各自一張浮動卡片。 */
+  .settings-group{
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg);
+    overflow:hidden; margin-bottom:var(--space-section); box-shadow:var(--shadow-xs);
+  }
+  .service-row{display:flex; align-items:center; gap:14px; padding:14px 16px; cursor:pointer; border-bottom:1px solid var(--border);}
+  .settings-group .service-row:last-child{border-bottom:none;}
   .service-row .icon-wrap{width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
   .service-row .txt{flex:1; min-width:0;}
   .service-row .txt .t1{font-weight:600; font-size:var(--text-sm); color:var(--text);}
@@ -600,7 +607,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-122-about-page-content-filled";
+const BUILD_TAG = "2026-07-06-123-more-page-sections-redesign";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHJ_ZVLwl9-bD-ZPCTsBcfSjK1A15oJN4",
@@ -2747,8 +2754,25 @@ function viewNotifications(){
 }
 
 /* =========================================================
-   17) 畫面：個人資料
+   17) 畫面：個人資料（「更多」頁，分成使用者功能／管理功能／系統資訊
+   三個分區，比照 iOS 設定頁的分組卡片樣式；下面兩個小函式相當於一般
+   框架裡的 SettingsItem／SettingsSection component，這裡用純字串
+   組裝實作，符合本專案單檔 vanilla JS 的寫法）
    ========================================================= */
+function settingsRow({icon:iconName, bg, fg, title, subtitle, onclick}){
+  return `
+    <div class="service-row" onclick="${onclick}">
+      <span class="icon-wrap" style="background:${bg}; color:${fg};">${icon(iconName,18)}</span>
+      <div class="txt"><div class="t1">${title}</div>${subtitle?`<div class="t2">${subtitle}</div>`:''}</div>
+      <span class="chev">›</span>
+    </div>`;
+}
+// rows 是空陣列時整個 section（含標題）都不渲染，這樣「管理功能」這個
+// 區塊在一般成員登入時會直接消失，不會顯示一個空標題卻沒有內容。
+function settingsSection(title, rows){
+  if (!rows.length) return "";
+  return `<div class="section-label">${title}</div><div class="settings-group">${rows.join("")}</div>`;
+}
 function viewProfile(){
   const p = state.profile;
   if (state.profileEditing) {
@@ -2775,40 +2799,41 @@ function viewProfile(){
   const surname = (p.displayName || p.email || '?').trim().charAt(0) || '?';
   const avatar = `<div class="hub-avatar" style="background:var(--blue); color:#fff; font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:36px; font-weight:700;">${esc(surname)}</div>`;
 
+  // Section 1：使用者功能，所有登入使用者皆可見。
+  const userRows = [
+    settingsRow({icon:'hospital', bg:'#FFF2E0', fg:'#B45F00', title:'醫院資訊', onclick:"window.__nav({name:'hospitals'})"}),
+    settingsRow({icon:'user', bg:'#E8F1FF', fg:'#0056C7', title:'個人資料', onclick:"window.__editProfile()"}),
+  ];
+  // Section 2：管理功能，只有能進管理後台的角色（admin／高勤官／連級主官管）
+  // 才看得到；角色權限預覽再更進一步限縮成只有 admin 看得到，且預覽模式
+  // 進行中就不再顯示（避免在預覽別人視角時又跳出預覽選單）。
+  const adminRows = [];
+  if (canManageTasks(p)) {
+    adminRows.push(settingsRow({
+      icon:'tasks', bg:'#E8F1FF', fg:'#0056C7', title:'管理後台', subtitle:'勤務、成員、基礎資料、系統設定等管理功能',
+      onclick:"window.__nav({name:'admin'})"
+    }));
+    if (canManageUsers(p) && !state.previewActive) {
+      adminRows.push(settingsRow({
+        icon:'user', bg:'#FFF2E0', fg:'#B45F00', title:'權限說明', subtitle:'檢視各角色/單位登入後預設看到的畫面',
+        onclick:"window.__nav({name:'rolePreview'})"
+      }));
+    }
+  }
+  // Section 3：系統資訊，所有使用者皆可見。
+  const systemRows = [
+    settingsRow({icon:'check', bg:'#F2E9FE', fg:'#6B23C7', title:'關於系統', subtitle:`build ${BUILD_TAG}`, onclick:"window.__nav({name:'about'})"}),
+  ];
+
   return `
     <div class="hub-head">
       ${avatar}
       <div class="hub-name">${esc(p.displayName||p.email)}</div>
       <div class="hub-sub">${p.rank ? esc(p.rank)+' · ' : ''}${unitLabel(p.unit)} · ${ROLE_LABEL[myRole(p)]||p.role}</div>
     </div>
-    <div class="section-label">服務</div>
-    <div class="service-row" onclick="window.__nav({name:'hospitals'})">
-      <span class="icon-wrap" style="background:#FFF2E0; color:#B45F00;">${icon('hospital',20)}</span>
-      <div class="txt"><div class="t1">醫院資訊</div></div>
-      <span class="chev">›</span>
-    </div>
-    <div class="service-row" onclick="window.__editProfile()">
-      <span class="icon-wrap" style="background:#E8F1FF; color:#0056C7;">${icon('user',20)}</span>
-      <div class="txt"><div class="t1">編輯個人資料</div></div>
-      <span class="chev">›</span>
-    </div>
-    ${canManageTasks(p) ? `
-    <div class="service-row" onclick="window.__nav({name:'admin'})">
-      <span class="icon-wrap" style="background:#E8F1FF; color:#0056C7;">${icon('tasks',20)}</span>
-      <div class="txt"><div class="t1">管理後台</div><div class="t2">任務管理、基礎資料管理、帳號權限</div></div>
-      <span class="chev">›</span>
-    </div>` : ""}
-    ${canManageUsers(p) && !state.previewActive ? `
-    <div class="service-row" onclick="window.__nav({name:'rolePreview'})">
-      <span class="icon-wrap" style="background:#FFF2E0; color:#B45F00;">${icon('user',20)}</span>
-      <div class="txt"><div class="t1">角色權限預覽</div><div class="t2">檢視各角色/單位登入後預設看到的畫面</div></div>
-      <span class="chev">›</span>
-    </div>` : ""}
-    <div class="service-row" onclick="window.__nav({name:'about'})">
-      <span class="icon-wrap" style="background:#F2E9FE; color:#6B23C7;">${icon('check',20)}</span>
-      <div class="txt"><div class="t1">關於系統</div><div class="t2">build ${BUILD_TAG}</div></div>
-      <span class="chev">›</span>
-    </div>
+    ${settingsSection('使用者功能', userRows)}
+    ${settingsSection('管理功能', adminRows)}
+    ${settingsSection('系統資訊', systemRows)}
     <button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="window.__logout()">登出</button>
   `;
 }
@@ -2982,16 +3007,26 @@ function viewAdmin(){
 
   const overview = `<div class="section-label">管理後台${canSeeAllUnits(p) ? '' : ' · ' + unitLabel(myUnit(p))}</div>`;
 
+  // 子選單項目變多（成員管理／訊息管理／系統設定都是新加的），改用可
+  // 橫向捲動的 tabs2（.scroll），避免六個頁籤擠在一行裡各自被壓得太窄。
   const tabs = `
-    <div class="tabs2">
-      <div class="tab2 ${state.adminTab==='tasks'?'active':''}" onclick="window.__setAdminTab('tasks')">任務管理</div>
+    <div class="tabs2 scroll">
+      <div class="tab2 ${state.adminTab==='tasks'?'active':''}" onclick="window.__setAdminTab('tasks')">勤務管理</div>
       ${canManageBaseData(p) ? `<div class="tab2 ${state.adminTab==='basedata'?'active':''}" onclick="window.__setAdminTab('basedata')">基礎資料</div>` : ""}
-      ${canManageUsers(p) ? `<div class="tab2 ${state.adminTab==='users'?'active':''}" onclick="window.__setAdminTab('users')">帳號權限</div>` : ""}
+      ${canManageUsers(p) ? `<div class="tab2 ${state.adminTab==='users'?'active':''}" onclick="window.__setAdminTab('users')">成員管理</div>` : ""}
+      ${canManageUsers(p) ? `<div class="tab2 ${state.adminTab==='messages'?'active':''}" onclick="window.__setAdminTab('messages')">訊息管理</div>` : ""}
+      ${canManageUsers(p) ? `<div class="tab2 ${state.adminTab==='settings'?'active':''}" onclick="window.__setAdminTab('settings')">系統設定</div>` : ""}
       ${canManageUsers(p) ? `<div class="tab2 ${state.adminTab==='feedback'?'active':''}" onclick="window.__setAdminTab('feedback')">意見回饋</div>` : ""}
     </div>`;
 
   if (state.adminTab === "users" && canManageUsers(p)) {
     return overview + tabs + viewAdminUsers();
+  }
+  if (state.adminTab === "messages" && canManageUsers(p)) {
+    return overview + tabs + viewAdminMessages();
+  }
+  if (state.adminTab === "settings" && canManageUsers(p)) {
+    return overview + tabs + viewAdminSystemSettings();
   }
   if (state.adminTab === "feedback" && canManageUsers(p)) {
     return overview + tabs + viewAdminFeedback();
@@ -3224,7 +3259,7 @@ function viewAdminUsers(){
 
   const roles = ["pending","member","commander","duty_officer","admin","disabled"];
   return `
-    <div class="section-label">帳號權限管理</div>
+    <div class="section-label">成員管理</div>
     ${state._usersCache.map(u => {
       const r = normalizeRole(u.role);
       return `
@@ -3245,6 +3280,14 @@ function viewAdminUsers(){
       </div>`;
     }).join("")}
   `;
+}
+// 訊息管理、系統設定目前尚未有實際內容，先放開發中的預留頁面，
+// 之後有實際的通知中心／系統層級設定需求時再填入。
+function viewAdminMessages(){
+  return `<div class="empty">${icon('bell',32)}<div style="margin-top:10px;">通知中心開發中，之後將顯示新勤務／完成／系統公告等通知。</div></div>`;
+}
+function viewAdminSystemSettings(){
+  return `<div class="empty">${icon('check',32)}<div style="margin-top:10px;">系統設定開發中，之後將提供系統層級的參數設定。</div></div>`;
 }
 // 意見回饋清單僅 admin 可見，比照帳號權限頁籤的做法：開啟頁籤時現抓一次，
 // 不另外建立輪詢（回報頻率低，不需要即時同步）。
