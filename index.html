@@ -331,6 +331,14 @@
   /* ---- task detail ---- */
   .back-row{display:flex; align-items:center; gap:8px; margin-bottom:16px; color:var(--blue); font-size:var(--text-sm); font-weight:600;}
   .back-row button{background:none; border:none; color:var(--blue); font-size:var(--text-sm); font-weight:600; padding:6px 0; font-family:var(--sans);}
+  /* iOS 風格返回鍵：圓圈裡放「‹」，右邊固定接「返回」文字，全站統一，
+     不再依目的地不同顯示「返回列表」「返回更多」等不同文字。 */
+  .back-btn{display:inline-flex; align-items:center; gap:7px; background:none; border:none; padding:2px 0; color:var(--blue); font-size:var(--text-sm); font-weight:600; font-family:var(--sans); cursor:pointer;}
+  .back-btn-circle{
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    width:28px; height:28px; border-radius:50%; background:var(--panel-2); color:var(--blue);
+    font-size:19px; font-weight:700; line-height:1;
+  }
   .detail-head{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:var(--space-card); margin-bottom:var(--space-section); box-shadow:var(--shadow-sm);}
   .detail-head .task-title{font-size:var(--text-lg);}
   .kv{display:grid; grid-template-columns:96px 1fr; gap:12px 12px; margin-top:14px; font-size:var(--text-sm);}
@@ -344,19 +352,7 @@
   .about-list-row:last-child{border-bottom:none;}
   .about-list-row .chev{color:var(--muted); flex-shrink:0; font-size:18px;}
   .about-copyright{margin-top:var(--space-section); padding:0 4px; color:var(--muted); font-size:var(--text-xs); line-height:1.7; text-align:center;}
-  /* ---- 意見回饋表單：留言者（大卡片）／類別（小方塊）選擇 ---- */
-  .feedback-anon-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
-  .feedback-anon-option{
-    position:relative; cursor:pointer; text-align:center; padding:22px 10px;
-    background:var(--panel); border:2px solid var(--border); border-radius:var(--radius-md);
-  }
-  .feedback-anon-option input{position:absolute; opacity:0; width:0; height:0; pointer-events:none;}
-  .feedback-anon-option .fo-icon{display:block; color:var(--muted); margin-bottom:10px;}
-  .feedback-anon-option .fo-label{font-weight:700; font-size:var(--text-base); color:var(--text);}
-  .feedback-anon-option .fo-sub{font-size:var(--text-xs); color:var(--muted); margin-top:3px;}
-  .feedback-anon-option:has(input:checked){border-color:var(--blue); background:rgba(0,102,255,0.06);}
-  .feedback-anon-option:has(input:checked) .fo-icon,
-  .feedback-anon-option:has(input:checked) .fo-label{color:var(--blue);}
+  /* ---- 意見回饋表單：類別（小方塊）選擇 ---- */
   .feedback-category-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
   .feedback-category-option{
     position:relative; cursor:pointer; display:flex; align-items:center; gap:9px;
@@ -631,11 +627,20 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-125-pull-refresh-preserve-route";
-// 語意化版本號單獨維護（重大改版才手動調整），不像 BUILD_TAG 每次出貨都變；
-// 「關於系統」頁的 Build／發布日期／最後更新都直接從 BUILD_TAG 解析出來，
-// 不用每次出貨都手動回頭改「關於系統」裡的靜態文字。
-const APP_VERSION = "v1.0.0";
+const BUILD_TAG = "2026-07-06-126-feedback-named-back-btn-version";
+// 版本號採 主.次.修訂 架構：主/次版號只在重大改版（例如整個介面重新
+// 設計、資料結構大改）才手動調整這裡的 APP_MAJOR_MINOR；修訂號則直接
+// 從 BUILD_TAG 的流水號（"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨
+// bump BUILD_TAG 就會自動往上加，不用再回頭手動改「關於系統」頁的版本
+// 號。Build／發布日期／最後更新也都直接從 BUILD_TAG 解析。
+const APP_MAJOR_MINOR = "1.0";
+function buildSeq(){
+  const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
+  return m ? m[1] : "0";
+}
+function appVersion(){
+  return `v${APP_MAJOR_MINOR}.${buildSeq()}`;
+}
 function buildTagDate(){
   const m = BUILD_TAG.match(/^(\d{4})-(\d{2})-(\d{2})/);
   return m ? `${m[1]}/${m[2]}/${m[3]}` : "";
@@ -906,7 +911,7 @@ const HOSPITAL_COUNTIES = ["臺中市", "嘉義市", "嘉義縣"];
 // 補一筆當天的異動摘要，讓這頁跟著實際出貨內容走，不是寫死不會更新的文字
 // （這個做法也記在 CLAUDE.md 的出貨檢查清單裡）。
 const RELEASE_NOTES = [
-  { date: "2026/07/06", summary: "新增「關於系統」頁面（使用條款/隱私權政策/開源授權/更新紀錄子頁面，系統版本資訊隨 Build 自動更新）；意見回饋改列為使用者功能項目，支援匿名/具名留言與四種類別（建議/問題回報/功能請求/其他）；更多頁改版為使用者功能/管理功能/系統資訊三大分區；患者紀錄新增現場狀況（創傷/非創傷）分類；車輛支援跨單位借用；車長/駕駛改為跨單位搜尋選擇器；閒置 8 小時自動登出；帳號待審核可自選單位；天氣卡片重新設計；下拉重新整理改為整頁重新整理且修正為重新整理後留在原本頁面（不會被彈回首頁）；急救責任醫院資料自動匯入；車輛依車種分組排序。" },
+  { date: "2026/07/06", summary: "新增「關於系統」頁面（使用條款/隱私權政策/開源授權/更新紀錄子頁面，系統版本改為主.次.修訂架構並隨 Build 自動更新）；意見回饋改列為使用者功能項目、一律具名顯示姓名，並支援四種類別（建議/問題回報/功能請求/其他），管理後台新增查看介面；全站返回鍵統一文字為「返回」並改成 iOS 風格（圓圈＋‹），管理後台補上原本缺少的返回鍵；更多頁改版為使用者功能/管理功能/系統資訊三大分區；患者紀錄新增現場狀況（創傷/非創傷）分類；車輛支援跨單位借用；車長/駕駛改為跨單位搜尋選擇器；閒置 8 小時自動登出；帳號待審核可自選單位；天氣卡片重新設計；下拉重新整理改為整頁重新整理且修正為重新整理後留在原本頁面（不會被彈回首頁）；急救責任醫院資料自動匯入；車輛依車種分組排序。" },
   { date: "2026/07/04 以前", summary: "建立車輛人員動態管制核心功能：勤務建立與追蹤、車輛／人員／行車紀錄器基礎資料管理、帳號權限（RBAC）、患者生命徵象紀錄、勤務紀錄查詢與統計分析。" }
 ];
 
@@ -1221,15 +1226,14 @@ async function addHospital(county, name, level, phone, note){
   await fsAddDoc("hospitals", { county, name, level, phone: phone||"", note: note||"" });
   showToast("已新增醫院"); if (hospitalsPoll) hospitalsPoll.refreshNow();
 }
-// 意見回饋：任何在職帳號都能送出，只有 admin 能在管理後台「意見回饋」
-// 頁籤檢視，不提供列表輪詢（很少人會用到，開啟該頁籤時現抓一次就好，
-// 比照帳號權限頁籤 state._usersCache 的做法）。userId/userName 一律都會
-// 寫入（保留可追溯性），anonymous 只控制管理後台清單「顯示」時是否隱藏
-// 姓名，不是真的不記錄是誰送出的。
-async function submitFeedback(category, message, anonymous){
+// 意見回饋：任何在職帳號都能送出，一律具名（顯示送出者姓名），只有
+// admin 能在管理後台「意見回饋」頁籤檢視，不提供列表輪詢（很少人會
+// 用到，開啟該頁籤時現抓一次就好，比照帳號權限頁籤 state._usersCache
+// 的做法）。
+async function submitFeedback(category, message){
   const p = state.profile;
   await fsAddDoc("feedback", {
-    category, message, anonymous: !!anonymous, userId: state.user.uid, userName: p.displayName || p.email || "",
+    category, message, userId: state.user.uid, userName: p.displayName || p.email || "",
     unit: p.unit || "", rank: p.rank || "", createdAt: new Date()
   });
 }
@@ -1645,12 +1649,16 @@ const ICON_PATHS = {
   refresh: `<path d="M4 12a8 8 0 0 1 14-5.2M20 12a8 8 0 0 1-14 5.2"/><path d="M18 3v4h-4M6 21v-4h4"/>`,
   lightbulb: `<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8 1 .8 1.6v.5h5.4v-.5c0-.6.3-1.2.8-1.6A6 6 0 0 0 12 3Z"/>`,
   sparkle: `<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/>`,
-  chat: `<path d="M4 5h16v11H8l-4 4V5Z"/>`,
-  incognito: `<path d="M3 12c1.5-2 3.5-3 5-3s3 1 4 2c1-1 2.5-2 4-2s3.5 1 5 3"/><circle cx="7" cy="13" r="2.2"/><circle cx="17" cy="13" r="2.2"/><path d="M9.2 13h5.6"/>`
+  chat: `<path d="M4 5h16v11H8l-4 4V5Z"/>`
 };
 function icon(name, size){
   size = size || 20;
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;flex-shrink:0;">${ICON_PATHS[name]||''}</svg>`;
+}
+// 全站共用的返回鍵：iOS 風格（圓圈＋‹），文字統一顯示「返回」，不管
+// 目的地是哪裡都一樣，不要再依頁面各自寫「返回列表」「返回更多」等。
+function backBtn(route){
+  return `<button class="back-btn" onclick="window.__nav(${JSON.stringify(route)})"><span class="back-btn-circle">‹</span>返回</button>`;
 }
 // 多選（checkbox）/單選（radio）標籤群組，用於過去病史／過敏史／處置項目／意識狀態。
 // triggers（選填）：[{ values:[...], wrapId }]，勾選到指定選項時，只切換對應
@@ -2118,7 +2126,7 @@ function viewEditTask(taskId){
   const isCrossUnitVehicle = !!(currentVehicleRecord && currentVehicleRecord.unit !== unit);
 
   return `
-    <div class="back-row"><button onclick="window.__nav({name:'task', id:'${taskId}'})">‹ 返回任務詳情</button></div>
+    <div class="back-row">${backBtn({name:'task', id:taskId})}</div>
     <div class="section-label">編輯${isLiaison?'洽公':'勤務'}</div>
     <form onsubmit="window.__saveTaskEdit(event,'${taskId}')">
       <div class="field"><label>單位</label><input value="${unitLabel(unit)}" disabled></div>
@@ -2366,9 +2374,7 @@ function viewVitalsPage(taskId, id, adding){
   ` : "";
 
   return `
-    <div class="back-row">
-      <button onclick="window.__nav({name:'task', id:'${taskId}'})">‹ 返回任務詳情</button>
-    </div>
+    <div class="back-row">${backBtn({name:'task', id:taskId})}</div>
     <div class="section-label">${icon('heartbeat',17)} ${editingVitals ? '編輯患者紀錄' : (hasPatient ? '患者紀錄' : '記錄患者狀況')}</div>
     ${historyHtml}
     ${formHtml}
@@ -2588,7 +2594,7 @@ function viewTaskDetail(taskId){
 
   return `
     <div class="back-row" style="justify-content:space-between;">
-      <button onclick="window.__nav({name:'tasks'})">‹ 返回列表</button>
+      ${backBtn({name:'tasks'})}
       ${canEditTask(p, t) ? `<button class="icon-btn" onclick="window.__nav({name:'editTask', id:'${t.id}'})">編輯勤務</button>` : ""}
     </div>
     ${progressHtml}
@@ -2800,7 +2806,7 @@ function viewStats(){
     </div>`;
 
   return `
-    <div class="back-row"><button onclick="window.__nav({name:'profile'})">‹ 返回更多</button></div>
+    <div class="back-row">${backBtn({name:'profile'})}</div>
     <div class="section-label">統計分析</div>
     <div class="tabs2">
       ${periods.map(pd => `<div class="tab2 ${state.statsPeriod===pd.key?'active':''}" onclick="window.__setStatsPeriod('${pd.key}')">${pd.label}</div>`).join("")}
@@ -2912,7 +2918,7 @@ function viewProfile(){
    ========================================================= */
 function viewAbout(){
   return `
-    <div class="back-row"><button onclick="window.__nav({name:'profile'})">‹ 返回</button></div>
+    <div class="back-row">${backBtn({name:'profile'})}</div>
     <div class="section-label">關於系統</div>
     <div class="login-wrap" style="min-height:auto; padding:10px 0 6px 0;">
       <img class="login-logo" src="icons/icon-192.png" alt="單位徽章" style="width:64px; height:64px;">
@@ -2927,7 +2933,7 @@ function viewAbout(){
     <div class="section-label">系統資訊</div>
     <div class="detail-head">
       <div class="kv" style="margin-top:0;">
-        <div class="k">系統版本</div><div class="v">${APP_VERSION}</div>
+        <div class="k">系統版本</div><div class="v">${appVersion()}</div>
         <div class="k">Build</div><div class="v">${esc(BUILD_TAG)}</div>
         <div class="k">發布日期</div><div class="v">${buildTagDate()}</div>
         <div class="k">最後更新</div><div class="v">${buildTagDate()}</div>
@@ -2960,7 +2966,7 @@ function viewAbout(){
 // 關於系統底下的文字型子頁面共用同一種版面：返回列＋標題＋一張卡片放內文。
 function viewAboutContentPage(title, bodyHtml){
   return `
-    <div class="back-row"><button onclick="window.__nav({name:'about'})">‹ 返回</button></div>
+    <div class="back-row">${backBtn({name:'about'})}</div>
     <div class="section-label">${title}</div>
     <div class="detail-head" style="text-align:left; font-size:var(--text-sm); line-height:1.8; color:var(--text);">
       ${bodyHtml}
@@ -3000,24 +3006,17 @@ function viewAboutReleaseNotes(){
   return viewAboutContentPage("更新紀錄", RELEASE_NOTES.map(n => `<p><b>${esc(n.date)}</b><br>${esc(n.summary)}</p>`).join(""));
 }
 function viewFeedbackForm(){
+  const p = state.profile;
   return `
-    <div class="back-row"><button onclick="window.__nav({name:'profile'})">‹ 返回</button></div>
+    <div class="back-row">${backBtn({name:'profile'})}</div>
     <div class="section-label">意見回饋</div>
     <form onsubmit="window.__submitFeedbackForm(event)">
       <div class="field"><label>留言者</label>
-        <div class="feedback-anon-grid">
-          <label class="feedback-anon-option">
-            <input type="radio" name="fb-anon" value="1" checked>
-            <span class="fo-icon">${icon('incognito',28)}</span>
-            <div class="fo-label">匿名</div>
-            <div class="fo-sub">不顯示姓名</div>
-          </label>
-          <label class="feedback-anon-option">
-            <input type="radio" name="fb-anon" value="0">
-            <span class="fo-icon">${icon('user',28)}</span>
-            <div class="fo-label">具名</div>
-            <div class="fo-sub">顯示成員姓名</div>
-          </label>
+        <div class="settings-group">
+          <div class="service-row" style="cursor:default;">
+            <span class="icon-wrap" style="background:#E8F1FF; color:#0056C7;">${icon('user',18)}</span>
+            <div class="txt"><div class="t1">${esc(p.displayName||p.email)}</div><div class="t2">${p.rank?esc(p.rank)+' · ':''}${esc(unitLabel(p.unit))}</div></div>
+          </div>
         </div>
       </div>
       <div class="field"><label>類別</label>
@@ -3047,7 +3046,7 @@ function viewHospitals(){
   const canEdit = canManageBaseData(p);
   const rows = state.hospitals.slice().sort((a,b) => HOSPITAL_LEVELS.indexOf(a.level) - HOSPITAL_LEVELS.indexOf(b.level) || (a.name||'').localeCompare(b.name||''));
   return `
-    <div class="back-row"><button onclick="window.__nav({name:'profile'})">‹ 返回更多</button></div>
+    <div class="back-row">${backBtn({name:'profile'})}</div>
     <div class="section-label">醫院資訊</div>
     ${canEdit ? `<button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('hospitals', null, '')">${icon('plus',15)} 新增醫院</button>` : ""}
     ${rows.length ? rows.map(x => `
@@ -3070,7 +3069,7 @@ function viewRolePreview(){
   const p = state.profile;
   if (!canManageUsers(p)) return `<div class="empty">您沒有使用此功能的權限</div>`;
   return `
-    <div class="back-row"><button onclick="window.__nav({name:'profile'})">‹ 返回更多</button></div>
+    <div class="back-row">${backBtn({name:'profile'})}</div>
     <div class="section-label">選擇要預覽的角色</div>
     <div class="empty" style="text-align:left; padding:16px;">
       預覽僅切換畫面顯示內容，方便確認各角色能看到哪些功能／資料；不會變更任何帳號的實際權限，Firestore 讀寫仍以您目前登入帳號的真實身份判斷。
@@ -3091,7 +3090,7 @@ function viewAdmin(){
   if (!canManageTasks(p)) return `<div class="empty">您沒有管理權限</div>`;
   ensureAdminPersonnelSync(p);
 
-  const overview = `<div class="section-label">管理後台${canSeeAllUnits(p) ? '' : ' · ' + unitLabel(myUnit(p))}</div>`;
+  const overview = `<div class="back-row">${backBtn({name:'profile'})}</div><div class="section-label">管理後台${canSeeAllUnits(p) ? '' : ' · ' + unitLabel(myUnit(p))}</div>`;
 
   // 子選單項目變多（成員管理／訊息管理／系統設定都是新加的），改用可
   // 橫向捲動的 tabs2（.scroll），避免六個頁籤擠在一行裡各自被壓得太窄。
@@ -3401,7 +3400,7 @@ function viewAdminFeedback(){
         <div style="flex:1; min-width:0;">
           <div class="name">
             <span class="vitals-stage-tag">${esc(FEEDBACK_CATEGORY_LABEL[f.category]||f.category||'—')}</span>
-            ${f.anonymous ? '匿名' : `${esc(f.userName||'—')}${f.rank?' '+esc(f.rank):''}${f.unit?' · '+esc(unitLabel(f.unit)):''}`}
+            ${esc(f.userName||'—')}${f.rank?' '+esc(f.rank):''}${f.unit?' · '+esc(unitLabel(f.unit)):''}
           </div>
           <div class="sub" style="margin-top:6px; color:var(--text); white-space:pre-wrap;">${esc(f.message||'')}</div>
           <div class="sub" style="margin-top:6px;">${f.createdAt ? fmtTime(new Date(f.createdAt).getTime()) : ''}</div>
@@ -3781,9 +3780,8 @@ window.__submitFeedbackForm = (ev) => {
   ev.preventDefault();
   const message = (document.getElementById("fb-message").value || "").trim();
   if (!message) return;
-  const anonymous = document.querySelector('input[name="fb-anon"]:checked').value === "1";
   const category = document.querySelector('input[name="fb-category"]:checked').value;
-  submitFeedback(category, message, anonymous).then(() => {
+  submitFeedback(category, message).then(() => {
     showToast("已送出，謝謝您的回饋");
     window.__nav({name:'profile'});
   }).catch(err => showToast(`送出失敗：[${err.code||'?'}] ${err.message||err}`));
