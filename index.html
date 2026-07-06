@@ -618,9 +618,10 @@
     letter-spacing:0.04em; margin-bottom:6px; padding:0 2px;
   }
   .picker-option{
-    display:block; width:100%; text-align:left; padding:12px 10px; border-radius:var(--radius-sm);
-    font-size:var(--text-base); color:var(--text); border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:12px 10px; border-radius:var(--radius-sm);
+    font-size:var(--text-base); color:var(--text); border-bottom:1px solid var(--border); cursor:pointer;
   }
+  .picker-option input[type="checkbox"]{flex-shrink:0; width:19px; height:19px;}
   .picker-option:last-child{border-bottom:none;}
   .picker-option-sub{color:var(--muted); font-size:var(--text-sm); margin-left:6px;}
 </style>
@@ -638,7 +639,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-135-task-scope-in-out-camp-field";
+const BUILD_TAG = "2026-07-06-136-scope-field-reorder-home-merge-liaison-picker";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1060,6 +1061,7 @@ const RELEASE_NOTES = [
     "返回鍵旁邊的頁面標題改回不顯示（維持純圖示），箭頭改細字重＋圓體並確保在圓圈裡水平垂直置中",
     "建立/編輯勤務選車號時，選項會標出該車目前可派遣／派遣中；首頁新增「營內車／營外車／洽公中人數」統計，高勤官一眼就看得出目前車輛動態",
     "修正營內／營外統計的定義：改成建立勤務時勾選「這趟勤務營內／營外」，首頁統計依此欄位計算，不再用車輛名冊總數去推算（原本會把整批沒出勤的車也算進「營內」，數字失真）",
+    "「營內／營外」選項移到建立勤務頁最上方、緊接在任務類型下面；首頁「今日概況」跟「車輛動態」合併成同一區塊，不再重複顯示相近的統計數字；洽公人員選擇改成跟車長/駕駛一樣可跨單位搜尋選人（可複選）",
   ] },
   { date: "2026/07/04 以前", items: [
     "建立車輛人員動態管制核心功能：勤務建立與追蹤",
@@ -2156,14 +2158,10 @@ function viewHome(){
     <div class="section-label">今日概況</div>
     <div class="stat-grid">
       <div class="stat-tile t-blue"><div class="num">${todayTasks.length}</div><div class="lbl">今日勤務數</div></div>
-      <div class="stat-tile t-orange"><div class="num">${activeTasks.length}</div><div class="lbl">進行中</div></div>
       <div class="stat-tile t-green"><div class="num">${todayDone.length}</div><div class="lbl">已完成</div></div>
-    </div>
-    <div class="section-label">車輛動態</div>
-    <div class="stat-grid">
+      <div class="stat-tile t-purple"><div class="num">${liaisonPeopleCount}</div><div class="lbl">洽公中人數</div></div>
       <div class="stat-tile t-green"><div class="num">${inCampCount}</div><div class="lbl">營內車</div></div>
       <div class="stat-tile t-orange"><div class="num">${outCampCount}</div><div class="lbl">營外車</div></div>
-      <div class="stat-tile t-purple"><div class="num">${liaisonPeopleCount}</div><div class="lbl">洽公中人數</div></div>
     </div>
     ${fleetSection}
   `;
@@ -2232,9 +2230,8 @@ function viewCreateTask(){
 
   const taskType = state.createTaskType || "duty";
   const isLiaison = taskType === "liaison";
-  // 車長／駕駛可跨單位選人，車長駕駛人員選擇器（personPickerCtx）會在打開時
-  // 直接讀取當下的 state.personnel 動態建立候選名單，這裡不用先篩好。
-  const personnelOpts = state.personnel.filter(x => x.unit === unit && x.active !== false).slice().sort((a,b) => rankWeight(a.title) - rankWeight(b.title));
+  // 車長／駕駛／洽公人員都可跨單位選人，對應的人員選擇器打開時會直接讀取
+  // 當下的 state.personnel 動態建立候選名單，這裡不用先篩好。
   const vehicleOpts = sortVehicles(state.vehicles.filter(x => x.unit === unit && x.active !== false));
   const recorderOpts = state.recorders.filter(x => x.unit === unit && x.active !== false);
   const outSet = dispatchedVehiclePlates();
@@ -2246,6 +2243,10 @@ function viewCreateTask(){
         ${TASK_TYPES.map(x => `<button type="button" class="${taskType===x.key?'active':''}" onclick="window.__setCreateTaskType('${x.key}')">${x.label}</button>`).join("")}
       </div>
     </div>
+    ${!isLiaison ? `
+    <div class="field"><label>營內／營外 *</label>
+      ${chipGroup('scope', TASK_SCOPE_OPTIONS, '營外', false)}
+    </div>` : ""}
     <form onsubmit="window.__createTask(event, '${unit}', '${taskType}')">
       ${canSwitch ? `
         <div class="field"><label>單位 *</label>
@@ -2256,19 +2257,12 @@ function viewCreateTask(){
       <div class="field"><label>任務名稱 *</label><input name="title" required placeholder="${isLiaison?'例如：軍公民任務現勘':'例如：OHCA 患者搶救'}"></div>
       <div class="field"><label>地點${isLiaison?'（可多個，用頓號分隔）':''}</label><input name="location" placeholder="${isLiaison?'例如：烏日高鐵站、福田水資源回收中心、天后宮':'例如：潭子區豐興路一段'}"></div>
       ${isLiaison ? `
-      <div class="field"><label>人員（可複選）*</label>
-        <div class="chip-select">
-          ${personnelOpts.map(x => `
-            <label class="chip-option">
-              <input type="checkbox" name="personnel" value="${esc(x.name)}">
-              <span>${esc(x.name)}${x.title?' '+esc(x.title):''}</span>
-            </label>`).join("")}
-        </div>
-        ${!personnelOpts.length ? `<div style="color:var(--muted);font-size:var(--text-xs);margin-top:6px;">此單位尚未建立人員資料，請至「基礎資料管理」新增</div>` : ""}
+      <div class="field"><label>人員（可複選，可跨單位）*</label>
+        <button type="button" class="picker-field" onclick="window.__openMultiPersonPicker(this)">
+          <span class="picker-field-text placeholder">請選擇人員</span>${icon('chevronDown',16)}
+        </button>
+        <div class="personnel-hidden-checkboxes"></div>
       </div>` : `
-      <div class="field"><label>營內／營外 *</label>
-        ${chipGroup('scope', TASK_SCOPE_OPTIONS, '營外', false)}
-      </div>
       <div class="field"><label>車號</label>
         <select name="vehicle" data-unit="${unit}">
           <option value="">請選擇車輛</option>
@@ -2313,9 +2307,9 @@ function viewEditTask(taskId){
 
   const isLiaison = t.type === "liaison";
   const unit = t.unit;
-  // 車長／駕駛可跨單位選人，人員選擇器打開時會直接讀取當下的 state.personnel
-  // 動態建立候選名單（並保留目前已指派的人選，即使現在被排除規則擋住）。
-  const personnelOpts = state.personnel.filter(x => x.unit === unit && x.active !== false).slice().sort((a,b) => rankWeight(a.title) - rankWeight(b.title));
+  // 車長／駕駛／洽公人員都可跨單位選人，對應的人員選擇器打開時會直接讀取
+  // 當下的 state.personnel 動態建立候選名單（並保留目前已指派的人選，即使
+  // 現在被排除規則擋住）。
   const vehicleOpts = sortVehicles(state.vehicles.filter(x => x.unit === unit && x.active !== false));
   const recorderOpts = state.recorders.filter(x => x.unit === unit && x.active !== false);
   const outSet = dispatchedVehiclePlates();
@@ -2331,22 +2325,20 @@ function viewEditTask(taskId){
     <div class="back-row">${backBtn({name:'task', id:taskId})}</div>
     <div class="section-label">編輯${isLiaison?'洽公':'勤務'}</div>
     <form onsubmit="window.__saveTaskEdit(event,'${taskId}')">
+      ${!isLiaison ? `
+      <div class="field"><label>營內／營外 *</label>
+        ${chipGroup('scope', TASK_SCOPE_OPTIONS, taskScope(t), false)}
+      </div>` : ""}
       <div class="field"><label>單位</label><input value="${unitLabel(unit)}" disabled></div>
       <div class="field"><label>任務名稱 *</label><input name="title" required value="${esc(t.title||'')}"></div>
       <div class="field"><label>地點${isLiaison?'（可多個，用頓號分隔）':''}</label><input name="location" value="${esc(t.location||'')}"></div>
       ${isLiaison ? `
-      <div class="field"><label>人員（可複選）*</label>
-        <div class="chip-select">
-          ${personnelOpts.map(x => `
-            <label class="chip-option">
-              <input type="checkbox" name="personnel" value="${esc(x.name)}" ${currentPersonnel.includes(x.name)?'checked':''}>
-              <span>${esc(x.name)}${x.title?' '+esc(x.title):''}</span>
-            </label>`).join("")}
-        </div>
+      <div class="field"><label>人員（可複選，可跨單位）*</label>
+        <button type="button" class="picker-field" onclick="window.__openMultiPersonPicker(this)">
+          <span class="picker-field-text${currentPersonnel.length?'':' placeholder'}">${currentPersonnel.length ? esc(currentPersonnel.join('、')) : '請選擇人員'}</span>${icon('chevronDown',16)}
+        </button>
+        <div class="personnel-hidden-checkboxes">${currentPersonnel.map(name => `<input type="checkbox" name="personnel" value="${esc(name)}" checked style="display:none">`).join("")}</div>
       </div>` : `
-      <div class="field"><label>營內／營外 *</label>
-        ${chipGroup('scope', TASK_SCOPE_OPTIONS, taskScope(t), false)}
-      </div>
       <div class="field"><label>車號</label>
         <select name="vehicle" data-unit="${unit}">
           ${isCrossUnitVehicle ? vehicleSelectOptionsAllUnits(t.vehicle) : `<option value="">請選擇車輛</option>` + vehicleOptionsByType(vehicleOpts, v => `<option value="${esc(v.plate)}" ${t.vehicle===v.plate?'selected':''}>${esc(vehicleOptionLabel(v.plate, outSet))}</option>`)}
@@ -3894,6 +3886,91 @@ window.__filterPersonPicker = (query) => {
   const list = document.getElementById("person-picker-list");
   list.innerHTML = personPickerRows(personPickerCtx.pool, query);
   wirePersonPickerOptions(list);
+};
+/* =========================================================
+   洽公人員選擇器：跟車長／駕駛選擇器同一套彈窗邏輯，但可複選、跨單位
+   （洽公本來就常常混多個單位的人一起出去），選完按「完成」才關閉，
+   而不是點一下就關掉。選取狀態存在 multiPersonPickerCtx.selected，
+   搜尋過濾時已勾選但被篩掉的人不會被忘記（在 Set 裡持續保留）。
+   ========================================================= */
+let multiPersonPickerCtx = null; // { pool, selected: Set<string>, fieldWrap }
+function personMultiPickerRows(pool, query, selected){
+  const q = (query||"").trim().toLowerCase();
+  const filtered = q ? pool.filter(x =>
+    x.name.toLowerCase().includes(q) || (x.title||"").toLowerCase().includes(q) || unitLabel(x.unit).toLowerCase().includes(q)
+  ) : pool;
+  if (!filtered.length) return `<div class="empty" style="padding:28px 0;">找不到符合的人員</div>`;
+  let html = "", curUnit = null;
+  for (const x of filtered) {
+    if (x.unit !== curUnit) {
+      if (curUnit !== null) html += `</div>`;
+      html += `<div class="picker-group"><div class="picker-group-label">${esc(unitLabel(x.unit))}</div>`;
+      curUnit = x.unit;
+    }
+    html += `<label class="picker-option">
+      <input type="checkbox" data-name="${esc(x.name)}" ${selected.has(x.name)?'checked':''}>
+      <span>${esc(x.name)}${x.title ? `<span class="picker-option-sub">${esc(x.title)}</span>` : ""}</span>
+    </label>`;
+  }
+  if (curUnit !== null) html += `</div>`;
+  return html;
+}
+function wireMultiPersonPickerOptions(container){
+  container.querySelectorAll('input[type="checkbox"][data-name]').forEach(cb => {
+    cb.onchange = () => {
+      if (cb.checked) multiPersonPickerCtx.selected.add(cb.dataset.name);
+      else multiPersonPickerCtx.selected.delete(cb.dataset.name);
+    };
+  });
+}
+function closeMultiPersonPicker(){
+  const overlay = document.querySelector(".multi-person-picker-overlay");
+  if (overlay) overlay.remove();
+  multiPersonPickerCtx = null;
+}
+window.__openMultiPersonPicker = (triggerBtn) => {
+  const fieldWrap = triggerBtn.closest(".field");
+  const currentNames = [...fieldWrap.querySelectorAll('input[name="personnel"]:checked')].map(el => el.value);
+  const pool = state.personnel
+    .filter(x => x.active !== false || currentNames.includes(x.name))
+    .slice()
+    .sort((a,b) => unitWeight(a.unit) - unitWeight(b.unit) || rankWeight(a.title) - rankWeight(b.title));
+  const selected = new Set(currentNames);
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay multi-person-picker-overlay";
+  overlay.onclick = (e) => { if (e.target === overlay) closeMultiPersonPicker(); };
+  overlay.innerHTML = `
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-title">選擇人員（可複選、可跨單位）</div>
+      <input type="text" class="picker-search" placeholder="輸入姓名、階級或單位搜尋" oninput="window.__filterMultiPersonPicker(this.value)">
+      <div id="multi-person-picker-list">${personMultiPickerRows(pool, "", selected)}</div>
+      <button type="button" class="btn-primary" style="margin-top:14px;" onclick="window.__commitMultiPersonPicker()">完成</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  multiPersonPickerCtx = { pool, selected, fieldWrap };
+  wireMultiPersonPickerOptions(overlay);
+};
+window.__filterMultiPersonPicker = (query) => {
+  if (!multiPersonPickerCtx) return;
+  const list = document.getElementById("multi-person-picker-list");
+  list.innerHTML = personMultiPickerRows(multiPersonPickerCtx.pool, query, multiPersonPickerCtx.selected);
+  wireMultiPersonPickerOptions(list);
+};
+window.__commitMultiPersonPicker = () => {
+  if (!multiPersonPickerCtx) return;
+  const { selected, fieldWrap } = multiPersonPickerCtx;
+  const hiddenContainer = fieldWrap.querySelector(".personnel-hidden-checkboxes");
+  hiddenContainer.innerHTML = [...selected].map(name => `<input type="checkbox" name="personnel" value="${esc(name)}" checked style="display:none">`).join("");
+  const textEl = fieldWrap.querySelector(".picker-field-text");
+  if (selected.size) {
+    textEl.textContent = [...selected].join('、');
+    textEl.classList.remove("placeholder");
+  } else {
+    textEl.textContent = "請選擇人員";
+    textEl.classList.add("placeholder");
+  }
+  closeMultiPersonPicker();
 };
 // 「跨單位借車」勾選框：純 DOM 換掉車號 <select> 的內容，不觸發整頁
 // render()，理由跟人員選擇器一樣——避免把其他還沒送出的欄位清空。
