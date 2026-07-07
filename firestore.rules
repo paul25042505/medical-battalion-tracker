@@ -67,8 +67,8 @@ service cloud.firestore {
 
     match /tasks/{taskId} {
       allow read: if isStaff() || sameUnit(resource.data.unit);
-      // 一般成員不可建立勤務，僅可回報；建立限管理員、高勤官、該單位主官管。
-      allow create: if isStaff() || (isCommander() && sameUnit(request.resource.data.unit));
+      // 建立勤務限一般成員（限自己單位）與管理員；高勤官、主官管維持督導/查看角色，不再能自己建立。
+      allow create: if isAdmin() || (isSignedIn() && myRole() == 'member' && sameUnit(request.resource.data.unit));
       // 高勤官、主官管對勤務只有查看權限：不可編輯、不可刪除（含強制結束），僅 admin 可操作。
       allow update: if isAdmin();
       allow delete: if isAdmin();
@@ -107,6 +107,15 @@ service cloud.firestore {
     match /hospitals/{id} {
       allow read: if isActive();
       allow create, update, delete: if isStaff() || isCommander();
+    }
+
+    // 急診待命：兩個醫務所地點固定，每筆文件記錄當天的急診醫官／待命車長／
+    // 駕駛名單，不綁定特定單位；任何在職帳號都能查看，維護權限比照基礎資料
+    // 管理（admin、高勤官、主官管）。
+    match /erStandby/{id} {
+      allow read: if isActive();
+      allow create, update: if isStaff() || isCommander();
+      allow delete: if false;
     }
 
     // 問題回報／功能建議：任何在職帳號都能送出，只有 admin 能檢視（管理後台

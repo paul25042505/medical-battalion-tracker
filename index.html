@@ -314,19 +314,36 @@
   .hazard-txt{flex:1; min-width:0;}
   .hazard-name{font-weight:700; font-size:var(--text-sm); color:var(--text);}
   .hazard-time{font-size:var(--text-xs); color:var(--muted); font-family:var(--mono); margin-top:2px;}
-  .stat-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:8px;}
-  .stat-tile{border-radius:var(--radius-md); padding:18px 10px; text-align:center; box-shadow:var(--shadow-xs); border:1px solid transparent;}
-  .stat-tile .num{font-size:var(--text-2xl); font-weight:800; font-family:var(--mono); letter-spacing:-0.02em;}
-  .stat-tile .lbl{font-size:var(--text-xs); font-weight:600; margin-top:5px;}
-  .stat-tile.t-blue{background:#EAF1FF;} .stat-tile.t-blue .num{color:#0052E0;} .stat-tile.t-blue .lbl{color:#0052E0; opacity:0.7;}
-  .stat-tile.t-orange{background:#FFF3E3;} .stat-tile.t-orange .num{color:#B45F00;} .stat-tile.t-orange .lbl{color:#B45F00; opacity:0.7;}
-  .stat-tile.t-green{background:#E9F9EF;} .stat-tile.t-green .num{color:#177A34;} .stat-tile.t-green .lbl{color:#177A34; opacity:0.7;}
-  .stat-tile.t-purple{background:#F3EEFE;} .stat-tile.t-purple .num{color:#6B23C7;} .stat-tile.t-purple .lbl{color:#6B23C7; opacity:0.7;}
+  /* 首頁統計卡片：改成白底＋小色塊圖示（比照 iOS Health/Widget 摘要卡的做法），
+     不再整塊塗滿飽和背景色——原本 5 個色塊一字排開太花，數字改回中性深色，
+     只用小色塊圖示保留辨識度。 */
+  .stat-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:8px;}
+  .stat-tile{
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md);
+    padding:14px 8px; text-align:center; box-shadow:var(--shadow-xs);
+  }
+  .stat-tile .stat-icon{
+    width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center;
+    margin:0 auto 8px auto;
+  }
+  .stat-tile .num{font-size:var(--text-2xl); font-weight:800; font-family:var(--mono); letter-spacing:-0.02em; color:var(--text);}
+  .stat-tile .lbl{font-size:var(--text-xs); font-weight:600; margin-top:3px; color:var(--muted);}
+  .stat-tile.t-blue .stat-icon{background:rgba(0,122,255,0.12); color:#0066FF;}
+  .stat-tile.t-orange .stat-icon{background:rgba(255,149,0,0.14); color:#B45F00;}
+  .stat-tile.t-green .stat-icon{background:rgba(52,199,89,0.14); color:#177A34;}
+  .stat-tile.t-purple .stat-icon{background:rgba(107,35,199,0.12); color:#6B23C7;}
   .fab{
     position:fixed; right:22px; bottom:calc(84px + env(safe-area-inset-bottom));
     width:58px; height:58px; border-radius:50%; background:var(--blue); color:#fff; border:none;
     display:flex; align-items:center; justify-content:center; box-shadow:0 6px 18px rgba(0,102,255,0.35); z-index:25;
   }
+  /* 急診待命：兩個地點各一張卡片，樣式比照 task-card 但沒有左側狀態色條。 */
+  .er-standby-card{
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg);
+    padding:18px; margin-bottom:14px; box-shadow:var(--shadow-sm);
+  }
+  .er-standby-head{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px;}
+  .er-standby-head .name{font-size:var(--text-lg); font-weight:700; letter-spacing:-0.01em;}
 
   /* ---- task detail ---- */
   .back-row{display:flex; align-items:center; gap:8px; margin-bottom:16px; color:var(--blue); font-size:var(--text-sm); font-weight:600;}
@@ -647,7 +664,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-141-fix-idle-logout-relogin-loop";
+const BUILD_TAG = "2026-07-07-142-er-standby-task-perm-home-redesign";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -655,7 +672,7 @@ const BUILD_TAG = "2026-07-06-141-fix-idle-logout-relogin-loop";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "1.3";
+const APP_MAJOR_MINOR = "1.4";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -978,6 +995,13 @@ function vehicleOptionLabel(plate, dispatchedSet){ return `${plate}（${dispatch
 // 欄位時，預設當作營外（多數勤務本來就是出營區執行）。
 const TASK_SCOPE_OPTIONS = ["營內","營外"];
 function taskScope(t){ return t && t.scope === "營內" ? "營內" : "營外"; }
+// 急診待命：兩個醫務所地點固定，每個地點一筆文件（doc id = key），記錄
+// 當天的急診醫官／待命車長／駕駛，由指定角色（canManageErStandby）直接
+// 編輯「目前」的名單，沒有排班日曆的概念——誰改了就是最新的一份。
+const ER_STANDBY_LOCATIONS = [
+  { key: "chenggongbei", label: "成功北醫務所" },
+  { key: "jingbei", label: "精北醫務所" }
+];
 function sortVehicles(list){
   return list.slice().sort((a,b) => vehicleTypeWeight(a.type) - vehicleTypeWeight(b.type) || (a.plate||'').localeCompare(b.plate||''));
 }
@@ -1049,6 +1073,11 @@ const HOSPITAL_COUNTIES = ["臺中市", "嘉義市", "嘉義縣"];
 // 一大段連續文字），畫面上會排成清單，才看得清楚；同一天有多筆出貨就往
 // 同一個日期的 items 陣列後面加，不要開新的日期項目。
 const RELEASE_NOTES = [
+  { date: "2026/07/07", items: [
+    "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
+    "新增「急診待命」分頁：成功北醫務所／精北醫務所兩個地點各自顯示當天的急診醫官／待命車長／駕駛，需要後送時可直接建立勤務（欄位跟一般勤務完全一樣）",
+    "首頁「今日概況」統計卡片改版：原本五個色塊一字排開太花，改成白底卡片＋小色塊圖示，風格更接近 iPhone 原生 App",
+  ] },
   { date: "2026/07/06", items: [
     "新增「關於系統」頁面（使用條款/隱私權政策/開源授權/更新紀錄子頁面），系統版本改為主.次.修訂架構並隨 Build 自動更新",
     "意見回饋改列為使用者功能項目、一律具名顯示姓名，並支援四種類別（建議/問題回報/功能請求/其他），管理後台新增查看介面",
@@ -1114,6 +1143,7 @@ const state = {
   user: null, profile: null, tasks: [], events: [],
   personnel: [], vehicles: [], recorders: [],
   hospitals: [], vitals: [], // 醫院資訊（急救責任等級/電話）、患者生命徵象/主訴紀錄
+  erStandby: [], erStandbyModal: null, // 急診待命名單；erStandbyModal: { key } | null
   route: { name: "home" },
   reportDraft: null, // { taskId, type }
   eventEditId: null, // 正在編輯哪一筆已回報事件（時間/里程填錯時修正用）
@@ -1137,7 +1167,7 @@ const state = {
 };
 let tasksPoll = null, eventsPoll = null, profilePoll = null;
 let personnelPoll = null, vehiclesPoll = null, recordersPoll = null;
-let hospitalsPoll = null, vitalsPoll = null;
+let hospitalsPoll = null, vitalsPoll = null, erStandbyPoll = null;
 // 只有資料真的變動時才重繪畫面，避免每次背景輪詢都整頁重畫造成畫面閃爍/捲動位置跳動。
 const lastJson = {};
 function changedSince(cacheKey, value){
@@ -1223,11 +1253,15 @@ function canManageUsers(p){ return myRole(p) === "admin"; }
 // 任務管理／基礎資料管理：admin、高勤官（全單位），連級主官管（僅自己單位）皆可進入管理後台
 function canManageTasks(p){ const r = myRole(p); return r === "admin" || r === "duty_officer" || r === "commander"; }
 function canManageBaseData(p){ return canManageTasks(p); }
+// 急診待命名單（急診醫官／待命車長／駕駛）維護權限比照勤務管理。
+function canManageErStandby(p){ return canManageTasks(p); }
 function canSeeAllTasks(p){ return canSeeAllUnits(p); }
 // 高勤官、主官管對勤務只有查看權限：不可編輯、不可強制結束，僅 admin 可操作。
 function canDeleteTask(p){ return myRole(p) === "admin"; }
 function canForceEndTask(p){ return myRole(p) === "admin"; }
-function canCreateTask(p){ const r = myRole(p); return r === "admin" || r === "duty_officer" || r === "commander"; } // 一般成員不可建立勤務，僅可回報
+// 建立勤務改為一般成員、管理員專用；高勤官／主官管維持督導/查看角色（canManageTasks），
+// 不再能自己建立勤務。
+function canCreateTask(p){ const r = myRole(p); return r === "admin" || r === "member"; }
 function canEditTask(p, t){ return myRole(p) === "admin"; }
 // 回報（出勤/抵達現場/返營/抵達營區）僅開放給實際執行勤務的一般成員，以及 admin（後台支援用）；
 // 高勤官、主官管屬於督導/查看角色，不進行第一線回報操作。
@@ -1615,15 +1649,21 @@ function startDataListeners(){
     state.vitals = merged;
     if (changed) safeRender();
   });
+  erStandbyPoll = poll(async () => {
+    const docs = await fsListCollection("erStandby");
+    const changed = changedSince("erStandby", docs);
+    state.erStandby = docs;
+    if (changed) safeRender();
+  });
   ensureUnitsSeeded();
   ensureHospitalsSeeded();
 }
 function cleanupListeners(){
-  [tasksPoll, eventsPoll, profilePoll, personnelPoll, vehiclesPoll, recordersPoll, hospitalsPoll, vitalsPoll].forEach(p => p && p.stop());
+  [tasksPoll, eventsPoll, profilePoll, personnelPoll, vehiclesPoll, recordersPoll, hospitalsPoll, vitalsPoll, erStandbyPoll].forEach(p => p && p.stop());
   for (const k in lastJson) delete lastJson[k];
-  tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = hospitalsPoll = vitalsPoll = null;
+  tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = hospitalsPoll = vitalsPoll = erStandbyPoll = null;
   state.tasks = []; state.events = []; state.personnel = []; state.vehicles = []; state.recorders = [];
-  state.hospitals = []; state.vitals = [];
+  state.hospitals = []; state.vitals = []; state.erStandby = [];
   state.deepTasks = []; state.deepEvents = []; state.deepVitals = []; state.recordsDeepQuery = null;
   state.previewActive = false; state.realRoleUnit = null;
 }
@@ -1824,6 +1864,7 @@ const ROUTE_REFRESH = {
   records: ['tasks','events','vitals','personnel','vehicles'],
   stats: ['tasks','events'],
   hospitals: ['hospitals'],
+  erStandby: ['erStandby'],
   // 管理後台改成分區列表入口＋各自獨立路由後，每個子頁只重抓自己真的會
   // 用到的集合，不用像以前那樣進管理後台就整批重抓（hub 本身不用抓）。
   adminTasks: ['tasks','events'],
@@ -1837,7 +1878,7 @@ function nav(route){
   if (route.name === "adminUsers") state._usersCache = null;
   if (route.name === "adminFeedback") state._feedbackCache = null;
   render(); window.scrollTo(0,0);
-  const polls = { tasks: tasksPoll, events: eventsPoll, personnel: personnelPoll, vehicles: vehiclesPoll, recorders: recordersPoll, hospitals: hospitalsPoll, vitals: vitalsPoll };
+  const polls = { tasks: tasksPoll, events: eventsPoll, personnel: personnelPoll, vehicles: vehiclesPoll, recorders: recordersPoll, hospitals: hospitalsPoll, vitals: vitalsPoll, erStandby: erStandbyPoll };
   (ROUTE_REFRESH[route.name] || []).forEach(key => { if (polls[key]) polls[key].refreshNow(); });
 }
 function esc(s){ return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -2204,11 +2245,11 @@ function viewHome(){
     ${renderWeatherTip(unit)}
     <div class="section-label">今日概況</div>
     <div class="stat-grid">
-      <div class="stat-tile t-blue"><div class="num">${todayTasks.length}</div><div class="lbl">今日勤務數</div></div>
-      <div class="stat-tile t-green"><div class="num">${todayDone.length}</div><div class="lbl">已完成</div></div>
-      <div class="stat-tile t-purple"><div class="num">${liaisonPeopleCount}</div><div class="lbl">洽公中人數</div></div>
-      <div class="stat-tile t-green"><div class="num">${inCampCount}</div><div class="lbl">營內車</div></div>
-      <div class="stat-tile t-orange"><div class="num">${outCampCount}</div><div class="lbl">營外車</div></div>
+      <div class="stat-tile t-blue"><div class="stat-icon">${icon('tasks',16)}</div><div class="num">${todayTasks.length}</div><div class="lbl">今日勤務數</div></div>
+      <div class="stat-tile t-green"><div class="stat-icon">${icon('check',16)}</div><div class="num">${todayDone.length}</div><div class="lbl">已完成</div></div>
+      <div class="stat-tile t-purple"><div class="stat-icon">${icon('user',16)}</div><div class="num">${liaisonPeopleCount}</div><div class="lbl">洽公中人數</div></div>
+      <div class="stat-tile t-green"><div class="stat-icon">${icon('home',16)}</div><div class="num">${inCampCount}</div><div class="lbl">營內車</div></div>
+      <div class="stat-tile t-orange"><div class="stat-icon">${icon('depart',16)}</div><div class="num">${outCampCount}</div><div class="lbl">營外車</div></div>
     </div>
     ${fleetSection}
   `;
@@ -2302,7 +2343,7 @@ function viewCreateTask(){
           </select>
         </div>` : `<div class="field"><label>單位</label><input value="${unitLabel(unit)}" disabled></div>`}
       <div class="field"><label>任務名稱 *</label><input name="title" required placeholder="${isLiaison?'例如：軍公民任務現勘':'例如：OHCA 患者搶救'}"></div>
-      <div class="field"><label>地點${isLiaison?'（可多個，用頓號分隔）':''}</label><input name="location" placeholder="${isLiaison?'例如：烏日高鐵站、福田水資源回收中心、天后宮':'例如：潭子區豐興路一段'}"></div>
+      <div class="field"><label>地點${isLiaison?'（可多個，用頓號分隔）':''}</label><input name="location" value="${esc(state.route.presetLocation||'')}" placeholder="${isLiaison?'例如：烏日高鐵站、福田水資源回收中心、天后宮':'例如：潭子區豐興路一段'}"></div>
       ${isLiaison ? `
       <div class="field"><label>人員（可複選）*</label>
         <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openMultiPersonPicker(this)">
@@ -3330,6 +3371,58 @@ function viewHospitals(){
   `;
 }
 
+/* =========================================================
+   急診待命：兩個醫務所地點固定，各自顯示當天的急診醫官／待命車長／
+   駕駛名單。這是底部導覽的一個分頁（不是子頁面），所以跟首頁/任務/
+   紀錄一樣不接返回鍵。如果現場需要後送，「建立後送」直接沿用建立
+   勤務的既有表單（帶入地點），資訊欄位跟一般勤務完全一樣。
+   ========================================================= */
+function viewErStandby(){
+  const p = state.profile;
+  const canEdit = canManageErStandby(p);
+  const canDispatch = canCreateTask(p);
+  return `
+    <div class="section-label">急診待命</div>
+    ${ER_STANDBY_LOCATIONS.map(loc => {
+      const d = state.erStandby.find(x => x.id === loc.key);
+      return `
+      <div class="er-standby-card">
+        <div class="er-standby-head">
+          <div class="name">${esc(loc.label)}</div>
+          ${canEdit ? `<button class="icon-btn" onclick="window.__openErStandbyModal('${loc.key}')">編輯名單</button>` : ""}
+        </div>
+        <div class="detail-grid">
+          <div class="detail-item"><span class="lbl">急診醫官</span><span class="val">${d && d.dutyOfficer ? esc(d.dutyOfficer) : "尚未設定"}</span></div>
+          <div class="detail-item"><span class="lbl">待命車長</span><span class="val">${d && d.crewLeader ? esc(d.crewLeader) : "尚未設定"}</span></div>
+          <div class="detail-item"><span class="lbl">待命駕駛</span><span class="val">${d && d.driver ? esc(d.driver) : "尚未設定"}</span></div>
+        </div>
+        ${d && d.updatedAt ? `<div class="sub">最後更新：${fmtTime(new Date(d.updatedAt).getTime())}${d.updatedByName ? ' · ' + esc(d.updatedByName) : ''}</div>` : ""}
+        ${canDispatch ? `<button class="btn-primary" style="width:100%;margin-top:12px;" onclick='window.__startErStandbyDispatch(${JSON.stringify(loc.label)})'>建立後送</button>` : ""}
+      </div>`;
+    }).join("")}
+  `;
+}
+function viewErStandbyModal(){
+  const m = state.erStandbyModal;
+  if (!m) return "";
+  const loc = ER_STANDBY_LOCATIONS.find(x => x.key === m.key);
+  const d = state.erStandby.find(x => x.id === m.key);
+  return `
+    <div class="modal-overlay" onclick="if(event.target===this) window.__closeErStandbyModal()">
+      <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-title">編輯待命名單・${esc(loc ? loc.label : "")}</div>
+        <form onsubmit="window.__submitErStandbyModal(event,'${m.key}')">
+          <div class="field"><label>急診醫官</label><input name="dutyOfficer" value="${esc(d?.dutyOfficer||'')}" placeholder="請輸入姓名"></div>
+          <div class="field"><label>待命車長</label><input name="crewLeader" value="${esc(d?.crewLeader||'')}" placeholder="請輸入姓名"></div>
+          <div class="field"><label>待命駕駛</label><input name="driver" value="${esc(d?.driver||'')}" placeholder="請輸入姓名"></div>
+          <button class="btn-primary" type="submit">儲存變更</button>
+          <button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__closeErStandbyModal()">取消</button>
+        </form>
+      </div>
+    </div>`;
+}
+
 function viewRolePreview(){
   const p = state.profile;
   if (!canManageUsers(p)) return `<div class="empty">您沒有使用此功能的權限</div>`;
@@ -3713,6 +3806,7 @@ const ROUTE_VIEWS = {
   task: () => viewTaskDetail(state.route.id),
   vitals: () => viewVitalsPage(state.route.taskId, state.route.id, state.route.adding),
   records: viewRecords,
+  erStandby: viewErStandby,
   stats: viewStats,
   notifications: viewNotifications,
   profile: viewProfile,
@@ -3735,6 +3829,7 @@ const ROUTE_VIEWS = {
 const NAV_ITEMS = [
   { name:"home", iconName:"home", label:"首頁", accent:"#007AFF" },
   { name:"tasks", iconName:"tasks", label:"任務", accent:"#FF9500" },
+  { name:"erStandby", iconName:"hospital", label:"急診待命", accent:"#FF3B30" },
   { name:"records", iconName:"records", label:"紀錄", accent:"#6B23C7" },
   { name:"profile", iconName:"user", label:"更多", accent:"#34C759" }
 ];
@@ -3752,7 +3847,7 @@ const NAV_ITEMS = [
 function safeRender(){
   const ae = document.activeElement;
   if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT")) return;
-  if (state.profileEditing || state.baseDataModal || state.reportDraft || state.eventEditId) return;
+  if (state.profileEditing || state.baseDataModal || state.erStandbyModal || state.reportDraft || state.eventEditId) return;
   render();
 }
 
@@ -3799,6 +3894,7 @@ function render(){
         </button>`).join("")}
     </div>
     ${viewBaseDataModal()}
+    ${viewErStandbyModal()}
     <div id="toast" class="toast"></div>
   `;
 }
@@ -4173,6 +4269,21 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
        : addRecorder(unit, f.get("code")));
   action.then(() => { state.baseDataModal = null; render(); }).catch(baseDataErr);
 };
+window.__openErStandbyModal = (key) => { state.erStandbyModal = { key }; render(); };
+window.__closeErStandbyModal = () => { state.erStandbyModal = null; render(); };
+window.__submitErStandbyModal = (ev, key) => {
+  ev.preventDefault();
+  const f = new FormData(ev.target);
+  const p = state.profile;
+  fsSetDoc(`erStandby/${key}`, {
+    dutyOfficer: f.get("dutyOfficer")||"", crewLeader: f.get("crewLeader")||"", driver: f.get("driver")||"",
+    updatedAt: new Date(), updatedByName: p.displayName || p.email || ""
+  }).then(() => {
+    state.erStandbyModal = null;
+    if (erStandbyPoll) erStandbyPoll.refreshNow();
+    render();
+  }).catch(baseDataErr);
+};
 window.__editProfile = () => { state.profileEditing = true; render(); };
 window.__cancelEditProfile = () => { state.profileEditing = false; render(); };
 window.__saveProfile = (ev) => {
@@ -4251,6 +4362,13 @@ window.__setTasksTab = (key) => { state.tasksTab = key; render(); window.scrollT
 window.__setStatsPeriod = (key) => { state.statsPeriod = key; render(); window.scrollTo(0,0); };
 window.__setCreateTaskUnit = (code) => { state.createTaskUnit = code; render(); };
 window.__setCreateTaskType = (key) => { state.createTaskType = key; render(); };
+// 急診待命頁「建立後送」：一定是勤務（不是洽公），先把建立勤務頁的任務
+// 類型重置成「勤務」，並帶入地點，其餘欄位（車號/車長/駕駛等）跟一般
+// 建立勤務完全一樣，由使用者照現場狀況填寫。
+window.__startErStandbyDispatch = (locationLabel) => {
+  state.createTaskType = "duty";
+  nav({ name: "createTask", presetLocation: locationLabel });
+};
 window.__createTask = (ev, unit, type) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
