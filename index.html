@@ -664,7 +664,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-07-143-duty-officer-view-vitals";
+const BUILD_TAG = "2026-07-07-144-er-standby-real-task";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -995,9 +995,9 @@ function vehicleOptionLabel(plate, dispatchedSet){ return `${plate}（${dispatch
 // 欄位時，預設當作營外（多數勤務本來就是出營區執行）。
 const TASK_SCOPE_OPTIONS = ["營內","營外"];
 function taskScope(t){ return t && t.scope === "營內" ? "營內" : "營外"; }
-// 急診待命：兩個醫務所地點固定，每個地點一筆文件（doc id = key），記錄
-// 當天的急診醫官／待命車長／駕駛，由指定角色（canManageErStandby）直接
-// 編輯「目前」的名單，沒有排班日曆的概念——誰改了就是最新的一份。
+// 急診待命：兩個醫務所地點固定，每個地點一筆文件（doc id = key），只存
+// currentTaskId 指向目前綁定的待命勤務（見 viewErStandby() 說明），
+// 不再另外存急診醫官/車長/駕駛文字——那些資料直接來自綁定的 tasks 文件。
 const ER_STANDBY_LOCATIONS = [
   { key: "chenggongbei", label: "成功北醫務所" },
   { key: "jingbei", label: "精北醫務所" }
@@ -1078,6 +1078,7 @@ const RELEASE_NOTES = [
     "新增「急診待命」分頁：成功北醫務所／精北醫務所兩個地點各自顯示當天的急診醫官／待命車長／駕駛，需要後送時可直接建立勤務（欄位跟一般勤務完全一樣）",
     "首頁「今日概況」統計卡片改版：原本五個色塊一字排開太花，改成白底卡片＋小色塊圖示，風格更接近 iPhone 原生 App",
     "修正高勤官／主官管無法查看既有患者紀錄的問題：勤務詳情頁的患者狀況卡片改成有紀錄時就可以點進去查看（唯讀），不再因為沒有回報權限而完全點不進去",
+    "急診待命改版：兩個地點各自綁定一筆真正的待命勤務，可以先建立勤務資料（車號/車長/駕駛/值班醫官），此時停在「待出勤」狀態，真正出勤時再到勤務詳情頁回報「出勤」、記錄患者狀況，跟一般勤務共用同一套流程",
   ] },
   { date: "2026/07/06", items: [
     "新增「關於系統」頁面（使用條款/隱私權政策/開源授權/更新紀錄子頁面），系統版本改為主.次.修訂架構並隨 Build 自動更新",
@@ -1144,7 +1145,7 @@ const state = {
   user: null, profile: null, tasks: [], events: [],
   personnel: [], vehicles: [], recorders: [],
   hospitals: [], vitals: [], // 醫院資訊（急救責任等級/電話）、患者生命徵象/主訴紀錄
-  erStandby: [], erStandbyModal: null, // 急診待命名單；erStandbyModal: { key } | null
+  erStandby: [], // 急診待命：每個地點目前綁定的待命勤務指標（currentTaskId）
   route: { name: "home" },
   reportDraft: null, // { taskId, type }
   eventEditId: null, // 正在編輯哪一筆已回報事件（時間/里程填錯時修正用）
@@ -1213,13 +1214,18 @@ function reportableTypes(taskId){
   const evs = taskEvents(taskId);
   const lastType = evs.length ? evs[evs.length - 1].type : null;
   // 洽公任務地點在建立時就一次填完，回報流程沒有分岔，單純出發→抵達→離開→返營。
+  // !lastType（還沒有任何事件）＝待出勤，跟「已出勤、下一步抵達現場」是
+  // 兩件不同的事，急診待命的待命勤務建立時不會自動補 DISPATCH 事件，會
+  // 真的停在待出勤狀態，所以這裡要分開處理，不能再假設 !lastType 不會發生。
   if (t && t.type === "liaison") {
-    if (!lastType || lastType === "DISPATCH") return ["ARRIVED_SCENE"];
+    if (!lastType) return ["DISPATCH"];
+    if (lastType === "DISPATCH") return ["ARRIVED_SCENE"];
     if (lastType === "ARRIVED_SCENE") return ["DEPART_SCENE"];
     if (lastType === "DEPART_SCENE") return ["RETURNING"];
     return [];
   }
-  if (!lastType || lastType === "DISPATCH") return ["ARRIVED_SCENE"];
+  if (!lastType) return ["DISPATCH"];
+  if (lastType === "DISPATCH") return ["ARRIVED_SCENE"];
   if (lastType === "ARRIVED_SCENE") return ["DEPART_SCENE", "RETURNING"]; // 唯一的分岔點
   // 離開現場後車輛正在移動，還沒抵達下一個地點，所以下一步只會是「抵達」；
   // 離開跟抵達是兩個不同時刻（中間有移動時間），必須分開回報各自的時間/里程，
@@ -1254,8 +1260,6 @@ function canManageUsers(p){ return myRole(p) === "admin"; }
 // 任務管理／基礎資料管理：admin、高勤官（全單位），連級主官管（僅自己單位）皆可進入管理後台
 function canManageTasks(p){ const r = myRole(p); return r === "admin" || r === "duty_officer" || r === "commander"; }
 function canManageBaseData(p){ return canManageTasks(p); }
-// 急診待命名單（急診醫官／待命車長／駕駛）維護權限比照勤務管理。
-function canManageErStandby(p){ return canManageTasks(p); }
 function canSeeAllTasks(p){ return canSeeAllUnits(p); }
 // 高勤官、主官管對勤務只有查看權限：不可編輯、不可強制結束，僅 admin 可操作。
 function canDeleteTask(p){ return myRole(p) === "admin"; }
@@ -1334,21 +1338,28 @@ async function updateEvent(id, fields){
   showToast("已更新回報紀錄");
   if (eventsPoll) eventsPoll.refreshNow();
 }
-async function createTask(data){
+// options.skipDispatch：急診待命的待命勤務要先建立（車號/車長/駕駛/值班
+// 醫官都先填好），但還沒有真的出勤，所以不能像一般勤務一樣建立當下就自動
+// 補一筆 DISPATCH 事件——要讓任務留在「待出勤」狀態，等真的出勤時再由
+// 使用者自己在勤務詳情頁回報「出勤」。
+async function createTask(data, options){
+  options = options || {};
   const created = await fsAddDoc("tasks", { ...data, createdAt: new Date(), createdBy: state.user.uid, createdByName: state.profile.displayName || state.user.email });
-  // 建立勤務後直接視為已出勤，不再停留在「待命中」的中間狀態
-  // （待命中之後會另外設計，目前先讓新建立的勤務直接進入出勤中）。
-  await fsAddDoc("events", {
-    taskId: created.id, type: "DISPATCH", unit: data.unit,
-    timestamp: new Date(),
-    userId: state.user.uid,
-    userName: state.profile.displayName || state.user.email,
-    ...(data.startMileage != null ? { mileage: data.startMileage } : {}),
-    seq: Date.now()
-  });
-  showToast(data.type === "liaison" ? "洽公已建立並標記出發" : "勤務已建立並標記出勤");
+  if (!options.skipDispatch) {
+    await fsAddDoc("events", {
+      taskId: created.id, type: "DISPATCH", unit: data.unit,
+      timestamp: new Date(),
+      userId: state.user.uid,
+      userName: state.profile.displayName || state.user.email,
+      ...(data.startMileage != null ? { mileage: data.startMileage } : {}),
+      seq: Date.now()
+    });
+  }
+  showToast(options.skipDispatch ? "待命勤務已建立，真正出勤時請至勤務詳情頁回報「出勤」"
+    : (data.type === "liaison" ? "洽公已建立並標記出發" : "勤務已建立並標記出勤"));
   if (tasksPoll) tasksPoll.refreshNow();
   if (eventsPoll) eventsPoll.refreshNow();
+  return created;
 }
 async function updateTask(taskId, fields){
   await fsSetDoc(`tasks/${taskId}`, fields);
@@ -2376,6 +2387,7 @@ function viewCreateTask(){
         </button>
         <input type="hidden" name="driver" value="">
       </div>
+      <div class="field"><label>值班醫官（選填）</label><input name="dutyOfficer" value="${esc(state.route.presetDutyOfficer||'')}" placeholder="例如：王醫官"></div>
       <div class="field"><label>行車紀錄器（可多選）</label>
         <select name="recorders" multiple size="${Math.min(4, Math.max(2, recorderOpts.length || 2))}">
           ${recorderOpts.map(x => `<option value="${esc(x.code)}">${esc(x.code)}</option>`).join("")}
@@ -2450,6 +2462,7 @@ function viewEditTask(taskId){
         </button>
         <input type="hidden" name="driver" value="${esc(t.driver||'')}">
       </div>
+      <div class="field"><label>值班醫官（選填）</label><input name="dutyOfficer" value="${esc(t.dutyOfficer||'')}" placeholder="例如：王醫官"></div>
       <div class="field"><label>行車紀錄器（可多選）</label>
         <select name="recorders" multiple size="${Math.min(4, Math.max(2, recorderOpts.length || 2))}">
           ${recorderOpts.map(x => `<option value="${esc(x.code)}" ${currentRecorders.includes(x.code)?'selected':''}>${esc(x.code)}</option>`).join("")}
@@ -2909,6 +2922,7 @@ function viewTaskDetail(taskId){
         ${!isLiaison ? `
         <div class="k">車長</div><div class="v">${crewLabel(t.crewLeader, t.unit)}</div>
         <div class="k">駕駛</div><div class="v">${crewLabel(t.driver, t.unit)}</div>
+        ${t.dutyOfficer ? `<div class="k">值班醫官</div><div class="v">${esc(t.dutyOfficer)}</div>` : ""}
         <div class="k">紀錄器</div><div class="v">${esc((t.recorders||[]).join('、') || '—')}</div>` : ""}
         <div class="k">建立人</div><div class="v">${nameWithRank(t.createdByName, t.unit)}</div>
         <div class="k">建立時間</div><div class="v">${fmtTime(new Date(t.createdAt||0).getTime())}</div>
@@ -3383,55 +3397,45 @@ function viewHospitals(){
 }
 
 /* =========================================================
-   急診待命：兩個醫務所地點固定，各自顯示當天的急診醫官／待命車長／
-   駕駛名單。這是底部導覽的一個分頁（不是子頁面），所以跟首頁/任務/
-   紀錄一樣不接返回鍵。如果現場需要後送，「建立後送」直接沿用建立
-   勤務的既有表單（帶入地點），資訊欄位跟一般勤務完全一樣。
+   急診待命：兩個醫務所地點固定，各自顯示「目前綁定的待命勤務」——
+   待命勤務其實就是一筆提早建立、還沒真的出勤的正常勤務（車號/車長/
+   駕駛/值班醫官都先填好），只是建立當下不會自動補一筆出勤事件，停在
+   「待出勤」狀態；erStandby/{key} 只存一個 currentTaskId 指標，實際
+   資料都在 tasks 集合裡，這樣才能直接沿用平常的勤務詳情頁出勤、記錄
+   患者狀況，不用另外維護一套獨立資料。這是底部導覽的一個分頁（不是
+   子頁面），所以跟首頁/任務/紀錄一樣不接返回鍵。
    ========================================================= */
 function viewErStandby(){
   const p = state.profile;
-  const canEdit = canManageErStandby(p);
   const canDispatch = canCreateTask(p);
   return `
     <div class="section-label">急診待命</div>
     ${ER_STANDBY_LOCATIONS.map(loc => {
-      const d = state.erStandby.find(x => x.id === loc.key);
+      const rec = state.erStandby.find(x => x.id === loc.key);
+      const boundTask = rec && rec.currentTaskId ? state.tasks.find(t => t.id === rec.currentTaskId) : null;
+      const boundStatus = boundTask ? deriveStatus(boundTask.id) : null;
+      const isBound = boundTask && boundStatus !== "completed";
       return `
       <div class="er-standby-card">
         <div class="er-standby-head">
           <div class="name">${esc(loc.label)}</div>
-          ${canEdit ? `<button class="icon-btn" onclick="window.__openErStandbyModal('${loc.key}')">編輯名單</button>` : ""}
+          ${isBound ? statusBadge(boundStatus) : ""}
         </div>
+        ${isBound ? `
         <div class="detail-grid">
-          <div class="detail-item"><span class="lbl">急診醫官</span><span class="val">${d && d.dutyOfficer ? esc(d.dutyOfficer) : "尚未設定"}</span></div>
-          <div class="detail-item"><span class="lbl">待命車長</span><span class="val">${d && d.crewLeader ? esc(d.crewLeader) : "尚未設定"}</span></div>
-          <div class="detail-item"><span class="lbl">待命駕駛</span><span class="val">${d && d.driver ? esc(d.driver) : "尚未設定"}</span></div>
+          <div class="detail-item"><span class="lbl">車號</span><span class="val">${esc(boundTask.vehicle||'—')}</span></div>
+          <div class="detail-item"><span class="lbl">車長</span><span class="val">${crewLabel(boundTask.crewLeader, boundTask.unit)}</span></div>
+          <div class="detail-item"><span class="lbl">駕駛</span><span class="val">${crewLabel(boundTask.driver, boundTask.unit)}</span></div>
+          <div class="detail-item"><span class="lbl">值班醫官</span><span class="val">${boundTask.dutyOfficer ? esc(boundTask.dutyOfficer) : "尚未設定"}</span></div>
         </div>
-        ${d && d.updatedAt ? `<div class="sub">最後更新：${fmtTime(new Date(d.updatedAt).getTime())}${d.updatedByName ? ' · ' + esc(d.updatedByName) : ''}</div>` : ""}
-        ${canDispatch ? `<button class="btn-primary" style="width:100%;margin-top:12px;" onclick='window.__startErStandbyDispatch(${JSON.stringify(loc.label)})'>建立後送</button>` : ""}
+        <button class="btn-primary" style="width:100%;margin-top:12px;" onclick="window.__nav({name:'task', id:'${boundTask.id}'})">查看／管理</button>
+        ` : `
+        <div class="empty" style="padding:16px 0;">尚未建立待命勤務</div>
+        ${canDispatch ? `<button class="btn-primary" style="width:100%;" onclick='window.__startErStandbyTask(${JSON.stringify(loc.key)}, ${JSON.stringify(loc.label)})'>建立待命勤務</button>` : ""}
+        `}
       </div>`;
     }).join("")}
   `;
-}
-function viewErStandbyModal(){
-  const m = state.erStandbyModal;
-  if (!m) return "";
-  const loc = ER_STANDBY_LOCATIONS.find(x => x.key === m.key);
-  const d = state.erStandby.find(x => x.id === m.key);
-  return `
-    <div class="modal-overlay" onclick="if(event.target===this) window.__closeErStandbyModal()">
-      <div class="modal-sheet">
-        <div class="modal-handle"></div>
-        <div class="modal-title">編輯待命名單・${esc(loc ? loc.label : "")}</div>
-        <form onsubmit="window.__submitErStandbyModal(event,'${m.key}')">
-          <div class="field"><label>急診醫官</label><input name="dutyOfficer" value="${esc(d?.dutyOfficer||'')}" placeholder="請輸入姓名"></div>
-          <div class="field"><label>待命車長</label><input name="crewLeader" value="${esc(d?.crewLeader||'')}" placeholder="請輸入姓名"></div>
-          <div class="field"><label>待命駕駛</label><input name="driver" value="${esc(d?.driver||'')}" placeholder="請輸入姓名"></div>
-          <button class="btn-primary" type="submit">儲存變更</button>
-          <button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__closeErStandbyModal()">取消</button>
-        </form>
-      </div>
-    </div>`;
 }
 
 function viewRolePreview(){
@@ -3858,7 +3862,7 @@ const NAV_ITEMS = [
 function safeRender(){
   const ae = document.activeElement;
   if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT")) return;
-  if (state.profileEditing || state.baseDataModal || state.erStandbyModal || state.reportDraft || state.eventEditId) return;
+  if (state.profileEditing || state.baseDataModal || state.reportDraft || state.eventEditId) return;
   render();
 }
 
@@ -3905,7 +3909,6 @@ function render(){
         </button>`).join("")}
     </div>
     ${viewBaseDataModal()}
-    ${viewErStandbyModal()}
     <div id="toast" class="toast"></div>
   `;
 }
@@ -4280,21 +4283,6 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
        : addRecorder(unit, f.get("code")));
   action.then(() => { state.baseDataModal = null; render(); }).catch(baseDataErr);
 };
-window.__openErStandbyModal = (key) => { state.erStandbyModal = { key }; render(); };
-window.__closeErStandbyModal = () => { state.erStandbyModal = null; render(); };
-window.__submitErStandbyModal = (ev, key) => {
-  ev.preventDefault();
-  const f = new FormData(ev.target);
-  const p = state.profile;
-  fsSetDoc(`erStandby/${key}`, {
-    dutyOfficer: f.get("dutyOfficer")||"", crewLeader: f.get("crewLeader")||"", driver: f.get("driver")||"",
-    updatedAt: new Date(), updatedByName: p.displayName || p.email || ""
-  }).then(() => {
-    state.erStandbyModal = null;
-    if (erStandbyPoll) erStandbyPoll.refreshNow();
-    render();
-  }).catch(baseDataErr);
-};
 window.__editProfile = () => { state.profileEditing = true; render(); };
 window.__cancelEditProfile = () => { state.profileEditing = false; render(); };
 window.__saveProfile = (ev) => {
@@ -4373,16 +4361,19 @@ window.__setTasksTab = (key) => { state.tasksTab = key; render(); window.scrollT
 window.__setStatsPeriod = (key) => { state.statsPeriod = key; render(); window.scrollTo(0,0); };
 window.__setCreateTaskUnit = (code) => { state.createTaskUnit = code; render(); };
 window.__setCreateTaskType = (key) => { state.createTaskType = key; render(); };
-// 急診待命頁「建立後送」：一定是勤務（不是洽公），先把建立勤務頁的任務
-// 類型重置成「勤務」，並帶入地點，其餘欄位（車號/車長/駕駛等）跟一般
-// 建立勤務完全一樣，由使用者照現場狀況填寫。
-window.__startErStandbyDispatch = (locationLabel) => {
+// 急診待命頁「建立待命勤務」：一定是勤務（不是洽公），先把建立勤務頁的
+// 任務類型重置成「勤務」，並帶入地點，其餘欄位（車號/車長/駕駛/值班醫官
+// 等）先照目前狀況填好；送出時 __createTask 會判斷 state.route.erStandbyKey
+// 存在就跳過自動出勤，並把這筆任務的 id 記到 erStandby/{key}.currentTaskId，
+// 之後這個地點就會顯示這筆任務，可以直接點進去用平常的勤務詳情頁出勤。
+window.__startErStandbyTask = (key, locationLabel) => {
   state.createTaskType = "duty";
-  nav({ name: "createTask", presetLocation: locationLabel });
+  nav({ name: "createTask", erStandbyKey: key, presetLocation: locationLabel });
 };
 window.__createTask = (ev, unit, type) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
+  const erStandbyKey = state.route.erStandbyKey || null;
   if (type === "liaison") {
     const personnel = f.getAll("personnel");
     if (!personnel.length) { showToast("請至少選擇一位人員"); return; }
@@ -4393,13 +4384,19 @@ window.__createTask = (ev, unit, type) => {
     createTask({
       unit, type: "duty", title: f.get("title"), vehicle: f.get("vehicle"), location: f.get("location"),
       scope: f.get("scope") || "營外",
-      crewLeader: f.get("crewLeader"), driver: f.get("driver"), recorders,
+      crewLeader: f.get("crewLeader"), driver: f.get("driver"), dutyOfficer: f.get("dutyOfficer")||"", recorders,
       startMileage: startMileage ? Number(startMileage) : null,
       startFuel: f.get("startFuel"), notes: f.get("notes")
+    }, { skipDispatch: !!erStandbyKey }).then(created => {
+      if (!erStandbyKey) return;
+      fsSetDoc(`erStandby/${erStandbyKey}`, {
+        currentTaskId: created.id, updatedAt: new Date(),
+        updatedByName: state.profile.displayName || state.profile.email || ""
+      }).then(() => { if (erStandbyPoll) erStandbyPoll.refreshNow(); }).catch(baseDataErr);
     });
   }
   ev.target.reset();
-  nav({ name: "tasks" });
+  nav({ name: erStandbyKey ? "erStandby" : "tasks" });
 };
 window.__saveTaskEdit = (ev, taskId) => {
   ev.preventDefault();
@@ -4414,7 +4411,7 @@ window.__saveTaskEdit = (ev, taskId) => {
         return {
           title: f.get("title"), vehicle: f.get("vehicle"), location: f.get("location"),
           scope: f.get("scope") || "營外",
-          crewLeader: f.get("crewLeader"), driver: f.get("driver"), recorders,
+          crewLeader: f.get("crewLeader"), driver: f.get("driver"), dutyOfficer: f.get("dutyOfficer")||"", recorders,
           startMileage: startMileage ? Number(startMileage) : null,
           startFuel: f.get("startFuel"), notes: f.get("notes")
         };
