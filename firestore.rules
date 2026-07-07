@@ -109,12 +109,13 @@ service cloud.firestore {
       allow create, update, delete: if isStaff() || isCommander();
     }
 
-    // 急診待命：兩個醫務所地點固定，每筆文件記錄當天的急診醫官／待命車長／
-    // 駕駛名單，不綁定特定單位；任何在職帳號都能查看，維護權限比照基礎資料
-    // 管理（admin、高勤官、主官管）。
+    // 急診待命：兩個醫務所地點固定，每筆文件只存 currentTaskId 指向目前
+    // 綁定的待命勤務（實際車號/車長/駕駛/值班醫官資料都在 tasks 集合裡）。
+    // 這個指標是建立待命勤務當下由建立者自動寫入，寫入權限比照建立勤務
+    // （admin、一般成員）；任何在職帳號都能查看。
     match /erStandby/{id} {
       allow read: if isActive();
-      allow create, update: if isStaff() || isCommander();
+      allow create, update: if isAdmin() || (isSignedIn() && myRole() == 'member');
       allow delete: if false;
     }
 
