@@ -647,7 +647,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-06-140-vitals-quick-fill-dropdown";
+const BUILD_TAG = "2026-07-06-141-fix-idle-logout-relogin-loop";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1074,6 +1074,7 @@ const RELEASE_NOTES = [
     "管理後台改版：原本擠在一起的六個橫向頁籤（勤務管理/基礎資料/成員管理/訊息管理/系統設定/意見回饋）改成分區列表入口，每個子功能都是獨立頁面，之後陸續加新功能只要在對應分區加一列，不會讓頁籤越擠越亂",
     "患者紀錄主訴欄位（哪裡不舒服/怎麼不舒服/多久了/其他不適/脊椎評估）新增快捷選字按鈕，點一下把常見用語塞進輸入框，不用每次都手動打字，也可以跟原本的自由輸入文字混用",
     "主訴欄位的快捷選字改成標籤右側的下拉選單，不再佔用輸入框下方一整排按鈕的版面",
+    "修正閒置逾時登出後卡在無限重新登入迴圈的問題：被判定閒置登出後，再次登入會立刻被同一個過期的閒置時間戳記再判定一次逾時、當場又被登出，導致一直點登入卻一直跳回登出提示",
   ] },
   { date: "2026/07/04 以前", items: [
     "建立車輛人員動態管制核心功能：勤務建立與追蹤",
@@ -1463,7 +1464,14 @@ async function updateVitalsEntry(id, fields){
 /* =========================================================
    7) Auth 流程
    ========================================================= */
-function doLogin(){ signInWithPopup(auth, googleProvider).catch(e => showToast("登入失敗：" + e.message)); }
+function doLogin(){
+  // 手動按登入視為新的操作，要先把閒置計時戳記重置，不然剛被判定閒置
+  // 登出、localStorage 裡的舊時間戳沒人清掉，重新登入成功後
+  // onAuthStateChanged 又會用同一個過期時間戳判定閒置逾時，當場再登出
+  // 一次、跳出同一個提示——使用者會卡在「一直登入一直被踢出」的迴圈。
+  try { localStorage.setItem(IDLE_STORAGE_KEY, String(Date.now())); } catch (e) {}
+  signInWithPopup(auth, googleProvider).catch(e => showToast("登入失敗：" + e.message));
+}
 function doLogout(){ signOut(auth); }
 
 // 閒置 8 小時自動登出：最後操作時間存在 localStorage（不是只靠頁面裡的
