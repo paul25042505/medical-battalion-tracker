@@ -217,8 +217,12 @@
     display:flex; align-items:center; justify-content:center; flex-shrink:0;
   }
   .form-section .field:last-child{margin-bottom:0;}
-  .vitals-entry{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 14px; margin-bottom:10px; box-shadow:var(--shadow-xs);}
+  .vitals-entry{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 14px 12px 12px; margin-bottom:10px; box-shadow:var(--shadow-xs); border-left:4px solid transparent;}
   .vitals-entry:last-child{margin-bottom:0;}
+  /* 初評／二評（複測）左側色條區分，跟小標籤的顏色一致，捲動歷史紀錄時
+     一眼就能分辨哪一筆是基準值（初評）、哪一筆是後續追蹤（二評）。 */
+  .vitals-entry.stage-initial{border-left-color:var(--blue);}
+  .vitals-entry.stage-followup{border-left-color:var(--amber);}
   .vitals-entry-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:9px;}
   .vitals-entry-time{font-family:var(--mono); font-size:var(--text-xs); color:var(--muted); font-weight:600;}
   /* 主訴是整份紀錄裡最關鍵的一句話：淡紅底、圓角、無粗外框，靠底色跟
@@ -237,7 +241,7 @@
     display:inline-block; padding:2px 7px; border-radius:6px; font-size:var(--text-xs); font-weight:800;
     background:rgba(0,102,255,0.12); color:var(--blue); margin-right:7px; vertical-align:middle;
   }
-  .vitals-stage-tag.alt{background:var(--panel-2); color:var(--muted);}
+  .vitals-stage-tag.alt{background:rgba(255,149,0,0.14); color:#B45F00;}
   .vitals-subdetail{font-size:var(--text-xs); color:var(--muted); line-height:1.7; margin-bottom:9px;}
   /* 患者身分是重點資訊，不能跟其他次要文字一樣灰灰的不顯眼，但也不用跟
      主訴一樣粗，用淺色底＋一般粗體字（600）就足夠區隔。 */
@@ -252,18 +256,26 @@
   .detail-item{display:flex; flex-direction:column; gap:var(--space-label-gap);}
   .detail-item .lbl{font-size:var(--text-xs); color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;}
   .detail-item .val{font-size:var(--text-lg); font-weight:600; color:var(--text); line-height:1.3;}
-  .gcs-hint-btn{
-    display:inline-flex; align-items:center; gap:3px; background:none; border:none; color:var(--blue);
-    font-size:var(--text-xs); font-weight:700; font-family:var(--mono); padding:0; margin-left:4px; vertical-align:middle;
+  .gcs-select-row{display:flex; gap:8px; margin-top:8px;}
+  .gcs-select-row select{flex:1; min-width:0;}
+  .gcs-score-display{font-size:var(--text-sm); font-weight:700; color:var(--blue); margin-top:8px; font-family:var(--mono);}
+  /* 生命徵象分兩組：核心關鍵指標（意識/血壓/心跳/SpO2）用置中的迷你卡片、
+     大字級，異常時整格變色，一眼就能抓到危急數值；次要指標（呼吸/體溫/
+     GCS/血糖）維持較小字級的清單樣式，視覺權重明顯低於核心指標。 */
+  .vitals-grid-core{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;}
+  .vitals-core-item{
+    background:#F7F9FF; border-radius:var(--radius-md); padding:12px 8px; text-align:center;
   }
-  .gcs-hint-panel{
-    background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-md);
-    padding:12px 14px; margin-bottom:10px; font-size:var(--text-xs); color:var(--text); line-height:1.7;
-  }
+  .vitals-core-item .lbl{font-size:var(--text-xs); color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;}
+  .vitals-core-item .val{font-family:var(--mono); font-size:26px; font-weight:700; color:var(--text); line-height:1.3; margin-top:2px; display:block;}
+  .vitals-core-item.warn{background:rgba(255,149,0,0.1);} .vitals-core-item.warn .val{color:#B45F00;}
+  .vitals-core-item.danger{background:rgba(255,59,48,0.1);} .vitals-core-item.danger .val{color:var(--red);}
   /* 生命徵象：Label 在上（淺灰小字）、數值在下，用等寬字體＋略大字級
      跟一般文字做區隔，字重維持 600（非重粗體），才不會跟主訴搶焦點。 */
   .vitals-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(78px,1fr)); gap:14px var(--space-section);}
   .vitals-item{display:flex; flex-direction:column; gap:var(--space-label-gap);}
+  .vitals-item.warn .val{color:#B45F00;}
+  .vitals-item.danger .val{color:var(--red); font-weight:800;}
   .vitals-item .lbl{font-size:var(--text-xs); color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;}
   .vitals-item .val{font-family:var(--mono); font-size:var(--text-lg); font-weight:600; color:var(--text); line-height:1.3;}
 
@@ -664,7 +676,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-07-144-er-standby-real-task";
+const BUILD_TAG = "2026-07-07-145-vitals-abnormal-color-gcs-select";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -672,7 +684,7 @@ const BUILD_TAG = "2026-07-07-144-er-standby-real-task";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "1.4";
+const APP_MAJOR_MINOR = "1.5";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -1079,6 +1091,7 @@ const RELEASE_NOTES = [
     "首頁「今日概況」統計卡片改版：原本五個色塊一字排開太花，改成白底卡片＋小色塊圖示，風格更接近 iPhone 原生 App",
     "修正高勤官／主官管無法查看既有患者紀錄的問題：勤務詳情頁的患者狀況卡片改成有紀錄時就可以點進去查看（唯讀），不再因為沒有回報權限而完全點不進去",
     "急診待命改版：兩個地點各自綁定一筆真正的待命勤務，可以先建立勤務資料（車號/車長/駕駛/值班醫官），此時停在「待出勤」狀態，真正出勤時再到勤務詳情頁回報「出勤」、記錄患者狀況，跟一般勤務共用同一套流程",
+    "患者紀錄改版：生命徵象分成核心指標（意識/血壓/心跳/SpO2，大字級卡片）與次要指標（呼吸/體溫/GCS/血糖），數值超出正常區間會自動標色提醒；GCS 改成 E/V/M 三個下拉選單，選完自動加總，不用再自己心算或手動輸入格式不一致的分數；初評／二評（原「複測」）改用不同顏色的左側色條與標籤區分，捲動歷史紀錄時更容易分辨",
   ] },
   { date: "2026/07/06", items: [
     "新增「關於系統」頁面（使用條款/隱私權政策/開源授權/更新紀錄子頁面），系統版本改為主.次.修訂架構並隨 Build 自動更新",
@@ -1117,8 +1130,80 @@ const RELEASE_NOTES = [
 ];
 
 // 比照救護紀錄表：意識狀態用 AVPU（清/痛/聲/否），過去病史、過敏史、處置項目
-// 只在初評（第一筆生命徵象紀錄）詢問一次，複測不用每次重填。
+// 只在初評（第一筆生命徵象紀錄）詢問一次，二評（後續複測）不用每次重填。
 const CONSCIOUSNESS_OPTIONS = ["清", "痛", "聲", "否"];
+// GCS 改成 E/V/M 三個下拉選單分開選，選完自動加總，避免自由輸入格式不
+// 統一（有人填 15、有人填 E4V5M6，事後無法快速比對）。
+const GCS_E_OPTIONS = [
+  { v: "4", label: "E4 自動睜眼" }, { v: "3", label: "E3 呼喚睜眼" },
+  { v: "2", label: "E2 疼痛刺激睜眼" }, { v: "1", label: "E1 無反應" }
+];
+const GCS_V_OPTIONS = [
+  { v: "5", label: "V5 對答正確" }, { v: "4", label: "V4 答非所問" },
+  { v: "3", label: "V3 可說出字句（無意義）" }, { v: "2", label: "V2 僅能發出聲音" }, { v: "1", label: "V1 無反應" }
+];
+const GCS_M_OPTIONS = [
+  { v: "6", label: "M6 遵從指令動作" }, { v: "5", label: "M5 疼痛能定位" }, { v: "4", label: "M4 肢體回縮反應" },
+  { v: "3", label: "M3 異常屈曲" }, { v: "2", label: "M2 異常伸直" }, { v: "1", label: "M1 無反應" }
+];
+// 編輯既有紀錄時，把儲存的 GCS 字串（"E4V5M6（15分）" 或舊格式）拆回
+// E/V/M 三個下拉選單各自的值，抓不到就留空讓使用者重新選。
+function gcsPartsFromString(gcsStr){
+  const evm = /E(\d).*V(\d).*M(\d)/.exec(gcsStr||"");
+  return evm ? { e: evm[1], v: evm[2], m: evm[3] } : { e: "", v: "", m: "" };
+}
+// 生命徵象異常自動標色：分「正常／注意（偏離但不算危急）／危險」三級，門檻值
+// 是常見的成人生命徵象參考區間，僅供現場快速警示用，不能取代臨床判斷。
+function hrSeverity(n){ if (isNaN(n)) return ""; if (n>=60&&n<=100) return ""; if ((n>=50&&n<60)||(n>100&&n<=120)) return "warn"; return "danger"; }
+function rrSeverity(n){ if (isNaN(n)) return ""; if (n>=12&&n<=20) return ""; if ((n>=8&&n<12)||(n>20&&n<=24)) return "warn"; return "danger"; }
+function spo2Severity(n){ if (isNaN(n)) return ""; if (n>=95) return ""; if (n>=90) return "warn"; return "danger"; }
+function tempSeverity(n){ if (isNaN(n)) return ""; if (n>=36&&n<=37.5) return ""; if ((n>=35&&n<36)||(n>37.5&&n<=38.5)) return "warn"; return "danger"; }
+function bpSeverity(bpStr){
+  const m = /^(\d+)\s*\/\s*(\d+)$/.exec((bpStr||"").trim());
+  if (!m) return "";
+  const sys = Number(m[1]), dia = Number(m[2]);
+  const sysSev = (sys>=90&&sys<=140) ? "" : (sys>=80&&sys<160) ? "warn" : "danger";
+  const diaSev = (dia>=60&&dia<=90) ? "" : (dia>=50&&dia<100) ? "warn" : "danger";
+  return (sysSev==="danger"||diaSev==="danger") ? "danger" : (sysSev==="warn"||diaSev==="warn") ? "warn" : "";
+}
+function gcsSeverity(total){ if (isNaN(total)) return ""; if (total>=13) return ""; if (total>=9) return "warn"; return "danger"; }
+// 舊資料的 GCS 可能是純數字（"15"）或沒有加總的 "E4V5M6"，新格式統一存
+// "E4V5M6（15分）"；這裡盡量從各種格式抓出總分，抓不到就不標色。
+function gcsTotalFromString(gcsStr){
+  const s = gcsStr || "";
+  const totalMatch = /(\d+)\s*分/.exec(s);
+  if (totalMatch) return Number(totalMatch[1]);
+  const evm = /E(\d).*V(\d).*M(\d)/.exec(s);
+  if (evm) return Number(evm[1]) + Number(evm[2]) + Number(evm[3]);
+  if (/^\d+$/.test(s.trim())) return Number(s.trim());
+  return NaN;
+}
+function consciousnessSeverity(c){ if (c==="清") return ""; if (c==="痛"||c==="聲") return "warn"; if (c==="否") return "danger"; return ""; }
+// 生命徵象歷史紀錄分兩組呈現：核心關鍵指標（意識/血壓/心跳/SpO2）用大字級
+// 置中的迷你卡片，異常時整格變色；次要檢測指標（呼吸/體溫/GCS/血糖）維持
+// 原本較小字級的清單樣式，兩組視覺權重不同，救護人員一眼就能先看核心指標。
+function vitalsCoreGridHtml(v){
+  const items = [];
+  if (v.consciousness) items.push({ lbl: "意識", val: v.consciousness, sev: consciousnessSeverity(v.consciousness) });
+  if (v.bp) items.push({ lbl: "血壓", val: v.bp, sev: bpSeverity(v.bp) });
+  if (v.hr) items.push({ lbl: "心跳", val: v.hr, sev: hrSeverity(Number(v.hr)) });
+  if (v.spo2) items.push({ lbl: "SpO2", val: v.spo2 + "%", sev: spo2Severity(Number(v.spo2)) });
+  if (!items.length) return "";
+  return `<div class="vitals-grid-core">${items.map(it => `
+    <div class="vitals-core-item${it.sev?' '+it.sev:''}"><span class="lbl">${esc(it.lbl)}</span><span class="val">${esc(it.val)}</span></div>
+  `).join("")}</div>`;
+}
+function vitalsSecondaryGridHtml(v){
+  const items = [];
+  if (v.rr) items.push({ lbl: "呼吸", val: v.rr, sev: rrSeverity(Number(v.rr)) });
+  if (v.temp) items.push({ lbl: "體溫", val: v.temp + "°C", sev: tempSeverity(Number(v.temp)) });
+  if (v.gcs) items.push({ lbl: "GCS", val: v.gcs, sev: gcsSeverity(gcsTotalFromString(v.gcs)) });
+  if (v.glucose) items.push({ lbl: "血糖", val: v.glucose, sev: "" });
+  if (!items.length) return "";
+  return `<div class="vitals-grid">${items.map(it => `
+    <div class="vitals-item${it.sev?' '+it.sev:''}"><span class="lbl">${esc(it.lbl)}</span><span class="val">${esc(it.val)}</span></div>
+  `).join("")}</div>`;
+}
 const PAST_HISTORY_OPTIONS = ["糖尿病", "高血壓", "心臟疾病", "中風", "氣喘", "慢性阻塞性肺病", "肝臟疾病", "腎臟疾病", "癌症", "癲癇", "精神疾病", "其他", "不清楚", "無"];
 const ALLERGY_OPTIONS = ["藥物", "食物", "其他", "不清楚", "無"];
 // 處置項目涵蓋創傷與非創傷常見處置，不只是外傷包紮固定這類。
@@ -2498,6 +2583,7 @@ function viewVitalsPage(taskId, id, adding){
   // 血壓拆成收縮壓／舒張壓兩格輸入，儲存時仍合併成「收縮/舒張」字串，
   // 沿用既有的 bp 欄位與所有顯示邏輯（時間軸、歷史紀錄清單皆顯示 120/80）。
   const [bpSys, bpDia] = (editingVitals?.bp || "").split("/");
+  const gcsParts = gcsPartsFromString(editingVitals?.gcs);
   // 有既有紀錄時，預設只顯示歷史紀錄本身；新增紀錄改成要另外點按鈕，
   // 才會切到表單頁面，避免清單跟表單擠在同一畫面。
   const showHistory = !editingVitals && hasPatient && !adding;
@@ -2519,9 +2605,9 @@ function viewVitalsPage(taskId, id, adding){
   const historyHtml = showHistory ? `
     <div class="vitals-history">
       ${taskVitals.map((v,i) => `
-        <div class="vitals-entry">
+        <div class="vitals-entry ${i===0?'stage-initial':'stage-followup'}">
           <div class="vitals-entry-head">
-            <span class="vitals-entry-time"><span class="vitals-stage-tag${i===0?'':' alt'}">${i===0?'初評':'複測'}</span>${fmtTime(v.ts)} · ${nameWithRank(v.userName, v.unit)}</span>
+            <span class="vitals-entry-time"><span class="vitals-stage-tag${i===0?'':' alt'}">${i===0?'初評':'二評'}</span>${fmtTime(v.ts)} · ${nameWithRank(v.userName, v.unit)}</span>
             ${canDoReport ? `<button class="tl-edit-btn" type="button" onclick="window.__editVitals('${taskId}','${v.id}')">編輯</button>` : ""}
           </div>
           ${v.patientName || v.patientUnit || v.patientRank || v.patientGender ? `
@@ -2546,16 +2632,8 @@ function viewVitalsPage(taskId, id, adding){
             ${v.pastHistory&&v.pastHistory.length ? `<div class="detail-item"><span class="lbl">過去病史</span><span class="val">${v.pastHistory.map(esc).join('、')}${v.pastHistoryOtherDetail?`（${esc(v.pastHistoryOtherDetail)}）`:''}</span></div>` : ""}
             ${v.allergyHistory&&v.allergyHistory.length ? `<div class="detail-item"><span class="lbl">過敏史</span><span class="val">${v.allergyHistory.map(esc).join('、')}${[v.allergyDrugFoodDetail,v.allergyOtherDetail].filter(Boolean).length?`（${[v.allergyDrugFoodDetail,v.allergyOtherDetail].filter(Boolean).map(esc).join('、')}）`:''}</span></div>` : ""}
           </div>` : ""}
-          <div class="vitals-grid">
-            ${v.consciousness ? `<div class="vitals-item"><span class="lbl">意識</span><span class="val">${esc(v.consciousness)}</span></div>` : ""}
-            ${v.bp ? `<div class="vitals-item"><span class="lbl">血壓</span><span class="val">${esc(v.bp)}</span></div>` : ""}
-            ${v.hr ? `<div class="vitals-item"><span class="lbl">心跳</span><span class="val">${esc(v.hr)}</span></div>` : ""}
-            ${v.rr ? `<div class="vitals-item"><span class="lbl">呼吸</span><span class="val">${esc(v.rr)}</span></div>` : ""}
-            ${v.spo2 ? `<div class="vitals-item"><span class="lbl">SpO2</span><span class="val">${esc(v.spo2)}%</span></div>` : ""}
-            ${v.temp ? `<div class="vitals-item"><span class="lbl">體溫</span><span class="val">${esc(v.temp)}°C</span></div>` : ""}
-            ${v.gcs ? `<div class="vitals-item"><span class="lbl">GCS</span><span class="val">${esc(v.gcs)}</span></div>` : ""}
-            ${v.glucose ? `<div class="vitals-item"><span class="lbl">血糖</span><span class="val">${esc(v.glucose)}</span></div>` : ""}
-          </div>
+          ${vitalsCoreGridHtml(v)}
+          ${vitalsSecondaryGridHtml(v)}
           ${v.treatments&&v.treatments.length ? `
           <div class="detail-item" style="margin-top:9px;">
             <span class="lbl">處置項目</span>
@@ -2652,14 +2730,23 @@ function viewVitalsPage(taskId, id, adding){
         <div class="field"><label>血氧 SpO2 %（選填）</label><input id="vf-spo2" type="text" inputmode="numeric" value="${esc(editingVitals?.spo2||'')}"></div>
         <div class="field"><label>體溫 °C（選填）</label><input id="vf-temp" type="text" inputmode="decimal" value="${esc(editingVitals?.temp||'')}"></div>
         <div class="field">
-          <label>意識程度 GCS（選填） <button type="button" class="gcs-hint-btn" onclick="const el=document.getElementById('gcs-hint'); el.style.display = el.style.display==='block'?'none':'block';">？ 怎麼判定</button></label>
-          <div id="gcs-hint" class="gcs-hint-panel" style="display:none;">
-            <div><b>E 睜眼反應</b>：E4 自動睜眼／E3 呼喚睜眼／E2 疼痛刺激睜眼／E1 無反應</div>
-            <div><b>V 語言反應</b>：V5 對答正確／V4 答非所問／V3 可說出字句（無意義）／V2 僅能發出聲音／V1 無反應</div>
-            <div><b>M 運動反應</b>：M6 遵從指令動作／M5 疼痛能定位／M4 肢體回縮反應／M3 異常屈曲／M2 異常伸直／M1 無反應</div>
-            <div style="margin-top:6px; color:var(--muted);">總分 = E+V+M，滿分 15 分，分數越低意識越差。</div>
+          <label>意識程度 GCS（選填）</label>
+          <div class="gcs-select-row">
+            <select id="gcs-e" onchange="window.__updateGcsScore()">
+              <option value="">E 睜眼</option>
+              ${GCS_E_OPTIONS.map(o => `<option value="${o.v}" ${gcsParts.e===o.v?'selected':''}>${esc(o.label)}</option>`).join("")}
+            </select>
+            <select id="gcs-v" onchange="window.__updateGcsScore()">
+              <option value="">V 語言</option>
+              ${GCS_V_OPTIONS.map(o => `<option value="${o.v}" ${gcsParts.v===o.v?'selected':''}>${esc(o.label)}</option>`).join("")}
+            </select>
+            <select id="gcs-m" onchange="window.__updateGcsScore()">
+              <option value="">M 運動</option>
+              ${GCS_M_OPTIONS.map(o => `<option value="${o.v}" ${gcsParts.m===o.v?'selected':''}>${esc(o.label)}</option>`).join("")}
+            </select>
           </div>
-          <input id="vf-gcs" placeholder="例如：E4V5M6 或 15" value="${esc(editingVitals?.gcs||'')}">
+          <div id="gcs-score-display" class="gcs-score-display">${(gcsParts.e&&gcsParts.v&&gcsParts.m) ? `總分：${Number(gcsParts.e)+Number(gcsParts.v)+Number(gcsParts.m)} / 15` : ''}</div>
+          <input type="hidden" id="vf-gcs" value="${esc(editingVitals?.gcs||'')}">
         </div>
         <div class="field"><label>血糖值 mg/dL（選填）</label><input id="vf-glucose" type="text" inputmode="numeric" value="${esc(editingVitals?.glucose||'')}"></div>
       </div>
@@ -3988,6 +4075,24 @@ window.__backToVitalsHistory = (taskId) => nav({ name: 'vitals', taskId, id: nul
 window.__resetVitalsTime = () => {
   const el = document.getElementById("vf-time");
   if (el) el.value = hhmmValue(new Date());
+};
+// GCS 三個下拉選單一有變動就重新組字串寫回隱藏欄位（vf-gcs），格式維持
+// 跟舊資料相容的 "E4V5M6"，後面加註總分方便直接閱讀；三個選單沒有全部
+// 選完之前先不算總分，避免顯示誤導的不完整分數。
+window.__updateGcsScore = () => {
+  const e = document.getElementById("gcs-e").value;
+  const v = document.getElementById("gcs-v").value;
+  const m = document.getElementById("gcs-m").value;
+  const hidden = document.getElementById("vf-gcs");
+  const display = document.getElementById("gcs-score-display");
+  if (!e || !v || !m) {
+    hidden.value = [e && ("E"+e), v && ("V"+v), m && ("M"+m)].filter(Boolean).join("");
+    display.textContent = "";
+    return;
+  }
+  const total = Number(e) + Number(v) + Number(m);
+  hidden.value = `E${e}V${v}M${m}（${total}分）`;
+  display.textContent = `總分：${total} / 15`;
 };
 // 主訴快捷選字：見 quickFillSelect() 說明。
 window.__applyQuickFillSelect = (inputId, selectEl) => {
