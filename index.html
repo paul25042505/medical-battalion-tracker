@@ -18,6 +18,7 @@
 <style>
   :root{
     --bg:#F4F5F8;
+    --bg-gradient: linear-gradient(180deg, #F8F9FC 0%, #F1F2F6 100%);
     --panel:#FFFFFF;
     --panel-2:#F3F4F7;
     --border:#E7E8EE;
@@ -25,16 +26,19 @@
     --text:#15161B;
     --muted:#8A8D98;
     --amber:#FF9500;
+    --amber-text:#B45F00; /* 淺色模式下用在淺色底上的深化文字色，維持對比度 */
     --red:#FF3B30;
     --green:#34C759;
+    --green-text:#177A34; /* 淺色模式下用在淺色底上的深化文字色，維持對比度 */
     --blue:#0066FF;
+    --purple:#6B23C7;
     --gray:#8E8E93;
     --topbar-fade: rgba(255,255,255,0.92);
     --navbar-bg: rgba(255,255,255,0.96);
     --bottomnav-h:66px;
     --radius-sm:10px;
     --radius-md:14px;
-    --radius-lg:18px;
+    --radius-lg:24px;
     --shadow-xs: 0 1px 2px rgba(15,15,20,0.04);
     --shadow-sm: 0 1px 2px rgba(15,15,20,0.05), 0 2px 8px rgba(15,15,20,0.05);
     --shadow-md: 0 6px 20px rgba(15,15,20,0.08), 0 1px 3px rgba(15,15,20,0.05);
@@ -58,8 +62,42 @@
     --btn-height: 56px;
     --radius-btn: 18px;
   }
+  /* ---- 深色模式：跟隨系統設定（設定 → 一般 → 外觀），不提供手動切換開關——
+     整個設計系統都是靠 CSS 變數驅動（見上面 :root），這裡只要覆寫變數本身，
+     所有套用這些變數的元件（卡片／按鈕／badge／陰影...）就會一起變成深色，
+     不用每個元件另外寫一次深色樣式。狀態色（red/green/amber/blue/purple）
+     比照 Apple 系統色在深色模式下的慣例微調得更亮一些，維持在深色背景上的
+     可讀性與飽和度觀感；amber-text/green-text 這種「淺底深字」的對比色，深色
+     模式下反過來要用「深底淺字」，所以也跟著換成較亮的版本。 */
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0B0B0F;
+      --bg-gradient: linear-gradient(180deg, #0E0E13 0%, #08080B 100%);
+      --panel:#1C1C22;
+      --panel-2:#232329;
+      --border:#2E2E36;
+      --border-strong:#3A3A44;
+      --text:#F2F2F5;
+      --muted:#8E8E96;
+      --amber:#FF9F0A;
+      --amber-text:#FFB454;
+      --red:#FF453A;
+      --green:#30D158;
+      --green-text:#4ADE80;
+      --blue:#3B82F6;
+      --purple:#A855F7;
+      --gray:#98989D;
+      --topbar-fade: rgba(28,28,34,0.90);
+      --navbar-bg: rgba(28,28,34,0.94);
+      --shadow-xs: 0 1px 2px rgba(0,0,0,0.24);
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.24);
+      --shadow-md: 0 6px 20px rgba(0,0,0,0.36), 0 1px 3px rgba(0,0,0,0.24);
+    }
+  }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
-  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:var(--sans); font-size:var(--text-base); overflow-x:hidden; max-width:100%; -webkit-font-smoothing:antialiased;}
+  html{scroll-behavior:smooth; overscroll-behavior-y:contain;}
+  html,body{margin:0; padding:0; background:var(--bg-gradient); background-attachment:fixed; color:var(--text); font-family:var(--sans); font-size:var(--text-base); overflow-x:hidden; max-width:100%; -webkit-font-smoothing:antialiased;}
+  input,select,textarea{accent-color:var(--blue);}
   html{height:100%;}
   /* 注意：body 這裡務必用 min-height 而不是 height —— 兩者都設 height:100% 會讓
      body 變成自己獨立捲動（body.scrollTop 捲動），導致 window.scrollY 永遠停在 0，
@@ -138,7 +176,7 @@
   .task-card.s-pending::before{background:var(--gray);}
   .task-card.s-dispatch::before{background:var(--red);}
   .task-card.s-onscene::before{background:var(--amber);}
-  .task-card.s-transit::before{background:#6B23C7;}
+  .task-card.s-transit::before{background:var(--purple);}
   .task-card.s-returning::before{background:var(--blue);}
   .task-card.s-completed::before{background:var(--green);}
   .task-top{display:flex; justify-content:space-between; align-items:center; gap:10px;}
@@ -149,18 +187,18 @@
     padding:7px 13px; border-radius:var(--radius-sm); white-space:nowrap;
   }
   .badge .dot{width:6px; height:6px; border-radius:50%; background:currentColor; flex-shrink:0;}
-  .badge.pending{background:rgba(142,142,147,0.13); color:var(--gray);}
-  .badge.dispatch{background:rgba(255,59,48,0.12); color:var(--red);}
-  .badge.onscene{background:rgba(255,149,0,0.13); color:#B45F00;}
-  .badge.transit{background:rgba(107,35,199,0.12); color:#6B23C7;}
-  .badge.returning{background:rgba(0,102,255,0.12); color:var(--blue);}
-  .badge.completed{background:rgba(52,199,89,0.13); color:#177A34;}
+  .badge.pending{background:color-mix(in srgb, var(--gray) 13%, transparent); color:var(--gray);}
+  .badge.dispatch{background:color-mix(in srgb, var(--red) 12%, transparent); color:var(--red);}
+  .badge.onscene{background:color-mix(in srgb, var(--amber) 13%, transparent); color:var(--amber-text);}
+  .badge.transit{background:color-mix(in srgb, var(--purple) 12%, transparent); color:var(--purple);}
+  .badge.returning{background:color-mix(in srgb, var(--blue) 12%, transparent); color:var(--blue);}
+  .badge.completed{background:color-mix(in srgb, var(--green) 13%, transparent); color:var(--green-text);}
   .task-foot{display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:var(--text-xs); color:var(--muted);}
   .task-crew{display:flex; flex-direction:column; gap:6px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border); font-size:var(--text-sm); color:var(--text); font-family:var(--mono); font-weight:500;}
   .empty{color:var(--muted); font-size:var(--text-sm); text-align:center; padding:46px 22px; border:1px dashed var(--border-strong); border-radius:var(--radius-lg);}
 
   /* ---- 患者狀況：突發狀況時記錄生命徵象/主訴，任務卡片凸顯提示 ---- */
-  .task-card.has-patient{border-color:rgba(255,59,48,0.35); box-shadow:0 0 0 1px rgba(255,59,48,0.16), var(--shadow-sm);}
+  .task-card.has-patient{border-color:color-mix(in srgb, var(--red) 35%, transparent); box-shadow:0 0 0 1px color-mix(in srgb, var(--red) 16%, transparent), var(--shadow-sm);}
   .task-card.has-patient::before{background:var(--red); width:6px;}
   .patient-badge{
     display:inline-flex; align-items:center; gap:4px; padding:5px 10px; border-radius:999px;
@@ -174,14 +212,14 @@
     transition:background 0.2s ease, border-color 0.2s ease;
   }
   .patient-card:active{transform:scale(0.99);}
-  .patient-card.has-record{background:rgba(255,59,48,0.045); border-color:rgba(255,59,48,0.24);}
+  .patient-card.has-record{background:color-mix(in srgb, var(--red) 4.5%, transparent); border-color:color-mix(in srgb, var(--red) 24%, transparent);}
   .patient-card-top{display:flex; align-items:flex-start; gap:13px; padding:var(--space-card) var(--space-card) 4px var(--space-card);}
   .patient-card-icon{
     width:44px; height:44px; border-radius:50%; flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
-    background:rgba(0,102,255,0.11); color:var(--blue);
+    background:color-mix(in srgb, var(--blue) 11%, transparent); color:var(--blue);
   }
-  .patient-card.has-record .patient-card-icon{background:rgba(255,59,48,0.14); color:var(--red);}
+  .patient-card.has-record .patient-card-icon{background:color-mix(in srgb, var(--red) 14%, transparent); color:var(--red);}
   .patient-card-body{flex:1; min-width:0; padding-top:3px;}
   .patient-card-title-row{display:flex; align-items:center; justify-content:space-between; gap:8px;}
   .patient-card-title{font-size:var(--text-base); font-weight:800; color:var(--text);}
@@ -224,7 +262,7 @@
      才能真的凸顯出來，不然全部都粗體等於沒有重點。 */
   .vitals-entry-complaint{
     font-size:var(--text-base); font-weight:700; color:var(--text); line-height:1.45;
-    background:rgba(255,59,48,0.08); border-radius:var(--radius-md);
+    background:color-mix(in srgb, var(--red) 8%, transparent); border-radius:var(--radius-md);
     padding:11px 13px; margin-bottom:12px;
   }
   .vitals-entry-complaint b{
@@ -233,15 +271,15 @@
   }
   .vitals-stage-tag{
     display:inline-block; padding:2px 7px; border-radius:6px; font-size:var(--text-xs); font-weight:800;
-    background:rgba(0,102,255,0.12); color:var(--blue); margin-right:7px; vertical-align:middle;
+    background:color-mix(in srgb, var(--blue) 12%, transparent); color:var(--blue); margin-right:7px; vertical-align:middle;
   }
-  .vitals-stage-tag.alt{background:rgba(255,149,0,0.14); color:#B45F00;}
+  .vitals-stage-tag.alt{background:color-mix(in srgb, var(--amber) 14%, transparent); color:var(--amber-text);}
   .vitals-subdetail{font-size:var(--text-xs); color:var(--muted); line-height:1.7; margin-bottom:9px;}
   /* 患者身分是重點資訊，不能跟其他次要文字一樣灰灰的不顯眼，但也不用跟
      主訴一樣粗，用淺色底＋一般粗體字（600）就足夠區隔。 */
   .vitals-patient-line{
     display:flex; align-items:center; gap:7px; font-size:var(--text-sm); font-weight:600; color:var(--text);
-    background:rgba(0,102,255,0.06); border-radius:var(--radius-md); padding:8px 10px; margin-bottom:10px;
+    background:color-mix(in srgb, var(--blue) 6%, transparent); border-radius:var(--radius-md); padding:8px 10px; margin-bottom:10px;
   }
   .vitals-patient-line svg{color:var(--blue); flex-shrink:0;}
   /* 主訴細節、過去病史、過敏史這些文字型資訊：標籤淺灰小字、內容一般字重
@@ -262,13 +300,13 @@
   }
   .vitals-core-item .lbl{font-size:var(--text-xs); color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;}
   .vitals-core-item .val{font-family:var(--mono); font-size:26px; font-weight:700; color:var(--text); line-height:1.3; margin-top:2px; display:block;}
-  .vitals-core-item.warn{background:rgba(255,149,0,0.1);} .vitals-core-item.warn .val{color:#B45F00;}
-  .vitals-core-item.danger{background:rgba(255,59,48,0.1);} .vitals-core-item.danger .val{color:var(--red);}
+  .vitals-core-item.warn{background:color-mix(in srgb, var(--amber) 10%, transparent);} .vitals-core-item.warn .val{color:var(--amber-text);}
+  .vitals-core-item.danger{background:color-mix(in srgb, var(--red) 10%, transparent);} .vitals-core-item.danger .val{color:var(--red);}
   /* 生命徵象：Label 在上（淺灰小字）、數值在下，用等寬字體＋略大字級
      跟一般文字做區隔，字重維持 600（非重粗體），才不會跟主訴搶焦點。 */
   .vitals-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(78px,1fr)); gap:14px var(--space-section);}
   .vitals-item{display:flex; flex-direction:column; gap:var(--space-label-gap);}
-  .vitals-item.warn .val{color:#B45F00;}
+  .vitals-item.warn .val{color:var(--amber-text);}
   .vitals-item.danger .val{color:var(--red); font-weight:800;}
   .vitals-item .lbl{font-size:var(--text-xs); color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;}
   .vitals-item .val{font-family:var(--mono); font-size:var(--text-lg); font-weight:600; color:var(--text); line-height:1.3;}
@@ -313,7 +351,7 @@
   .hazard-banner{margin-bottom:14px;}
   .hazard-row{
     display:flex; align-items:flex-start; gap:10px; color:var(--red);
-    background:rgba(255,59,48,0.08); border:1px solid rgba(255,59,48,0.22);
+    background:color-mix(in srgb, var(--red) 8%, transparent); border:1px solid color-mix(in srgb, var(--red) 22%, transparent);
     border-radius:var(--radius-md); padding:12px 14px; margin-bottom:8px;
   }
   .hazard-row:last-child{margin-bottom:0;}
@@ -335,14 +373,14 @@
   }
   .stat-tile .num{font-size:var(--text-2xl); font-weight:800; font-family:var(--mono); letter-spacing:-0.02em; color:var(--text);}
   .stat-tile .lbl{font-size:var(--text-xs); font-weight:600; margin-top:3px; color:var(--muted);}
-  .stat-tile.t-blue .stat-icon{background:rgba(0,122,255,0.12); color:#0066FF;}
-  .stat-tile.t-orange .stat-icon{background:rgba(255,149,0,0.14); color:#B45F00;}
-  .stat-tile.t-green .stat-icon{background:rgba(52,199,89,0.14); color:#177A34;}
-  .stat-tile.t-purple .stat-icon{background:rgba(107,35,199,0.12); color:#6B23C7;}
+  .stat-tile.t-blue .stat-icon{background:color-mix(in srgb, var(--blue) 12%, transparent); color:var(--blue);}
+  .stat-tile.t-orange .stat-icon{background:color-mix(in srgb, var(--amber) 14%, transparent); color:var(--amber-text);}
+  .stat-tile.t-green .stat-icon{background:color-mix(in srgb, var(--green) 14%, transparent); color:var(--green-text);}
+  .stat-tile.t-purple .stat-icon{background:color-mix(in srgb, var(--purple) 12%, transparent); color:var(--purple);}
   .fab{
     position:fixed; right:22px; bottom:calc(84px + env(safe-area-inset-bottom));
     width:58px; height:58px; border-radius:50%; background:var(--blue); color:#fff; border:none;
-    display:flex; align-items:center; justify-content:center; box-shadow:0 6px 18px rgba(0,102,255,0.35); z-index:25;
+    display:flex; align-items:center; justify-content:center; box-shadow:0 6px 18px color-mix(in srgb, var(--blue) 35%, transparent); z-index:25;
   }
   /* 急診待命：兩個地點各一張卡片，樣式比照 task-card 但沒有左側狀態色條。 */
   .er-standby-card{
@@ -396,7 +434,7 @@
   .feedback-category-option input{position:absolute; opacity:0; width:0; height:0; pointer-events:none;}
   .feedback-category-option .fo-icon{color:var(--muted); flex-shrink:0;}
   .feedback-category-option .fo-label{font-weight:600; font-size:var(--text-sm); color:var(--text);}
-  .feedback-category-option:has(input:checked){border-color:var(--blue); background:rgba(0,102,255,0.06);}
+  .feedback-category-option:has(input:checked){border-color:var(--blue); background:color-mix(in srgb, var(--blue) 6%, transparent);}
   .feedback-category-option:has(input:checked) .fo-icon,
   .feedback-category-option:has(input:checked) .fo-label{color:var(--blue);}
 
@@ -413,7 +451,7 @@
     background:var(--panel); border:2px solid var(--border-strong); color:#fff; z-index:1;
   }
   .step-item.done .step-dot{background:var(--green); border-color:var(--green);}
-  .step-item.current .step-dot{background:var(--blue); border-color:var(--blue); box-shadow:0 0 0 4px rgba(0,102,255,0.16);}
+  .step-item.current .step-dot{background:var(--blue); border-color:var(--blue); box-shadow:0 0 0 4px color-mix(in srgb, var(--blue) 16%, transparent);}
   /* 目前進行中的那一步，圓點加一圈往外擴散淡出的漣漪動畫，一眼就看得出
      「這是現在正在走的步驟」，跟已完成／未開始的圓點區分開來。 */
   .step-item.current .step-dot::after{
@@ -424,7 +462,13 @@
     0%{ transform:scale(1); opacity:0.7; }
     100%{ transform:scale(2.2); opacity:0; }
   }
+  /* 使用者在系統設定裡開了「減少動態效果」，全站所有動畫／轉場統一縮到
+     幾乎瞬間完成（不是關掉——避免有些效果本來就靠 transition 才能正確
+     切換狀態，直接設 none 可能讓畫面卡在中間態），滑動也改回立即跳轉、
+     不做平滑捲動，尊重使用者的無障礙偏好設定。 */
   @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important; }
+    html{ scroll-behavior:auto; }
     .step-item.current .step-dot::after{ animation:none; }
   }
   .step-label{font-size:var(--text-sm); font-weight:600; color:var(--muted);}
@@ -445,14 +489,14 @@
   .sticky-action-bar .btn-primary, .sticky-action-bar .btn-ghost{
     flex:1; margin-top:0;
   }
-  .btn-primary.green{background:var(--green); box-shadow:0 4px 14px rgba(52,199,89,0.25);}
+  .btn-primary.green{background:var(--green); box-shadow:0 4px 14px color-mix(in srgb, var(--green) 25%, transparent);}
   .sticky-bar-spacer{height:78px;}
   .btn-ghost{
     background:none; border:1.5px solid var(--border); color:var(--text); font-weight:600;
     border-radius:var(--radius-btn); min-height:var(--btn-height); padding:0 20px; font-size:var(--text-base); font-family:var(--sans);
     display:flex; align-items:center; justify-content:center; gap:8px;
   }
-  .btn-ghost.danger{color:var(--red); border-color:rgba(255,59,48,0.25); background:rgba(255,59,48,0.06);}
+  .btn-ghost.danger{color:var(--red); border-color:color-mix(in srgb, var(--red) 25%, transparent); background:color-mix(in srgb, var(--red) 6%, transparent);}
 
   .tl-edit-btn{background:none; border:none; color:var(--blue); font-size:var(--text-xs); font-weight:600; padding:2px 0; flex-shrink:0;}
 
@@ -465,7 +509,7 @@
     transition:border-color 0.15s ease, box-shadow 0.15s ease;
   }
   .field input:focus, .field select:focus, .field textarea:focus{
-    outline:none; border-color:var(--blue); box-shadow:0 0 0 3px rgba(0,102,255,0.14);
+    outline:none; border-color:var(--blue); box-shadow:0 0 0 3px color-mix(in srgb, var(--blue) 14%, transparent);
   }
   .field textarea{resize:vertical; min-height:72px;}
   .field input:disabled{color:var(--muted); background:var(--bg);}
@@ -473,7 +517,7 @@
     display:flex; align-items:center; gap:8px; margin-top:8px;
     font-size:var(--text-sm); color:var(--muted); font-weight:600;
   }
-  .checkbox-inline input{width:auto; padding:0; accent-color:var(--blue);}
+  .checkbox-inline input{width:auto; padding:0;}
   /* 建立勤務：勤務／洽公 任務類型切換 */
   .seg-toggle{display:flex; gap:8px;}
   .seg-toggle button{
@@ -510,14 +554,14 @@
   .btn-primary{
     width:100%; min-height:var(--btn-height); background:var(--blue); color:#fff; font-weight:600;
     border:none; padding:0 20px; border-radius:var(--radius-btn); font-size:var(--text-base); margin-top:4px;
-    box-shadow:0 4px 14px rgba(0,102,255,0.25); display:flex; align-items:center; justify-content:center; gap:8px;
+    box-shadow:0 4px 14px color-mix(in srgb, var(--blue) 25%, transparent); display:flex; align-items:center; justify-content:center; gap:8px;
   }
   .admin-row{display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; background:var(--panel); border:1px solid var(--border); padding:14px 16px; border-radius:var(--radius-md); margin-bottom:10px; box-shadow:var(--shadow-xs);}
   .admin-row .name{font-size:var(--text-sm); font-weight:600; word-break:break-word;}
   .admin-row .sub{font-size:var(--text-xs); color:var(--muted); font-family:var(--mono); word-break:break-word;}
   .admin-row > div:first-child{min-width:0; flex:1 1 160px;}
   .icon-btn{background:var(--panel-2); border:1px solid var(--border); color:var(--text); font-weight:600; border-radius:var(--radius-sm); padding:9px 13px; font-size:var(--text-sm); display:inline-flex; align-items:center; gap:5px;}
-  .icon-btn.danger{color:var(--red); border-color:rgba(255,59,48,0.25); background:rgba(255,59,48,0.06);}
+  .icon-btn.danger{color:var(--red); border-color:color-mix(in srgb, var(--red) 25%, transparent); background:color-mix(in srgb, var(--red) 6%, transparent);}
   .icon-btn.primary{color:#fff; background:var(--blue); border-color:var(--blue);}
   .role-select{background:var(--panel-2); border:1px solid var(--border); color:var(--text); font-size:var(--text-xs); border-radius:var(--radius-sm); padding:8px 10px; font-family:var(--mono); min-width:0; max-width:100%;}
   .role-controls{display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; width:100%;}
@@ -528,9 +572,9 @@
   .tab2-count{margin-left:5px; opacity:0.65; font-weight:700;}
   /* 頁籤數量較多（例如任務狀態篩選）時改成可橫向滑動的膠囊列，每個頁籤依內容寬度排列，
      不會被擠壓到文字換行。 */
-  .tabs2.scroll{overflow-x:auto; scrollbar-width:none;}
+  .tabs2.scroll{overflow-x:auto; scrollbar-width:none; scroll-snap-type:x proximity;}
   .tabs2.scroll::-webkit-scrollbar{display:none;}
-  .tabs2.scroll .tab2{flex:0 0 auto; padding:9px 15px;}
+  .tabs2.scroll .tab2{flex:0 0 auto; padding:9px 15px; scroll-snap-align:start;}
 
   /* ---- records search ---- */
   .search-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;}
@@ -542,7 +586,7 @@
     font-weight:600; font-size:var(--text-xs); padding:8px 15px; border-radius:var(--radius-sm); font-family:var(--sans);
     box-shadow:var(--shadow-xs);
   }
-  .pill.active{background:var(--blue); border-color:var(--blue); color:#fff; box-shadow:0 3px 10px rgba(0,102,255,0.25);}
+  .pill.active{background:var(--blue); border-color:var(--blue); color:#fff; box-shadow:0 3px 10px color-mix(in srgb, var(--blue) 25%, transparent);}
   .filters-toggle{
     display:flex; align-items:center; justify-content:center; gap:6px; width:100%;
     background:none; border:none; padding:6px 2px; margin-bottom:2px;
@@ -685,7 +729,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-175-liaison-no-patient-card";
+const BUILD_TAG = "2026-07-08-176-ios-design-tokens";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -693,7 +737,7 @@ const BUILD_TAG = "2026-07-08-175-liaison-no-patient-card";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "1.9";
+const APP_MAJOR_MINOR = "1.10";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -1148,6 +1192,7 @@ const RELEASE_NOTES = [
     "修正首頁「今日概況」營內車／營外車統計：待命中（急診待命尚未出勤）的車輛不會再被誤算成營外車，要等真的回報「出勤」、離開營區之後才會列入統計",
     "首頁「今日概況」的營內車／營外車改成獨立一列各佔一半寬度，不再跟其他三格統計數字擠成同一個三欄網格、留白不對稱",
     "洽公任務的勤務詳情頁不再顯示「患者狀況」卡片，洽公性質上不會有患者",
+    "視覺設計系統升級（第一階段：設計 token 地基，比照 iOS 26 Human Interface 風格）：新增跟隨系統設定的深色模式（設定 → 一般 → 外觀，不用手動切換）；卡片圓角從 18px 加大到 24px；背景改成柔和的漸層；狀態色（紅/綠/橘/藍/紫）統一改用 color-mix() 動態算出淺色調背景，跟著主題色一起變化；任務狀態篩選頁籤改成滑動吸附（scroll-snap），滑到定點會自動卡住；表單勾選/選取/開關統一套用系統主題色；全站啟用平滑捲動與防止下拉回彈干擾；「減少動態效果」無障礙設定會讓全站動畫/轉場統一縮短到幾乎瞬間完成",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
