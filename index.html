@@ -430,7 +430,9 @@
   .feedback-category-option{
     position:relative; cursor:pointer; display:flex; align-items:center; gap:9px;
     padding:13px 14px; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-sm);
+    transition:transform 0.12s ease;
   }
+  .feedback-category-option:active{transform:scale(0.97);}
   .feedback-category-option input{position:absolute; opacity:0; width:0; height:0; pointer-events:none;}
   .feedback-category-option .fo-icon{color:var(--muted); flex-shrink:0;}
   .feedback-category-option .fo-label{font-weight:600; font-size:var(--text-sm); color:var(--text);}
@@ -533,6 +535,7 @@
     display:inline-block; padding:9px 16px; border-radius:999px; border:1.5px solid var(--border);
     font-size:var(--text-xs); font-weight:600; color:var(--text); background:var(--panel-2); transition:all .15s ease;
   }
+  .chip-option:active span{transform:scale(0.93);}
   .chip-option:has(input:checked) span{background:var(--blue); border-color:var(--blue); color:#fff;}
   /* 主訴等自由輸入框的標籤列，右側放快捷選字下拉選單，選了之後塞進輸入框。 */
   .field-label-row{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:var(--space-label-gap);}
@@ -556,11 +559,20 @@
     border:none; padding:0 20px; border-radius:var(--radius-btn); font-size:var(--text-base); margin-top:4px;
     box-shadow:0 4px 14px color-mix(in srgb, var(--blue) 25%, transparent); display:flex; align-items:center; justify-content:center; gap:8px;
   }
-  .admin-row{display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; background:var(--panel); border:1px solid var(--border); padding:14px 16px; border-radius:var(--radius-md); margin-bottom:10px; box-shadow:var(--shadow-xs);}
+  .admin-row{display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; background:var(--panel); border:1px solid var(--border); padding:14px 16px; border-radius:var(--radius-md); margin-bottom:10px; box-shadow:var(--shadow-xs); transition:transform 0.12s ease;}
+  /* 少數 admin-row 整列可點擊（例如角色預覽），加這個 class 才有按壓回饋，
+     單純列出資料、只有裡面的編輯/刪除按鈕可點的 admin-row 不套用，避免
+     整列看起來像可以點但其實點了沒反應。 */
+  .admin-row.clickable{cursor:pointer;}
+  .admin-row.clickable:active{transform:scale(0.985);}
   .admin-row .name{font-size:var(--text-sm); font-weight:600; word-break:break-word;}
   .admin-row .sub{font-size:var(--text-xs); color:var(--muted); font-family:var(--mono); word-break:break-word;}
   .admin-row > div:first-child{min-width:0; flex:1 1 160px;}
-  .icon-btn{background:var(--panel-2); border:1px solid var(--border); color:var(--text); font-weight:600; border-radius:var(--radius-sm); padding:9px 13px; font-size:var(--text-sm); display:inline-flex; align-items:center; gap:5px;}
+  /* icon-btn 有時是 <a>（例如導航連結）不是 <button>，全站按壓縮放那條全域規則
+     （見上面 button:active）只認 <button> 標籤，這裡另外補上 class 層級的按壓
+     回饋，讓連結版本的按鈕也有一致的觸覺回饋。 */
+  .icon-btn{background:var(--panel-2); border:1px solid var(--border); color:var(--text); font-weight:600; border-radius:var(--radius-sm); padding:9px 13px; font-size:var(--text-sm); display:inline-flex; align-items:center; gap:5px; transition:transform 0.12s ease, opacity 0.12s ease;}
+  .icon-btn:active{transform:scale(0.95); opacity:0.85;}
   .icon-btn.danger{color:var(--red); border-color:color-mix(in srgb, var(--red) 25%, transparent); background:color-mix(in srgb, var(--red) 6%, transparent);}
   .icon-btn.primary{color:#fff; background:var(--blue); border-color:var(--blue);}
   .role-select{background:var(--panel-2); border:1px solid var(--border); color:var(--text); font-size:var(--text-xs); border-radius:var(--radius-sm); padding:8px 10px; font-family:var(--mono); min-width:0; max-width:100%;}
@@ -729,7 +741,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-176-ios-design-tokens";
+const BUILD_TAG = "2026-07-08-177-micro-interactions";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1193,6 +1205,7 @@ const RELEASE_NOTES = [
     "首頁「今日概況」的營內車／營外車改成獨立一列各佔一半寬度，不再跟其他三格統計數字擠成同一個三欄網格、留白不對稱",
     "洽公任務的勤務詳情頁不再顯示「患者狀況」卡片，洽公性質上不會有患者",
     "視覺設計系統升級（第一階段：設計 token 地基，比照 iOS 26 Human Interface 風格）：新增跟隨系統設定的深色模式（設定 → 一般 → 外觀，不用手動切換）；卡片圓角從 18px 加大到 24px；背景改成柔和的漸層；狀態色（紅/綠/橘/藍/紫）統一改用 color-mix() 動態算出淺色調背景，跟著主題色一起變化；任務狀態篩選頁籤改成滑動吸附（scroll-snap），滑到定點會自動卡住；表單勾選/選取/開關統一套用系統主題色；全站啟用平滑捲動與防止下拉回彈干擾；「減少動態效果」無障礙設定會讓全站動畫/轉場統一縮短到幾乎瞬間完成",
+    "視覺設計系統升級（第二階段：微互動按壓回饋）：導航連結按鈕（Google/Apple 導航）、洽公人員多選標籤、意見回饋類別選項、角色預覽列點按時補上縮放回饋，跟全站其他按鈕/卡片的觸覺回饋一致",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -3911,7 +3924,7 @@ function viewRolePreview(){
       預覽僅切換畫面顯示內容，方便確認各角色能看到哪些功能／資料；不會變更任何帳號的實際權限，Firestore 讀寫仍以您目前登入帳號的真實身份判斷。
     </div>
     ${PREVIEW_OPTIONS.map(o => `
-      <div class="admin-row" style="cursor:pointer;" onclick="window.__startRolePreview('${o.role}','${o.unit}')">
+      <div class="admin-row clickable" onclick="window.__startRolePreview('${o.role}','${o.unit}')">
         <div><div class="name">${esc(o.label)}</div><div class="sub">${ROLE_LABEL[o.role]}${o.unit ? ' · ' + unitLabel(o.unit) : ''}</div></div>
         <span class="chev" style="color:var(--muted); font-size:20px;">›</span>
       </div>`).join("")}
