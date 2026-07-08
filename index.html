@@ -186,6 +186,11 @@
   /* ---- 電話號碼 ---- */
   .phone-link{color:var(--blue); text-decoration:underline;}
 
+  /* ---- 階級/單位這類跟在姓名或車號後面的次要說明文字 ---- */
+  /* 姓名/車號才是主要資訊，階級（上士/下士/中尉）、車輛所屬單位（第一連）
+     這類附加說明縮小＋灰階，降低視覺份量，不跟主要資訊搶焦點。 */
+  .muted-suffix{font-size:var(--text-sm); font-weight:400; color:var(--muted);}
+
   /* ---- top status strip ---- */
   .topbar{
     background:linear-gradient(180deg, var(--panel) 0%, var(--topbar-fade) 100%);
@@ -933,7 +938,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-189-vitals-qa-panel-gcs-split";
+const BUILD_TAG = "2026-07-08-190-mute-rank-unit-suffix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1411,6 +1416,7 @@ const RELEASE_NOTES = [
     "全站數字（時間戳記、生命徵象數值、狀態徽章等等寬字體欄位）字型改成優先使用 SF Mono，非 Apple 裝置或找不到 SF Mono 時退回原本的 JetBrains Mono",
     "右上角通知／登出按鈕改成液態玻璃質感，跟全站返回鍵一致：毛玻璃透明圓圈＋高光/陰影，按下去放大＋提亮＋外圍柔光",
     "患者紀錄的問診細節、過去病史、過敏史合併成同一個灰底面板（原本是兩個各自獨立的面板），其他不適/脊椎評估改成各自佔滿一整行；GCS 數值改成大字顯示總分、E/V/M 分項縮小放在下面當輔助說明，不再整串原始字串擠在一起",
+    "姓名後面的階級（上士/下士/中尉…）、車號後面的所屬單位（第一連/第二連…）字體縮小改灰階，降低視覺份量，讓姓名/車號本身更突出（急診待命卡片、勤務詳情頁、任務卡片等有顯示這類資訊的地方一併套用）",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -2669,12 +2675,13 @@ function findPersonnel(name, unit){
   return findPersonnelByName(scoped, name) || (unit ? findPersonnelByName(state.personnel, name) : null);
 }
 // 姓名 + 階級（若姓名本身沒有帶階級，如新版下拉選單只存姓名，才補上人員名冊的階級）。
-// 凡是畫面上會出現人名的地方都套用，讓階級一律跟著姓名顯示。
+// 凡是畫面上會出現人名的地方都套用，讓階級一律跟著姓名顯示。階級用縮小的
+// 灰階字（.muted-suffix）弱化，不跟姓名搶視覺焦點，姓名才是主要資訊。
 function nameWithRank(name, unit){
   if (!name) return esc('—');
   const match = findPersonnel(name, unit);
-  const rank = (match && match.title && !name.includes(match.title)) ? ' ' + match.title : '';
-  return esc(name) + esc(rank);
+  const rank = (match && match.title && !name.includes(match.title)) ? match.title : '';
+  return esc(name) + (rank ? ` <span class="muted-suffix">${esc(rank)}</span>` : '');
 }
 // 編輯勤務頁面「車長／駕駛」欄位目前已指派人選的顯示文字：姓名＋階級，
 // 用空格分隔（例如「林伯霖 上士」），不加點號、不顯示單位。
@@ -2683,11 +2690,18 @@ function crewDisplayLabel(name, taskUnit){
   if (!match) return name;
   return `${match.name}${match.title ? ' ' + match.title : ''}`;
 }
-// 值班醫官姓名＋階級，格式跟車長／駕駛一致：空格分隔、不加括號。
+// 值班醫官姓名＋階級，格式跟車長／駕駛一致：空格分隔、不加括號；階級一樣
+// 用 .muted-suffix 縮小弱化。呼叫端不用再另外包 esc()，這裡已經處理過escaping。
 function doctorLabel(name){
   if (!name) return "";
   const match = state.doctors.find(d => d.name === name);
-  return match && match.title ? `${name} ${match.title}` : name;
+  return match && match.title ? `${esc(name)} <span class="muted-suffix">${esc(match.title)}</span>` : esc(name);
+}
+// 車號＋所屬單位（例如「軍H-20618（第一連）」），單位用 .muted-suffix
+// 縮小弱化，不跟車號搶視覺焦點。plate 為空時顯示「—」、不附單位。
+function vehicleLabelHtml(plate){
+  const unit = plate ? vehicleUnitLabel(plate) : '';
+  return esc(plate || '—') + (unit ? ` <span class="muted-suffix">（${esc(unit)}）</span>` : '');
 }
 // 姓名 + 階級 + EMT 證照等級 + 電話（可點擊撥打），給車長/駕駛這種需要
 // 聯絡方式、且要讓調度端知道現場救護量能的欄位用。
@@ -2763,7 +2777,7 @@ function taskCard(t){
         ${statusBadge(s)}
       </div>
     </div>
-    <div class="task-meta">${isLiaison ? '洽公' : `${esc(t.vehicle||'—')}${t.vehicle && vehicleUnitLabel(t.vehicle) ? '（'+esc(vehicleUnitLabel(t.vehicle))+'）' : ''} · ${taskScope(t)}`} · ${esc(t.location||'—')}</div>
+    <div class="task-meta">${isLiaison ? '洽公' : `${vehicleLabelHtml(t.vehicle)} · ${taskScope(t)}`} · ${esc(t.location||'—')}</div>
     <div class="task-crew">
       ${locationLine ? `<span>目前位置：${locationLine}</span>` : ""}
       ${isLiaison
@@ -3608,13 +3622,13 @@ function viewTaskDetail(taskId){
       <div class="kv">
         ${isLiaison
           ? `<div class="k">人員</div><div class="v">${personnelLine || '—'}</div>`
-          : `<div class="k">車號</div><div class="v">${esc(t.vehicle||'—')}${t.vehicle && vehicleUnitLabel(t.vehicle) ? '（'+esc(vehicleUnitLabel(t.vehicle))+'）' : ''}</div>
+          : `<div class="k">車號</div><div class="v">${vehicleLabelHtml(t.vehicle)}</div>
              <div class="k">營內／營外</div><div class="v">${taskScope(t)}</div>`}
         <div class="k">地點</div><div class="v">${esc(t.location||'—')}</div>
         ${!isLiaison ? `
         <div class="k">車長</div><div class="v">${crewLabel(t.crewLeader, t.unit)}</div>
         <div class="k">駕駛</div><div class="v">${crewLabel(t.driver, t.unit)}</div>
-        ${t.dutyOfficer ? `<div class="k">值班醫官</div><div class="v">${esc(doctorLabel(t.dutyOfficer))}</div>` : ""}
+        ${t.dutyOfficer ? `<div class="k">值班醫官</div><div class="v">${doctorLabel(t.dutyOfficer)}</div>` : ""}
         <div class="k">紀錄器</div><div class="v">${esc((t.recorders||[]).join('、') || '—')}</div>` : ""}
         <div class="k">建立人</div><div class="v">${nameWithRank(t.createdByName, t.unit)}</div>
         <div class="k">建立時間</div><div class="v">${fmtTime(new Date(t.createdAt||0).getTime())}</div>
@@ -4211,10 +4225,10 @@ function viewErStandby(){
         ${isBound ? `
         <div class="er-standby-meta">建立於 ${fmtTime(new Date(boundTask.createdAt||0).getTime())}${isStandbyStale(new Date(boundTask.createdAt||0).getTime()) ? `　<span style="color:var(--amber);">${icon('alert',13)} 尚未於今日 08:00 後更新，請確認車長/駕駛是否需要換班</span>` : ''}</div>
         <div class="er-standby-grid">
-          <div class="detail-item"><span class="lbl">車號</span><span class="val">${esc(boundTask.vehicle||'—')}${boundTask.vehicle && vehicleUnitLabel(boundTask.vehicle) ? '（'+esc(vehicleUnitLabel(boundTask.vehicle))+'）' : ''}</span></div>
+          <div class="detail-item"><span class="lbl">車號</span><span class="val">${vehicleLabelHtml(boundTask.vehicle)}</span></div>
           <div class="detail-item"><span class="lbl">車長</span><span class="val">${crewLine.main}</span>${crewLine.sub ? `<span class="sub-line">${crewLine.sub}</span>` : ''}</div>
           <div class="detail-item"><span class="lbl">駕駛</span><span class="val">${driverLine.main}</span>${driverLine.sub ? `<span class="sub-line">${driverLine.sub}</span>` : ''}</div>
-          <div class="detail-item"><span class="lbl">值班醫官</span><span class="val">${boundTask.dutyOfficer ? esc(doctorLabel(boundTask.dutyOfficer)) : "尚未設定"}</span></div>
+          <div class="detail-item"><span class="lbl">值班醫官</span><span class="val">${boundTask.dutyOfficer ? doctorLabel(boundTask.dutyOfficer) : "尚未設定"}</span></div>
         </div>
         <button class="btn-primary" style="width:100%;" onclick="window.__nav({name:'task', id:'${boundTask.id}'})">查看／管理</button>
         ` : `
