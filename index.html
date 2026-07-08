@@ -945,12 +945,15 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/fireba
 import {
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import {
+  getMessaging, getToken, deleteToken, onMessage, isSupported as isMessagingSupported
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging.js";
 
 /* =========================================================
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-192-emt-dot-doctor-phone";
+const BUILD_TAG = "2026-07-09-193-push-notification-opt-in";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -958,7 +961,7 @@ const BUILD_TAG = "2026-07-08-192-emt-dot-doctor-phone";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "1.10";
+const APP_MAJOR_MINOR = "1.11";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -982,6 +985,10 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+// 推播通知（Firebase Cloud Messaging）用的 Web Push 憑證公鑰，在 Firebase
+// Console → 專案設定 → 雲端訊息傳遞 → Web Push 憑證 產生，是公開金鑰，
+// 不是密鑰，可以放在前端程式碼裡。
+const FCM_VAPID_KEY = "BP0uwpNgyOr3TDnqxI_bLRuI28DH9Q4SCH_ocG5nfvgBMeJmSv0TX41L307-lwD1fiQ4VuWJotrE6fNBwf8D5Is";
 const googleProvider = new GoogleAuthProvider();
 
 /* =========================================================
@@ -1378,6 +1385,9 @@ const HOSPITAL_COUNTIES = ["臺中市", "嘉義市", "嘉義縣"];
 // 一大段連續文字），畫面上會排成清單，才看得清楚；同一天有多筆出貨就往
 // 同一個日期的 items 陣列後面加，不要開新的日期項目。
 const RELEASE_NOTES = [
+  { date: "2026/07/09", items: [
+    "新增推播通知功能（第一階段：使用者可以自行開啟/關閉）：「更多 → 推播通知」新增開關，開啟後裝置會註冊到後端；iPhone 需要先「加入主畫面」才能使用背景推播，一般 Safari 分頁不支援時會有提示",
+  ] },
   { date: "2026/07/08", items: [
     "基礎資料管理新增「醫官」名冊（姓名/電話），建立勤務的「值班醫官」欄位改成從這份名冊下拉選擇，不用再手動打字",
     "建立/編輯勤務選車長、駕駛時，預設只列出該勤務所屬單位的人員（比照跨單位借車的做法），勾選「跨單位選人」才會展開列出其他單位；已指派跨單位人員的既有勤務，編輯時會自動展開避免看起來像被取消",
@@ -1656,7 +1666,13 @@ const state = {
   // 背景刷新（只抓最近期間）會把這些額外查到的舊資料整個蓋掉。
   deepTasks: [], deepEvents: [], deepVitals: [],
   recordsDeepQuery: null, // { loading, from, to } | null：目前是否正在查詢/已查過超出預載範圍的自訂日期
-  themeMode: loadThemeMode() // "system" | "light" | "dark"：外觀模式，預設跟隨系統，存在 localStorage 跨裝置不同步（單純本機偏好）
+  themeMode: loadThemeMode(), // "system" | "light" | "dark"：外觀模式，預設跟隨系統，存在 localStorage 跨裝置不同步（單純本機偏好）
+  // 推播通知：這三個是裝置/瀏覽器層級的暫時狀態，不能放進 state.profile
+  // （profilePoll 每次背景刷新都會用 Firestore 讀回來的資料整個蓋掉
+  // state.profile，這些欄位又不存在 Firestore 裡，會被覆蓋消失）。
+  pushSupported: null, // null=尚未檢查；true/false=瀏覽器是否支援背景推播（iOS Safari 只有加入主畫面後才是 true）
+  pushPermission: (typeof Notification !== "undefined" ? Notification.permission : "unsupported"), // "default"|"granted"|"denied"|"unsupported"
+  pushEnabling: false // 正在請求權限/註冊 token 中，避免重複點擊
 };
 applyThemeMode(state.themeMode); // 在第一次 render() 之前就套用，避免畫面先閃一次錯的模式再跳回正確的
 let tasksPoll = null, eventsPoll = null, profilePoll = null;
@@ -2135,6 +2151,106 @@ function restoreSavedRoute(){
   } catch (e) {}
 }
 
+/* =========================================================
+   7b) 推播通知（Firebase Cloud Messaging）
+   iOS Safari 只有「加入主畫面」變成 PWA 之後才支援背景推播，一般網頁
+   分頁完全不支援（isMessagingSupported() 會回傳 false）；桌機/Android
+   Chrome 一般網頁分頁就支援，不用加主畫面。
+   ========================================================= */
+let pushForegroundSetup = false;
+async function checkPushSupport(){
+  try { state.pushSupported = await isMessagingSupported(); }
+  catch(e) { state.pushSupported = false; }
+  return state.pushSupported;
+}
+// App 開著（前景）時收到推播不會跳系統通知，改用站內 toast 顯示，
+// 只需要設定一次，重複呼叫會被 pushForegroundSetup 擋掉。
+function setupForegroundMessaging(){
+  if (pushForegroundSetup) return;
+  pushForegroundSetup = true;
+  checkPushSupport().then(supported => {
+    if (!supported) return;
+    const messaging = getMessaging(app);
+    onMessage(messaging, (payload) => {
+      const title = (payload.notification && payload.notification.title) || "新通知";
+      const body = (payload.notification && payload.notification.body) || "";
+      showToast(body ? `${title}：${body}` : title);
+    });
+  }).catch(e => console.error("前景推播監聽設定失敗", e));
+}
+// 注意：render() 每次都會整個重畫 #app.innerHTML（含 #toast 節點本身），
+// 如果在 showToast() 之後才呼叫 render()，剛設定好的 toast 文字/顯示狀態
+// 會被新產生的空白 toast 節點整個蓋掉，畫面上等於完全沒看到 toast 閃過。
+// 所以這裡每個分支都刻意讓 render() 先於對應的 showToast()，不能用
+// try/finally 圖方便統一收尾。
+async function enablePush(){
+  if (state.pushEnabling) return;
+  state.pushEnabling = true; render();
+  try {
+    const supported = await checkPushSupport();
+    if (!supported) {
+      state.pushEnabling = false; render();
+      showToast("此裝置/瀏覽器不支援推播，iPhone 請先「加入主畫面」後從主畫面圖示開啟再試一次");
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    state.pushPermission = permission;
+    if (permission !== "granted") {
+      state.pushEnabling = false; render();
+      showToast("通知權限被拒絕，請到手機設定裡開啟這個網站的通知權限");
+      return;
+    }
+    const reg = await navigator.serviceWorker.register("firebase-messaging-sw.js");
+    const messaging = getMessaging(app);
+    const token = await getToken(messaging, { vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: reg });
+    if (!token) {
+      state.pushEnabling = false; render();
+      showToast("無法取得推播權杖，請稍後再試");
+      return;
+    }
+    const existing = state.profile.fcmTokens || [];
+    if (!existing.includes(token)) {
+      const updated = [...existing, token];
+      await fsSetDoc(`users/${state.user.uid}`, { fcmTokens: updated });
+      state.profile.fcmTokens = updated;
+    }
+    state.pushEnabling = false; render();
+    showToast("推播通知已開啟");
+  } catch(e) {
+    console.error("開啟推播失敗", e);
+    state.pushEnabling = false; render();
+    showToast("開啟推播失敗：" + (e.message || e));
+  }
+}
+async function disablePush(){
+  if (state.pushEnabling) return;
+  state.pushEnabling = true; render();
+  try {
+    const messaging = getMessaging(app);
+    const reg = await navigator.serviceWorker.getRegistration("firebase-messaging-sw.js");
+    // 先拿目前裝置實際在用的 token 才知道要從清單移除哪一筆（已註冊過的話
+    // getToken 會回傳同一組既有 token，不會重新產生新的）。
+    let token = null;
+    if (reg) { try { token = await getToken(messaging, { vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: reg }); } catch(e){} }
+    const existing = state.profile.fcmTokens || [];
+    const updated = token ? existing.filter(t => t !== token) : [];
+    await fsSetDoc(`users/${state.user.uid}`, { fcmTokens: updated });
+    state.profile.fcmTokens = updated;
+    try { await deleteToken(messaging); } catch(e){}
+    state.pushEnabling = false; render();
+    showToast("推播通知已關閉");
+  } catch(e) {
+    console.error("關閉推播失敗", e);
+    state.pushEnabling = false; render();
+    showToast("關閉推播失敗：" + (e.message || e));
+  }
+}
+function pushStatusLabel(){
+  if (state.pushSupported === false) return "此裝置不支援";
+  if (state.pushPermission === "denied") return "已被瀏覽器封鎖";
+  return (state.profile && state.profile.fcmTokens && state.profile.fcmTokens.length) ? "已開啟" : "已關閉";
+}
+
 onAuthStateChanged(auth, async (user) => {
   cleanupListeners();
   if (user && isIdleTimedOut()) {
@@ -2159,6 +2275,8 @@ onAuthStateChanged(auth, async (user) => {
     state.profile = { uid: user.uid, ...data };
     restoreSavedRoute();
     if (state.profile.role !== "pending") startDataListeners();
+    checkPushSupport().then(() => safeRender());
+    setupForegroundMessaging();
     render();
 
     profilePoll = poll(async () => {
@@ -3947,6 +4065,7 @@ function viewProfile(){
     settingsRow({icon:'hospital', bg:'#FFF2E0', fg:'#B45F00', title:'醫院資訊', onclick:"window.__nav({name:'hospitals'})"}),
     settingsRow({icon:'user', bg:'#E8F1FF', fg:'#0056C7', title:'個人資料', onclick:"window.__editProfile()"}),
     settingsRow({icon:'sun', bg:'#F2E9FE', fg:'#6B23C7', title:'螢幕顯示', subtitle:THEME_MODE_LABEL[state.themeMode], onclick:"window.__nav({name:'displayAppearance'})"}),
+    settingsRow({icon:'bell', bg:'#FFEAEA', fg:'#C7233B', title:'推播通知', subtitle:pushStatusLabel(), onclick:"window.__nav({name:'pushSettings'})"}),
     settingsRow({icon:'chat', bg:'#E9F9EF', fg:'#177A34', title:'意見回饋', onclick:"window.__nav({name:'feedback'})"}),
   ];
   // Section 2：管理功能，只有能進管理後台的角色（admin／高勤官／連級主官管）
@@ -3980,6 +4099,42 @@ function viewProfile(){
     ${settingsSection('管理功能', adminRows)}
     ${settingsSection('系統資訊', systemRows)}
     <button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="window.__logout()">登出</button>
+  `;
+}
+
+/* =========================================================
+   17a-1a2) 畫面：推播通知
+   ========================================================= */
+function viewPushSettings(){
+  const p = state.profile;
+  const tokens = p.fcmTokens || [];
+  const enabled = tokens.length > 0;
+  const supported = state.pushSupported;
+  const denied = state.pushPermission === "denied";
+  return `
+    <div class="back-row">${backBtn({name:'profile'})}</div>
+    <div class="section-label">推播通知</div>
+    <div class="detail-head">
+      <div class="appearance-auto-row">
+        <span style="font-size:var(--text-base); color:var(--text);">開啟推播通知</span>
+        <label class="ios-switch">
+          <input type="checkbox" ${enabled?'checked':''} ${state.pushEnabling?'disabled':''} onchange="window.__togglePush(this.checked)">
+          <span class="track"></span>
+          <span class="knob"></span>
+        </label>
+      </div>
+    </div>
+    ${denied ? `
+    <div class="weather-tip" style="margin-top:14px;">
+      ${icon('alert',16)}
+      <div>通知權限已被瀏覽器封鎖，請到手機「設定 → 通知」（或 Safari 網站設定）裡找到本網站，手動開啟通知權限後再回來開啟。</div>
+    </div>` : ''}
+    ${supported === false ? `
+    <div class="weather-tip" style="margin-top:14px;">
+      ${icon('alert',16)}
+      <div>iPhone 需要先把這個網站「加入主畫面」，並且從主畫面的圖示開啟（不是在 Safari 分頁裡開），推播才能生效。</div>
+    </div>` : ''}
+    <div style="color:var(--muted); font-size:var(--text-xs); padding:14px 4px 0 4px;">開啟後，有新任務指派給你、急診待命出勤／狀態變更、患者生命徵象出現危急異常時，就算沒有打開這個網頁也會收到推播通知。</div>
   `;
 }
 
@@ -4741,6 +4896,7 @@ const ROUTE_VIEWS = {
   notifications: viewNotifications,
   profile: viewProfile,
   displayAppearance: viewDisplayAppearance,
+  pushSettings: viewPushSettings,
   about: viewAbout,
   aboutTerms: viewAboutTerms,
   aboutPrivacy: viewAboutPrivacy,
@@ -5302,6 +5458,7 @@ window.__toggleThemeAuto = (turnedOn) => {
 };
 window.__editProfile = () => { state.profileEditing = true; render(); };
 window.__cancelEditProfile = () => { state.profileEditing = false; render(); };
+window.__togglePush = (turnedOn) => { if (turnedOn) enablePush(); else disablePush(); };
 window.__saveProfile = (ev) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
