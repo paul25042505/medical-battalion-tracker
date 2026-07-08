@@ -684,7 +684,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-171-stepper-hospital-nav";
+const BUILD_TAG = "2026-07-08-172-sticky-btn-hospital-nav";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1142,7 +1142,7 @@ const RELEASE_NOTES = [
     "修正急診待命勤務出勤後回報「抵達現場」，勤務進度時間軸誤顯示成抵達自己出發的醫務所本身（例如「抵達現場：成功北醫務所」），改成正確顯示回報出勤時選的送醫醫院",
     "回報「出勤」表單選好送醫醫院後，馬上出現 Google／Apple 一鍵導航按鈕，不用等表單送出、跳去勤務詳情頁才找得到導航",
     "勤務進度時間軸「編輯」回報新增「刪除這筆回報」功能：誤按到不該回報的步驟時可以整筆撤銷、狀態退回上一步，不用只能修改內容；限制只能刪時間軸上最新的一筆，避免刪掉中間的歷史紀錄造成流程斷層",
-    "出勤時選送醫醫院的一鍵導航按鈕位置調整：移除回報表單內選完醫院即時顯示的導航（送出後就消失，不好找），改成出勤送出後直接顯示在勤務進度時間軸「抵達現場」這一步上面，人在路上隨時能點進去導航，不用跳到別的地方找",
+    "出勤時選送醫醫院的一鍵導航按鈕位置調整：移除回報表單內選完醫院即時顯示的導航（送出後就消失，不好找），改成出勤送出後直接顯示在底部「抵達現場」回報按鈕的正上方，人準備按下去回報之前就能先點導航出發",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -3067,11 +3067,10 @@ function viewTaskDetail(taskId){
   const lastIdx = lastType ? stepTypes.indexOf(lastType) : -1;
   const isTaskDone = s === "completed";
   const upcomingSteps = evDefs.filter((def, i) => i > lastIdx);
-  // 出勤後、還沒抵達現場前，下一步就是要送去的醫院——在「抵達現場」這個
-  // 還沒發生的步驟上面先顯示導航按鈕，人在路上就能一鍵導航過去，不用等
-  // 抵達之後才在勤務資訊那邊找到已選的送醫醫院。只在「下一步剛好是抵達
-  // 現場、且出勤時有選送醫醫院」才顯示，之後前往下一站的地點是自由輸入
-  // 的文字，沒有對應醫院名冊資料可以導航。
+  // 出勤後、還沒抵達現場前，下一步就是要送去的醫院——回報按鈕上面顯示
+  // 導航按鈕用（見下方 stickyBar），人在路上點開勤務詳情頁隨時能導航過去。
+  // 只在「下一步剛好是抵達現場、且出勤時有選送醫醫院」才顯示；之後前往
+  // 下一站的地點是自由輸入的文字，沒有對應醫院名冊資料可以導航。
   const hospitalForArrival = (!isLiaison && lastType === "DISPATCH" && dispatchEv?.hospital)
     ? state.hospitals.find(h => h.name === dispatchEv.hospital)
     : null;
@@ -3094,18 +3093,11 @@ function viewTaskDetail(taskId){
           </div>
         </div>`;
       }).join("")}
-      ${upcomingSteps.map((def, i) => {
-        const showNav = i === 0 && def.type === "ARRIVED_SCENE" && hospitalForArrival;
-        const navHtml = showNav ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
-          <a class="icon-btn" href="${googleMapsUrl(hospitalNavQuery(hospitalForArrival))}" target="_blank" rel="noopener">${icon('depart',14)} Google 導航</a>
-          <a class="icon-btn" href="${appleMapsUrl(hospitalNavQuery(hospitalForArrival))}" target="_blank" rel="noopener">${icon('depart',14)} Apple 導航</a>
-        </div>` : "";
-        return `
+      ${upcomingSteps.map(def => `
         <div class="step-item upcoming">
           <div class="step-dot"></div>
-          <div class="step-body">${navHtml}<div class="step-label">${icon(def.icon,15)} ${def.label}${showNav ? '：'+esc(hospitalForArrival.name) : ''}</div></div>
-        </div>`;
-      }).join("")}
+          <div class="step-body"><div class="step-label">${icon(def.icon,15)} ${def.label}</div></div>
+        </div>`).join("")}
     </div>`;
 
   // rTypes 決定回報表單/Sticky Bar 要顯示的動作按鈕（見下方），勤務進度 Stepper
@@ -3213,11 +3205,19 @@ function viewTaskDetail(taskId){
     const def = evDefs.find(e=>e.type===rTypes[0]);
     // 離開現場後回頭要回報的「抵達」是抵達下一個地點，跟第一次抵達現場要分開講清楚。
     const btnLabel = (!isLiaison && rTypes[0] === "ARRIVED_SCENE" && lastType === "DEPART_SCENE") ? "抵達下一個地點" : def.label;
+    // 下一步剛好是「抵達現場」且出勤時有選送醫醫院時，在「抵達現場」這顆
+    // 回報按鈕上面加一排導航按鈕，人準備按下去回報之前就能先點導航出發。
+    const showNavAboveBtn = rTypes[0] === "ARRIVED_SCENE" && hospitalForArrival;
+    const navRow = showNavAboveBtn ? `<div style="display:flex; gap:8px;">
+      <a class="icon-btn" style="flex:1; justify-content:center;" href="${googleMapsUrl(hospitalNavQuery(hospitalForArrival))}" target="_blank" rel="noopener">${icon('depart',14)} Google 導航</a>
+      <a class="icon-btn" style="flex:1; justify-content:center;" href="${appleMapsUrl(hospitalNavQuery(hospitalForArrival))}" target="_blank" rel="noopener">${icon('depart',14)} Apple 導航</a>
+    </div>` : "";
     stickyBar = `
-      <div class="sticky-action-bar">
-        <button class="btn-primary" onclick="window.__startReport('${t.id}','${rTypes[0]}')">${icon(def.icon,20)} ${btnLabel}</button>
+      <div class="sticky-action-bar" style="flex-direction:column; align-items:stretch; gap:8px;">
+        ${navRow}
+        <button class="btn-primary" style="width:100%;" onclick="window.__startReport('${t.id}','${rTypes[0]}')">${icon(def.icon,20)} ${btnLabel}</button>
       </div>
-      <div class="sticky-bar-spacer"></div>`;
+      <div class="sticky-bar-spacer" style="${showNavAboveBtn ? 'height:128px;' : ''}"></div>`;
   } else if (canDoReport && !draft && rTypes.length === 2) {
     // 唯一的分岔點（僅勤務類任務才會出現）：抵達現場之後，離開前往下一個地點
     // （這裡回報的是「離開現場」本身，抵達下一站要等真的到了才另外回報，
