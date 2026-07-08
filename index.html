@@ -684,7 +684,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-170-delete-last-event";
+const BUILD_TAG = "2026-07-08-171-stepper-hospital-nav";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1142,6 +1142,7 @@ const RELEASE_NOTES = [
     "修正急診待命勤務出勤後回報「抵達現場」，勤務進度時間軸誤顯示成抵達自己出發的醫務所本身（例如「抵達現場：成功北醫務所」），改成正確顯示回報出勤時選的送醫醫院",
     "回報「出勤」表單選好送醫醫院後，馬上出現 Google／Apple 一鍵導航按鈕，不用等表單送出、跳去勤務詳情頁才找得到導航",
     "勤務進度時間軸「編輯」回報新增「刪除這筆回報」功能：誤按到不該回報的步驟時可以整筆撤銷、狀態退回上一步，不用只能修改內容；限制只能刪時間軸上最新的一筆，避免刪掉中間的歷史紀錄造成流程斷層",
+    "出勤時選送醫醫院的一鍵導航按鈕位置調整：移除回報表單內選完醫院即時顯示的導航（送出後就消失，不好找），改成出勤送出後直接顯示在勤務進度時間軸「抵達現場」這一步上面，人在路上隨時能點進去導航，不用跳到別的地方找",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -3066,6 +3067,14 @@ function viewTaskDetail(taskId){
   const lastIdx = lastType ? stepTypes.indexOf(lastType) : -1;
   const isTaskDone = s === "completed";
   const upcomingSteps = evDefs.filter((def, i) => i > lastIdx);
+  // 出勤後、還沒抵達現場前，下一步就是要送去的醫院——在「抵達現場」這個
+  // 還沒發生的步驟上面先顯示導航按鈕，人在路上就能一鍵導航過去，不用等
+  // 抵達之後才在勤務資訊那邊找到已選的送醫醫院。只在「下一步剛好是抵達
+  // 現場、且出勤時有選送醫醫院」才顯示，之後前往下一站的地點是自由輸入
+  // 的文字，沒有對應醫院名冊資料可以導航。
+  const hospitalForArrival = (!isLiaison && lastType === "DISPATCH" && dispatchEv?.hospital)
+    ? state.hospitals.find(h => h.name === dispatchEv.hospital)
+    : null;
   const progressHtml = `
     <div class="section-label">${isLiaison ? "洽公進度" : "勤務進度"}</div>
     <div class="stepper">
@@ -3085,11 +3094,18 @@ function viewTaskDetail(taskId){
           </div>
         </div>`;
       }).join("")}
-      ${upcomingSteps.map(def => `
+      ${upcomingSteps.map((def, i) => {
+        const showNav = i === 0 && def.type === "ARRIVED_SCENE" && hospitalForArrival;
+        const navHtml = showNav ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
+          <a class="icon-btn" href="${googleMapsUrl(hospitalNavQuery(hospitalForArrival))}" target="_blank" rel="noopener">${icon('depart',14)} Google 導航</a>
+          <a class="icon-btn" href="${appleMapsUrl(hospitalNavQuery(hospitalForArrival))}" target="_blank" rel="noopener">${icon('depart',14)} Apple 導航</a>
+        </div>` : "";
+        return `
         <div class="step-item upcoming">
           <div class="step-dot"></div>
-          <div class="step-body"><div class="step-label">${icon(def.icon,15)} ${def.label}</div></div>
-        </div>`).join("")}
+          <div class="step-body">${navHtml}<div class="step-label">${icon(def.icon,15)} ${def.label}${showNav ? '：'+esc(hospitalForArrival.name) : ''}</div></div>
+        </div>`;
+      }).join("")}
     </div>`;
 
   // rTypes 決定回報表單/Sticky Bar 要顯示的動作按鈕（見下方），勤務進度 Stepper
@@ -3173,11 +3189,10 @@ function viewTaskDetail(taskId){
           <form onsubmit="event.preventDefault(); window.__submitReport('${t.id}','${draft.type}')">
             ${needsLocation ? `<div class="field"><label>前往地點</label><input id="rf-location" placeholder="例如：加油站、OO超商" required></div>` : ""}
             ${needsHospital ? `<div class="field"><label>送醫醫院（選填）</label>
-              <select id="rf-hospital" onchange="window.__updateHospitalNavLinks()">
+              <select id="rf-hospital">
                 <option value="">請選擇醫院</option>
                 ${state.hospitals.map(h => `<option value="${esc(h.name)}">${esc(h.name)}</option>`).join("")}
               </select>
-              <div id="rf-hospital-nav"></div>
             </div>` : ""}
             <div class="field">
               <label>時間</label>
@@ -4411,19 +4426,6 @@ window.__cancelReport = () => { state.reportDraft = null; render(); };
 window.__resetReportTime = () => {
   const el = document.getElementById("rf-time");
   if (el) el.value = hhmmValue(new Date());
-};
-// 出勤當下選好送醫醫院，馬上就能一鍵導航出發，不用等表單送出、跳去勤務
-// 詳情頁才找得到導航按鈕——直接操作 DOM 而不是呼叫 render()，避免整個
-// 回報表單被重新產生、剛選的下拉選單值跟著被清空。
-window.__updateHospitalNavLinks = () => {
-  const sel = document.getElementById("rf-hospital");
-  const container = document.getElementById("rf-hospital-nav");
-  if (!sel || !container) return;
-  const h = state.hospitals.find(x => x.name === sel.value);
-  container.innerHTML = h ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
-    <a class="icon-btn" href="${googleMapsUrl(hospitalNavQuery(h))}" target="_blank" rel="noopener">${icon('depart',14)} Google 導航</a>
-    <a class="icon-btn" href="${appleMapsUrl(hospitalNavQuery(h))}" target="_blank" rel="noopener">${icon('depart',14)} Apple 導航</a>
-  </div>` : "";
 };
 window.__submitReport = (taskId, type) => {
   const mileageEl = document.getElementById("rf-mileage");
