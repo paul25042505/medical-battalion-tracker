@@ -950,7 +950,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-191-emt-patch-badge";
+const BUILD_TAG = "2026-07-08-192-emt-dot-doctor-phone";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1435,6 +1435,7 @@ const RELEASE_NOTES = [
     "患者紀錄的問診細節、過去病史、過敏史合併成同一個灰底面板（原本是兩個各自獨立的面板），其他不適/脊椎評估改成各自佔滿一整行；GCS 數值改成大字顯示總分、E/V/M 分項縮小放在下面當輔助說明，不再整串原始字串擠在一起",
     "姓名後面的階級（上士/下士/中尉…）、車號後面的所屬單位（第一連/第二連…）字體縮小改灰階，降低視覺份量，讓姓名/車號本身更突出（急診待命卡片、勤務詳情頁、任務卡片等有顯示這類資訊的地方一併套用）",
     "EMT 證照等級（EMT-1/EMT-2/EMT-P）顯示改成比照臂章繡片樣式的徽章：紅字＋紅色四角形邊框，字體改用粗襯線體 Bitter，車長/駕駛欄位、個人資料頁、基礎資料管理人員清單有顯示證照等級的地方一併套用",
+    "急診待命卡片：車長 EMT 證照徽章跟電話號碼中間多出來的「．」分隔符號拿掉；值班醫官欄位補上手機電話（可點擊撥打），跟車長/駕駛的顯示方式一致",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -2715,6 +2716,17 @@ function doctorLabel(name){
   const match = state.doctors.find(d => d.name === name);
   return match && match.title ? `${esc(name)} <span class="muted-suffix">${esc(match.title)}</span>` : esc(name);
 }
+// 跟 personCardLine 同樣的「主要姓名/次要電話」兩段式呈現，給值班醫官這種
+// 要把姓名階級跟聯絡方式分兩行顯示的版面用（例如急診待命卡片）。
+function doctorCardLine(name){
+  if (!name) return { main: '', sub: '' };
+  const match = state.doctors.find(d => d.name === name);
+  const phone = (match && match.phone) || "";
+  return {
+    main: doctorLabel(name),
+    sub: phone ? `<a href="tel:${esc(phone)}" class="phone-link" style="text-decoration:none;">${esc(phone)}</a>` : ''
+  };
+}
 // 車號＋所屬單位（例如「軍H-20618（第一連）」），單位用 .muted-suffix
 // 縮小弱化，不跟車號搶視覺焦點。plate 為空時顯示「—」、不附單位。
 function vehicleLabelHtml(plate){
@@ -2743,7 +2755,7 @@ function personCardLine(name, unit){
   const subParts = [];
   if (emtLevel) subParts.push(emtBadgeHtml(emtLevel));
   if (phone) subParts.push(`<a href="tel:${esc(phone)}" class="phone-link" style="text-decoration:none;">${esc(phone)}</a>`);
-  return { main: nameWithRank(name, unit), sub: subParts.join(' · ') };
+  return { main: nameWithRank(name, unit), sub: subParts.join(' ') };
 }
 // 目前位置：最新一筆有帶地點的事件（離開現場記錄的前往地點、抵達現場記錄
 // 的抵達地點）就是目前最新的已知位置；還沒有任何地點回報時，退回任務本身
@@ -4234,6 +4246,7 @@ function viewErStandby(){
       const isBound = boundTask && boundStatus !== "completed";
       const crewLine = isBound ? personCardLine(boundTask.crewLeader, boundTask.unit) : null;
       const driverLine = isBound ? personCardLine(boundTask.driver, boundTask.unit) : null;
+      const doctorLine = isBound && boundTask.dutyOfficer ? doctorCardLine(boundTask.dutyOfficer) : null;
       return `
       <div class="er-standby-card">
         <div class="er-standby-head">
@@ -4246,7 +4259,7 @@ function viewErStandby(){
           <div class="detail-item"><span class="lbl">車號</span><span class="val">${vehicleLabelHtml(boundTask.vehicle)}</span></div>
           <div class="detail-item"><span class="lbl">車長</span><span class="val">${crewLine.main}</span>${crewLine.sub ? `<span class="sub-line">${crewLine.sub}</span>` : ''}</div>
           <div class="detail-item"><span class="lbl">駕駛</span><span class="val">${driverLine.main}</span>${driverLine.sub ? `<span class="sub-line">${driverLine.sub}</span>` : ''}</div>
-          <div class="detail-item"><span class="lbl">值班醫官</span><span class="val">${boundTask.dutyOfficer ? doctorLabel(boundTask.dutyOfficer) : "尚未設定"}</span></div>
+          <div class="detail-item"><span class="lbl">值班醫官</span><span class="val">${doctorLine ? doctorLine.main : "尚未設定"}</span>${doctorLine && doctorLine.sub ? `<span class="sub-line">${doctorLine.sub}</span>` : ''}</div>
         </div>
         <button class="btn-primary" style="width:100%;" onclick="window.__nav({name:'task', id:'${boundTask.id}'})">查看／管理</button>
         ` : `
