@@ -304,41 +304,53 @@
     display:flex; align-items:center; justify-content:center; flex-shrink:0;
   }
   .form-section .field:last-child{margin-bottom:0;}
-  .vitals-entry{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 14px 12px 12px; margin-bottom:10px; box-shadow:var(--shadow-xs); border-left:4px solid transparent;}
+  .vitals-entry{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); margin-bottom:14px; box-shadow:var(--shadow-xs); border-left:4px solid transparent; overflow:hidden;}
   .vitals-entry:last-child{margin-bottom:0;}
   /* 初評／二評（複測）左側色條區分，跟小標籤的顏色一致，捲動歷史紀錄時
      一眼就能分辨哪一筆是基準值（初評）、哪一筆是後續追蹤（二評）。 */
   .vitals-entry.stage-initial{border-left-color:var(--blue);}
   .vitals-entry.stage-followup{border-left-color:var(--amber);}
-  .vitals-entry-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:9px;}
+  .vitals-entry-head{display:flex; justify-content:space-between; align-items:center; padding:14px 16px 0 16px;}
   .vitals-entry-time{font-family:var(--mono); font-size:var(--text-xs); color:var(--muted); font-weight:600;}
+  .vitals-entry-body{padding:16px 16px 18px 16px; display:flex; flex-direction:column; gap:18px;}
+  /* 現場狀況改成大標題：底色跟細節網格拉開視覺層級，異常發現用紅字凸顯，
+     附加說明用一般灰字弱化，不跟主要發現搶焦點。 */
+  .vitals-scene-block{display:flex; flex-direction:column; gap:4px;}
+  .vitals-scene-block .lbl{font-size:var(--text-xs); color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;}
+  .vitals-scene-headline{font-size:var(--text-xl); font-weight:800; color:var(--text); letter-spacing:-0.01em; line-height:1.3;}
+  .vitals-scene-headline .danger{color:var(--red);}
+  .vitals-scene-headline .muted-note{font-size:var(--text-base); font-weight:400; color:var(--muted);}
   /* 主訴是整份紀錄裡最關鍵的一句話：淡紅底、圓角、無粗外框，靠底色跟
      字重凸顯，不是靠邊框。但只有這裡用粗體，其他文字保持一般字重，
      才能真的凸顯出來，不然全部都粗體等於沒有重點。 */
   .vitals-entry-complaint{
     font-size:var(--text-base); font-weight:700; color:var(--text); line-height:1.45;
-    background:color-mix(in srgb, var(--red) 8%, transparent); border-radius:var(--radius-md);
-    padding:11px 13px; margin-bottom:12px;
+    background:color-mix(in srgb, var(--red) 6%, transparent); border:1px solid color-mix(in srgb, var(--red) 12%, transparent);
+    border-radius:var(--radius-md); padding:14px 16px;
   }
   .vitals-entry-complaint b{
-    display:block; font-size:var(--text-xs); font-weight:700; color:var(--red); text-transform:uppercase;
-    letter-spacing:0.05em; margin-bottom:var(--space-label-gap);
+    display:inline-block; font-size:var(--text-xs); font-weight:700; color:var(--red);
+    background:color-mix(in srgb, var(--red) 14%, transparent); padding:2px 8px; border-radius:6px;
+    margin-bottom:8px;
   }
   .vitals-stage-tag{
     display:inline-block; padding:2px 7px; border-radius:6px; font-size:var(--text-xs); font-weight:800;
     background:color-mix(in srgb, var(--blue) 12%, transparent); color:var(--blue); margin-right:7px; vertical-align:middle;
   }
   .vitals-stage-tag.alt{background:color-mix(in srgb, var(--amber) 14%, transparent); color:var(--amber-text);}
-  .vitals-subdetail{font-size:var(--text-xs); color:var(--muted); line-height:1.7; margin-bottom:9px;}
-  /* 患者身分是重點資訊，不能跟其他次要文字一樣灰灰的不顯眼，但也不用跟
-     主訴一樣粗，用淺色底＋一般粗體字（600）就足夠區隔。 */
+  .vitals-subdetail{font-size:var(--text-xs); color:var(--muted); line-height:1.7;}
+  /* 患者身分列改成整條滿版淡藍色橫條（貼齊卡片邊緣），比照卡片抬頭列，
+     跟內文的留白區隔開來，一眼就能看出這筆紀錄是誰的。 */
   .vitals-patient-line{
-    display:flex; align-items:center; gap:7px; font-size:var(--text-sm); font-weight:600; color:var(--text);
-    background:color-mix(in srgb, var(--blue) 6%, transparent); border-radius:var(--radius-md); padding:8px 10px; margin-bottom:10px;
+    display:flex; align-items:center; gap:8px; font-size:var(--text-sm); font-weight:700; color:var(--blue);
+    background:color-mix(in srgb, var(--blue) 6%, transparent); border-top:1px solid color-mix(in srgb, var(--blue) 10%, transparent);
+    border-bottom:1px solid color-mix(in srgb, var(--blue) 10%, transparent); padding:12px 16px; margin-top:12px;
   }
-  .vitals-patient-line svg{color:var(--blue); flex-shrink:0;}
-  /* 主訴細節、過去病史、過敏史這些文字型資訊：標籤淺灰小字、內容一般字重
-     （非粗體）、字級跟內文一致即可，不需要跟生命徵象數值搶視覺重量。 */
+  .vitals-patient-line .dot{width:8px; height:8px; border-radius:50%; background:var(--blue); flex-shrink:0;}
+  /* 主訴細節、過去病史、過敏史這些文字型資訊：收納進淺灰底的網格卡片，
+     標籤淺灰小字、內容一般字重（非粗體），不需要跟生命徵象數值搶視覺重量。 */
+  .detail-panel{background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 16px;}
+  .detail-panel .detail-grid{margin-bottom:0;}
   .detail-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:10px var(--space-section); margin-bottom:10px;}
   .detail-item{display:flex; flex-direction:column; gap:var(--space-label-gap);}
   .detail-item .lbl{font-size:var(--text-xs); color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;}
@@ -349,22 +361,36 @@
   /* 生命徵象分兩組：核心關鍵指標（意識/血壓/心跳/SpO2）用置中的迷你卡片、
      大字級，異常時整格變色，一眼就能抓到危急數值；次要指標（呼吸/體溫/
      GCS/血糖）維持較小字級的清單樣式，視覺權重明顯低於核心指標。 */
-  .vitals-grid-core{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;}
+  .vitals-grid-core{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
   .vitals-core-item{
-    background:#F7F9FF; border-radius:var(--radius-md); padding:12px 8px; text-align:center;
+    background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 8px; text-align:center;
   }
   .vitals-core-item .lbl{font-size:var(--text-xs); color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;}
   .vitals-core-item .val{font-family:var(--mono); font-size:26px; font-weight:700; color:var(--text); line-height:1.3; margin-top:2px; display:block;}
   .vitals-core-item.warn{background:color-mix(in srgb, var(--amber) 10%, transparent);} .vitals-core-item.warn .val{color:var(--amber-text);}
   .vitals-core-item.danger{background:color-mix(in srgb, var(--red) 10%, transparent);} .vitals-core-item.danger .val{color:var(--red);}
   /* 生命徵象：Label 在上（淺灰小字）、數值在下，用等寬字體＋略大字級
-     跟一般文字做區隔，字重維持 600（非重粗體），才不會跟主訴搶焦點。 */
-  .vitals-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(78px,1fr)); gap:14px var(--space-section);}
-  .vitals-item{display:flex; flex-direction:column; gap:var(--space-label-gap);}
+     跟一般文字做區隔，字重維持 600（非重粗體），才不會跟主訴搶焦點。整組
+     收進淺灰底卡片、置中對齊，欄位之間用細直線分隔（比照核心指標的卡片感）。 */
+  .vitals-grid{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(70px,1fr)); gap:0;
+    background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-md); padding:10px 6px;
+  }
+  .vitals-item{display:flex; flex-direction:column; align-items:center; text-align:center; gap:var(--space-label-gap); padding:0 8px;}
+  .vitals-item:not(:first-child){border-left:1px solid var(--border);}
   .vitals-item.warn .val{color:var(--amber-text);}
   .vitals-item.danger .val{color:var(--red); font-weight:800;}
   .vitals-item .lbl{font-size:var(--text-xs); color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;}
   .vitals-item .val{font-family:var(--mono); font-size:var(--text-lg); font-weight:600; color:var(--text); line-height:1.3;}
+  /* 處置項目改成標籤化 Pills，取代原本逗號分隔的一長串文字。 */
+  .vitals-treatment-block{display:flex; flex-direction:column; gap:8px; border-top:1px solid var(--border); padding-top:14px;}
+  .vitals-treatment-block .lbl{font-size:var(--text-xs); color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;}
+  .treatment-pills{display:flex; flex-wrap:wrap; gap:8px;}
+  .treatment-pill{
+    display:inline-flex; align-items:center; padding:5px 12px; border-radius:var(--radius-sm);
+    font-size:var(--text-sm); font-weight:600; color:var(--blue);
+    background:color-mix(in srgb, var(--blue) 8%, transparent); border:1px solid color-mix(in srgb, var(--blue) 14%, transparent);
+  }
 
   /* ---- home ---- */
   .home-date{font-size:var(--text-sm); color:var(--muted); font-weight:600; font-family:var(--mono); margin-bottom:16px;}
@@ -440,10 +466,25 @@
   /* 急診待命：兩個地點各一張卡片，樣式比照 task-card 但沒有左側狀態色條。 */
   .er-standby-card{
     background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg);
-    padding:18px; margin-bottom:14px; box-shadow:var(--shadow-sm);
+    padding:24px; margin-bottom:14px; box-shadow:var(--shadow-sm);
   }
-  .er-standby-head{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px;}
+  .er-standby-head{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:4px;}
   .er-standby-head .name{font-size:var(--text-lg); font-weight:700; letter-spacing:-0.01em;}
+  .er-standby-meta{font-size:var(--text-xs); color:var(--muted); font-family:var(--mono); margin-bottom:20px;}
+  /* 中間資訊改成標準 2x2 網格，上下用細線收邊跟按鈕拉開距離；車長多一行
+     藍字小字顯示 EMT 等級與電話，跟姓名階級那行區隔開，不搶主要資訊焦點。 */
+  .er-standby-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:16px 24px;
+    border-top:1px solid var(--border); border-bottom:1px solid var(--border);
+    padding:18px 0; margin-bottom:20px;
+  }
+  .er-standby-grid .detail-item .sub-line{font-size:var(--text-xs); color:var(--blue); font-weight:600; margin-top:2px;}
+  /* 待命中狀態的圓點做微弱脈動，呼應待命中「還在等待」的狀態感；開啟
+     「減少動態效果」時會被全站統一的 reduced-motion 規則壓成瞬間完成。 */
+  .badge.pending .dot{animation:badgePulse 1.6s ease-in-out infinite;}
+  @keyframes badgePulse{
+    0%, 100%{ opacity:1; } 50%{ opacity:0.35; }
+  }
 
   /* ---- task detail ---- */
   .back-row{display:flex; align-items:center; gap:8px; margin-bottom:16px; color:var(--blue); font-size:var(--text-sm); font-weight:600;}
@@ -847,7 +888,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-183-disable-text-selection";
+const BUILD_TAG = "2026-07-08-184-vitals-erstandby-redesign";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1318,6 +1359,8 @@ const RELEASE_NOTES = [
     "返回鍵按壓動畫加上彈性感：按下去快速縮小，放開後用彈簧曲線「彈過頭再回穩」，不再是單純的線性回彈",
     "修正返回鍵按壓方向：改成按下去放大，放開後用彈簧曲線縮回原尺寸",
     "全站禁止選取文字，比照原生 App 手感（長按/雙點不會跳出選取把手或系統選單）；表單輸入框不受影響，仍然可以正常選取、編輯、複製貼上",
+    "患者紀錄卡片視覺改版：患者身分改成滿版淡藍色橫條，現場狀況改成大標題呈現（異常發現用紅字凸顯），主訴卡片、問診/病史欄位收進柔和的淺灰網格卡片，處置項目改成標籤化 Pills，取代原本一整排逗號分隔的文字",
+    "急診待命卡片視覺改版：資訊欄位改成標準 2x2 網格並用上下分隔線收邊，車長多顯示一行 EMT 證照等級與電話（藍字），待命中狀態徽章的圓點加上微弱脈動效果",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -2577,6 +2620,18 @@ function crewLabel(name, unit){
   const emtLevel = (match && match.emtLevel) || "";
   return `${nameWithRank(name, unit)}${emtLevel ? ` · ${esc(emtLevel)}` : ''}${phone ? ` <a href="tel:${esc(phone)}" class="phone-link" style="text-decoration:none;">${esc(phone)}</a>` : ''}`;
 }
+// 跟 crewLabel 同樣的資料來源，但拆成「姓名＋階級」「EMT等級＋電話」兩段，
+// 給急診待命卡片這種要把姓名階級跟聯絡方式分兩行顯示的版面用。
+function personCardLine(name, unit){
+  if (!name) return { main: esc('—'), sub: '' };
+  const match = findPersonnel(name, unit);
+  const phone = (match && match.phone) || "";
+  const emtLevel = (match && match.emtLevel) || "";
+  const subParts = [];
+  if (emtLevel) subParts.push(esc(emtLevel));
+  if (phone) subParts.push(`<a href="tel:${esc(phone)}" class="phone-link" style="text-decoration:none;">${esc(phone)}</a>`);
+  return { main: nameWithRank(name, unit), sub: subParts.join(' · ') };
+}
 // 目前位置：最新一筆有帶地點的事件（離開現場記錄的前往地點、抵達現場記錄
 // 的抵達地點）就是目前最新的已知位置；還沒有任何地點回報時，退回任務本身
 // 建立時填的地點欄位。
@@ -3059,35 +3114,42 @@ function viewVitalsPage(taskId, id, adding){
           </div>
           ${v.patientName || v.patientUnit || v.patientRank || v.patientGender ? `
           <div class="vitals-patient-line">
-            ${icon('user',16)}
+            <span class="dot"></span>
             <span>${[v.patientUnit, v.patientRank, v.patientName].filter(Boolean).map(esc).join('　')}${v.patientGender?`（${esc(v.patientGender)}）`:''}</span>
           </div>` : ""}
+          <div class="vitals-entry-body">
           ${v.sceneType ? `
-          <div class="detail-grid">
-            <div class="detail-item"><span class="lbl">現場狀況</span><span class="val">${esc(v.sceneType)}${v.sceneFindings&&v.sceneFindings.length?'：'+v.sceneFindings.map(esc).join('、'):''}${v.sceneFindingsOtherDetail?`（${esc(v.sceneFindingsOtherDetail)}）`:''}</span></div>
+          <div class="vitals-scene-block">
+            <span class="lbl">現場狀況</span>
+            <h3 class="vitals-scene-headline">${esc(v.sceneType)}：${v.sceneFindings&&v.sceneFindings.length?`<span class="danger">${v.sceneFindings.map(esc).join('、')}</span>`:''}${v.sceneFindingsOtherDetail?` <span class="muted-note">（${esc(v.sceneFindingsOtherDetail)}）</span>`:''}</h3>
           </div>` : ""}
-          ${v.complaint ? `<div class="vitals-entry-complaint"><b>主訴</b> ${esc(v.complaint)}</div>` : ""}
+          ${v.complaint ? `<div class="vitals-entry-complaint"><b>主訴</b><br>${esc(v.complaint)}</div>` : ""}
           ${v.complaintQuality || v.complaintDuration || v.complaintOthers || v.spineCheck ? `
+          <div class="detail-panel">
           <div class="detail-grid">
             ${v.complaintQuality ? `<div class="detail-item"><span class="lbl">怎麼不舒服</span><span class="val">${esc(v.complaintQuality)}</span></div>` : ""}
             ${v.complaintDuration ? `<div class="detail-item"><span class="lbl">多久了</span><span class="val">${esc(v.complaintDuration)}</span></div>` : ""}
             ${v.complaintOthers ? `<div class="detail-item"><span class="lbl">其他不適</span><span class="val">${esc(v.complaintOthers)}</span></div>` : ""}
             ${v.spineCheck ? `<div class="detail-item"><span class="lbl">脊椎評估</span><span class="val">${esc(v.spineCheck)}</span></div>` : ""}
+          </div>
           </div>` : ""}
           ${(v.pastHistory&&v.pastHistory.length) || (v.allergyHistory&&v.allergyHistory.length) ? `
+          <div class="detail-panel">
           <div class="detail-grid">
             ${v.pastHistory&&v.pastHistory.length ? `<div class="detail-item"><span class="lbl">過去病史</span><span class="val">${v.pastHistory.map(esc).join('、')}${v.pastHistoryOtherDetail?`（${esc(v.pastHistoryOtherDetail)}）`:''}</span></div>` : ""}
             ${v.allergyHistory&&v.allergyHistory.length ? `<div class="detail-item"><span class="lbl">過敏史</span><span class="val">${v.allergyHistory.map(esc).join('、')}${[v.allergyDrugFoodDetail,v.allergyOtherDetail].filter(Boolean).length?`（${[v.allergyDrugFoodDetail,v.allergyOtherDetail].filter(Boolean).map(esc).join('、')}）`:''}</span></div>` : ""}
+          </div>
           </div>` : ""}
           ${vitalsCoreGridHtml(v)}
           ${vitalsSecondaryGridHtml(v)}
           ${v.treatments&&v.treatments.length ? `
-          <div class="detail-item" style="margin-top:9px;">
+          <div class="vitals-treatment-block">
             <span class="lbl">處置項目</span>
-            <span class="val">${v.treatments.map(esc).join('、')}</span>
+            <div class="treatment-pills">${v.treatments.map(x=>`<span class="treatment-pill">${esc(x)}</span>`).join("")}</div>
           </div>` : ""}
-          ${v.treatmentOtherDetail ? `<div class="detail-item" style="margin-top:9px;"><span class="lbl">其他處置</span><span class="val">${esc(v.treatmentOtherDetail)}</span></div>` : ""}
-          ${v.note ? `<div class="step-note" style="margin-top:8px;">${esc(v.note)}</div>` : ""}
+          ${v.treatmentOtherDetail ? `<div class="detail-item"><span class="lbl">其他處置</span><span class="val">${esc(v.treatmentOtherDetail)}</span></div>` : ""}
+          ${v.note ? `<div class="step-note">${esc(v.note)}</div>` : ""}
+          </div>
         </div>`).join("")}
     </div>
     ${canDoReport ? `<button class="btn-primary" type="button" onclick="window.__showAddVitalsForm('${taskId}')">${icon('plus',16)} 新增紀錄</button>` : ""}
@@ -4072,6 +4134,8 @@ function viewErStandby(){
       const boundTask = rec && rec.currentTaskId ? state.tasks.find(t => t.id === rec.currentTaskId) : null;
       const boundStatus = boundTask ? deriveStatus(boundTask.id) : null;
       const isBound = boundTask && boundStatus !== "completed";
+      const crewLine = isBound ? personCardLine(boundTask.crewLeader, boundTask.unit) : null;
+      const driverLine = isBound ? personCardLine(boundTask.driver, boundTask.unit) : null;
       return `
       <div class="er-standby-card">
         <div class="er-standby-head">
@@ -4079,14 +4143,14 @@ function viewErStandby(){
           ${isBound ? statusBadge(boundStatus) : ""}
         </div>
         ${isBound ? `
-        <div class="task-meta" style="margin-bottom:10px;">建立於 ${fmtTime(new Date(boundTask.createdAt||0).getTime())}${isStandbyStale(new Date(boundTask.createdAt||0).getTime()) ? `　<span style="color:var(--amber);">${icon('alert',13)} 尚未於今日 08:00 後更新，請確認車長/駕駛是否需要換班</span>` : ''}</div>
-        <div class="detail-grid">
+        <div class="er-standby-meta">建立於 ${fmtTime(new Date(boundTask.createdAt||0).getTime())}${isStandbyStale(new Date(boundTask.createdAt||0).getTime()) ? `　<span style="color:var(--amber);">${icon('alert',13)} 尚未於今日 08:00 後更新，請確認車長/駕駛是否需要換班</span>` : ''}</div>
+        <div class="er-standby-grid">
           <div class="detail-item"><span class="lbl">車號</span><span class="val">${esc(boundTask.vehicle||'—')}${boundTask.vehicle && vehicleUnitLabel(boundTask.vehicle) ? '（'+esc(vehicleUnitLabel(boundTask.vehicle))+'）' : ''}</span></div>
-          <div class="detail-item"><span class="lbl">車長</span><span class="val">${crewLabel(boundTask.crewLeader, boundTask.unit)}</span></div>
-          <div class="detail-item"><span class="lbl">駕駛</span><span class="val">${crewLabel(boundTask.driver, boundTask.unit)}</span></div>
+          <div class="detail-item"><span class="lbl">車長</span><span class="val">${crewLine.main}</span>${crewLine.sub ? `<span class="sub-line">${crewLine.sub}</span>` : ''}</div>
+          <div class="detail-item"><span class="lbl">駕駛</span><span class="val">${driverLine.main}</span>${driverLine.sub ? `<span class="sub-line">${driverLine.sub}</span>` : ''}</div>
           <div class="detail-item"><span class="lbl">值班醫官</span><span class="val">${boundTask.dutyOfficer ? esc(doctorLabel(boundTask.dutyOfficer)) : "尚未設定"}</span></div>
         </div>
-        <button class="btn-primary" style="width:100%;margin-top:12px;" onclick="window.__nav({name:'task', id:'${boundTask.id}'})">查看／管理</button>
+        <button class="btn-primary" style="width:100%;" onclick="window.__nav({name:'task', id:'${boundTask.id}'})">查看／管理</button>
         ` : `
         <div class="empty" style="padding:16px 0;">尚未建立待命勤務</div>
         ${canDispatch ? `<button class="btn-primary" style="width:100%;" onclick='window.__startErStandbyTask(${JSON.stringify(loc.key)}, ${JSON.stringify(loc.label)})'>建立待命勤務</button>` : ""}
