@@ -689,7 +689,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-155-stepper-current-dot-ripple";
+const BUILD_TAG = "2026-07-08-156-standby-stale-0800-cutoff";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1121,6 +1121,7 @@ const RELEASE_NOTES = [
     "修正建立勤務跟緊接著回報「抵達現場」剛好在同一分鐘內時，系統誤判成還沒回報過、一直要求重複回報抵達現場的問題",
     "「值班醫官」欄位改成只有急診待命建立出來的勤務才會顯示（建立/編輯都是），一般勤務不會用到，不再顯示",
     "勤務進度時間軸目前所在的那一步，圓點加上往外擴散的漣漪動畫，更容易一眼看出目前走到哪一步",
+    "急診待命卡片的「非今日建立」提醒改成依每日 08:00 換班時間判斷：現在還沒到今天 08:00 就不會誤跳警告，過了 08:00 若車長/駕駛還沒換班更新才會提醒",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -1361,6 +1362,20 @@ function isSameDay(ms, ref){
   if (!ms) return false;
   const a = new Date(ms), b = ref;
   return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+}
+// 急診待命每天固定 08:00 換班，車長/駕駛應該跟著換班更新。現在時間還沒到
+// 今天 08:00 時，目前這班其實是「昨天 08:00 開始」的班，不能拿今天的日期
+// 當基準，否則從昨天下午一路待命到今天清晨都會被誤判成過期；換算成「以
+// 最近一次 08:00 為起點」的基準時間，建立時間比這個基準還早才算過期。
+function standbyShiftCutoff(now){
+  const cutoff = new Date(now);
+  cutoff.setHours(8, 0, 0, 0);
+  if (now < cutoff) cutoff.setDate(cutoff.getDate() - 1);
+  return cutoff;
+}
+function isStandbyStale(createdAtMs){
+  if (!createdAtMs) return false;
+  return createdAtMs < standbyShiftCutoff(new Date()).getTime();
 }
 function durationLabel(ms){
   if (ms == null || ms < 0) return "—";
@@ -3641,7 +3656,7 @@ function viewErStandby(){
           ${isBound ? statusBadge(boundStatus) : ""}
         </div>
         ${isBound ? `
-        <div class="task-meta" style="margin-bottom:10px;">建立於 ${fmtTime(new Date(boundTask.createdAt||0).getTime())}${!isSameDay(new Date(boundTask.createdAt||0).getTime(), new Date()) ? `　<span style="color:var(--amber);">${icon('alert',13)} 非今日建立，請確認車長/駕駛是否需要更新</span>` : ''}</div>
+        <div class="task-meta" style="margin-bottom:10px;">建立於 ${fmtTime(new Date(boundTask.createdAt||0).getTime())}${isStandbyStale(new Date(boundTask.createdAt||0).getTime()) ? `　<span style="color:var(--amber);">${icon('alert',13)} 尚未於今日 08:00 後更新，請確認車長/駕駛是否需要換班</span>` : ''}</div>
         <div class="detail-grid">
           <div class="detail-item"><span class="lbl">車號</span><span class="val">${esc(boundTask.vehicle||'—')}</span></div>
           <div class="detail-item"><span class="lbl">車長</span><span class="val">${crewLabel(boundTask.crewLeader, boundTask.unit)}</span></div>
