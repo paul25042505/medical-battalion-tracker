@@ -676,7 +676,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-146-doctor-roster-crew-picker-unit-scope";
+const BUILD_TAG = "2026-07-08-147-doctor-rank-basedata-hub-crew-picker-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1089,6 +1089,9 @@ const RELEASE_NOTES = [
     "基礎資料管理新增「醫官」名冊（姓名/電話），建立勤務的「值班醫官」欄位改成從這份名冊下拉選擇，不用再手動打字",
     "建立/編輯勤務選車長、駕駛時，預設只列出該勤務所屬單位的人員（比照跨單位借車的做法），勾選「跨單位選人」才會展開列出其他單位；已指派跨單位人員的既有勤務，編輯時會自動展開避免看起來像被取消",
     "車長／駕駛欄位選定後的顯示文字改成「姓名 階級」，不再用點號分隔、也不再顯示單位",
+    "醫官名冊補上階級欄位，值班醫官下拉選單同步顯示姓名＋階級",
+    "車長／駕駛選人固定預設不勾選跨單位選人，不再因為目前指派的人是不是跨單位借調而有例外",
+    "基礎資料管理改成分區列表入口：人員/車輛/行車紀錄器歸在「單位資料」、醫院/醫官歸在「共用資料」，每個類別各自獨立頁面，之後陸續增加類別只要多加一列，不會讓頁籤越擠越亂",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -1246,7 +1249,7 @@ const state = {
   tasksTab: "all",
   statsPeriod: "today",
   profileEditing: false,
-  baseDataUnit: "", baseDataTab: "personnel", baseDataModal: null, // 基礎資料管理頁籤狀態；baseDataModal: {coll, id, unit} | null
+  baseDataUnit: "", baseDataModal: null, // 基礎資料管理目前選的單位；baseDataModal: {coll, id, unit} | null
   createTaskUnit: "", // 建立勤務頁面：admin/高勤官可切換的單位
   createTaskType: "duty", // 建立勤務頁面：勤務（車輛派遣）或洽公（無車輛/里程追蹤）
   previewActive: false, realRoleUnit: null, // 角色權限預覽（僅限 admin）
@@ -1550,8 +1553,8 @@ async function addHospital(county, name, level, phone, note){
   await fsAddDoc("hospitals", { county, name, level, phone: phone||"", note: note||"" });
   showToast("已新增醫院"); if (hospitalsPoll) hospitalsPoll.refreshNow();
 }
-async function addDoctor(name, phone){
-  await fsAddDoc("doctors", { name, phone: phone||"", active: true });
+async function addDoctor(name, title, phone){
+  await fsAddDoc("doctors", { name, title: title||"", phone: phone||"", active: true });
   showToast("已新增醫官"); if (doctorsPoll) doctorsPoll.refreshNow();
 }
 // 意見回饋：任何在職帳號都能送出，一律具名（顯示送出者姓名），只有
@@ -1986,7 +1989,13 @@ const ROUTE_REFRESH = {
   // 管理後台改成分區列表入口＋各自獨立路由後，每個子頁只重抓自己真的會
   // 用到的集合，不用像以前那樣進管理後台就整批重抓（hub 本身不用抓）。
   adminTasks: ['tasks','events'],
-  adminBaseData: ['personnel','vehicles','recorders','hospitals','doctors'],
+  // adminBaseData 本身只是分區列表入口，不用重抓；各類別各自的路由只
+  // 重抓自己真的會用到的集合。
+  baseDataPersonnel: ['personnel'],
+  baseDataVehicles: ['vehicles'],
+  baseDataRecorders: ['recorders'],
+  baseDataHospitals: ['hospitals'],
+  baseDataDoctors: ['doctors'],
 };
 function nav(route){
   state.route = route; state.reportDraft = null;
@@ -2491,7 +2500,7 @@ function viewCreateTask(){
       <div class="field"><label>值班醫官（選填）</label>
         <select name="dutyOfficer">
           <option value="">請選擇醫官</option>
-          ${state.doctors.filter(x=>x.active!==false).map(x => `<option value="${esc(x.name)}" ${state.route.presetDutyOfficer===x.name?'selected':''}>${esc(x.name)}</option>`).join("")}
+          ${state.doctors.filter(x=>x.active!==false).map(x => `<option value="${esc(x.name)}" ${state.route.presetDutyOfficer===x.name?'selected':''}>${esc(x.name)}${x.title?'（'+esc(x.title)+'）':''}</option>`).join("")}
         </select>
       </div>
       <div class="field"><label>行車紀錄器（可多選）</label>
@@ -3613,7 +3622,32 @@ function viewAdminTasksPage(){
 function viewAdminBaseDataPage(){
   const p = state.profile;
   if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
-  return `<div class="back-row">${backBtn({name:'admin'})}</div><div class="section-label">基礎資料</div>${viewAdminBaseData()}`;
+  return `<div class="back-row">${backBtn({name:'admin'})}</div><div class="section-label">基礎資料</div>${viewBaseDataHub()}`;
+}
+function viewBaseDataPersonnelPage(){
+  const p = state.profile;
+  if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
+  return viewBaseDataPersonnel();
+}
+function viewBaseDataVehiclesPage(){
+  const p = state.profile;
+  if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
+  return viewBaseDataVehicles();
+}
+function viewBaseDataRecordersPage(){
+  const p = state.profile;
+  if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
+  return viewBaseDataRecorders();
+}
+function viewBaseDataHospitalsPage(){
+  const p = state.profile;
+  if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
+  return viewBaseDataHospitals();
+}
+function viewBaseDataDoctorsPage(){
+  const p = state.profile;
+  if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
+  return viewBaseDataDoctors();
 }
 function viewAdminUsersPage(){
   const p = state.profile;
@@ -3686,108 +3720,125 @@ function viewAdminTasks(){
 /* =========================================================
    18b) 畫面：基礎資料管理（人員／車輛／行車紀錄器，依單位分類）
    ========================================================= */
-const BASEDATA_TABS = [
-  { key:"personnel", label:"人員" },
-  { key:"vehicles", label:"車輛" },
-  { key:"recorders", label:"行車紀錄器" },
-  { key:"hospitals", label:"醫院" },
-  { key:"doctors", label:"醫官" }
-];
-function viewAdminBaseData(){
+// 基礎資料管理改成分區列表入口（hub）＋每個類別各自獨立路由，跟管理
+// 後台首頁同一套模式——原本橫向頁籤只有 4、5 個還好排，之後陸續增加
+// 類別（例如這次新增的醫官）只會越擠越亂，改成列表後每加一類只要在
+// 對應分區多加一列，不影響既有排版。人員／車輛／行車紀錄器依單位分類
+// 歸在「單位資料」；醫院／醫官是全營共用、不綁定單位，歸在「共用資料」。
+function viewBaseDataHub(){
+  const unitRows = [
+    settingsRow({icon:'user', bg:'#E8F1FF', fg:'#0056C7', title:'人員', subtitle:'依單位分類的成員名冊', onclick:"window.__nav({name:'baseDataPersonnel'})"}),
+    settingsRow({icon:'depart', bg:'#FFF2E0', fg:'#B45F00', title:'車輛', subtitle:'依單位分類的車輛名冊', onclick:"window.__nav({name:'baseDataVehicles'})"}),
+    settingsRow({icon:'records', bg:'#F2E9FE', fg:'#6B23C7', title:'行車紀錄器', subtitle:'依單位分類', onclick:"window.__nav({name:'baseDataRecorders'})"}),
+  ];
+  const sharedRows = [
+    settingsRow({icon:'hospital', bg:'#E9F9EF', fg:'#177A34', title:'醫院', subtitle:'急救責任等級／電話，全營共用', onclick:"window.__nav({name:'baseDataHospitals'})"}),
+    settingsRow({icon:'heartbeat', bg:'#FFEAEA', fg:'#C7233B', title:'醫官', subtitle:'值班醫官名冊，全營共用', onclick:"window.__nav({name:'baseDataDoctors'})"}),
+  ];
+  return `
+    ${settingsSection('單位資料', unitRows)}
+    ${settingsSection('共用資料', sharedRows)}
+  `;
+}
+function viewBaseDataPersonnel(){
   const p = state.profile;
   const canSwitch = canSeeAllUnits(p);
   const unit = canSwitch ? (state.baseDataUnit || UNITS[0].code) : myUnit(p);
-
-  if (!unit) return `<div class="empty">您尚未被指派單位，請聯繫管理員。</div>`;
-
-  const subTabs = `
-    <div class="tabs2">
-      ${BASEDATA_TABS.map(t => `<div class="tab2 ${state.baseDataTab===t.key?'active':''}" onclick="window.__setBaseDataTab('${t.key}')">${t.label}</div>`).join("")}
-    </div>`;
-
-  // 醫院資訊是全營共用的參考資料，不像人員/車輛/行車紀錄器綁定特定單位，
-  // 不需要單位切換頁籤。
-  if (state.baseDataTab === "hospitals") {
-    const rows = state.hospitals.slice().sort((a,b) => HOSPITAL_LEVELS.indexOf(a.level) - HOSPITAL_LEVELS.indexOf(b.level) || (a.name||'').localeCompare(b.name||''));
-    const body = `
-      <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('hospitals', null, '')">${icon('plus',15)} 新增醫院</button>
-      ${rows.length ? rows.map(x => `
-        <div class="admin-row">
-          <div><div class="name">${esc(x.name)}</div><div class="sub">${esc(x.county||'—')} · ${esc(x.level||'—')}${x.phone?' · '+esc(x.phone):''}</div>${x.note?`<div class="sub">${esc(x.note)}</div>`:""}</div>
-          <div style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button class="icon-btn" onclick="window.__openBaseDataModal('hospitals','${x.id}','')">編輯</button>
-            <button class="icon-btn danger" onclick="window.__deleteBaseData('hospitals','${x.id}')">刪除</button>
-          </div>
-        </div>`).join("") : `<div class="empty">尚無醫院資料</div>`}`;
-    return `${subTabs}${body}`;
-  }
-
-  // 醫官（值班醫官名冊）也是全營共用的參考資料，不綁定特定單位，比照
-  // 醫院頁籤不需要單位切換。
-  if (state.baseDataTab === "doctors") {
-    const rows = state.doctors.slice().sort((a,b) => (a.name||'').localeCompare(b.name||''));
-    const body = `
-      <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('doctors', null, '')">${icon('plus',15)} 新增醫官</button>
-      ${rows.length ? rows.map(x => `
-        <div class="admin-row">
-          <div><div class="name">${esc(x.name)}${x.active===false?'（已停用）':''}</div><div class="sub">${x.phone?esc(x.phone):'—'}</div></div>
-          <div style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button class="icon-btn" onclick="window.__openBaseDataModal('doctors','${x.id}','')">編輯</button>
-            <button class="icon-btn" onclick="window.__toggleBaseData('doctors','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
-            <button class="icon-btn danger" onclick="window.__deleteBaseData('doctors','${x.id}')">刪除</button>
-          </div>
-        </div>`).join("") : `<div class="empty">尚無醫官資料</div>`}`;
-    return `${subTabs}${body}`;
-  }
-
+  if (!unit) return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="empty">您尚未被指派單位，請聯繫管理員。</div>`;
   const unitTabs = canSwitch ? `
     <div class="tabs2">
       ${UNITS.map(u => `<div class="tab2 ${unit===u.code?'active':''}" onclick="window.__setBaseDataUnit('${u.code}')">${u.label}</div>`).join("")}
     </div>` : `<div class="section-label">${unitLabel(unit)}</div>`;
-
-  let body = "";
-  if (state.baseDataTab === "personnel") {
-    const rows = state.personnel.filter(x => x.unit === unit).slice().sort((a,b) => rankWeight(a.title) - rankWeight(b.title));
-    body = `
-      <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('personnel', null, '${unit}')">${icon('plus',15)} 新增人員</button>
-      ${rows.length ? rows.map(x => `
-        <div class="admin-row">
-          <div><div class="name">${esc(x.name)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.title||'—')}${x.phone?' · '+esc(x.phone):''}</div></div>
-          <div style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button class="icon-btn" onclick="window.__openBaseDataModal('personnel','${x.id}','${unit}')">編輯</button>
-            <button class="icon-btn" onclick="window.__toggleBaseData('personnel','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
-            <button class="icon-btn danger" onclick="window.__deleteBaseData('personnel','${x.id}')">刪除</button>
-          </div>
-        </div>`).join("") : `<div class="empty">尚無人員資料</div>`}`;
-  } else if (state.baseDataTab === "vehicles") {
-    const rows = sortVehicles(state.vehicles.filter(x => x.unit === unit));
-    body = `
-      <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('vehicles', null, '${unit}')">${icon('plus',15)} 新增車輛</button>
-      ${rows.length ? rows.map(x => `
-        <div class="admin-row">
-          <div><div class="name">${esc(x.plate)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.type||'—')}</div></div>
-          <div style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button class="icon-btn" onclick="window.__openBaseDataModal('vehicles','${x.id}','${unit}')">編輯</button>
-            <button class="icon-btn" onclick="window.__toggleBaseData('vehicles','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
-            <button class="icon-btn danger" onclick="window.__deleteBaseData('vehicles','${x.id}')">刪除</button>
-          </div>
-        </div>`).join("") : `<div class="empty">尚無車輛資料</div>`}`;
-  } else {
-    const rows = state.recorders.filter(x => x.unit === unit);
-    body = `
-      <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('recorders', null, '${unit}')">${icon('plus',15)} 新增行車紀錄器</button>
-      ${rows.length ? rows.map(x => `
-        <div class="admin-row">
-          <div><div class="name">${esc(x.code)}${x.active===false?'（已停用）':''}</div></div>
-          <div style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button class="icon-btn" onclick="window.__openBaseDataModal('recorders','${x.id}','${unit}')">編輯</button>
-            <button class="icon-btn" onclick="window.__toggleBaseData('recorders','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
-            <button class="icon-btn danger" onclick="window.__deleteBaseData('recorders','${x.id}')">刪除</button>
-          </div>
-        </div>`).join("") : `<div class="empty">尚無行車紀錄器資料</div>`}`;
-  }
-
-  return `${unitTabs}${subTabs}${body}`;
+  const rows = state.personnel.filter(x => x.unit === unit).slice().sort((a,b) => rankWeight(a.title) - rankWeight(b.title));
+  const body = `
+    <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('personnel', null, '${unit}')">${icon('plus',15)} 新增人員</button>
+    ${rows.length ? rows.map(x => `
+      <div class="admin-row">
+        <div><div class="name">${esc(x.name)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.title||'—')}${x.phone?' · '+esc(x.phone):''}</div></div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="icon-btn" onclick="window.__openBaseDataModal('personnel','${x.id}','${unit}')">編輯</button>
+          <button class="icon-btn" onclick="window.__toggleBaseData('personnel','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
+          <button class="icon-btn danger" onclick="window.__deleteBaseData('personnel','${x.id}')">刪除</button>
+        </div>
+      </div>`).join("") : `<div class="empty">尚無人員資料</div>`}`;
+  return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">人員</div>${unitTabs}${body}`;
+}
+function viewBaseDataVehicles(){
+  const p = state.profile;
+  const canSwitch = canSeeAllUnits(p);
+  const unit = canSwitch ? (state.baseDataUnit || UNITS[0].code) : myUnit(p);
+  if (!unit) return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="empty">您尚未被指派單位，請聯繫管理員。</div>`;
+  const unitTabs = canSwitch ? `
+    <div class="tabs2">
+      ${UNITS.map(u => `<div class="tab2 ${unit===u.code?'active':''}" onclick="window.__setBaseDataUnit('${u.code}')">${u.label}</div>`).join("")}
+    </div>` : `<div class="section-label">${unitLabel(unit)}</div>`;
+  const rows = sortVehicles(state.vehicles.filter(x => x.unit === unit));
+  const body = `
+    <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('vehicles', null, '${unit}')">${icon('plus',15)} 新增車輛</button>
+    ${rows.length ? rows.map(x => `
+      <div class="admin-row">
+        <div><div class="name">${esc(x.plate)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.type||'—')}</div></div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="icon-btn" onclick="window.__openBaseDataModal('vehicles','${x.id}','${unit}')">編輯</button>
+          <button class="icon-btn" onclick="window.__toggleBaseData('vehicles','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
+          <button class="icon-btn danger" onclick="window.__deleteBaseData('vehicles','${x.id}')">刪除</button>
+        </div>
+      </div>`).join("") : `<div class="empty">尚無車輛資料</div>`}`;
+  return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">車輛</div>${unitTabs}${body}`;
+}
+function viewBaseDataRecorders(){
+  const p = state.profile;
+  const canSwitch = canSeeAllUnits(p);
+  const unit = canSwitch ? (state.baseDataUnit || UNITS[0].code) : myUnit(p);
+  if (!unit) return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="empty">您尚未被指派單位，請聯繫管理員。</div>`;
+  const unitTabs = canSwitch ? `
+    <div class="tabs2">
+      ${UNITS.map(u => `<div class="tab2 ${unit===u.code?'active':''}" onclick="window.__setBaseDataUnit('${u.code}')">${u.label}</div>`).join("")}
+    </div>` : `<div class="section-label">${unitLabel(unit)}</div>`;
+  const rows = state.recorders.filter(x => x.unit === unit);
+  const body = `
+    <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('recorders', null, '${unit}')">${icon('plus',15)} 新增行車紀錄器</button>
+    ${rows.length ? rows.map(x => `
+      <div class="admin-row">
+        <div><div class="name">${esc(x.code)}${x.active===false?'（已停用）':''}</div></div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="icon-btn" onclick="window.__openBaseDataModal('recorders','${x.id}','${unit}')">編輯</button>
+          <button class="icon-btn" onclick="window.__toggleBaseData('recorders','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
+          <button class="icon-btn danger" onclick="window.__deleteBaseData('recorders','${x.id}')">刪除</button>
+        </div>
+      </div>`).join("") : `<div class="empty">尚無行車紀錄器資料</div>`}`;
+  return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">行車紀錄器</div>${unitTabs}${body}`;
+}
+// 醫院、醫官都是全營共用的參考資料，不像人員/車輛/行車紀錄器綁定特定
+// 單位，不需要單位切換頁籤。
+function viewBaseDataHospitals(){
+  const rows = state.hospitals.slice().sort((a,b) => HOSPITAL_LEVELS.indexOf(a.level) - HOSPITAL_LEVELS.indexOf(b.level) || (a.name||'').localeCompare(b.name||''));
+  const body = `
+    <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('hospitals', null, '')">${icon('plus',15)} 新增醫院</button>
+    ${rows.length ? rows.map(x => `
+      <div class="admin-row">
+        <div><div class="name">${esc(x.name)}</div><div class="sub">${esc(x.county||'—')} · ${esc(x.level||'—')}${x.phone?' · '+esc(x.phone):''}</div>${x.note?`<div class="sub">${esc(x.note)}</div>`:""}</div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="icon-btn" onclick="window.__openBaseDataModal('hospitals','${x.id}','')">編輯</button>
+          <button class="icon-btn danger" onclick="window.__deleteBaseData('hospitals','${x.id}')">刪除</button>
+        </div>
+      </div>`).join("") : `<div class="empty">尚無醫院資料</div>`}`;
+  return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">醫院</div>${body}`;
+}
+function viewBaseDataDoctors(){
+  const rows = state.doctors.slice().sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  const body = `
+    <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('doctors', null, '')">${icon('plus',15)} 新增醫官</button>
+    ${rows.length ? rows.map(x => `
+      <div class="admin-row">
+        <div><div class="name">${esc(x.name)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.title||'—')}${x.phone?' · '+esc(x.phone):''}</div></div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="icon-btn" onclick="window.__openBaseDataModal('doctors','${x.id}','')">編輯</button>
+          <button class="icon-btn" onclick="window.__toggleBaseData('doctors','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
+          <button class="icon-btn danger" onclick="window.__deleteBaseData('doctors','${x.id}')">刪除</button>
+        </div>
+      </div>`).join("") : `<div class="empty">尚無醫官資料</div>`}`;
+  return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">醫官</div>${body}`;
 }
 
 /* =========================================================
@@ -3843,6 +3894,12 @@ function viewBaseDataModal(){
     title = editing ? "編輯醫官" : "新增醫官";
     fields = `
       <div class="field"><label>姓名</label><input name="name" required value="${esc(editing?.name||'')}"></div>
+      <div class="field"><label>階級</label>
+        <select name="title">
+          <option value="">請選擇階級</option>
+          ${RANKS.map(r => `<option value="${r}" ${editing?.title===r?'selected':''}>${r}</option>`).join("")}
+        </select>
+      </div>
       <div class="field"><label>電話（選填）</label><input name="phone" type="tel" inputmode="tel" value="${esc(editing?.phone||'')}"></div>`;
   } else {
     title = editing ? "編輯行車紀錄器" : "新增行車紀錄器";
@@ -3973,6 +4030,11 @@ const ROUTE_VIEWS = {
   admin: viewAdmin,
   adminTasks: viewAdminTasksPage,
   adminBaseData: viewAdminBaseDataPage,
+  baseDataPersonnel: viewBaseDataPersonnelPage,
+  baseDataVehicles: viewBaseDataVehiclesPage,
+  baseDataRecorders: viewBaseDataRecordersPage,
+  baseDataHospitals: viewBaseDataHospitalsPage,
+  baseDataDoctors: viewBaseDataDoctorsPage,
   adminUsers: viewAdminUsersPage,
   adminMessages: viewAdminMessagesPage,
   adminSettings: viewAdminSettingsPage,
@@ -4172,12 +4234,12 @@ window.__syncSceneType = (value) => {
   if (traumaWrap) traumaWrap.style.display = value === "創傷" ? "block" : "none";
 };
 /* =========================================================
-   車長／駕駛人員選擇器：預設只列該勤務所屬單位的人（比照「跨單位借車」
-   預設不勾選的邏輯），勾選「跨單位選人」才展開列出其他單位；如果目前
-   已指派的人本來就不屬於這個單位（跨單位借調），一開始就自動勾選展開，
-   不然那個人會從清單裡消失、看起來像被取消選取。可打字搜尋。純 DOM
-   彈窗，不觸發 render()，避免打開選人彈窗時，把使用者已經填到一半的
-   其他欄位（任務名稱、地點等未受控的 input）整頁重繪掉。
+   車長／駕駛人員選擇器：一律預設只列該勤務所屬單位的人（比照「跨單位
+   借車」預設不勾選的邏輯），勾選「跨單位選人」才展開列出其他單位——
+   固定預設不勾選，不因為目前已指派的人是不是跨單位借調而有例外。
+   可打字搜尋。純 DOM 彈窗，不觸發 render()，避免打開選人彈窗時，把
+   使用者已經填到一半的其他欄位（任務名稱、地點等未受控的 input）整頁
+   重繪掉。
    ========================================================= */
 let personPickerCtx = null; // { pool, unit, crossUnit, hiddenInput, triggerBtn }
 function personPickerRows(pool, unit, crossUnit, query){
@@ -4229,8 +4291,7 @@ window.__openPersonPicker = (fieldName, triggerBtn) => {
     .filter(x => x.active !== false && (eligible(x) || x.name === currentValue))
     .slice()
     .sort((a,b) => unitWeight(a.unit) - unitWeight(b.unit) || rankWeight(a.title) - rankWeight(b.title));
-  const currentPerson = currentValue ? pool.find(x => x.name === currentValue) : null;
-  const crossUnit = !!(currentPerson && currentPerson.unit !== unit);
+  const crossUnit = false;
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay person-picker-overlay";
   overlay.onclick = (e) => { if (e.target === overlay) closePersonPicker(); };
@@ -4436,7 +4497,6 @@ window.__setRole = (uid) => {
   setUserRole(uid, role, unit).then(() => { state._usersCache = null; render(); });
 };
 window.__setBaseDataUnit = (code) => { state.baseDataUnit = code; state.baseDataModal = null; render(); window.scrollTo(0,0); };
-window.__setBaseDataTab = (key) => { state.baseDataTab = key; state.baseDataModal = null; render(); window.scrollTo(0,0); };
 function baseDataErr(err){ showToast(`操作失敗：[${err.code||'?'}] ${err.message||err}`); console.error("基礎資料操作失敗", err); }
 window.__toggleBaseData = (coll, id, active) => toggleBaseDataActive(coll, id, active).catch(baseDataErr);
 window.__deleteBaseData = (coll, id) => { if (confirm("確定刪除此筆資料？此動作無法復原。")) deleteBaseData(coll, id).catch(baseDataErr); };
@@ -4449,12 +4509,12 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
     ? (coll === "personnel" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"" })
        : coll === "vehicles" ? updateBaseData(coll, id, { plate: f.get("plate"), type: f.get("type") })
        : coll === "hospitals" ? updateBaseData(coll, id, { name: f.get("name"), county: f.get("county"), level: f.get("level"), phone: f.get("phone")||"", note: f.get("note")||"" })
-       : coll === "doctors" ? updateBaseData(coll, id, { name: f.get("name"), phone: f.get("phone")||"" })
+       : coll === "doctors" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"" })
        : updateBaseData(coll, id, { code: f.get("code") }))
     : (coll === "personnel" ? addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone"))
        : coll === "vehicles" ? addVehicle(unit, f.get("plate"), f.get("type"))
        : coll === "hospitals" ? addHospital(f.get("county"), f.get("name"), f.get("level"), f.get("phone"), f.get("note"))
-       : coll === "doctors" ? addDoctor(f.get("name"), f.get("phone"))
+       : coll === "doctors" ? addDoctor(f.get("name"), f.get("title"), f.get("phone"))
        : addRecorder(unit, f.get("code")));
   action.then(() => { state.baseDataModal = null; render(); }).catch(baseDataErr);
 };
