@@ -684,7 +684,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-172-sticky-btn-hospital-nav";
+const BUILD_TAG = "2026-07-08-173-remove-detail-hospital-nav";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1143,6 +1143,7 @@ const RELEASE_NOTES = [
     "回報「出勤」表單選好送醫醫院後，馬上出現 Google／Apple 一鍵導航按鈕，不用等表單送出、跳去勤務詳情頁才找得到導航",
     "勤務進度時間軸「編輯」回報新增「刪除這筆回報」功能：誤按到不該回報的步驟時可以整筆撤銷、狀態退回上一步，不用只能修改內容；限制只能刪時間軸上最新的一筆，避免刪掉中間的歷史紀錄造成流程斷層",
     "出勤時選送醫醫院的一鍵導航按鈕位置調整：移除回報表單內選完醫院即時顯示的導航（送出後就消失，不好找），改成出勤送出後直接顯示在底部「抵達現場」回報按鈕的正上方，人準備按下去回報之前就能先點導航出發",
+    "移除勤務詳情頁「勤務資訊」送醫醫院那一列重複的導航按鈕，導航統一只在底部「抵達現場」回報按鈕上方顯示，避免同一頁面出現兩組功能相同的導航按鈕",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -3303,14 +3304,7 @@ function viewTaskDetail(taskId){
     <div class="detail-head">
       <div class="kv">
         <div class="k">出發里程</div><div class="v">${startMileage!=null ? startMileage+' km' : '—'}</div>
-        ${dispatchEv?.hospital ? (() => {
-          const h = state.hospitals.find(x => x.name === dispatchEv.hospital);
-          const navLinks = h ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
-            <a class="icon-btn" href="${googleMapsUrl(hospitalNavQuery(h))}" target="_blank" rel="noopener">${icon('depart',14)} Google 導航</a>
-            <a class="icon-btn" href="${appleMapsUrl(hospitalNavQuery(h))}" target="_blank" rel="noopener">${icon('depart',14)} Apple 導航</a>
-          </div>` : "";
-          return `<div class="k">送醫醫院</div><div class="v">${esc(dispatchEv.hospital)}${navLinks}</div>`;
-        })() : ""}
+        ${dispatchEv?.hospital ? `<div class="k">送醫醫院</div><div class="v">${esc(dispatchEv.hospital)}</div>` : ""}
         ${arrivalRows}
         ${departRows}
         <div class="k">返營里程</div><div class="v">${returningEv?.mileage!=null ? returningEv.mileage+' km' : '—'}</div>
