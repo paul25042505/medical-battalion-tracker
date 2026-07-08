@@ -676,7 +676,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-150-doctor-rank-dispatch-hospital";
+const BUILD_TAG = "2026-07-08-151-standby-auto-renew-intransit-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -684,7 +684,7 @@ const BUILD_TAG = "2026-07-08-150-doctor-rank-dispatch-hospital";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "1.6";
+const APP_MAJOR_MINOR = "1.7";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -1097,6 +1097,8 @@ const RELEASE_NOTES = [
     "急診待命卡片補上待命勤務的建立時間，如果不是今天建立會額外顯示提醒，避免今天忘記更新車長/駕駛卻沒發現還是昨天的舊資料",
     "值班醫官姓名顯示的地方（勤務詳情頁、急診待命卡片）補上階級，顯示格式跟車長/駕駛一致（姓名 階級，不加括號）",
     "回報「出勤」新增「送醫醫院（選填）」下拉選單，沿用醫院名冊選擇，勤務詳情頁會顯示已選的送醫醫院",
+    "修正「目前位置」顯示：回報「出勤」後車輛其實還在路上，畫面卻直接顯示成已經抵達任務地點，現在會正確顯示「前往OO中」（離開現場前往下一個地點時原本就會顯示，這次補上出勤當下也要顯示）",
+    "急診待命的待命車送醫返營、任務完成後，該地點會自動用同一組車輛／人員建立下一筆待命勤務並回到「待命中」，不用再手動重新建立；已完成的舊任務連同患者紀錄原樣保留，可在「紀錄」頁查詢",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -1430,6 +1432,32 @@ async function addEvent(taskId, type, extra){
   });
   showToast(`已回報：${eventTypesFor(task).find(e=>e.type===type).label}`);
   if (eventsPoll) eventsPoll.refreshNow();
+  if (type === "COMPLETED" && task && task.erStandbyKey) {
+    await renewStandbyTask(task);
+  }
+}
+// 待命車送醫返營、任務完成後，該地點要立刻回到「待命中」，不能消失成「尚未
+// 建立待命勤務」——沿用同一組車輛／人員自動建立下一筆待命勤務並接手指標，
+// 值勤人員不用重新手動建立。新任務沒有患者資料，「有患者」徽章自然不會顯示；
+// 剛完成的舊任務連同患者紀錄原樣保留，可在「紀錄」頁查閱。
+async function renewStandbyTask(oldTask){
+  try {
+    const created = await createTask({
+      unit: oldTask.unit, type: "duty", title: "待命勤務",
+      vehicle: oldTask.vehicle, location: oldTask.location,
+      scope: oldTask.scope || "營外",
+      crewLeader: oldTask.crewLeader, driver: oldTask.driver,
+      dutyOfficer: oldTask.dutyOfficer || "", recorders: oldTask.recorders || [],
+      erStandbyKey: oldTask.erStandbyKey
+    }, { skipDispatch: true });
+    await fsSetDoc(`erStandby/${oldTask.erStandbyKey}`, {
+      currentTaskId: created.id, updatedAt: new Date(),
+      updatedByName: state.profile.displayName || state.profile.email || ""
+    });
+    if (erStandbyPoll) erStandbyPoll.refreshNow();
+  } catch (e) {
+    console.error("待命勤務續約失敗", e);
+  }
 }
 // 時間、里程有時候會填寫錯誤，回報後仍要能修正，不能整筆事件唯讀鎖死。
 async function updateEvent(id, fields){
@@ -2219,12 +2247,14 @@ function taskCard(t){
     ? t.personnel.map(n => nameWithRank(n, t.unit)).join('、')
     : '—';
   const currentLocation = currentLocationOf(t);
-  // 最新一筆是離開現場，代表車輛還在路上、還沒真的抵達那個地點，文字要
-  // 講清楚是「正在前往」而不是「已經在那裡」，避免看起來像已經抵達了。
+  // 最新一筆是出勤或離開現場，代表車輛還在路上、還沒真的抵達那個地點，
+  // 文字要講清楚是「正在前往」而不是「已經在那裡」，避免看起來像已經抵達
+  // 了——出勤當下車輛才剛從營區/醫務所出發，還沒到任務地點，跟離開現場後
+  // 前往下一站是同一種「移動中」狀態，不能只處理離開現場這一種情況。
   // 已經按下返回營區的話，正在前往的地方是營區本身，不是上一次離開現場時
   // 記的那個地點（那個地點已經是過去式了），所以要顯示「返回營區中」，
   // 不能沿用舊的地點文字，否則會顯示已經離開的地方、跟目前狀態對不上。
-  const inTransit = last && last.type === "DEPART_SCENE";
+  const inTransit = last && (last.type === "DISPATCH" || last.type === "DEPART_SCENE");
   const returningToBase = last && last.type === "RETURNING" && !isLiaison;
   const locationLine = returningToBase
     ? "返回營區中"
@@ -4657,7 +4687,10 @@ window.__createTask = (ev, unit, type) => {
       scope: f.get("scope") || "營外",
       crewLeader: f.get("crewLeader"), driver: f.get("driver"), dutyOfficer: f.get("dutyOfficer")||"", recorders,
       startMileage: startMileage ? Number(startMileage) : null,
-      startFuel: f.get("startFuel"), notes: f.get("notes")
+      startFuel: f.get("startFuel"), notes: f.get("notes"),
+      // 標記這筆任務是從急診待命建立的，任務完成時才知道要幫哪個地點自動
+      // 續約下一筆待命勤務（見 renewStandbyTask）。
+      ...(erStandbyKey ? { erStandbyKey } : {})
     }, { skipDispatch: !!erStandbyKey }).then(created => {
       if (!erStandbyKey) return;
       fsSetDoc(`erStandby/${erStandbyKey}`, {
