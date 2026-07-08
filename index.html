@@ -676,7 +676,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-148-standby-task-locked-fields";
+const BUILD_TAG = "2026-07-08-149-standby-pending-label-date-filter";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -930,7 +930,7 @@ function eventTypesFor(t){ return (t && t.type === "liaison") ? LIAISON_EVENT_TY
 // 若同一趟勤務重複多次，Stepper 一律以「最新一筆事件」決定目前走到第幾步。
 const STEP_TYPES = EVENT_TYPES.map(e => e.type);
 const STATUS_LABEL = {
-  pending:   "待出勤",
+  pending:   "待命中",
   dispatch:  "出勤中",
   onscene:   "已抵達現場",
   transit:   "前往下一地點",
@@ -1093,6 +1093,8 @@ const RELEASE_NOTES = [
     "車長／駕駛選人固定預設不勾選跨單位選人，不再因為目前指派的人是不是跨單位借調而有例外",
     "基礎資料管理改成分區列表入口：人員/車輛/行車紀錄器歸在「單位資料」、醫院/醫官歸在「共用資料」，每個類別各自獨立頁面，之後陸續增加類別只要多加一列，不會讓頁籤越擠越亂",
     "急診待命「建立待命勤務」表單鎖定固定欄位：不顯示任務類型（一定是勤務）與營內／營外（一定是營外），地點改標示「醫務所」並鎖定不可修改",
+    "勤務狀態「待出勤」改名「待命中」，任務頁上方篩選新增「待命中」頁籤",
+    "急診待命卡片補上待命勤務的建立時間，如果不是今天建立會額外顯示提醒，避免今天忘記更新車長/駕駛卻沒發現還是昨天的舊資料",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -2390,6 +2392,7 @@ function viewHome(){
 // 就查得到剛完成的勤務，不用跳去「紀錄」頁另外查詢。
 const TASKS_TABS = [
   { key:"all", label:"全部" },
+  { key:"pending", label:"待命中" },
   { key:"dispatch", label:"出勤中" },
   { key:"onscene", label:"現場中" },
   { key:"transit", label:"前往中" },
@@ -3556,6 +3559,7 @@ function viewErStandby(){
           ${isBound ? statusBadge(boundStatus) : ""}
         </div>
         ${isBound ? `
+        <div class="task-meta" style="margin-bottom:10px;">建立於 ${fmtTime(new Date(boundTask.createdAt||0).getTime())}${!isSameDay(new Date(boundTask.createdAt||0).getTime(), new Date()) ? `　<span style="color:var(--amber);">${icon('alert',13)} 非今日建立，請確認車長/駕駛是否需要更新</span>` : ''}</div>
         <div class="detail-grid">
           <div class="detail-item"><span class="lbl">車號</span><span class="val">${esc(boundTask.vehicle||'—')}</span></div>
           <div class="detail-item"><span class="lbl">車長</span><span class="val">${crewLabel(boundTask.crewLeader, boundTask.unit)}</span></div>
