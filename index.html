@@ -676,7 +676,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-153-tasks-all-completed-standby-hospital-location";
+const BUILD_TAG = "2026-07-08-154-same-minute-order-fix-doctor-standby-only";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1105,6 +1105,8 @@ const RELEASE_NOTES = [
     "急診待命「建立待命勤務」預設帶入單位：成功北醫務所預設第一連、精北醫務所預設第二連，可跨單位切換的角色不用每次都手動改單位",
     "任務頁「全部」頁籤補回已完成的勤務（原本只顯示進行中的），跟其他頁籤一樣可以在「全部」裡看到已完成的紀錄",
     "修正待命勤務出勤後「目前位置」顯示成醫務所本身（待命的地方，不是真正要去的地方）的問題，改成顯示回報出勤時選的送醫醫院",
+    "修正建立勤務跟緊接著回報「抵達現場」剛好在同一分鐘內時，系統誤判成還沒回報過、一直要求重複回報抵達現場的問題",
+    "「值班醫官」欄位改成只有急診待命建立出來的勤務才會顯示（建立/編輯都是），一般勤務不會用到，不再顯示",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -1481,7 +1483,12 @@ async function createTask(data, options){
   if (!options.skipDispatch) {
     await fsAddDoc("events", {
       taskId: created.id, type: "DISPATCH", unit: data.unit,
-      timestamp: new Date(),
+      // 跟手動回報的事件一樣只精確到分鐘（見 todayAt），不能用完整精確度的
+      // new Date()——建立勤務後緊接著手動回報「抵達現場」，如果兩者剛好
+      // 落在同一分鐘內，手動回報的時間欄位一律無條件捨去秒數，只要出勤這
+      // 筆的秒數不是 0，就會變成比抵達還晚，導致排序顛倒、系統誤以為抵達
+      // 還沒回報過，一直重複要求回報。
+      timestamp: todayAt(hhmmValue(new Date())),
       userId: state.user.uid,
       userName: state.profile.displayName || state.user.email,
       ...(data.startMileage != null ? { mileage: data.startMileage } : {}),
@@ -2561,12 +2568,13 @@ function viewCreateTask(){
         </button>
         <input type="hidden" name="driver" value="">
       </div>
+      ${isStandbyDispatch ? `
       <div class="field"><label>值班醫官（選填）</label>
         <select name="dutyOfficer">
           <option value="">請選擇醫官</option>
           ${state.doctors.filter(x=>x.active!==false).map(x => `<option value="${esc(x.name)}" ${state.route.presetDutyOfficer===x.name?'selected':''}>${esc(x.name)}${x.title?' '+esc(x.title):''}</option>`).join("")}
         </select>
-      </div>
+      </div>` : ""}
       <div class="field"><label>行車紀錄器（可多選）</label>
         <select name="recorders" multiple size="${Math.min(4, Math.max(2, recorderOpts.length || 2))}">
           ${recorderOpts.map(x => `<option value="${esc(x.code)}">${esc(x.code)}</option>`).join("")}
@@ -2641,12 +2649,13 @@ function viewEditTask(taskId){
         </button>
         <input type="hidden" name="driver" value="${esc(t.driver||'')}">
       </div>
+      ${t.erStandbyKey ? `
       <div class="field"><label>值班醫官（選填）</label>
         <select name="dutyOfficer">
           <option value="">請選擇醫官</option>
           ${state.doctors.filter(x=>x.active!==false).map(x => `<option value="${esc(x.name)}" ${t.dutyOfficer===x.name?'selected':''}>${esc(x.name)}${x.title?' '+esc(x.title):''}</option>`).join("")}
         </select>
-      </div>
+      </div>` : ""}
       <div class="field"><label>行車紀錄器（可多選）</label>
         <select name="recorders" multiple size="${Math.min(4, Math.max(2, recorderOpts.length || 2))}">
           ${recorderOpts.map(x => `<option value="${esc(x.code)}" ${currentRecorders.includes(x.code)?'selected':''}>${esc(x.code)}</option>`).join("")}
@@ -4728,7 +4737,11 @@ window.__saveTaskEdit = (ev, taskId) => {
         return {
           title: f.get("title"), vehicle: f.get("vehicle"), location: f.get("location"),
           scope: f.get("scope") || "營外",
-          crewLeader: f.get("crewLeader"), driver: f.get("driver"), dutyOfficer: f.get("dutyOfficer")||"", recorders,
+          crewLeader: f.get("crewLeader"), driver: f.get("driver"),
+          // 值班醫官欄位只有急診待命建立出來的勤務才會顯示，一般勤務編輯時
+          // 表單裡沒有這個欄位，f.get() 會回傳 null，不能直接拿來覆蓋掉
+          // （這裡本來就沒有值可覆蓋，但保險起見沿用原本的值，不要誤清空）。
+          dutyOfficer: f.has("dutyOfficer") ? (f.get("dutyOfficer")||"") : (t.dutyOfficer||""), recorders,
           startMileage: startMileage ? Number(startMileage) : null,
           startFuel: f.get("startFuel"), notes: f.get("notes")
         };
