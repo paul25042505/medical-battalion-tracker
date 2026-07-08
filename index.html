@@ -139,6 +139,17 @@
     --glass-btn-highlight: rgba(255,255,255,0.16);
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  /* 全站禁止選取文字（比照原生 App 手感，長按/雙點不會跳出選取把手或
+     系統選單），表單欄位例外——輸入框裡的文字本來就要能選取/編輯，
+     禁掉會讓使用者連游標定位、全選、複製貼上都做不到。 */
+  *{
+    -webkit-user-select:none; -moz-user-select:none; user-select:none;
+    -webkit-touch-callout:none;
+  }
+  input, textarea, select, [contenteditable]{
+    -webkit-user-select:text; -moz-user-select:text; user-select:text;
+    -webkit-touch-callout:default;
+  }
   html{scroll-behavior:smooth; overscroll-behavior-y:contain;}
   html,body{margin:0; padding:0; background:var(--bg-gradient); background-attachment:fixed; color:var(--text); font-family:var(--sans); font-size:var(--text-base); overflow-x:hidden; max-width:100%; -webkit-font-smoothing:antialiased;}
   input,select,textarea{accent-color:var(--blue);}
@@ -836,7 +847,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-182-back-button-enlarge";
+const BUILD_TAG = "2026-07-08-183-disable-text-selection";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1306,6 +1317,7 @@ const RELEASE_NOTES = [
     "全站返回鍵改成「液態玻璃」風格：毛玻璃透明圓圈＋高光/陰影營造玻璃厚度感，按下去有縮放＋加深回饋；淺色/深色模式各有專屬的玻璃色調，不會在深色畫面上變成突兀的亮斑",
     "返回鍵按壓動畫加上彈性感：按下去快速縮小，放開後用彈簧曲線「彈過頭再回穩」，不再是單純的線性回彈",
     "修正返回鍵按壓方向：改成按下去放大，放開後用彈簧曲線縮回原尺寸",
+    "全站禁止選取文字，比照原生 App 手感（長按/雙點不會跳出選取把手或系統選單）；表單輸入框不受影響，仍然可以正常選取、編輯、複製貼上",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
