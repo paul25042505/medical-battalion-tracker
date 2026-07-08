@@ -953,7 +953,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-197-push-event-dedup-guard";
+const BUILD_TAG = "2026-07-09-198-double-submit-guard";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1397,6 +1397,7 @@ const RELEASE_NOTES = [
     "修正推播通知重複收到的問題：同一支裝置反覆開關推播時，先前的裝置權杖沒清乾淨會留在資料庫變成孤兒，導致每次推播同一支裝置收到好幾則一樣的通知",
     "推播通知設定頁新增目前帳號底下裝置權杖筆數顯示，方便排查是否還有重複收到推播的異常",
     "推播通知後端加上事件冪等防護：Google 底層事件傳遞偶爾會把同一次新增/回報重複投遞給函式處理，導致同一支裝置收到好幾則一樣的通知，現在同一個事件重複進來會直接被擋掉，只送一次",
+    "修正建立勤務/洽公、任務進度回報、患者狀況記錄這三個表單在網路稍慢時被連點兩下會真的送出兩筆幾乎一樣的資料的問題（因此各自觸發兩次推播，看起來像重複收到通知）",
   ] },
   { date: "2026/07/08", items: [
     "基礎資料管理新增「醫官」名冊（姓名/電話），建立勤務的「值班醫官」欄位改成從這份名冊下拉選擇，不用再手動打字",
@@ -5014,13 +5015,17 @@ window.__refreshProfile = () => { if (profilePoll) profilePoll.refreshNow(); };
 window.__nav = nav;
 window.__startRolePreview = (role, unit) => startRolePreview(role, unit);
 window.__endRolePreview = () => endRolePreview();
-window.__startReport = (taskId, type) => { state.reportDraft = { taskId, type }; render(); };
-window.__cancelReport = () => { state.reportDraft = null; render(); };
+window.__startReport = (taskId, type) => { state.reportDraft = { taskId, type }; state.reportSubmitting = false; render(); };
+window.__cancelReport = () => { state.reportDraft = null; state.reportSubmitting = false; render(); };
 window.__resetReportTime = () => {
   const el = document.getElementById("rf-time");
   if (el) el.value = hhmmValue(new Date());
 };
 window.__submitReport = (taskId, type) => {
+  // 手機觸控偶爾會在網路還沒回應前被連點兩下，沒有這個防呆的話會真的
+  // 寫入兩筆幾乎一樣的回報紀錄，各自觸發一次推播，看起來像收到重複通知。
+  if (state.reportSubmitting) return;
+  state.reportSubmitting = true;
   const mileageEl = document.getElementById("rf-mileage");
   const fuelEl = document.getElementById("rf-fuel");
   const noteEl = document.getElementById("rf-note");
@@ -5054,8 +5059,8 @@ window.__submitReport = (taskId, type) => {
   // 寫入成功才關閉彈窗並重繪；失敗（例如權限被拒）要留在原畫面讓使用者看到
   // 錯誤訊息並可重試，不能還沒確認寫入結果就先把草稿清掉。
   addEvent(taskId, type, extra)
-    .then(() => { state.reportDraft = null; render(); })
-    .catch(err => showToast(`回報失敗：[${err.code||'?'}] ${err.message||err}`));
+    .then(() => { state.reportSubmitting = false; state.reportDraft = null; render(); })
+    .catch(err => { state.reportSubmitting = false; showToast(`回報失敗：[${err.code||'?'}] ${err.message||err}`); });
 };
 window.__editEvent = (id) => { state.eventEditId = id; render(); };
 window.__cancelEditEvent = () => { state.eventEditId = null; render(); };
@@ -5087,10 +5092,10 @@ window.__deleteEditingEvent = (id, isFinal) => {
     .then(() => { state.eventEditId = null; render(); })
     .catch(err => showToast(`刪除失敗：[${err.code||'?'}] ${err.message||err}`));
 };
-window.__startVitals = (taskId) => nav({ name: 'vitals', taskId, id: null, adding: false });
-window.__editVitals = (taskId, id) => nav({ name: 'vitals', taskId, id, adding: false });
-window.__showAddVitalsForm = (taskId) => nav({ name: 'vitals', taskId, id: null, adding: true });
-window.__backToVitalsHistory = (taskId) => nav({ name: 'vitals', taskId, id: null, adding: false });
+window.__startVitals = (taskId) => { state.vitalsSubmitting = false; nav({ name: 'vitals', taskId, id: null, adding: false }); };
+window.__editVitals = (taskId, id) => { state.vitalsSubmitting = false; nav({ name: 'vitals', taskId, id, adding: false }); };
+window.__showAddVitalsForm = (taskId) => { state.vitalsSubmitting = false; nav({ name: 'vitals', taskId, id: null, adding: true }); };
+window.__backToVitalsHistory = (taskId) => { state.vitalsSubmitting = false; nav({ name: 'vitals', taskId, id: null, adding: false }); };
 window.__resetVitalsTime = () => {
   const el = document.getElementById("vf-time");
   if (el) el.value = hhmmValue(new Date());
@@ -5348,6 +5353,10 @@ window.__toggleCrossUnitVehicle = (checkbox) => {
     : vehicleSelectOptionsSameUnit(select.dataset.unit, currentPlate);
 };
 window.__submitVitals = (taskId, id) => {
+  // 手機觸控偶爾會在網路還沒回應前被連點兩下，沒有這個防呆的話會真的
+  // 寫入兩筆幾乎一樣的患者紀錄，各自觸發一次推播，看起來像收到重複通知。
+  if (state.vitalsSubmitting) return;
+  state.vitalsSubmitting = true;
   const get = (elId) => document.getElementById(elId)?.value || "";
   const checkedValues = (name) => [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(el => el.value);
   const timeVal = get("vf-time");
@@ -5392,8 +5401,8 @@ window.__submitVitals = (taskId, id) => {
   }
   // 寫入成功才跳回上一層（歷史紀錄清單）；失敗要留在原畫面讓使用者看到
   // 錯誤訊息並可重試，不能還沒確認寫入結果就先跳走。
-  action.then(() => nav({ taskId, id: null, adding: false, name: 'vitals' }))
-        .catch(err => showToast(`儲存失敗：[${err.code||'?'}] ${err.message||err}`));
+  action.then(() => { state.vitalsSubmitting = false; nav({ taskId, id: null, adding: false, name: 'vitals' }); })
+        .catch(err => { state.vitalsSubmitting = false; showToast(`儲存失敗：[${err.code||'?'}] ${err.message||err}`); });
 };
 window.__deleteTask = (id) => { if (confirm("確定刪除此任務？此動作無法復原。")) deleteTask(id); };
 window.__forceEndTask = (id) => { if (confirm("確定強制結束此勤務？此動作無法復原。")) forceEndTask(id); };
@@ -5567,16 +5576,21 @@ window.__startErStandbyTask = (key, locationLabel) => {
 };
 window.__createTask = (ev, unit, type) => {
   ev.preventDefault();
+  // 手機觸控偶爾會在網路還沒回應前被連點兩下，沒有這個防呆的話會真的
+  // 建立兩筆幾乎一樣的任務，各自觸發一次推播，看起來像收到重複通知。
+  if (state.taskSubmitting) return;
+  state.taskSubmitting = true;
   const f = new FormData(ev.target);
   const erStandbyKey = state.route.erStandbyKey || null;
+  let action;
   if (type === "liaison") {
     const personnel = f.getAll("personnel");
-    if (!personnel.length) { showToast("請至少選擇一位人員"); return; }
-    createTask({ unit, type, title: f.get("title"), location: f.get("location"), personnel, notes: f.get("notes") });
+    if (!personnel.length) { state.taskSubmitting = false; showToast("請至少選擇一位人員"); return; }
+    action = createTask({ unit, type, title: f.get("title"), location: f.get("location"), personnel, notes: f.get("notes") });
   } else {
     const recorders = f.getAll("recorders");
     const startMileage = f.get("startMileage");
-    createTask({
+    action = createTask({
       unit, type: "duty", title: f.get("title"), vehicle: f.get("vehicle"), location: f.get("location"),
       scope: f.get("scope") || "營外",
       crewLeader: f.get("crewLeader"), driver: f.get("driver"), dutyOfficer: f.get("dutyOfficer")||"", recorders,
@@ -5593,6 +5607,7 @@ window.__createTask = (ev, unit, type) => {
       }).then(() => { if (erStandbyPoll) erStandbyPoll.refreshNow(); }).catch(baseDataErr);
     });
   }
+  action.finally(() => { state.taskSubmitting = false; });
   ev.target.reset();
   nav({ name: erStandbyKey ? "erStandby" : "tasks" });
 };
