@@ -683,7 +683,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-161-remove-header-title";
+const BUILD_TAG = "2026-07-08-162-nearby-hospital-navigation";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -691,7 +691,7 @@ const BUILD_TAG = "2026-07-08-161-remove-header-title";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "1.8";
+const APP_MAJOR_MINOR = "1.9";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -1132,6 +1132,7 @@ const RELEASE_NOTES = [
     "任務卡片版面調整：狀態徽章（待命中/出勤中…）移到跟標題同一列，車號/營內外/地點那行改成獨立滿版顯示，不會再因為地點名稱較長而擠壓換行；有患者徽章改顯示在狀態徽章左邊，同一列並排",
     "車號後面補上該車實際登記的所屬單位（例如「軍H-30001（第一連）」），任務卡片、勤務詳情頁、急診待命卡片都會顯示，跨單位借車或管理員同時檢視多單位時不會再看不出車輛是哪個單位的",
     "移除頁面上方標題列的中英文系統名稱（衛生營車輛人員動態管制系統／Medical Battalion...），只保留姓名/階級與通知/登出按鈕，畫面更簡潔",
+    "醫院資訊頁新增「顯示附近醫院」：用手機定位算出目前概略所在縣市，同縣市的醫院自動排到最前面並標示「鄰近」；每間醫院新增「Google 導航」「Apple 導航」按鈕，點一下直接開對應地圖 App 開始導航",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -1295,6 +1296,8 @@ const state = {
   previewActive: false, realRoleUnit: null, // 角色權限預覽（僅限 admin）
   weather: null, // 首頁氣象預報（依單位對應縣市，見 ensureWeatherLoaded）
   hazards: null, // 首頁天氣特報／陸上警報（依單位對應縣市，見 ensureHazardsLoaded）
+  myCounty: null, // 醫院資訊頁：手機 GPS 定位算出的概略縣市（見 nearestCounty），null 代表尚未定位
+  locatingHospital: false, // 醫院資訊頁定位中的載入狀態
   // 「紀錄」頁自訂日期查詢往回查超過 RECENT_WINDOW_DAYS 時另外抓的舊資料，
   // 累積在這裡跟平常只抓最近期間的 tasks/events/vitals 合併，不然下一次
   // 背景刷新（只抓最近期間）會把這些額外查到的舊資料整個蓋掉。
@@ -1928,6 +1931,36 @@ async function ensureHospitalsSeeded(){
     if (hospitalsPoll) await hospitalsPoll.refreshNow();
   } catch (e) { console.error("初始化醫院資料失敗", e); }
 }
+
+// 醫院名冊目前只登記到「縣市」層級，沒有實際地址／經緯度，沒辦法算出跟
+// GPS 定位的精確距離；用縣治所在地座標當作該縣市的概略代表點，抓到手機
+// GPS 位置後算最接近哪個縣治，就能概略判斷「人在哪個縣市」，把同縣市的
+// 醫院排到最前面。之後若幫醫院資料補上實際座標，可以直接改成算醫院本身
+// 的距離，不用再繞經縣市這一層。
+const COUNTY_CENTERS = {
+  "臺中市": { lat: 24.1477, lng: 120.6736 },
+  "嘉義市": { lat: 23.4801, lng: 120.4491 },
+  "嘉義縣": { lat: 23.4623, lng: 120.3333 }
+};
+function haversineKm(lat1, lng1, lat2, lng2){
+  const toRad = d => d * Math.PI / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function nearestCounty(lat, lng){
+  let best = null, bestDist = Infinity;
+  for (const [county, c] of Object.entries(COUNTY_CENTERS)) {
+    const d = haversineKm(lat, lng, c.lat, c.lng);
+    if (d < bestDist) { bestDist = d; best = county; }
+  }
+  return best;
+}
+// Google／Apple 地圖都直接用醫院名稱當搜尋目的地（地圖本身會處理定位跟
+// 導航路線），不需要醫院名冊登記實際地址或經緯度。
+function googleMapsUrl(name){ return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(name)}`; }
+function appleMapsUrl(name){ return `https://maps.apple.com/?daddr=${encodeURIComponent(name)}`; }
 
 /* =========================================================
    7b) 氣象預報（中央氣象署 CWA 開放資料 API，直接從瀏覽器端呼叫；
@@ -3645,17 +3678,38 @@ function viewFeedbackForm(){
 function viewHospitals(){
   const p = state.profile;
   const canEdit = canManageBaseData(p);
-  const rows = state.hospitals.slice().sort((a,b) => HOSPITAL_LEVELS.indexOf(a.level) - HOSPITAL_LEVELS.indexOf(b.level) || (a.name||'').localeCompare(b.name||''));
+  // 定位到的縣市排最前面（同縣市內再照原本的等級/名稱排序），還沒定位
+  // 或定位失敗時退回原本的排序，不影響既有查詢流程。
+  const rows = state.hospitals.slice().sort((a,b) => {
+    if (state.myCounty) {
+      const na = a.county === state.myCounty ? 0 : 1;
+      const nb = b.county === state.myCounty ? 0 : 1;
+      if (na !== nb) return na - nb;
+    }
+    return HOSPITAL_LEVELS.indexOf(a.level) - HOSPITAL_LEVELS.indexOf(b.level) || (a.name||'').localeCompare(b.name||'');
+  });
+  const locateBar = `
+    <div class="field" style="margin-bottom:14px;">
+      <button class="icon-btn primary" style="width:100%;" onclick="window.__locateNearbyHospitals()" ${state.locatingHospital ? 'disabled' : ''}>
+        ${icon('pin',15)} ${state.locatingHospital ? '定位中…' : (state.myCounty ? '重新定位' : '顯示附近醫院')}
+      </button>
+      ${state.myCounty ? `<div style="color:var(--muted); font-size:var(--text-xs); margin-top:6px;">目前定位：靠近${esc(state.myCounty)}，同縣市醫院已排到最前面</div>` : ''}
+    </div>`;
   return `
     <div class="back-row">${backBtn({name:'profile'})}</div>
     <div class="section-label">醫院資訊</div>
+    ${locateBar}
     ${canEdit ? `<button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('hospitals', null, '')">${icon('plus',15)} 新增醫院</button>` : ""}
     ${rows.length ? rows.map(x => `
       <div class="admin-row">
         <div>
-          <div class="name">${esc(x.name)}</div>
+          <div class="name">${esc(x.name)}${state.myCounty && x.county === state.myCounty ? ` <span class="badge dispatch" style="padding:3px 8px;">鄰近</span>` : ''}</div>
           <div class="sub">${esc(x.county||'—')} · ${esc(x.level||'—')}${x.phone?` · <a href="tel:${esc(x.phone)}" class="phone-link" style="text-decoration:none;">${esc(x.phone)}</a>`:''}</div>
           ${x.note ? `<div class="sub">${esc(x.note)}</div>` : ""}
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+            <a class="icon-btn" href="${googleMapsUrl(x.name)}" target="_blank" rel="noopener">${icon('depart',14)} Google 導航</a>
+            <a class="icon-btn" href="${appleMapsUrl(x.name)}" target="_blank" rel="noopener">${icon('depart',14)} Apple 導航</a>
+          </div>
         </div>
         ${canEdit ? `
         <div style="display:flex; gap:6px; flex-wrap:wrap;">
@@ -4670,6 +4724,26 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
        : coll === "doctors" ? addDoctor(f.get("name"), f.get("title"), f.get("phone"))
        : addRecorder(unit, f.get("code")));
   action.then(() => { state.baseDataModal = null; render(); }).catch(baseDataErr);
+};
+// 醫院資訊頁「顯示附近醫院」：用瀏覽器定位 API 抓 GPS 座標，換算最接近
+// 哪個縣治（見 nearestCounty），再把同縣市的醫院排到列表最前面。定位
+// 失敗（使用者拒絕權限、裝置不支援等）要明確提示，不能靜默失敗讓人以為
+// 排序沒反應。
+window.__locateNearbyHospitals = () => {
+  if (!navigator.geolocation) { showToast("此裝置/瀏覽器不支援定位功能"); return; }
+  state.locatingHospital = true; render();
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      state.myCounty = nearestCounty(pos.coords.latitude, pos.coords.longitude);
+      state.locatingHospital = false;
+      render();
+    },
+    (err) => {
+      state.locatingHospital = false; render();
+      showToast(`定位失敗：${err.message || '請確認已開啟定位權限'}`);
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+  );
 };
 window.__editProfile = () => { state.profileEditing = true; render(); };
 window.__cancelEditProfile = () => { state.profileEditing = false; render(); };
