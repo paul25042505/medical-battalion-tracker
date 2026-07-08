@@ -419,6 +419,19 @@
   }
   .step-item.done .step-dot{background:var(--green); border-color:var(--green);}
   .step-item.current .step-dot{background:var(--blue); border-color:var(--blue); box-shadow:0 0 0 4px rgba(0,102,255,0.16);}
+  /* 目前進行中的那一步，圓點加一圈往外擴散淡出的漣漪動畫，一眼就看得出
+     「這是現在正在走的步驟」，跟已完成／未開始的圓點區分開來。 */
+  .step-item.current .step-dot::after{
+    content:''; position:absolute; inset:0; border-radius:50%;
+    border:2px solid var(--blue); animation:stepPulse 1.8s ease-out infinite;
+  }
+  @keyframes stepPulse{
+    0%{ transform:scale(1); opacity:0.7; }
+    100%{ transform:scale(2.2); opacity:0; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .step-item.current .step-dot::after{ animation:none; }
+  }
   .step-label{font-size:var(--text-sm); font-weight:600; color:var(--muted);}
   .step-item.done .step-label{color:var(--text);}
   .step-item.current .step-label{color:var(--blue); font-weight:700;}
@@ -676,7 +689,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-154-same-minute-order-fix-doctor-standby-only";
+const BUILD_TAG = "2026-07-08-155-stepper-current-dot-ripple";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1107,6 +1120,7 @@ const RELEASE_NOTES = [
     "修正待命勤務出勤後「目前位置」顯示成醫務所本身（待命的地方，不是真正要去的地方）的問題，改成顯示回報出勤時選的送醫醫院",
     "修正建立勤務跟緊接著回報「抵達現場」剛好在同一分鐘內時，系統誤判成還沒回報過、一直要求重複回報抵達現場的問題",
     "「值班醫官」欄位改成只有急診待命建立出來的勤務才會顯示（建立/編輯都是），一般勤務不會用到，不再顯示",
+    "勤務進度時間軸目前所在的那一步，圓點加上往外擴散的漣漪動畫，更容易一眼看出目前走到哪一步",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
