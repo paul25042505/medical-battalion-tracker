@@ -683,7 +683,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-163-geolocation-error-message";
+const BUILD_TAG = "2026-07-08-164-hospital-district-precision";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1134,6 +1134,7 @@ const RELEASE_NOTES = [
     "移除頁面上方標題列的中英文系統名稱（衛生營車輛人員動態管制系統／Medical Battalion...），只保留姓名/階級與通知/登出按鈕，畫面更簡潔",
     "醫院資訊頁新增「顯示附近醫院」：用手機定位算出目前概略所在縣市，同縣市的醫院自動排到最前面並標示「鄰近」；每間醫院新增「Google 導航」「Apple 導航」按鈕，點一下直接開對應地圖 App 開始導航",
     "修正「顯示附近醫院」定位失敗時只顯示英文原始錯誤訊息看不懂的問題，改成依情況給出可以實際照做的中文提示（例如拒絕權限時提示去手機設定開啟）",
+    "醫院資料補上經查證的真實地址與行政區，定位比對從「縣市」提升到「行政區」層級，同行政區的醫院會排在最前面並標示「同行政區」，其次才是同縣市但不同行政區（標示「同縣市」）；醫院清單新增「地址」欄位顯示，Google／Apple 導航改成優先帶入地址（沒有地址才退回用院名查詢）；醫院新增／編輯表單補上「行政區」「地址」欄位，方便日後補登或修正資料",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -1297,7 +1298,8 @@ const state = {
   previewActive: false, realRoleUnit: null, // 角色權限預覽（僅限 admin）
   weather: null, // 首頁氣象預報（依單位對應縣市，見 ensureWeatherLoaded）
   hazards: null, // 首頁天氣特報／陸上警報（依單位對應縣市，見 ensureHazardsLoaded）
-  myCounty: null, // 醫院資訊頁：手機 GPS 定位算出的概略縣市（見 nearestCounty），null 代表尚未定位
+  myCounty: null, // 醫院資訊頁：手機 GPS 定位算出的概略縣市（見 nearestDistrict），null 代表尚未定位
+  myDistrict: null, // 醫院資訊頁：手機 GPS 定位算出的概略行政區（比縣市更準），null 代表定位不到已知行政區或尚未定位
   locatingHospital: false, // 醫院資訊頁定位中的載入狀態
   // 「紀錄」頁自訂日期查詢往回查超過 RECENT_WINDOW_DAYS 時另外抓的舊資料，
   // 累積在這裡跟平常只抓最近期間的 tasks/events/vitals 合併，不然下一次
@@ -1652,8 +1654,8 @@ async function addRecorder(unit, code){
   await fsAddDoc("recorders", { unit, code, active: true });
   showToast("已新增行車紀錄器"); if (recordersPoll) recordersPoll.refreshNow();
 }
-async function addHospital(county, name, level, phone, note){
-  await fsAddDoc("hospitals", { county, name, level, phone: phone||"", note: note||"" });
+async function addHospital(county, name, level, phone, note, district, address){
+  await fsAddDoc("hospitals", { county, name, level, phone: phone||"", note: note||"", district: district||"", address: address||"" });
   showToast("已新增醫院"); if (hospitalsPoll) hospitalsPoll.refreshNow();
 }
 async function addDoctor(name, title, phone){
@@ -1910,14 +1912,14 @@ async function ensureUnitsSeeded(){
 // 集合；用縣市＋醫院名稱判斷是否已存在，只補齊清單裡還沒有的項目，
 // 不會蓋掉使用者已經手動新增或修改過的資料。
 const HOSPITAL_SEED = [
-  { county:"臺中市", name:"中國醫藥大學附設醫院", level:"重度級", phone:"04-22052121", note:"總機，急診專線待確認" },
-  { county:"臺中市", name:"臺中榮民總醫院", level:"重度級", phone:"04-23592525", note:"總機，急診專線待確認" },
-  { county:"臺中市", name:"中山醫學大學附設醫院", level:"重度級", phone:"", note:"電話待確認" },
-  { county:"臺中市", name:"童綜合醫院", level:"重度級", phone:"", note:"電話待確認" },
-  { county:"臺中市", name:"澄清醫院中港院區", level:"重度級", phone:"", note:"電話待確認" },
-  { county:"臺中市", name:"光田綜合醫院大甲院區", level:"重度級", phone:"04-26885599", note:"總機，急診專線待確認" },
-  { county:"嘉義市", name:"嘉義基督教醫院", level:"重度級", phone:"", note:"電話待確認" },
-  { county:"嘉義縣", name:"長庚紀念醫院嘉義院區", level:"重度級", phone:"", note:"電話待確認" }
+  { county:"臺中市", district:"北區", address:"臺中市北區育德路2號", name:"中國醫藥大學附設醫院", level:"重度級", phone:"04-22052121", note:"總機，急診專線待確認" },
+  { county:"臺中市", district:"西屯區", address:"臺中市西屯區臺灣大道四段1650號", name:"臺中榮民總醫院", level:"重度級", phone:"04-23592525", note:"總機，急診專線待確認" },
+  { county:"臺中市", district:"南區", address:"臺中市南區建國北路一段110號", name:"中山醫學大學附設醫院", level:"重度級", phone:"04-24739595", note:"" },
+  { county:"臺中市", district:"梧棲區", address:"臺中市梧棲區臺灣大道八段699號", name:"童綜合醫院", level:"重度級", phone:"04-26581919", note:"" },
+  { county:"臺中市", district:"西屯區", address:"臺中市西屯區臺灣大道四段966號", name:"澄清醫院中港院區", level:"重度級", phone:"04-24632000", note:"" },
+  { county:"臺中市", district:"大甲區", address:"臺中市大甲區經國路321號", name:"光田綜合醫院大甲院區", level:"重度級", phone:"04-26885599", note:"總機，急診專線待確認" },
+  { county:"嘉義市", district:"東區", address:"嘉義市東區忠孝路539號", name:"嘉義基督教醫院", level:"重度級", phone:"05-2765041", note:"" },
+  { county:"嘉義縣", district:"朴子市", address:"嘉義縣朴子市嘉朴路西段8號", name:"長庚紀念醫院嘉義院區", level:"重度級", phone:"05-3621000", note:"" }
 ];
 let hospitalsSeeded = false;
 async function ensureHospitalsSeeded(){
@@ -1933,15 +1935,25 @@ async function ensureHospitalsSeeded(){
   } catch (e) { console.error("初始化醫院資料失敗", e); }
 }
 
-// 醫院名冊目前只登記到「縣市」層級，沒有實際地址／經緯度，沒辦法算出跟
-// GPS 定位的精確距離；用縣治所在地座標當作該縣市的概略代表點，抓到手機
-// GPS 位置後算最接近哪個縣治，就能概略判斷「人在哪個縣市」，把同縣市的
-// 醫院排到最前面。之後若幫醫院資料補上實際座標，可以直接改成算醫院本身
-// 的距離，不用再繞經縣市這一層。
+// 醫院名冊目前沒有登記每間醫院自己的經緯度，沒辦法算出跟 GPS 定位的
+// 精確距離；退而求其次，用「行政區」層級的代表點（區公所／市公所座標，
+// 比整個縣市的代表點更接近實際醫院位置）概略判斷「人在哪個行政區」，
+// 縣市層級當作行政區判斷不到時的備援。之後若幫每間醫院補上實際座標，
+// 可以直接改成算醫院本身的距離，不用再繞經行政區/縣市這兩層。
 const COUNTY_CENTERS = {
   "臺中市": { lat: 24.1477, lng: 120.6736 },
   "嘉義市": { lat: 23.4801, lng: 120.4491 },
   "嘉義縣": { lat: 23.4623, lng: 120.3333 }
+};
+// key 用「縣市|行政區」，避免不同縣市剛好同名行政區（例如各地都有「東區」）互相搞混。
+const DISTRICT_CENTERS = {
+  "臺中市|北區": { lat: 24.1512, lng: 120.6839 },
+  "臺中市|西屯區": { lat: 24.1786, lng: 120.6400 },
+  "臺中市|南區": { lat: 24.1253, lng: 120.6653 },
+  "臺中市|梧棲區": { lat: 24.2547, lng: 120.5308 },
+  "臺中市|大甲區": { lat: 24.3486, lng: 120.6222 },
+  "嘉義市|東區": { lat: 23.4801, lng: 120.4491 },
+  "嘉義縣|朴子市": { lat: 23.4650, lng: 120.2458 }
 };
 function haversineKm(lat1, lng1, lat2, lng2){
   const toRad = d => d * Math.PI / 180;
@@ -1958,10 +1970,24 @@ function nearestCounty(lat, lng){
   }
   return best;
 }
-// Google／Apple 地圖都直接用醫院名稱當搜尋目的地（地圖本身會處理定位跟
-// 導航路線），不需要醫院名冊登記實際地址或經緯度。
-function googleMapsUrl(name){ return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(name)}`; }
-function appleMapsUrl(name){ return `https://maps.apple.com/?daddr=${encodeURIComponent(name)}`; }
+// 回傳 { county, district }：先找最接近的行政區代表點，再從 key 拆出對應
+// 縣市，兩層資訊一起回傳，排序時可以優先比對行政區、比對不到才退回縣市。
+function nearestDistrict(lat, lng){
+  let best = null, bestDist = Infinity;
+  for (const [key, c] of Object.entries(DISTRICT_CENTERS)) {
+    const d = haversineKm(lat, lng, c.lat, c.lng);
+    if (d < bestDist) { bestDist = d; best = key; }
+  }
+  if (!best) return { county: nearestCounty(lat, lng), district: null };
+  const [county, district] = best.split("|");
+  return { county, district };
+}
+// Google／Apple 地圖的導航目的地優先用實際地址（比只用醫院名稱搜尋更準，
+// 尤其是分院/院區這種同名醫院有多個院區的情況），沒有登記地址時退回用
+// 醫院名稱讓地圖自己搜尋定位。
+function hospitalNavQuery(h){ return h.address || h.name; }
+function googleMapsUrl(query){ return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(query)}`; }
+function appleMapsUrl(query){ return `https://maps.apple.com/?daddr=${encodeURIComponent(query)}`; }
 
 /* =========================================================
    7b) 氣象預報（中央氣象署 CWA 開放資料 API，直接從瀏覽器端呼叫；
@@ -3679,13 +3705,17 @@ function viewFeedbackForm(){
 function viewHospitals(){
   const p = state.profile;
   const canEdit = canManageBaseData(p);
-  // 定位到的縣市排最前面（同縣市內再照原本的等級/名稱排序），還沒定位
-  // 或定位失敗時退回原本的排序，不影響既有查詢流程。
+  // 排序優先度：同行政區（最準）> 同縣市但行政區不同或未知（次準）> 其餘。
+  // 還沒定位或定位失敗時退回原本依等級/名稱的排序，不影響既有查詢流程。
+  function matchRank(h){
+    if (state.myDistrict && h.district === state.myDistrict && h.county === state.myCounty) return 0;
+    if (state.myCounty && h.county === state.myCounty) return 1;
+    return 2;
+  }
   const rows = state.hospitals.slice().sort((a,b) => {
     if (state.myCounty) {
-      const na = a.county === state.myCounty ? 0 : 1;
-      const nb = b.county === state.myCounty ? 0 : 1;
-      if (na !== nb) return na - nb;
+      const ra = matchRank(a), rb = matchRank(b);
+      if (ra !== rb) return ra - rb;
     }
     return HOSPITAL_LEVELS.indexOf(a.level) - HOSPITAL_LEVELS.indexOf(b.level) || (a.name||'').localeCompare(b.name||'');
   });
@@ -3694,22 +3724,27 @@ function viewHospitals(){
       <button class="icon-btn primary" style="width:100%;" onclick="window.__locateNearbyHospitals()" ${state.locatingHospital ? 'disabled' : ''}>
         ${icon('pin',15)} ${state.locatingHospital ? '定位中…' : (state.myCounty ? '重新定位' : '顯示附近醫院')}
       </button>
-      ${state.myCounty ? `<div style="color:var(--muted); font-size:var(--text-xs); margin-top:6px;">目前定位：靠近${esc(state.myCounty)}，同縣市醫院已排到最前面</div>` : ''}
+      ${state.myCounty ? `<div style="color:var(--muted); font-size:var(--text-xs); margin-top:6px;">目前定位：靠近${state.myDistrict ? esc(state.myCounty)+esc(state.myDistrict) : esc(state.myCounty)}${state.myDistrict ? '，同行政區醫院已排到最前面' : '，同縣市醫院已排到最前面（尚無更精確的行政區資料）'}</div>` : ''}
     </div>`;
   return `
     <div class="back-row">${backBtn({name:'profile'})}</div>
     <div class="section-label">醫院資訊</div>
     ${locateBar}
     ${canEdit ? `<button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('hospitals', null, '')">${icon('plus',15)} 新增醫院</button>` : ""}
-    ${rows.length ? rows.map(x => `
+    ${rows.length ? rows.map(x => {
+      const rank = state.myCounty ? matchRank(x) : 2;
+      const nearBadge = rank === 0 ? `<span class="badge dispatch" style="padding:3px 8px;">同行政區</span>`
+        : rank === 1 ? `<span class="badge dispatch" style="padding:3px 8px;">同縣市</span>` : '';
+      return `
       <div class="admin-row">
         <div>
-          <div class="name">${esc(x.name)}${state.myCounty && x.county === state.myCounty ? ` <span class="badge dispatch" style="padding:3px 8px;">鄰近</span>` : ''}</div>
-          <div class="sub">${esc(x.county||'—')} · ${esc(x.level||'—')}${x.phone?` · <a href="tel:${esc(x.phone)}" class="phone-link" style="text-decoration:none;">${esc(x.phone)}</a>`:''}</div>
+          <div class="name">${esc(x.name)}${nearBadge ? ' '+nearBadge : ''}</div>
+          <div class="sub">${esc(x.county||'—')}${x.district?esc(x.district):''} · ${esc(x.level||'—')}${x.phone?` · <a href="tel:${esc(x.phone)}" class="phone-link" style="text-decoration:none;">${esc(x.phone)}</a>`:''}</div>
+          ${x.address ? `<div class="sub">${esc(x.address)}</div>` : ""}
           ${x.note ? `<div class="sub">${esc(x.note)}</div>` : ""}
           <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
-            <a class="icon-btn" href="${googleMapsUrl(x.name)}" target="_blank" rel="noopener">${icon('depart',14)} Google 導航</a>
-            <a class="icon-btn" href="${appleMapsUrl(x.name)}" target="_blank" rel="noopener">${icon('depart',14)} Apple 導航</a>
+            <a class="icon-btn" href="${googleMapsUrl(hospitalNavQuery(x))}" target="_blank" rel="noopener">${icon('depart',14)} Google 導航</a>
+            <a class="icon-btn" href="${appleMapsUrl(hospitalNavQuery(x))}" target="_blank" rel="noopener">${icon('depart',14)} Apple 導航</a>
           </div>
         </div>
         ${canEdit ? `
@@ -3717,7 +3752,8 @@ function viewHospitals(){
           <button class="icon-btn" onclick="window.__openBaseDataModal('hospitals','${x.id}','')">編輯</button>
           <button class="icon-btn danger" onclick="window.__deleteBaseData('hospitals','${x.id}')">刪除</button>
         </div>` : ""}
-      </div>`).join("") : `<div class="empty">尚無醫院資料${canEdit ? '，請點上方新增' : ''}</div>`}
+      </div>`;
+    }).join("") : `<div class="empty">尚無醫院資料${canEdit ? '，請點上方新增' : ''}</div>`}
   `;
 }
 
@@ -4092,6 +4128,8 @@ function viewBaseDataModal(){
           ${HOSPITAL_COUNTIES.map(c => `<option value="${c}" ${editing?.county===c?'selected':''}>${c}</option>`).join("")}
         </select>
       </div>
+      <div class="field"><label>行政區（選填，用於定位比對）</label><input name="district" value="${esc(editing?.district||'')}" placeholder="例如：西屯區"></div>
+      <div class="field"><label>地址（選填，用於一鍵導航）</label><input name="address" value="${esc(editing?.address||'')}" placeholder="例如：臺中市西屯區臺灣大道四段1650號"></div>
       <div class="field"><label>急救責任等級</label>
         <select name="level" required>
           <option value="">請選擇等級</option>
@@ -4716,26 +4754,29 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
   const action = id
     ? (coll === "personnel" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"", emtLevel: f.get("emtLevel")||"" })
        : coll === "vehicles" ? updateBaseData(coll, id, { plate: f.get("plate"), type: f.get("type") })
-       : coll === "hospitals" ? updateBaseData(coll, id, { name: f.get("name"), county: f.get("county"), level: f.get("level"), phone: f.get("phone")||"", note: f.get("note")||"" })
+       : coll === "hospitals" ? updateBaseData(coll, id, { name: f.get("name"), county: f.get("county"), level: f.get("level"), phone: f.get("phone")||"", note: f.get("note")||"", district: f.get("district")||"", address: f.get("address")||"" })
        : coll === "doctors" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"" })
        : updateBaseData(coll, id, { code: f.get("code") }))
     : (coll === "personnel" ? addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone"), f.get("emtLevel"))
        : coll === "vehicles" ? addVehicle(unit, f.get("plate"), f.get("type"))
-       : coll === "hospitals" ? addHospital(f.get("county"), f.get("name"), f.get("level"), f.get("phone"), f.get("note"))
+       : coll === "hospitals" ? addHospital(f.get("county"), f.get("name"), f.get("level"), f.get("phone"), f.get("note"), f.get("district"), f.get("address"))
        : coll === "doctors" ? addDoctor(f.get("name"), f.get("title"), f.get("phone"))
        : addRecorder(unit, f.get("code")));
   action.then(() => { state.baseDataModal = null; render(); }).catch(baseDataErr);
 };
 // 醫院資訊頁「顯示附近醫院」：用瀏覽器定位 API 抓 GPS 座標，換算最接近
-// 哪個縣治（見 nearestCounty），再把同縣市的醫院排到列表最前面。定位
-// 失敗（使用者拒絕權限、裝置不支援等）要明確提示，不能靜默失敗讓人以為
-// 排序沒反應。
+// 哪個行政區（見 nearestDistrict，比只到縣市層級更準——臺中市範圍很大，
+// 同縣市不代表距離近），同行政區的醫院排最前面，其次是同縣市但行政區
+// 不同或未知的。定位失敗（使用者拒絕權限、裝置不支援等）要明確提示，
+// 不能靜默失敗讓人以為排序沒反應。
 window.__locateNearbyHospitals = () => {
   if (!navigator.geolocation) { showToast("此裝置/瀏覽器不支援定位功能"); return; }
   state.locatingHospital = true; render();
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      state.myCounty = nearestCounty(pos.coords.latitude, pos.coords.longitude);
+      const { county, district } = nearestDistrict(pos.coords.latitude, pos.coords.longitude);
+      state.myCounty = county;
+      state.myDistrict = district;
       state.locatingHospital = false;
       render();
     },
