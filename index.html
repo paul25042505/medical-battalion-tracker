@@ -689,7 +689,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-159-task-card-layout";
+const BUILD_TAG = "2026-07-08-160-vehicle-unit-label";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1019,6 +1019,13 @@ function dispatchedVehiclePlates(){
   return set;
 }
 function vehicleOptionLabel(plate, dispatchedSet){ return `${plate}（${dispatchedSet.has(plate) ? '派遣中' : '可派遣'}）`; }
+// 車號本身看不出是哪個單位的車，尤其是跨單位借車、或高勤官/管理員同時看
+// 多個單位混在一起的畫面時特別容易搞混——查該車在車輛名冊裡實際登記的
+// 單位（不是勤務本身的單位，借來的車兩者可能不一樣），沒有名冊資料就沒有。
+function vehicleUnitLabel(plate){
+  const v = state.vehicles.find(x => x.plate === plate);
+  return v ? unitLabel(v.unit) : "";
+}
 // 勤務的營內／營外：這趟勤務車輛會不會離開營區，建立勤務時填寫，跟首頁
 // 「車輛動態」統計共用同一個欄位值，兩處才會對得起來。舊資料沒有這個
 // 欄位時，預設當作營外（多數勤務本來就是出營區執行）。
@@ -1129,6 +1136,7 @@ const RELEASE_NOTES = [
     "新增規則：勤務回報（出勤/抵達現場/離開現場/返營/抵達營區、患者紀錄）只開放給該筆勤務指定的車長、駕駛或洽公人員本人，同單位其他成員不能代為回報不是自己的勤務；管理員維持後台支援權限不受影響",
     "人員新增 EMT 證照等級欄位（EMT-1/EMT-2/EMT-P），新增帳號待審核、個人資料、基礎資料管理／人員都可以登記，出勤資訊（勤務詳情頁、任務卡片）的車長/駕駛顯示會一併帶出證照等級",
     "任務卡片版面調整：狀態徽章（待命中/出勤中…）移到跟標題同一列，車號/營內外/地點那行改成獨立滿版顯示，不會再因為地點名稱較長而擠壓換行；有患者徽章改顯示在狀態徽章左邊，同一列並排",
+    "車號後面補上該車實際登記的所屬單位（例如「軍H-30001（第一連）」），任務卡片、勤務詳情頁、急診待命卡片都會顯示，跨單位借車或管理員同時檢視多單位時不會再看不出車輛是哪個單位的",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -2349,7 +2357,7 @@ function taskCard(t){
         ${statusBadge(s)}
       </div>
     </div>
-    <div class="task-meta">${isLiaison ? '洽公' : `${esc(t.vehicle||'—')} · ${taskScope(t)}`} · ${esc(t.location||'—')}</div>
+    <div class="task-meta">${isLiaison ? '洽公' : `${esc(t.vehicle||'—')}${t.vehicle && vehicleUnitLabel(t.vehicle) ? '（'+esc(vehicleUnitLabel(t.vehicle))+'）' : ''} · ${taskScope(t)}`} · ${esc(t.location||'—')}</div>
     <div class="task-crew">
       ${locationLine ? `<span>目前位置：${locationLine}</span>` : ""}
       ${isLiaison
@@ -3176,7 +3184,7 @@ function viewTaskDetail(taskId){
       <div class="kv">
         ${isLiaison
           ? `<div class="k">人員</div><div class="v">${personnelLine || '—'}</div>`
-          : `<div class="k">車號</div><div class="v">${esc(t.vehicle||'—')}</div>
+          : `<div class="k">車號</div><div class="v">${esc(t.vehicle||'—')}${t.vehicle && vehicleUnitLabel(t.vehicle) ? '（'+esc(vehicleUnitLabel(t.vehicle))+'）' : ''}</div>
              <div class="k">營內／營外</div><div class="v">${taskScope(t)}</div>`}
         <div class="k">地點</div><div class="v">${esc(t.location||'—')}</div>
         ${!isLiaison ? `
@@ -3691,7 +3699,7 @@ function viewErStandby(){
         ${isBound ? `
         <div class="task-meta" style="margin-bottom:10px;">建立於 ${fmtTime(new Date(boundTask.createdAt||0).getTime())}${isStandbyStale(new Date(boundTask.createdAt||0).getTime()) ? `　<span style="color:var(--amber);">${icon('alert',13)} 尚未於今日 08:00 後更新，請確認車長/駕駛是否需要換班</span>` : ''}</div>
         <div class="detail-grid">
-          <div class="detail-item"><span class="lbl">車號</span><span class="val">${esc(boundTask.vehicle||'—')}</span></div>
+          <div class="detail-item"><span class="lbl">車號</span><span class="val">${esc(boundTask.vehicle||'—')}${boundTask.vehicle && vehicleUnitLabel(boundTask.vehicle) ? '（'+esc(vehicleUnitLabel(boundTask.vehicle))+'）' : ''}</span></div>
           <div class="detail-item"><span class="lbl">車長</span><span class="val">${crewLabel(boundTask.crewLeader, boundTask.unit)}</span></div>
           <div class="detail-item"><span class="lbl">駕駛</span><span class="val">${crewLabel(boundTask.driver, boundTask.unit)}</span></div>
           <div class="detail-item"><span class="lbl">值班醫官</span><span class="val">${boundTask.dutyOfficer ? esc(doctorLabel(boundTask.dutyOfficer)) : "尚未設定"}</span></div>
