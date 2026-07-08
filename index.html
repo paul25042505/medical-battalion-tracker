@@ -62,15 +62,21 @@
     --btn-height: 56px;
     --radius-btn: 18px;
   }
-  /* ---- 深色模式：跟隨系統設定（設定 → 一般 → 外觀），不提供手動切換開關——
-     整個設計系統都是靠 CSS 變數驅動（見上面 :root），這裡只要覆寫變數本身，
-     所有套用這些變數的元件（卡片／按鈕／badge／陰影...）就會一起變成深色，
-     不用每個元件另外寫一次深色樣式。狀態色（red/green/amber/blue/purple）
-     比照 Apple 系統色在深色模式下的慣例微調得更亮一些，維持在深色背景上的
-     可讀性與飽和度觀感；amber-text/green-text 這種「淺底深字」的對比色，深色
-     模式下反過來要用「深底淺字」，所以也跟著換成較亮的版本。 */
+  /* ---- 深色模式：預設跟隨系統設定（設定 → 一般 → 外觀），使用者也可以在
+     「更多 → 外觀模式」手動固定選淺色/深色（見 window.__setThemeMode，會在
+     <html> 上加 data-theme="light"/"dark"）。整個設計系統都是靠 CSS 變數
+     驅動（見上面 :root），這裡只要覆寫變數本身，所有套用這些變數的元件
+     （卡片／按鈕／badge／陰影...）就會一起變成深色，不用每個元件另外寫一次
+     深色樣式。狀態色（red/green/amber/blue/purple）比照 Apple 系統色在深色
+     模式下的慣例微調得更亮一些，維持在深色背景上的可讀性與飽和度觀感；
+     amber-text/green-text 這種「淺底深字」的對比色，深色模式下反過來要用
+     「深底淺字」，所以也跟著換成較亮的版本。
+     :root[data-theme="dark"] 的選擇器優先度（0,2,0）比 media query 裡的
+     :root（0,1,0）高，手動選深色時就算系統是淺色也會蓋過去；反過來
+     :root[data-theme="light"] 也是同樣道理蓋過系統深色，兩者都不用寫
+     !important。 */
   @media (prefers-color-scheme: dark){
-    :root{
+    :root:not([data-theme="light"]){
       --bg:#0B0B0F;
       --bg-gradient: linear-gradient(180deg, #0E0E13 0%, #08080B 100%);
       --panel:#1C1C22;
@@ -93,6 +99,29 @@
       --shadow-sm: 0 1px 2px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.24);
       --shadow-md: 0 6px 20px rgba(0,0,0,0.36), 0 1px 3px rgba(0,0,0,0.24);
     }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0B0B0F;
+    --bg-gradient: linear-gradient(180deg, #0E0E13 0%, #08080B 100%);
+    --panel:#1C1C22;
+    --panel-2:#232329;
+    --border:#2E2E36;
+    --border-strong:#3A3A44;
+    --text:#F2F2F5;
+    --muted:#8E8E96;
+    --amber:#FF9F0A;
+    --amber-text:#FFB454;
+    --red:#FF453A;
+    --green:#30D158;
+    --green-text:#4ADE80;
+    --blue:#3B82F6;
+    --purple:#A855F7;
+    --gray:#98989D;
+    --topbar-fade: rgba(28,28,34,0.90);
+    --navbar-bg: rgba(28,28,34,0.94);
+    --shadow-xs: 0 1px 2px rgba(0,0,0,0.24);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.24);
+    --shadow-md: 0 6px 20px rgba(0,0,0,0.36), 0 1px 3px rgba(0,0,0,0.24);
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html{scroll-behavior:smooth; overscroll-behavior-y:contain;}
@@ -741,7 +770,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-177-micro-interactions";
+const BUILD_TAG = "2026-07-08-178-manual-theme-toggle";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1206,6 +1235,7 @@ const RELEASE_NOTES = [
     "洽公任務的勤務詳情頁不再顯示「患者狀況」卡片，洽公性質上不會有患者",
     "視覺設計系統升級（第一階段：設計 token 地基，比照 iOS 26 Human Interface 風格）：新增跟隨系統設定的深色模式（設定 → 一般 → 外觀，不用手動切換）；卡片圓角從 18px 加大到 24px；背景改成柔和的漸層；狀態色（紅/綠/橘/藍/紫）統一改用 color-mix() 動態算出淺色調背景，跟著主題色一起變化；任務狀態篩選頁籤改成滑動吸附（scroll-snap），滑到定點會自動卡住；表單勾選/選取/開關統一套用系統主題色；全站啟用平滑捲動與防止下拉回彈干擾；「減少動態效果」無障礙設定會讓全站動畫/轉場統一縮短到幾乎瞬間完成",
     "視覺設計系統升級（第二階段：微互動按壓回饋）：導航連結按鈕（Google/Apple 導航）、洽公人員多選標籤、意見回饋類別選項、角色預覽列點按時補上縮放回饋，跟全站其他按鈕/卡片的觸覺回饋一致",
+    "新增外觀模式手動切換：「更多」頁新增「外觀模式」（跟隨系統／淺色／深色），選好之後會固定使用該模式，不用再跟著手機系統設定走；選擇會記在裝置上，下次打開還是同一個模式",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -1348,6 +1378,21 @@ const SPINE_CHECK_OPTIONS = ["否，無疑似損傷", "是，疑似頸椎損傷"
 /* =========================================================
    3) 全域狀態
    ========================================================= */
+// 外觀模式：預設「跟隨系統」（見 CSS 的 prefers-color-scheme），使用者也可以在
+// 「更多 → 外觀模式」手動固定選淺色/深色，存在 localStorage（單純本機偏好，
+// 不用登入也不用跨裝置同步）。手動選擇是透過 <html data-theme="dark/light">
+// 蓋過 prefers-color-scheme 判斷，見 CSS 裡對應的 :root[data-theme=...] 規則。
+const THEME_STORAGE_KEY = "medtrack_theme_mode";
+function loadThemeMode(){
+  try {
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
+    return (saved === "light" || saved === "dark") ? saved : "system";
+  } catch(e) { return "system"; }
+}
+function applyThemeMode(mode){
+  if (mode === "light" || mode === "dark") document.documentElement.setAttribute("data-theme", mode);
+  else document.documentElement.removeAttribute("data-theme");
+}
 const state = {
   user: null, profile: null, tasks: [], events: [],
   personnel: [], vehicles: [], recorders: [],
@@ -1378,8 +1423,10 @@ const state = {
   // 累積在這裡跟平常只抓最近期間的 tasks/events/vitals 合併，不然下一次
   // 背景刷新（只抓最近期間）會把這些額外查到的舊資料整個蓋掉。
   deepTasks: [], deepEvents: [], deepVitals: [],
-  recordsDeepQuery: null // { loading, from, to } | null：目前是否正在查詢/已查過超出預載範圍的自訂日期
+  recordsDeepQuery: null, // { loading, from, to } | null：目前是否正在查詢/已查過超出預載範圍的自訂日期
+  themeMode: loadThemeMode() // "system" | "light" | "dark"：外觀模式，預設跟隨系統，存在 localStorage 跨裝置不同步（單純本機偏好）
 };
+applyThemeMode(state.themeMode); // 在第一次 render() 之前就套用，避免畫面先閃一次錯的模式再跳回正確的
 let tasksPoll = null, eventsPoll = null, profilePoll = null;
 let personnelPoll = null, vehiclesPoll = null, recordersPoll = null;
 let hospitalsPoll = null, vitalsPoll = null, erStandbyPoll = null, doctorsPoll = null;
@@ -3671,6 +3718,15 @@ function viewProfile(){
       <div class="hub-name">${esc(p.displayName||p.email)}</div>
       <div class="hub-sub">${p.rank ? esc(p.rank)+' · ' : ''}${unitLabel(p.unit)} · ${ROLE_LABEL[myRole(p)]||p.role}${p.emtLevel ? ' · '+esc(p.emtLevel) : ''}</div>
     </div>
+    <div class="section-label">外觀</div>
+    <div class="field">
+      <label>外觀模式</label>
+      <div class="seg-toggle">
+        <button type="button" class="${state.themeMode==='system'?'active':''}" onclick="window.__setThemeMode('system')">跟隨系統</button>
+        <button type="button" class="${state.themeMode==='light'?'active':''}" onclick="window.__setThemeMode('light')">淺色</button>
+        <button type="button" class="${state.themeMode==='dark'?'active':''}" onclick="window.__setThemeMode('dark')">深色</button>
+      </div>
+    </div>
     ${settingsSection('使用者功能', userRows)}
     ${settingsSection('管理功能', adminRows)}
     ${settingsSection('系統資訊', systemRows)}
@@ -4927,6 +4983,12 @@ window.__locateNearbyHospitals = () => {
     },
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
   );
+};
+window.__setThemeMode = (mode) => {
+  state.themeMode = mode;
+  try { localStorage.setItem(THEME_STORAGE_KEY, mode); } catch(e){}
+  applyThemeMode(mode);
+  render();
 };
 window.__editProfile = () => { state.profileEditing = true; render(); };
 window.__cancelEditProfile = () => { state.profileEditing = false; render(); };
