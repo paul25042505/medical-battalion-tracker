@@ -676,7 +676,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-152-standby-default-unit";
+const BUILD_TAG = "2026-07-08-153-tasks-all-completed-standby-hospital-location";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1103,6 +1103,8 @@ const RELEASE_NOTES = [
     "修正「目前位置」顯示：回報「出勤」後車輛其實還在路上，畫面卻直接顯示成已經抵達任務地點，現在會正確顯示「前往OO中」（離開現場前往下一個地點時原本就會顯示，這次補上出勤當下也要顯示）",
     "急診待命的待命車送醫返營、任務完成後，該地點會自動用同一組車輛／人員建立下一筆待命勤務並回到「待命中」，不用再手動重新建立；已完成的舊任務連同患者紀錄原樣保留，可在「紀錄」頁查詢",
     "急診待命「建立待命勤務」預設帶入單位：成功北醫務所預設第一連、精北醫務所預設第二連，可跨單位切換的角色不用每次都手動改單位",
+    "任務頁「全部」頁籤補回已完成的勤務（原本只顯示進行中的），跟其他頁籤一樣可以在「全部」裡看到已完成的紀錄",
+    "修正待命勤務出勤後「目前位置」顯示成醫務所本身（待命的地方，不是真正要去的地方）的問題，改成顯示回報出勤時選的送醫醫院",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -2239,6 +2241,11 @@ function currentLocationOf(t){
   const evs = taskEvents(t.id);
   for (let i = evs.length - 1; i >= 0; i--) {
     if (evs[i].location) return evs[i].location;
+    // 待命勤務的「地點」欄位固定填的是醫務所本身（待命的地方，不是真正要
+    // 去的地方），出勤當下沒有另外的前往地點欄位，改用回報出勤時選的送醫
+    // 醫院當作目前正在前往的地方，才不會顯示成「前往（自己所在的）醫務所」
+    // 這種矛盾的文字。一般勤務的地點欄位本來就是真正的目的地，不受影響。
+    if (t.erStandbyKey && evs[i].hospital) return evs[i].hospital;
   }
   return t.location || null;
 }
@@ -2446,14 +2453,14 @@ function viewTasks(){
   const visible = visibleTasks(p, state.tasks);
   const active = visible.filter(t => deriveStatus(t.id) !== "completed");
   const completedTasks = visible.filter(t => deriveStatus(t.id) === "completed");
-  const shown = state.tasksTab === "all" ? active
+  const shown = state.tasksTab === "all" ? visible
     : state.tasksTab === "completed" ? completedTasks
     : active.filter(t => deriveStatus(t.id) === state.tasksTab);
 
   const tabs = `
     <div class="tabs2 scroll">
       ${TASKS_TABS.map(tb => {
-        const count = tb.key === "all" ? active.length
+        const count = tb.key === "all" ? visible.length
           : tb.key === "completed" ? completedTasks.length
           : active.filter(t=>deriveStatus(t.id)===tb.key).length;
         return `
