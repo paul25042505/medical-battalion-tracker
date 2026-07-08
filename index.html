@@ -443,7 +443,16 @@
      模式的玻璃色調不同（深色模式用偏灰的半透明底，不能沿用淺色模式的
      半透明白，不然在深色背景上會變成一塊突兀的亮斑)，所以拆成 token
      在 :root 與深色模式覆寫區塊分別定義。 */
-  .back-btn{display:inline-flex; align-items:center; background:none; border:none; padding:2px 0; color:var(--text); font-family:var(--sans); cursor:pointer;}
+  /* 按下去（scale 縮小）跟放開（scale 彈回）用兩條不同的曲線：按下去要
+     快、乾脆（ease-out，見 .back-btn:active 自己覆寫的 transition），放開
+     回彈要有彈性感，用 cubic-bezier 讓它「彈過頭再回穩」（0.34,1.56,0.64,1
+     是常見的 iOS 彈簧曲線，1.56 那個控制點 > 1 就是超過終點再彈回來的
+     由來）——transition 屬性寫在放開後會套用的「靜止狀態」（.back-btn 本身），
+     瀏覽器判斷用哪條曲線是看「變化後」那個狀態身上定義的 transition。 */
+  .back-btn{
+    display:inline-flex; align-items:center; background:none; border:none; padding:2px 0; color:var(--text); font-family:var(--sans); cursor:pointer;
+    transition:transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
   .back-btn-circle{
     display:flex; align-items:center; justify-content:center; flex-shrink:0;
     width:36px; height:36px; border-radius:50%; color:var(--text);
@@ -452,12 +461,12 @@
     -webkit-backdrop-filter:blur(20px) saturate(180%);
     box-shadow:0 1px 3px rgba(0,0,0,0.08), inset 0 1px 1px var(--glass-btn-highlight), inset 0 -1px 1px rgba(0,0,0,0.04);
     border:0.5px solid var(--glass-btn-border);
-    transition:transform 0.15s ease, background 0.15s ease;
+    transition:background 0.15s ease;
   }
   /* 蓋掉全域 button:active 的 scale(0.96)，改用液態玻璃鍵自己的縮放幅度；
      選擇器套在 .back-btn（實際的 <button>）上而不是內層的 .back-btn-circle，
      避免兩層各自 transform 疊加縮過頭。 */
-  .back-btn:active{transform:scale(0.9);}
+  .back-btn:active{transform:scale(0.9); transition:transform 0.1s ease-out;}
   .back-btn:active .back-btn-circle{background:var(--glass-btn-bg-active);}
   .detail-head{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:var(--space-card); margin-bottom:var(--space-section); box-shadow:var(--shadow-sm);}
   .detail-head .task-title{font-size:var(--text-lg);}
@@ -827,7 +836,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-180-liquid-glass-back-button";
+const BUILD_TAG = "2026-07-08-181-back-button-bounce";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1295,6 +1304,7 @@ const RELEASE_NOTES = [
     "新增外觀模式手動切換：「更多」頁新增「外觀模式」（跟隨系統／淺色／深色），選好之後會固定使用該模式，不用再跟著手機系統設定走；選擇會記在裝置上，下次打開還是同一個模式",
     "外觀設定改版成獨立頁面「螢幕顯示」，比照 iOS 設定 → 螢幕顯示與亮度：淺色/深色兩張預覽卡並排，點卡片直接鎖定該外觀；新增「自動」開關，開啟跟隨系統、關閉會鎖定目前系統實際顯示的外觀，跟原生 iOS 行為一致",
     "全站返回鍵改成「液態玻璃」風格：毛玻璃透明圓圈＋高光/陰影營造玻璃厚度感，按下去有縮放＋加深回饋；淺色/深色模式各有專屬的玻璃色調，不會在深色畫面上變成突兀的亮斑",
+    "返回鍵按壓動畫加上彈性感：按下去快速縮小，放開後用彈簧曲線「彈過頭再回穩」，不再是單純的線性回彈",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
