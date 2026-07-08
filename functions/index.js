@@ -97,9 +97,27 @@ async function removeInvalidTokens(invalidTokens) {
 }
 
 /* =========================================================
+   Eventarc/Pub-Sub 底層是「至少送達一次」，同一個事件在函式冷啟動、處理
+   稍微慢一點等情況下可能被重複投遞，導致同一次新增/回報被推播兩三次。
+   用 event.id（同一個底層事件重複投遞時這個 id 是同一組）搭配 Firestore
+   .create() 的原子性「搶佔」語意做冪等防護：第二次進來時 .create() 一定
+   會因為文件已存在而丟出 ALREADY_EXISTS，直接跳過即可。
+   ========================================================= */
+async function claimEventOnce(eventId) {
+  try {
+    await db.collection("_pushEventDedup").doc(eventId).create({ processedAt: new Date() });
+    return true;
+  } catch (e) {
+    if (e.code === 6) return false; // ALREADY_EXISTS
+    throw e;
+  }
+}
+
+/* =========================================================
    1) 任務新增
    ========================================================= */
 exports.onTaskCreated = onDocumentCreated("tasks/{taskId}", async (event) => {
+  if (!(await claimEventOnce(event.id))) return;
   const snap = event.data;
   if (!snap) return;
   const t = snap.data();
@@ -122,6 +140,7 @@ const EVENT_LABELS = {
   COMPLETED: "抵達營區",
 };
 exports.onEventCreated = onDocumentCreated("events/{eventId}", async (event) => {
+  if (!(await claimEventOnce(event.id))) return;
   const snap = event.data;
   if (!snap) return;
   const e = snap.data();
@@ -178,6 +197,7 @@ function isVitalsDanger(v) {
   );
 }
 exports.onVitalsCreated = onDocumentCreated("vitals/{vitalsId}", async (event) => {
+  if (!(await claimEventOnce(event.id))) return;
   const snap = event.data;
   if (!snap) return;
   const v = snap.data();
@@ -192,4 +212,4 @@ exports.onVitalsCreated = onDocumentCreated("vitals/{vitalsId}", async (event) =
 // 純函式/資料存取邏輯額外匯出一份，方便寫單元測試直接呼叫驗證（不會
 // 影響部署——firebase deploy 只認得用 onDocumentCreated 等 v2 trigger
 // builder 包起來的 exports，這個純物件會被忽略，不會變成多一個雲端函式）。
-exports._internal = { normalizeRole, resolveRecipientTokens, isVitalsDanger, gcsTotalFromString };
+exports._internal = { normalizeRole, resolveRecipientTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce };
