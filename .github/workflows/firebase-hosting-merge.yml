@@ -30,7 +30,7 @@ jobs:
       - name: Deploy Cloud Functions（推播通知後端）
         run: |
           echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/service-account.json
-          npx firebase-tools deploy --only functions --project medical-battalion-tracker --debug
+          npx firebase-tools deploy --only functions --project medical-battalion-tracker --force
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/service-account.json
           FIREBASE_SERVICE_ACCOUNT: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_MEDICAL_BATTALION_TRACKER }}"
