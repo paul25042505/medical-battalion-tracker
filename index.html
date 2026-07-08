@@ -676,7 +676,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-151-standby-auto-renew-intransit-fix";
+const BUILD_TAG = "2026-07-08-152-standby-default-unit";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1010,9 +1010,12 @@ function taskScope(t){ return t && t.scope === "營內" ? "營內" : "營外"; }
 // 急診待命：兩個醫務所地點固定，每個地點一筆文件（doc id = key），只存
 // currentTaskId 指向目前綁定的待命勤務（見 viewErStandby() 說明），
 // 不再另外存急診醫官/車長/駕駛文字——那些資料直接來自綁定的 tasks 文件。
+// defaultUnit：建立待命勤務時預設帶入的單位（僅對可跨單位切換的角色如
+// 管理員有意義，一般成員固定只能用自己單位，見 viewCreateTask 的 unit
+// 判斷式）——成功北固定給第一連支援、精北固定給第二連支援。
 const ER_STANDBY_LOCATIONS = [
-  { key: "chenggongbei", label: "成功北醫務所" },
-  { key: "jingbei", label: "精北醫務所" }
+  { key: "chenggongbei", label: "成功北醫務所", defaultUnit: "co1" },
+  { key: "jingbei", label: "精北醫務所", defaultUnit: "co2" }
 ];
 function sortVehicles(list){
   return list.slice().sort((a,b) => vehicleTypeWeight(a.type) - vehicleTypeWeight(b.type) || (a.plate||'').localeCompare(b.plate||''));
@@ -1099,6 +1102,7 @@ const RELEASE_NOTES = [
     "回報「出勤」新增「送醫醫院（選填）」下拉選單，沿用醫院名冊選擇，勤務詳情頁會顯示已選的送醫醫院",
     "修正「目前位置」顯示：回報「出勤」後車輛其實還在路上，畫面卻直接顯示成已經抵達任務地點，現在會正確顯示「前往OO中」（離開現場前往下一個地點時原本就會顯示，這次補上出勤當下也要顯示）",
     "急診待命的待命車送醫返營、任務完成後，該地點會自動用同一組車輛／人員建立下一筆待命勤務並回到「待命中」，不用再手動重新建立；已完成的舊任務連同患者紀錄原樣保留，可在「紀錄」頁查詢",
+    "急診待命「建立待命勤務」預設帶入單位：成功北醫務所預設第一連、精北醫務所預設第二連，可跨單位切換的角色不用每次都手動改單位",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -4669,6 +4673,8 @@ window.__setCreateTaskType = (key) => { state.createTaskType = key; render(); };
 // 之後這個地點就會顯示這筆任務，可以直接點進去用平常的勤務詳情頁出勤。
 window.__startErStandbyTask = (key, locationLabel) => {
   state.createTaskType = "duty";
+  const loc = ER_STANDBY_LOCATIONS.find(x => x.key === key);
+  if (loc && loc.defaultUnit) state.createTaskUnit = loc.defaultUnit;
   nav({ name: "createTask", erStandbyKey: key, presetLocation: locationLabel });
 };
 window.__createTask = (ev, unit, type) => {
