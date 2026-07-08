@@ -324,6 +324,7 @@
      不再整塊塗滿飽和背景色——原本 5 個色塊一字排開太花，數字改回中性深色，
      只用小色塊圖示保留辨識度。 */
   .stat-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:8px;}
+  .stat-grid.stat-grid-2{grid-template-columns:repeat(2,1fr);}
   .stat-tile{
     background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md);
     padding:14px 8px; text-align:center; box-shadow:var(--shadow-xs);
@@ -684,7 +685,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-173-remove-detail-hospital-nav";
+const BUILD_TAG = "2026-07-08-174-fleet-count-standby-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1144,6 +1145,8 @@ const RELEASE_NOTES = [
     "勤務進度時間軸「編輯」回報新增「刪除這筆回報」功能：誤按到不該回報的步驟時可以整筆撤銷、狀態退回上一步，不用只能修改內容；限制只能刪時間軸上最新的一筆，避免刪掉中間的歷史紀錄造成流程斷層",
     "出勤時選送醫醫院的一鍵導航按鈕位置調整：移除回報表單內選完醫院即時顯示的導航（送出後就消失，不好找），改成出勤送出後直接顯示在底部「抵達現場」回報按鈕的正上方，人準備按下去回報之前就能先點導航出發",
     "移除勤務詳情頁「勤務資訊」送醫醫院那一列重複的導航按鈕，導航統一只在底部「抵達現場」回報按鈕上方顯示，避免同一頁面出現兩組功能相同的導航按鈕",
+    "修正首頁「今日概況」營內車／營外車統計：待命中（急診待命尚未出勤）的車輛不會再被誤算成營外車，要等真的回報「出勤」、離開營區之後才會列入統計",
+    "首頁「今日概況」的營內車／營外車改成獨立一列各佔一半寬度，不再跟其他三格統計數字擠成同一個三欄網格、留白不對稱",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -2559,8 +2562,11 @@ function viewHome(){
   // 是營內、幾台是營外（依建立勤務時填的 scope 欄位，不是車輛名冊總數跟
   // 派遣中數量的差——名冊裡很多車今天根本沒有派遣，跟「營內外」這個問題
   // 無關），以及目前洽公在外的人數（不重複計算同一人同時掛在多筆洽公）。
-  const inCampCount = dutyActive.filter(t => taskScope(t) === "營內").length;
-  const outCampCount = dutyActive.filter(t => taskScope(t) === "營外").length;
+  // 待命中（deriveStatus 為 pending，還沒回報「出勤」）的車輛實際上還沒真的
+  // 離開營區，不能只看勤務建立時填的營內/營外屬性就算進營外車，要等真的
+  // 出勤、離開營區之後才算——否則急診待命還沒出勤的待命車會被誤算成營外車。
+  const inCampCount = dutyActive.filter(t => deriveStatus(t.id) !== "pending" && taskScope(t) === "營內").length;
+  const outCampCount = dutyActive.filter(t => deriveStatus(t.id) !== "pending" && taskScope(t) === "營外").length;
   const liaisonPeopleCount = new Set(liaisonActive.flatMap(t => Array.isArray(t.personnel) ? t.personnel : [])).size;
 
   return `
@@ -2573,6 +2579,8 @@ function viewHome(){
       <div class="stat-tile t-blue"><div class="stat-icon">${icon('tasks',16)}</div><div class="num">${todayTasks.length}</div><div class="lbl">今日勤務數</div></div>
       <div class="stat-tile t-green"><div class="stat-icon">${icon('check',16)}</div><div class="num">${todayDone.length}</div><div class="lbl">已完成</div></div>
       <div class="stat-tile t-purple"><div class="stat-icon">${icon('user',16)}</div><div class="num">${liaisonPeopleCount}</div><div class="lbl">洽公中人數</div></div>
+    </div>
+    <div class="stat-grid stat-grid-2">
       <div class="stat-tile t-green"><div class="stat-icon">${icon('home',16)}</div><div class="num">${inCampCount}</div><div class="lbl">營內車</div></div>
       <div class="stat-tile t-orange"><div class="stat-icon">${icon('depart',16)}</div><div class="num">${outCampCount}</div><div class="lbl">營外車</div></div>
     </div>
