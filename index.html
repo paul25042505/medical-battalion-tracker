@@ -43,7 +43,7 @@
     --shadow-sm: 0 1px 2px rgba(15,15,20,0.05), 0 2px 8px rgba(15,15,20,0.05);
     --shadow-md: 0 6px 20px rgba(15,15,20,0.08), 0 1px 3px rgba(15,15,20,0.05);
     --card-shadow: var(--shadow-sm);
-    --mono:'JetBrains Mono', ui-monospace, monospace;
+    --mono:'SF Mono', ui-monospace, 'JetBrains Mono', monospace;
     --sans:-apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
     /* ---- Typography tokens（比照 iOS 26 / Apple Health · Wallet · Reminders 的字級節奏）----
        全站一律從這 6 級挑，不要再各頁面自己開字級，資訊層級靠字重/顏色/留白，不要靠一堆
@@ -903,7 +903,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-186-vitals-card-soften-density";
+const BUILD_TAG = "2026-07-08-187-sf-mono-numbers";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1378,6 +1378,7 @@ const RELEASE_NOTES = [
     "急診待命卡片視覺改版：資訊欄位改成標準 2x2 網格並用上下分隔線收邊，車長多顯示一行 EMT 證照等級與電話（藍字），待命中狀態徽章的圓點加上微弱脈動效果",
     "返回鍵按壓效果加強：按下去除了放大，玻璃底色/邊框會提亮、外圍加一圈柔光，觸覺回饋更明顯",
     "患者紀錄卡片密度調整：移除問診/病史網格卡片、生命徵象格子原本偏明顯的邊框線，改成單純用底色深淺區分區塊，並加大卡片內邊距與段落間距，視覺更貼近原始設計稿的柔和留白風格",
+    "全站數字（時間戳記、生命徵象數值、狀態徽章等等寬字體欄位）字型改成優先使用 SF Mono，非 Apple 裝置或找不到 SF Mono 時退回原本的 JetBrains Mono",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
