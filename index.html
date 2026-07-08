@@ -683,7 +683,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-165-clear-hospital-seed-data";
+const BUILD_TAG = "2026-07-08-166-hospital-coords-input";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1136,6 +1136,7 @@ const RELEASE_NOTES = [
     "修正「顯示附近醫院」定位失敗時只顯示英文原始錯誤訊息看不懂的問題，改成依情況給出可以實際照做的中文提示（例如拒絕權限時提示去手機設定開啟）",
     "醫院資料補上經查證的真實地址與行政區，定位比對從「縣市」提升到「行政區」層級，同行政區的醫院會排在最前面並標示「同行政區」，其次才是同縣市但不同行政區（標示「同縣市」）；醫院清單新增「地址」欄位顯示，Google／Apple 導航改成優先帶入地址（沒有地址才退回用院名查詢）；醫院新增／編輯表單補上「行政區」「地址」欄位，方便日後補登或修正資料",
     "移除內建的 8 間預設醫院清單資料，改由使用者自行到「基礎資料管理 → 醫院」逐筆新增（後續會補上經緯度座標，讓定位比對可以直接算跟醫院本身的實際距離，不用再繞經行政區/縣市這兩層近似判斷）",
+    "醫院新增／編輯表單新增「座標」欄位（貼「緯度,經度」即可，例如 24.1786,120.6400），有登記座標的醫院「顯示附近醫院」會直接算出跟你目前位置的實際距離並標示「約 X 公里」、排序最優先；沒登記座標的醫院才退回用行政區/縣市概略比對",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -1299,7 +1300,9 @@ const state = {
   previewActive: false, realRoleUnit: null, // 角色權限預覽（僅限 admin）
   weather: null, // 首頁氣象預報（依單位對應縣市，見 ensureWeatherLoaded）
   hazards: null, // 首頁天氣特報／陸上警報（依單位對應縣市，見 ensureHazardsLoaded）
-  myCounty: null, // 醫院資訊頁：手機 GPS 定位算出的概略縣市（見 nearestDistrict），null 代表尚未定位
+  myLat: null, // 醫院資訊頁：手機 GPS 定位的原始緯度，null 代表尚未定位；有登記座標的醫院直接拿這個算實際距離
+  myLng: null, // 醫院資訊頁：手機 GPS 定位的原始經度
+  myCounty: null, // 醫院資訊頁：手機 GPS 定位算出的概略縣市（見 nearestDistrict），沒座標的醫院退回用這個比對；null 代表尚未定位
   myDistrict: null, // 醫院資訊頁：手機 GPS 定位算出的概略行政區（比縣市更準），null 代表定位不到已知行政區或尚未定位
   locatingHospital: false, // 醫院資訊頁定位中的載入狀態
   // 「紀錄」頁自訂日期查詢往回查超過 RECENT_WINDOW_DAYS 時另外抓的舊資料，
@@ -1655,9 +1658,20 @@ async function addRecorder(unit, code){
   await fsAddDoc("recorders", { unit, code, active: true });
   showToast("已新增行車紀錄器"); if (recordersPoll) recordersPoll.refreshNow();
 }
-async function addHospital(county, name, level, phone, note, district, address){
-  await fsAddDoc("hospitals", { county, name, level, phone: phone||"", note: note||"", district: district||"", address: address||"" });
+async function addHospital(county, name, level, phone, note, district, address, lat, lng){
+  const coords = (lat != null && lng != null) ? { lat, lng } : {};
+  await fsAddDoc("hospitals", { county, name, level, phone: phone||"", note: note||"", district: district||"", address: address||"", ...coords });
   showToast("已新增醫院"); if (hospitalsPoll) hospitalsPoll.refreshNow();
+}
+// 使用者在「座標」欄位貼「緯度,經度」（例如 24.1786,120.6400），這裡負責
+// 解析成 {lat,lng} 數字；格式不對或欄位空白就回傳 null，呼叫端退回不存座標。
+function parseHospitalCoords(str){
+  if (!str) return null;
+  const parts = String(str).split(",").map(s => s.trim());
+  if (parts.length !== 2) return null;
+  const lat = parseFloat(parts[0]), lng = parseFloat(parts[1]);
+  if (!isFinite(lat) || !isFinite(lng)) return null;
+  return { lat, lng };
 }
 async function addDoctor(name, title, phone){
   await fsAddDoc("doctors", { name, title: title||"", phone: phone||"", active: true });
@@ -1927,11 +1941,10 @@ async function ensureHospitalsSeeded(){
   } catch (e) { console.error("初始化醫院資料失敗", e); }
 }
 
-// 醫院名冊目前沒有登記每間醫院自己的經緯度，沒辦法算出跟 GPS 定位的
-// 精確距離；退而求其次，用「行政區」層級的代表點（區公所／市公所座標，
-// 比整個縣市的代表點更接近實際醫院位置）概略判斷「人在哪個行政區」，
-// 縣市層級當作行政區判斷不到時的備援。之後若幫每間醫院補上實際座標，
-// 可以直接改成算醫院本身的距離，不用再繞經行政區/縣市這兩層。
+// 醫院有登記自己的經緯度時，直接算跟 GPS 定位的實際距離最準；沒登記
+// 座標的醫院則退而求其次，用「行政區」層級的代表點（區公所／市公所
+// 座標，比整個縣市的代表點更接近實際醫院位置）概略判斷「人在哪個行政
+// 區」，縣市層級當作行政區判斷不到時的備援（見 viewHospitals 的 matchInfo）。
 const COUNTY_CENTERS = {
   "臺中市": { lat: 24.1477, lng: 120.6736 },
   "嘉義市": { lat: 23.4801, lng: 120.4491 },
@@ -3697,17 +3710,21 @@ function viewFeedbackForm(){
 function viewHospitals(){
   const p = state.profile;
   const canEdit = canManageBaseData(p);
-  // 排序優先度：同行政區（最準）> 同縣市但行政區不同或未知（次準）> 其餘。
-  // 還沒定位或定位失敗時退回原本依等級/名稱的排序，不影響既有查詢流程。
-  function matchRank(h){
-    if (state.myDistrict && h.district === state.myDistrict && h.county === state.myCounty) return 0;
-    if (state.myCounty && h.county === state.myCounty) return 1;
-    return 2;
+  // 排序優先度：醫院本身有登記座標時（tier 0）直接算實際距離最準；沒有
+  // 座標才退回用行政區（tier 1）/ 縣市（tier 2）概略比對；都比對不到排最後（tier 3）。
+  function matchInfo(h){
+    if (h.lat != null && h.lng != null && state.myLat != null) {
+      return { tier: 0, km: haversineKm(state.myLat, state.myLng, h.lat, h.lng) };
+    }
+    if (state.myDistrict && h.district === state.myDistrict && h.county === state.myCounty) return { tier: 1, km: null };
+    if (state.myCounty && h.county === state.myCounty) return { tier: 2, km: null };
+    return { tier: 3, km: null };
   }
   const rows = state.hospitals.slice().sort((a,b) => {
-    if (state.myCounty) {
-      const ra = matchRank(a), rb = matchRank(b);
-      if (ra !== rb) return ra - rb;
+    if (state.myCounty || state.myLat != null) {
+      const ia = matchInfo(a), ib = matchInfo(b);
+      if (ia.tier !== ib.tier) return ia.tier - ib.tier;
+      if (ia.tier === 0) return ia.km - ib.km;
     }
     return HOSPITAL_LEVELS.indexOf(a.level) - HOSPITAL_LEVELS.indexOf(b.level) || (a.name||'').localeCompare(b.name||'');
   });
@@ -3716,7 +3733,7 @@ function viewHospitals(){
       <button class="icon-btn primary" style="width:100%;" onclick="window.__locateNearbyHospitals()" ${state.locatingHospital ? 'disabled' : ''}>
         ${icon('pin',15)} ${state.locatingHospital ? '定位中…' : (state.myCounty ? '重新定位' : '顯示附近醫院')}
       </button>
-      ${state.myCounty ? `<div style="color:var(--muted); font-size:var(--text-xs); margin-top:6px;">目前定位：靠近${state.myDistrict ? esc(state.myCounty)+esc(state.myDistrict) : esc(state.myCounty)}${state.myDistrict ? '，同行政區醫院已排到最前面' : '，同縣市醫院已排到最前面（尚無更精確的行政區資料）'}</div>` : ''}
+      ${state.myCounty ? `<div style="color:var(--muted); font-size:var(--text-xs); margin-top:6px;">目前定位：靠近${state.myDistrict ? esc(state.myCounty)+esc(state.myDistrict) : esc(state.myCounty)}，已登記座標的醫院會顯示實際距離並排最前面，其餘${state.myDistrict ? '同行政區優先，其次同縣市' : '同縣市醫院優先'}</div>` : ''}
     </div>`;
   return `
     <div class="back-row">${backBtn({name:'profile'})}</div>
@@ -3724,9 +3741,10 @@ function viewHospitals(){
     ${locateBar}
     ${canEdit ? `<button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('hospitals', null, '')">${icon('plus',15)} 新增醫院</button>` : ""}
     ${rows.length ? rows.map(x => {
-      const rank = state.myCounty ? matchRank(x) : 2;
-      const nearBadge = rank === 0 ? `<span class="badge dispatch" style="padding:3px 8px;">同行政區</span>`
-        : rank === 1 ? `<span class="badge dispatch" style="padding:3px 8px;">同縣市</span>` : '';
+      const info = (state.myCounty || state.myLat != null) ? matchInfo(x) : { tier: 3, km: null };
+      const nearBadge = info.tier === 0 ? `<span class="badge dispatch" style="padding:3px 8px;">約 ${info.km.toFixed(1)} 公里</span>`
+        : info.tier === 1 ? `<span class="badge dispatch" style="padding:3px 8px;">同行政區</span>`
+        : info.tier === 2 ? `<span class="badge dispatch" style="padding:3px 8px;">同縣市</span>` : '';
       return `
       <div class="admin-row">
         <div>
@@ -4122,6 +4140,8 @@ function viewBaseDataModal(){
       </div>
       <div class="field"><label>行政區（選填，用於定位比對）</label><input name="district" value="${esc(editing?.district||'')}" placeholder="例如：西屯區"></div>
       <div class="field"><label>地址（選填，用於一鍵導航）</label><input name="address" value="${esc(editing?.address||'')}" placeholder="例如：臺中市西屯區臺灣大道四段1650號"></div>
+      <div class="field"><label>座標（選填，格式：緯度,經度）</label><input name="coords" value="${(editing && editing.lat != null && editing.lng != null) ? `${editing.lat},${editing.lng}` : ''}" placeholder="例如：24.1786,120.6400"></div>
+      <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">填了座標，「顯示附近醫院」會直接算你跟這間醫院的實際距離（比行政區/縣市更準）；不填就退回用行政區/縣市概略比對。手機地圖 App 長按地點通常可以複製出「緯度,經度」。</div>
       <div class="field"><label>急救責任等級</label>
         <select name="level" required>
           <option value="">請選擇等級</option>
@@ -4746,12 +4766,12 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
   const action = id
     ? (coll === "personnel" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"", emtLevel: f.get("emtLevel")||"" })
        : coll === "vehicles" ? updateBaseData(coll, id, { plate: f.get("plate"), type: f.get("type") })
-       : coll === "hospitals" ? updateBaseData(coll, id, { name: f.get("name"), county: f.get("county"), level: f.get("level"), phone: f.get("phone")||"", note: f.get("note")||"", district: f.get("district")||"", address: f.get("address")||"" })
+       : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return updateBaseData(coll, id, { name: f.get("name"), county: f.get("county"), level: f.get("level"), phone: f.get("phone")||"", note: f.get("note")||"", district: f.get("district")||"", address: f.get("address")||"", lat: c ? c.lat : null, lng: c ? c.lng : null }); })()
        : coll === "doctors" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"" })
        : updateBaseData(coll, id, { code: f.get("code") }))
     : (coll === "personnel" ? addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone"), f.get("emtLevel"))
        : coll === "vehicles" ? addVehicle(unit, f.get("plate"), f.get("type"))
-       : coll === "hospitals" ? addHospital(f.get("county"), f.get("name"), f.get("level"), f.get("phone"), f.get("note"), f.get("district"), f.get("address"))
+       : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return addHospital(f.get("county"), f.get("name"), f.get("level"), f.get("phone"), f.get("note"), f.get("district"), f.get("address"), c ? c.lat : null, c ? c.lng : null); })()
        : coll === "doctors" ? addDoctor(f.get("name"), f.get("title"), f.get("phone"))
        : addRecorder(unit, f.get("code")));
   action.then(() => { state.baseDataModal = null; render(); }).catch(baseDataErr);
@@ -4767,6 +4787,8 @@ window.__locateNearbyHospitals = () => {
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       const { county, district } = nearestDistrict(pos.coords.latitude, pos.coords.longitude);
+      state.myLat = pos.coords.latitude;
+      state.myLng = pos.coords.longitude;
       state.myCounty = county;
       state.myDistrict = district;
       state.locatingHospital = false;
