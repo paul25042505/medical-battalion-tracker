@@ -18,9 +18,7 @@ jobs:
       - name: Deploy Firestore rules
         run: |
           echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/service-account.json
-          echo "Service account in use (client_email from the secret JSON):"
-          node -e "console.log(JSON.parse(require('fs').readFileSync('/tmp/service-account.json','utf8')).client_email)"
-          npx firebase-tools deploy --only firestore:rules --project medical-battalion-tracker --debug
+          npx firebase-tools deploy --only firestore:rules --project medical-battalion-tracker
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/service-account.json
           FIREBASE_SERVICE_ACCOUNT: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_MEDICAL_BATTALION_TRACKER }}"
