@@ -683,7 +683,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-168-standby-arrival-hospital-location";
+const BUILD_TAG = "2026-07-08-169-dispatch-form-hospital-nav";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1139,6 +1139,7 @@ const RELEASE_NOTES = [
     "醫院新增／編輯表單新增「座標」欄位（貼「緯度,經度」即可，例如 24.1786,120.6400），有登記座標的醫院「顯示附近醫院」會直接算出跟你目前位置的實際距離並標示「約 X 公里」、排序最優先；沒登記座標的醫院才退回用行政區/縣市概略比對",
     "勤務詳情頁的「送醫醫院」欄位補上 Google／Apple 一鍵導航按鈕，出勤中需要送醫時不用再跳到「醫院資訊」頁另外找同一間醫院才能導航",
     "修正急診待命勤務出勤後回報「抵達現場」，勤務進度時間軸誤顯示成抵達自己出發的醫務所本身（例如「抵達現場：成功北醫務所」），改成正確顯示回報出勤時選的送醫醫院",
+    "回報「出勤」表單選好送醫醫院後，馬上出現 Google／Apple 一鍵導航按鈕，不用等表單送出、跳去勤務詳情頁才找得到導航",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -3161,10 +3162,11 @@ function viewTaskDetail(taskId){
           <form onsubmit="event.preventDefault(); window.__submitReport('${t.id}','${draft.type}')">
             ${needsLocation ? `<div class="field"><label>前往地點</label><input id="rf-location" placeholder="例如：加油站、OO超商" required></div>` : ""}
             ${needsHospital ? `<div class="field"><label>送醫醫院（選填）</label>
-              <select id="rf-hospital">
+              <select id="rf-hospital" onchange="window.__updateHospitalNavLinks()">
                 <option value="">請選擇醫院</option>
                 ${state.hospitals.map(h => `<option value="${esc(h.name)}">${esc(h.name)}</option>`).join("")}
               </select>
+              <div id="rf-hospital-nav"></div>
             </div>` : ""}
             <div class="field">
               <label>時間</label>
@@ -4392,6 +4394,19 @@ window.__cancelReport = () => { state.reportDraft = null; render(); };
 window.__resetReportTime = () => {
   const el = document.getElementById("rf-time");
   if (el) el.value = hhmmValue(new Date());
+};
+// 出勤當下選好送醫醫院，馬上就能一鍵導航出發，不用等表單送出、跳去勤務
+// 詳情頁才找得到導航按鈕——直接操作 DOM 而不是呼叫 render()，避免整個
+// 回報表單被重新產生、剛選的下拉選單值跟著被清空。
+window.__updateHospitalNavLinks = () => {
+  const sel = document.getElementById("rf-hospital");
+  const container = document.getElementById("rf-hospital-nav");
+  if (!sel || !container) return;
+  const h = state.hospitals.find(x => x.name === sel.value);
+  container.innerHTML = h ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+    <a class="icon-btn" href="${googleMapsUrl(hospitalNavQuery(h))}" target="_blank" rel="noopener">${icon('depart',14)} Google 導航</a>
+    <a class="icon-btn" href="${appleMapsUrl(hospitalNavQuery(h))}" target="_blank" rel="noopener">${icon('depart',14)} Apple 導航</a>
+  </div>` : "";
 };
 window.__submitReport = (taskId, type) => {
   const mileageEl = document.getElementById("rf-mileage");
