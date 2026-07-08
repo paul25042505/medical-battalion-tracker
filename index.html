@@ -556,6 +556,38 @@
     background:var(--panel-2); color:var(--text); font-weight:700; font-size:var(--text-base); font-family:var(--sans);
   }
   .seg-toggle button.active{background:var(--blue); border-color:var(--blue); color:#fff;}
+  /* ---- 螢幕顯示（外觀模式）：比照 iOS 設定 → 螢幕顯示與亮度 的「外觀」卡片
+     樣式，兩張淺色/深色預覽卡並排＋選中打勾圓點，加上「自動」開關（開＝跟
+     隨系統，關＝鎖定目前選的那一個）。 ---- */
+  .appearance-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:18px;}
+  .appearance-card{background:none; border:none; padding:0; display:flex; flex-direction:column; align-items:center; gap:10px; font-family:var(--sans);}
+  .phone-preview{
+    width:100%; aspect-ratio:9/16; border-radius:16px; overflow:hidden; position:relative;
+    border:1px solid var(--border); box-shadow:var(--shadow-sm);
+  }
+  .phone-preview.preview-light{background:linear-gradient(160deg, #eaf1ff 0%, #cfe0ff 60%, #9fc2ff 100%);}
+  .phone-preview.preview-dark{background:linear-gradient(160deg, #1a2340 0%, #0f1730 60%, #060a1a 100%);}
+  .phone-preview .pv-time{position:absolute; top:12%; left:0; right:0; text-align:center; font-weight:700; font-size:var(--text-sm); color:#fff;}
+  .phone-preview .pv-bar{position:absolute; left:14%; right:14%; height:12%; border-radius:6px; background:rgba(255,255,255,0.32);}
+  .phone-preview .pv-bar:nth-child(2){top:46%;}
+  .phone-preview .pv-bar:nth-child(3){top:62%;}
+  .appearance-card .cap-label{font-size:var(--text-sm); font-weight:600; color:var(--text);}
+  .check-circle{
+    width:24px; height:24px; border-radius:50%; border:1.5px solid var(--border-strong);
+    display:flex; align-items:center; justify-content:center; color:#fff; flex-shrink:0;
+  }
+  .appearance-card.selected .check-circle{background:var(--blue); border-color:var(--blue);}
+  /* ---- iOS 風格開關（自動跟隨系統） ---- */
+  .ios-switch{position:relative; display:inline-block; width:51px; height:31px; flex-shrink:0;}
+  .ios-switch input{position:absolute; inset:0; opacity:0; margin:0; cursor:pointer; z-index:1;}
+  .ios-switch .track{position:absolute; inset:0; background:var(--border-strong); border-radius:999px; transition:background 0.2s ease;}
+  .ios-switch .knob{
+    position:absolute; top:2px; left:2px; width:27px; height:27px; background:#fff; border-radius:50%;
+    box-shadow:0 2px 4px rgba(0,0,0,0.25); transition:transform 0.2s ease;
+  }
+  .ios-switch input:checked ~ .track{background:var(--green);}
+  .ios-switch input:checked ~ .knob{transform:translateX(20px);}
+  .appearance-auto-row{display:flex; align-items:center; justify-content:space-between; gap:12px;}
   /* 洽公任務：人員多選改用可勾選的標籤（chip），行動裝置上比原生 multi-select 好操作 */
   .chip-select{display:flex; flex-wrap:wrap; gap:8px;}
   .chip-option{cursor:pointer;}
@@ -770,7 +802,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-178-manual-theme-toggle";
+const BUILD_TAG = "2026-07-08-179-ios-style-appearance-page";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1236,6 +1268,7 @@ const RELEASE_NOTES = [
     "視覺設計系統升級（第一階段：設計 token 地基，比照 iOS 26 Human Interface 風格）：新增跟隨系統設定的深色模式（設定 → 一般 → 外觀，不用手動切換）；卡片圓角從 18px 加大到 24px；背景改成柔和的漸層；狀態色（紅/綠/橘/藍/紫）統一改用 color-mix() 動態算出淺色調背景，跟著主題色一起變化；任務狀態篩選頁籤改成滑動吸附（scroll-snap），滑到定點會自動卡住；表單勾選/選取/開關統一套用系統主題色；全站啟用平滑捲動與防止下拉回彈干擾；「減少動態效果」無障礙設定會讓全站動畫/轉場統一縮短到幾乎瞬間完成",
     "視覺設計系統升級（第二階段：微互動按壓回饋）：導航連結按鈕（Google/Apple 導航）、洽公人員多選標籤、意見回饋類別選項、角色預覽列點按時補上縮放回饋，跟全站其他按鈕/卡片的觸覺回饋一致",
     "新增外觀模式手動切換：「更多」頁新增「外觀模式」（跟隨系統／淺色／深色），選好之後會固定使用該模式，不用再跟著手機系統設定走；選擇會記在裝置上，下次打開還是同一個模式",
+    "外觀設定改版成獨立頁面「螢幕顯示」，比照 iOS 設定 → 螢幕顯示與亮度：淺色/深色兩張預覽卡並排，點卡片直接鎖定該外觀；新增「自動」開關，開啟跟隨系統、關閉會鎖定目前系統實際顯示的外觀，跟原生 iOS 行為一致",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -1393,6 +1426,7 @@ function applyThemeMode(mode){
   if (mode === "light" || mode === "dark") document.documentElement.setAttribute("data-theme", mode);
   else document.documentElement.removeAttribute("data-theme");
 }
+const THEME_MODE_LABEL = { system: "跟隨系統", light: "淺色", dark: "深色" };
 const state = {
   user: null, profile: null, tasks: [], events: [],
   personnel: [], vehicles: [], recorders: [],
@@ -3689,6 +3723,7 @@ function viewProfile(){
   const userRows = [
     settingsRow({icon:'hospital', bg:'#FFF2E0', fg:'#B45F00', title:'醫院資訊', onclick:"window.__nav({name:'hospitals'})"}),
     settingsRow({icon:'user', bg:'#E8F1FF', fg:'#0056C7', title:'個人資料', onclick:"window.__editProfile()"}),
+    settingsRow({icon:'sun', bg:'#F2E9FE', fg:'#6B23C7', title:'螢幕顯示', subtitle:THEME_MODE_LABEL[state.themeMode], onclick:"window.__nav({name:'displayAppearance'})"}),
     settingsRow({icon:'chat', bg:'#E9F9EF', fg:'#177A34', title:'意見回饋', onclick:"window.__nav({name:'feedback'})"}),
   ];
   // Section 2：管理功能，只有能進管理後台的角色（admin／高勤官／連級主官管）
@@ -3718,19 +3753,59 @@ function viewProfile(){
       <div class="hub-name">${esc(p.displayName||p.email)}</div>
       <div class="hub-sub">${p.rank ? esc(p.rank)+' · ' : ''}${unitLabel(p.unit)} · ${ROLE_LABEL[myRole(p)]||p.role}${p.emtLevel ? ' · '+esc(p.emtLevel) : ''}</div>
     </div>
-    <div class="section-label">外觀</div>
-    <div class="field">
-      <label>外觀模式</label>
-      <div class="seg-toggle">
-        <button type="button" class="${state.themeMode==='system'?'active':''}" onclick="window.__setThemeMode('system')">跟隨系統</button>
-        <button type="button" class="${state.themeMode==='light'?'active':''}" onclick="window.__setThemeMode('light')">淺色</button>
-        <button type="button" class="${state.themeMode==='dark'?'active':''}" onclick="window.__setThemeMode('dark')">深色</button>
-      </div>
-    </div>
     ${settingsSection('使用者功能', userRows)}
     ${settingsSection('管理功能', adminRows)}
     ${settingsSection('系統資訊', systemRows)}
     <button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="window.__logout()">登出</button>
+  `;
+}
+
+/* =========================================================
+   17a-1b) 畫面：螢幕顯示（外觀模式）
+   比照 iOS 設定 → 螢幕顯示與亮度 的「外觀」卡片：淺色/深色兩張預覽卡
+   並排＋選中打勾，「自動」開關代表跟隨系統。點卡片＝直接鎖定該選項
+   （自動跟著關掉）；開自動＝改回跟隨系統；關自動＝鎖定目前系統實際
+   顯示的那個外觀（跟原生 iOS 行為一致，不是隨便挑一個）。
+   ========================================================= */
+function viewDisplayAppearance(){
+  const mode = state.themeMode;
+  const isAuto = mode === "system";
+  return `
+    <div class="back-row">${backBtn({name:'profile'})}</div>
+    <div class="section-label">外觀</div>
+    <div class="detail-head">
+      <div class="appearance-grid">
+        <button type="button" class="appearance-card${mode==='light'?' selected':''}" onclick="window.__setThemeMode('light')">
+          <div class="phone-preview preview-light">
+            <div class="pv-time">9:41</div>
+            <div class="pv-bar"></div>
+            <div class="pv-bar"></div>
+          </div>
+          <div class="cap-label">淺色</div>
+          <div class="check-circle">${mode==='light' ? icon('check',13) : ''}</div>
+        </button>
+        <button type="button" class="appearance-card${mode==='dark'?' selected':''}" onclick="window.__setThemeMode('dark')">
+          <div class="phone-preview preview-dark">
+            <div class="pv-time">9:41</div>
+            <div class="pv-bar"></div>
+            <div class="pv-bar"></div>
+          </div>
+          <div class="cap-label">深色</div>
+          <div class="check-circle">${mode==='dark' ? icon('check',13) : ''}</div>
+        </button>
+      </div>
+      <div style="border-top:1px solid var(--border); padding-top:16px;">
+        <div class="appearance-auto-row">
+          <span style="font-size:var(--text-base); color:var(--text);">自動</span>
+          <label class="ios-switch">
+            <input type="checkbox" ${isAuto?'checked':''} onchange="window.__toggleThemeAuto(this.checked)">
+            <span class="track"></span>
+            <span class="knob"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div style="color:var(--muted); font-size:var(--text-xs); padding:0 4px;">開啟「自動」會跟著手機的外觀設定（設定 → 顯示與亮度）自動切換淺色／深色；關閉後可以直接點上面的預覽卡固定使用淺色或深色。</div>
   `;
 }
 
@@ -4439,6 +4514,7 @@ const ROUTE_VIEWS = {
   stats: viewStats,
   notifications: viewNotifications,
   profile: viewProfile,
+  displayAppearance: viewDisplayAppearance,
   about: viewAbout,
   aboutTerms: viewAboutTerms,
   aboutPrivacy: viewAboutPrivacy,
@@ -4989,6 +5065,14 @@ window.__setThemeMode = (mode) => {
   try { localStorage.setItem(THEME_STORAGE_KEY, mode); } catch(e){}
   applyThemeMode(mode);
   render();
+};
+// 「自動」開關關掉時，比照原生 iOS 行為鎖定「目前系統實際顯示的外觀」，
+// 不是隨便固定成淺色或深色；開啟時則改回跟隨系統（跟點卡片選淺色/深色
+// 是兩種不同的觸發方式，但最後都是呼叫 __setThemeMode 套用＋存檔）。
+window.__toggleThemeAuto = (turnedOn) => {
+  if (turnedOn) { window.__setThemeMode("system"); return; }
+  const systemPrefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  window.__setThemeMode(systemPrefersDark ? "dark" : "light");
 };
 window.__editProfile = () => { state.profileEditing = true; render(); };
 window.__cancelEditProfile = () => { state.profileEditing = false; render(); };
