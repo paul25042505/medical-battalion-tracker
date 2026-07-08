@@ -205,8 +205,26 @@
     font-family:var(--sans); font-size:var(--text-xs); font-weight:700; color:var(--muted);
     background:var(--panel-2); padding:3px 10px; border-radius:999px; letter-spacing:0.02em;
   }
-  .topbar-icon-btn{background:var(--panel-2); border:none; color:var(--text); width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;}
-  .topbar-icon-btn:active{background:var(--border); transform:scale(0.92);}
+  /* 右上角通知／登出按鈕改成跟返回鍵一樣的液態玻璃質感：backdrop-filter
+     毛玻璃＋inset 高光/陰影模擬玻璃厚度，按下去放大＋提亮＋外圍柔光，
+     跟全站返回鍵的觸覺回饋一致。這裡是單一元素（沒有像返回鍵拆外層/內層），
+     所以 transform 跟 background/border/filter/box-shadow 的 transition
+     分開在 base 與 :active 各自完整列出一次，避免 :active 覆寫整個
+     transition 捷徑時不小心把其他屬性的轉場效果也一併蓋掉。 */
+  .topbar-icon-btn{
+    background:var(--glass-btn-bg); border:0.5px solid var(--glass-btn-border); color:var(--text);
+    width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%);
+    box-shadow:0 1px 3px rgba(0,0,0,0.08), inset 0 1px 1px var(--glass-btn-highlight), inset 0 -1px 1px rgba(0,0,0,0.04);
+    transition:transform 0.32s cubic-bezier(0.34,1.56,0.64,1), background 0.2s cubic-bezier(0.25,1,0.5,1),
+      border-color 0.2s cubic-bezier(0.25,1,0.5,1), box-shadow 0.2s cubic-bezier(0.25,1,0.5,1), filter 0.2s cubic-bezier(0.25,1,0.5,1);
+  }
+  .topbar-icon-btn:active{
+    transform:scale(1.12); background:var(--glass-btn-bg-active); border-color:var(--glass-btn-border-active); filter:brightness(1.15);
+    box-shadow:0 1px 3px rgba(0,0,0,0.08), inset 0 1px 1px var(--glass-btn-highlight), inset 0 -1px 1px rgba(0,0,0,0.04), 0 0 14px var(--glass-btn-glow);
+    transition:transform 0.1s ease-out, background 0.2s cubic-bezier(0.25,1,0.5,1),
+      border-color 0.2s cubic-bezier(0.25,1,0.5,1), box-shadow 0.2s cubic-bezier(0.25,1,0.5,1), filter 0.2s cubic-bezier(0.25,1,0.5,1);
+  }
 
   main{flex:1; padding:16px 16px 100px 16px; max-width:680px; width:100%; margin:0 auto;}
 
@@ -903,7 +921,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-187-sf-mono-numbers";
+const BUILD_TAG = "2026-07-08-188-topbar-glass-buttons";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1379,6 +1397,7 @@ const RELEASE_NOTES = [
     "返回鍵按壓效果加強：按下去除了放大，玻璃底色/邊框會提亮、外圍加一圈柔光，觸覺回饋更明顯",
     "患者紀錄卡片密度調整：移除問診/病史網格卡片、生命徵象格子原本偏明顯的邊框線，改成單純用底色深淺區分區塊，並加大卡片內邊距與段落間距，視覺更貼近原始設計稿的柔和留白風格",
     "全站數字（時間戳記、生命徵象數值、狀態徽章等等寬字體欄位）字型改成優先使用 SF Mono，非 Apple 裝置或找不到 SF Mono 時退回原本的 JetBrains Mono",
+    "右上角通知／登出按鈕改成液態玻璃質感，跟全站返回鍵一致：毛玻璃透明圓圈＋高光/陰影，按下去放大＋提亮＋外圍柔光",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
