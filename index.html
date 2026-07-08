@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>衛生營車輛人員動態管制系統</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Serif+TC:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Serif+TC:wght@500;700&family=Bitter:wght@700;800&display=swap" rel="stylesheet">
 <!-- 圖示：手機瀏覽器分頁圖示、加到主畫面（iOS）／安裝為 App（Android/Chrome）都會用到 -->
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
@@ -190,6 +190,18 @@
   /* 姓名/車號才是主要資訊，階級（上士/下士/中尉）、車輛所屬單位（第一連）
      這類附加說明縮小＋灰階，降低視覺份量，不跟主要資訊搶焦點。 */
   .muted-suffix{font-size:var(--text-sm); font-weight:400; color:var(--muted);}
+
+  /* ---- EMT 證照等級徽章 ---- */
+  /* 比照真實 EMT 臂章繡片的樣子：紅字＋紅色四角形邊框，字體用 Bitter
+     （粗襯線體，質感接近臂章常用的 Clarendon）取代一般 sans-serif，
+     一眼就能認出這是證照等級標示，跟其他一般文字明顯區隔開來。 */
+  .emt-badge{
+    display:inline-flex; align-items:center; justify-content:center;
+    font-family:'Bitter', var(--sans); font-weight:800; color:var(--red);
+    border:2px solid var(--red); border-radius:3px; padding:0px 6px;
+    font-size:11px; letter-spacing:0.03em; line-height:1.6; vertical-align:middle;
+    background:color-mix(in srgb, var(--red) 5%, transparent);
+  }
 
   /* ---- top status strip ---- */
   .topbar{
@@ -938,7 +950,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-190-mute-rank-unit-suffix";
+const BUILD_TAG = "2026-07-08-191-emt-patch-badge";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1243,6 +1255,11 @@ function rankWeight(rank){ const i = RANKS.indexOf(rank); return i === -1 ? RANK
 // EMT（緊急救護技術員）證照等級，跟階級一樣是人員的固有資料，帳號審核
 // 通過前就能先登記，車長/駕駛顯示時一併帶出，方便調度時知道現場救護量能。
 const EMT_LEVELS = ["EMT-1","EMT-2","EMT-P"];
+// EMT 等級唯讀顯示一律用臂章樣式的徽章（紅字＋紅框），取代單純的文字，
+// 一眼就能認出是證照等級；空值時不顯示任何東西。
+function emtBadgeHtml(level){
+  return level ? `<span class="emt-badge">${esc(level)}</span>` : '';
+}
 
 // 車長／駕駛不能派給督導性質的角色（高勤官、全單位視角；主官管、連級主官），
 // 車長還要再排除資淺士兵（上等兵／一等兵／二等兵），避免資淺兵員單獨擔任
@@ -1417,6 +1434,7 @@ const RELEASE_NOTES = [
     "右上角通知／登出按鈕改成液態玻璃質感，跟全站返回鍵一致：毛玻璃透明圓圈＋高光/陰影，按下去放大＋提亮＋外圍柔光",
     "患者紀錄的問診細節、過去病史、過敏史合併成同一個灰底面板（原本是兩個各自獨立的面板），其他不適/脊椎評估改成各自佔滿一整行；GCS 數值改成大字顯示總分、E/V/M 分項縮小放在下面當輔助說明，不再整串原始字串擠在一起",
     "姓名後面的階級（上士/下士/中尉…）、車號後面的所屬單位（第一連/第二連…）字體縮小改灰階，降低視覺份量，讓姓名/車號本身更突出（急診待命卡片、勤務詳情頁、任務卡片等有顯示這類資訊的地方一併套用）",
+    "EMT 證照等級（EMT-1/EMT-2/EMT-P）顯示改成比照臂章繡片樣式的徽章：紅字＋紅色四角形邊框，字體改用粗襯線體 Bitter，車長/駕駛欄位、個人資料頁、基礎資料管理人員清單有顯示證照等級的地方一併套用",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -2713,7 +2731,7 @@ function crewLabel(name, unit){
   const match = findPersonnel(name, unit);
   const phone = (match && match.phone) || "";
   const emtLevel = (match && match.emtLevel) || "";
-  return `${nameWithRank(name, unit)}${emtLevel ? ` · ${esc(emtLevel)}` : ''}${phone ? ` <a href="tel:${esc(phone)}" class="phone-link" style="text-decoration:none;">${esc(phone)}</a>` : ''}`;
+  return `${nameWithRank(name, unit)}${emtLevel ? ` ${emtBadgeHtml(emtLevel)}` : ''}${phone ? ` <a href="tel:${esc(phone)}" class="phone-link" style="text-decoration:none;">${esc(phone)}</a>` : ''}`;
 }
 // 跟 crewLabel 同樣的資料來源，但拆成「姓名＋階級」「EMT等級＋電話」兩段，
 // 給急診待命卡片這種要把姓名階級跟聯絡方式分兩行顯示的版面用。
@@ -2723,7 +2741,7 @@ function personCardLine(name, unit){
   const phone = (match && match.phone) || "";
   const emtLevel = (match && match.emtLevel) || "";
   const subParts = [];
-  if (emtLevel) subParts.push(esc(emtLevel));
+  if (emtLevel) subParts.push(emtBadgeHtml(emtLevel));
   if (phone) subParts.push(`<a href="tel:${esc(phone)}" class="phone-link" style="text-decoration:none;">${esc(phone)}</a>`);
   return { main: nameWithRank(name, unit), sub: subParts.join(' · ') };
 }
@@ -3944,7 +3962,7 @@ function viewProfile(){
     <div class="hub-head">
       ${avatar}
       <div class="hub-name">${esc(p.displayName||p.email)}</div>
-      <div class="hub-sub">${p.rank ? esc(p.rank)+' · ' : ''}${unitLabel(p.unit)} · ${ROLE_LABEL[myRole(p)]||p.role}${p.emtLevel ? ' · '+esc(p.emtLevel) : ''}</div>
+      <div class="hub-sub">${p.rank ? esc(p.rank)+' · ' : ''}${unitLabel(p.unit)} · ${ROLE_LABEL[myRole(p)]||p.role}${p.emtLevel ? ' ' + emtBadgeHtml(p.emtLevel) : ''}</div>
     </div>
     ${settingsSection('使用者功能', userRows)}
     ${settingsSection('管理功能', adminRows)}
@@ -4434,7 +4452,7 @@ function viewBaseDataPersonnel(){
     <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('personnel', null, '${unit}')">${icon('plus',15)} 新增人員</button>
     ${rows.length ? rows.map(x => `
       <div class="admin-row">
-        <div><div class="name">${esc(x.name)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.title||'—')}${x.emtLevel?' · '+esc(x.emtLevel):''}${x.phone?' · '+esc(x.phone):''}</div></div>
+        <div><div class="name">${esc(x.name)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.title||'—')}${x.emtLevel?' '+emtBadgeHtml(x.emtLevel):''}${x.phone?' · '+esc(x.phone):''}</div></div>
         <div style="display:flex; gap:6px; flex-wrap:wrap;">
           <button class="icon-btn" onclick="window.__openBaseDataModal('personnel','${x.id}','${unit}')">編輯</button>
           <button class="icon-btn" onclick="window.__toggleBaseData('personnel','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
