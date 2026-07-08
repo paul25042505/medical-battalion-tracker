@@ -109,6 +109,13 @@ service cloud.firestore {
       allow create, update, delete: if isStaff() || isCommander();
     }
 
+    // 醫官名冊（姓名/電話）供建立勤務的「值班醫官」欄位選用，是全營共用的
+    // 參考資料，不綁定特定單位；維護權限比照基礎資料管理。
+    match /doctors/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isStaff() || isCommander();
+    }
+
     // 急診待命：兩個醫務所地點固定，每筆文件只存 currentTaskId 指向目前
     // 綁定的待命勤務（實際車號/車長/駕駛/值班醫官資料都在 tasks 集合裡）。
     // 這個指標是建立待命勤務當下由建立者自動寫入，寫入權限比照建立勤務

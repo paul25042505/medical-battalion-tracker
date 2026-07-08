@@ -676,7 +676,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-07-145-vitals-abnormal-color-gcs-select";
+const BUILD_TAG = "2026-07-08-146-doctor-roster-crew-picker-unit-scope";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -684,7 +684,7 @@ const BUILD_TAG = "2026-07-07-145-vitals-abnormal-color-gcs-select";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "1.5";
+const APP_MAJOR_MINOR = "1.6";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -1085,6 +1085,11 @@ const HOSPITAL_COUNTIES = ["臺中市", "嘉義市", "嘉義縣"];
 // 一大段連續文字），畫面上會排成清單，才看得清楚；同一天有多筆出貨就往
 // 同一個日期的 items 陣列後面加，不要開新的日期項目。
 const RELEASE_NOTES = [
+  { date: "2026/07/08", items: [
+    "基礎資料管理新增「醫官」名冊（姓名/電話），建立勤務的「值班醫官」欄位改成從這份名冊下拉選擇，不用再手動打字",
+    "建立/編輯勤務選車長、駕駛時，預設只列出該勤務所屬單位的人員（比照跨單位借車的做法），勾選「跨單位選人」才會展開列出其他單位；已指派跨單位人員的既有勤務，編輯時會自動展開避免看起來像被取消",
+    "車長／駕駛欄位選定後的顯示文字改成「姓名 階級」，不再用點號分隔、也不再顯示單位",
+  ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
     "新增「急診待命」分頁：成功北醫務所／精北醫務所兩個地點各自顯示當天的急診醫官／待命車長／駕駛，需要後送時可直接建立勤務（欄位跟一般勤務完全一樣）",
@@ -1230,6 +1235,7 @@ const state = {
   user: null, profile: null, tasks: [], events: [],
   personnel: [], vehicles: [], recorders: [],
   hospitals: [], vitals: [], // 醫院資訊（急救責任等級/電話）、患者生命徵象/主訴紀錄
+  doctors: [], // 醫官名冊（姓名/電話），供建立勤務的「值班醫官」欄位選用
   erStandby: [], // 急診待命：每個地點目前綁定的待命勤務指標（currentTaskId）
   route: { name: "home" },
   reportDraft: null, // { taskId, type }
@@ -1254,7 +1260,7 @@ const state = {
 };
 let tasksPoll = null, eventsPoll = null, profilePoll = null;
 let personnelPoll = null, vehiclesPoll = null, recordersPoll = null;
-let hospitalsPoll = null, vitalsPoll = null, erStandbyPoll = null;
+let hospitalsPoll = null, vitalsPoll = null, erStandbyPoll = null, doctorsPoll = null;
 // 只有資料真的變動時才重繪畫面，避免每次背景輪詢都整頁重畫造成畫面閃爍/捲動位置跳動。
 const lastJson = {};
 function changedSince(cacheKey, value){
@@ -1544,6 +1550,10 @@ async function addHospital(county, name, level, phone, note){
   await fsAddDoc("hospitals", { county, name, level, phone: phone||"", note: note||"" });
   showToast("已新增醫院"); if (hospitalsPoll) hospitalsPoll.refreshNow();
 }
+async function addDoctor(name, phone){
+  await fsAddDoc("doctors", { name, phone: phone||"", active: true });
+  showToast("已新增醫官"); if (doctorsPoll) doctorsPoll.refreshNow();
+}
 // 意見回饋：任何在職帳號都能送出，一律具名（顯示送出者姓名），只有
 // admin 能在管理後台「意見回饋」頁籤檢視，不提供列表輪詢（很少人會
 // 用到，開啟該頁籤時現抓一次就好，比照帳號權限頁籤 state._usersCache
@@ -1560,6 +1570,7 @@ function refreshBaseDataPoll(coll){
   if (coll === "vehicles" && vehiclesPoll) vehiclesPoll.refreshNow();
   if (coll === "recorders" && recordersPoll) recordersPoll.refreshNow();
   if (coll === "hospitals" && hospitalsPoll) hospitalsPoll.refreshNow();
+  if (coll === "doctors" && doctorsPoll) doctorsPoll.refreshNow();
 }
 async function toggleBaseDataActive(coll, id, active){
   await fsSetDoc(`${coll}/${id}`, { active: !active });
@@ -1756,15 +1767,21 @@ function startDataListeners(){
     state.erStandby = docs;
     if (changed) safeRender();
   });
+  doctorsPoll = poll(async () => {
+    const docs = await fsListCollection("doctors");
+    const changed = changedSince("doctors", docs);
+    state.doctors = docs;
+    if (changed) safeRender();
+  });
   ensureUnitsSeeded();
   ensureHospitalsSeeded();
 }
 function cleanupListeners(){
-  [tasksPoll, eventsPoll, profilePoll, personnelPoll, vehiclesPoll, recordersPoll, hospitalsPoll, vitalsPoll, erStandbyPoll].forEach(p => p && p.stop());
+  [tasksPoll, eventsPoll, profilePoll, personnelPoll, vehiclesPoll, recordersPoll, hospitalsPoll, vitalsPoll, erStandbyPoll, doctorsPoll].forEach(p => p && p.stop());
   for (const k in lastJson) delete lastJson[k];
-  tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = hospitalsPoll = vitalsPoll = erStandbyPoll = null;
+  tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = hospitalsPoll = vitalsPoll = erStandbyPoll = doctorsPoll = null;
   state.tasks = []; state.events = []; state.personnel = []; state.vehicles = []; state.recorders = [];
-  state.hospitals = []; state.vitals = []; state.erStandby = [];
+  state.hospitals = []; state.vitals = []; state.erStandby = []; state.doctors = [];
   state.deepTasks = []; state.deepEvents = []; state.deepVitals = []; state.recordsDeepQuery = null;
   state.previewActive = false; state.realRoleUnit = null;
 }
@@ -1960,16 +1977,16 @@ const ROUTE_REFRESH = {
   tasks: ['tasks','events'],
   task: ['tasks','events','vitals'],
   vitals: ['tasks','events','vitals'],
-  editTask: ['tasks','events','personnel','vehicles','recorders'],
-  createTask: ['personnel','vehicles','recorders'],
+  editTask: ['tasks','events','personnel','vehicles','recorders','doctors'],
+  createTask: ['personnel','vehicles','recorders','doctors'],
   records: ['tasks','events','vitals','personnel','vehicles'],
   stats: ['tasks','events'],
   hospitals: ['hospitals'],
-  erStandby: ['erStandby'],
+  erStandby: ['erStandby','tasks','events'],
   // 管理後台改成分區列表入口＋各自獨立路由後，每個子頁只重抓自己真的會
   // 用到的集合，不用像以前那樣進管理後台就整批重抓（hub 本身不用抓）。
   adminTasks: ['tasks','events'],
-  adminBaseData: ['personnel','vehicles','recorders','hospitals'],
+  adminBaseData: ['personnel','vehicles','recorders','hospitals','doctors'],
 };
 function nav(route){
   state.route = route; state.reportDraft = null;
@@ -1979,7 +1996,7 @@ function nav(route){
   if (route.name === "adminUsers") state._usersCache = null;
   if (route.name === "adminFeedback") state._feedbackCache = null;
   render(); window.scrollTo(0,0);
-  const polls = { tasks: tasksPoll, events: eventsPoll, personnel: personnelPoll, vehicles: vehiclesPoll, recorders: recordersPoll, hospitals: hospitalsPoll, vitals: vitalsPoll, erStandby: erStandbyPoll };
+  const polls = { tasks: tasksPoll, events: eventsPoll, personnel: personnelPoll, vehicles: vehiclesPoll, recorders: recordersPoll, hospitals: hospitalsPoll, vitals: vitalsPoll, erStandby: erStandbyPoll, doctors: doctorsPoll };
   (ROUTE_REFRESH[route.name] || []).forEach(key => { if (polls[key]) polls[key].refreshNow(); });
 }
 function esc(s){ return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -2146,13 +2163,12 @@ function nameWithRank(name, unit){
   const rank = (match && match.title && !name.includes(match.title)) ? ' ' + match.title : '';
   return esc(name) + esc(rank);
 }
-// 編輯勤務頁面「車長／駕駛」欄位目前已指派人選的顯示文字：車長／駕駛現在
-// 可以跨單位選人，光顯示姓名不夠清楚，補上階級＋單位（例如「林伯霖 · 上士 ·
-// 第一連」），讓人一眼看出這是不是跨單位借調的人員。
+// 編輯勤務頁面「車長／駕駛」欄位目前已指派人選的顯示文字：姓名＋階級，
+// 用空格分隔（例如「林伯霖 上士」），不加點號、不顯示單位。
 function crewDisplayLabel(name, taskUnit){
   const match = findPersonnel(name, taskUnit);
   if (!match) return name;
-  return `${match.name}${match.title ? ' · ' + match.title : ''}${match.unit ? ' · ' + unitLabel(match.unit) : ''}`;
+  return `${match.name}${match.title ? ' ' + match.title : ''}`;
 }
 // 姓名 + 階級 + 電話（可點擊撥打），給車長/駕駛這種需要聯絡方式的欄位用。
 // iOS Safari 對 tel: 連結一律會跳出「已阻擋此網站自動開始通話」的系統提示，不管
@@ -2461,18 +2477,23 @@ function viewCreateTask(){
         ${!vehicleOpts.length ? `<div style="color:var(--muted);font-size:var(--text-xs);margin-top:6px;">此單位尚未建立車輛資料，請至「基礎資料管理」新增</div>` : ""}
       </div>
       <div class="field"><label>車長</label>
-        <button type="button" class="picker-field" onclick="window.__openPersonPicker('crewLeader', this)">
+        <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openPersonPicker('crewLeader', this)">
           <span class="picker-field-text placeholder">請選擇車長</span>${icon('chevronDown',16)}
         </button>
         <input type="hidden" name="crewLeader" value="">
       </div>
       <div class="field"><label>駕駛</label>
-        <button type="button" class="picker-field" onclick="window.__openPersonPicker('driver', this)">
+        <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openPersonPicker('driver', this)">
           <span class="picker-field-text placeholder">請選擇駕駛</span>${icon('chevronDown',16)}
         </button>
         <input type="hidden" name="driver" value="">
       </div>
-      <div class="field"><label>值班醫官（選填）</label><input name="dutyOfficer" value="${esc(state.route.presetDutyOfficer||'')}" placeholder="例如：王醫官"></div>
+      <div class="field"><label>值班醫官（選填）</label>
+        <select name="dutyOfficer">
+          <option value="">請選擇醫官</option>
+          ${state.doctors.filter(x=>x.active!==false).map(x => `<option value="${esc(x.name)}" ${state.route.presetDutyOfficer===x.name?'selected':''}>${esc(x.name)}</option>`).join("")}
+        </select>
+      </div>
       <div class="field"><label>行車紀錄器（可多選）</label>
         <select name="recorders" multiple size="${Math.min(4, Math.max(2, recorderOpts.length || 2))}">
           ${recorderOpts.map(x => `<option value="${esc(x.code)}">${esc(x.code)}</option>`).join("")}
@@ -2536,18 +2557,23 @@ function viewEditTask(taskId){
         <label class="checkbox-inline"><input type="checkbox" ${isCrossUnitVehicle?'checked':''} onchange="window.__toggleCrossUnitVehicle(this)"> 跨單位借車</label>
       </div>
       <div class="field"><label>車長</label>
-        <button type="button" class="picker-field" onclick="window.__openPersonPicker('crewLeader', this)">
+        <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openPersonPicker('crewLeader', this)">
           <span class="picker-field-text${t.crewLeader?'':' placeholder'}">${t.crewLeader ? esc(crewDisplayLabel(t.crewLeader, unit)) : '請選擇車長'}</span>${icon('chevronDown',16)}
         </button>
         <input type="hidden" name="crewLeader" value="${esc(t.crewLeader||'')}">
       </div>
       <div class="field"><label>駕駛</label>
-        <button type="button" class="picker-field" onclick="window.__openPersonPicker('driver', this)">
+        <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openPersonPicker('driver', this)">
           <span class="picker-field-text${t.driver?'':' placeholder'}">${t.driver ? esc(crewDisplayLabel(t.driver, unit)) : '請選擇駕駛'}</span>${icon('chevronDown',16)}
         </button>
         <input type="hidden" name="driver" value="${esc(t.driver||'')}">
       </div>
-      <div class="field"><label>值班醫官（選填）</label><input name="dutyOfficer" value="${esc(t.dutyOfficer||'')}" placeholder="例如：王醫官"></div>
+      <div class="field"><label>值班醫官（選填）</label>
+        <select name="dutyOfficer">
+          <option value="">請選擇醫官</option>
+          ${state.doctors.filter(x=>x.active!==false).map(x => `<option value="${esc(x.name)}" ${t.dutyOfficer===x.name?'selected':''}>${esc(x.name)}</option>`).join("")}
+        </select>
+      </div>
       <div class="field"><label>行車紀錄器（可多選）</label>
         <select name="recorders" multiple size="${Math.min(4, Math.max(2, recorderOpts.length || 2))}">
           ${recorderOpts.map(x => `<option value="${esc(x.code)}" ${currentRecorders.includes(x.code)?'selected':''}>${esc(x.code)}</option>`).join("")}
@@ -3664,7 +3690,8 @@ const BASEDATA_TABS = [
   { key:"personnel", label:"人員" },
   { key:"vehicles", label:"車輛" },
   { key:"recorders", label:"行車紀錄器" },
-  { key:"hospitals", label:"醫院" }
+  { key:"hospitals", label:"醫院" },
+  { key:"doctors", label:"醫官" }
 ];
 function viewAdminBaseData(){
   const p = state.profile;
@@ -3692,6 +3719,24 @@ function viewAdminBaseData(){
             <button class="icon-btn danger" onclick="window.__deleteBaseData('hospitals','${x.id}')">刪除</button>
           </div>
         </div>`).join("") : `<div class="empty">尚無醫院資料</div>`}`;
+    return `${subTabs}${body}`;
+  }
+
+  // 醫官（值班醫官名冊）也是全營共用的參考資料，不綁定特定單位，比照
+  // 醫院頁籤不需要單位切換。
+  if (state.baseDataTab === "doctors") {
+    const rows = state.doctors.slice().sort((a,b) => (a.name||'').localeCompare(b.name||''));
+    const body = `
+      <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('doctors', null, '')">${icon('plus',15)} 新增醫官</button>
+      ${rows.length ? rows.map(x => `
+        <div class="admin-row">
+          <div><div class="name">${esc(x.name)}${x.active===false?'（已停用）':''}</div><div class="sub">${x.phone?esc(x.phone):'—'}</div></div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="icon-btn" onclick="window.__openBaseDataModal('doctors','${x.id}','')">編輯</button>
+            <button class="icon-btn" onclick="window.__toggleBaseData('doctors','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
+            <button class="icon-btn danger" onclick="window.__deleteBaseData('doctors','${x.id}')">刪除</button>
+          </div>
+        </div>`).join("") : `<div class="empty">尚無醫官資料</div>`}`;
     return `${subTabs}${body}`;
   }
 
@@ -3752,7 +3797,7 @@ function viewBaseDataModal(){
   const m = state.baseDataModal;
   if (!m) return "";
   const { coll, id, unit } = m;
-  const pool = coll === "personnel" ? state.personnel : coll === "vehicles" ? state.vehicles : coll === "hospitals" ? state.hospitals : state.recorders;
+  const pool = coll === "personnel" ? state.personnel : coll === "vehicles" ? state.vehicles : coll === "hospitals" ? state.hospitals : coll === "doctors" ? state.doctors : state.recorders;
   const editing = id ? pool.find(x => x.id === id) : null;
   let title, fields;
   if (coll === "personnel") {
@@ -3794,6 +3839,11 @@ function viewBaseDataModal(){
       </div>
       <div class="field"><label>電話</label><input name="phone" type="tel" inputmode="tel" value="${esc(editing?.phone||'')}" placeholder="總機或急診專線"></div>
       <div class="field"><label>備註（選填）</label><input name="note" value="${esc(editing?.note||'')}" placeholder="例如：電話為總機，急診專線待確認"></div>`;
+  } else if (coll === "doctors") {
+    title = editing ? "編輯醫官" : "新增醫官";
+    fields = `
+      <div class="field"><label>姓名</label><input name="name" required value="${esc(editing?.name||'')}"></div>
+      <div class="field"><label>電話（選填）</label><input name="phone" type="tel" inputmode="tel" value="${esc(editing?.phone||'')}"></div>`;
   } else {
     title = editing ? "編輯行車紀錄器" : "新增行車紀錄器";
     fields = `<div class="field"><label>編號</label><input name="code" required value="${esc(editing?.code||'')}"></div>`;
@@ -4122,16 +4172,20 @@ window.__syncSceneType = (value) => {
   if (traumaWrap) traumaWrap.style.display = value === "創傷" ? "block" : "none";
 };
 /* =========================================================
-   車長／駕駛人員選擇器：可跨單位、可打字搜尋。純 DOM 彈窗，不觸發
-   render()，避免打開選人彈窗時，把使用者已經填到一半的其他欄位
-   （任務名稱、地點等未受控的 input）整頁重繪掉。
+   車長／駕駛人員選擇器：預設只列該勤務所屬單位的人（比照「跨單位借車」
+   預設不勾選的邏輯），勾選「跨單位選人」才展開列出其他單位；如果目前
+   已指派的人本來就不屬於這個單位（跨單位借調），一開始就自動勾選展開，
+   不然那個人會從清單裡消失、看起來像被取消選取。可打字搜尋。純 DOM
+   彈窗，不觸發 render()，避免打開選人彈窗時，把使用者已經填到一半的
+   其他欄位（任務名稱、地點等未受控的 input）整頁重繪掉。
    ========================================================= */
-let personPickerCtx = null; // { pool, hiddenInput, triggerBtn }
-function personPickerRows(pool, query){
+let personPickerCtx = null; // { pool, unit, crossUnit, hiddenInput, triggerBtn }
+function personPickerRows(pool, unit, crossUnit, query){
+  const scoped = crossUnit ? pool : pool.filter(x => x.unit === unit);
   const q = (query||"").trim().toLowerCase();
-  const filtered = q ? pool.filter(x =>
+  const filtered = q ? scoped.filter(x =>
     x.name.toLowerCase().includes(q) || (x.title||"").toLowerCase().includes(q) || unitLabel(x.unit).toLowerCase().includes(q)
-  ) : pool;
+  ) : scoped;
   if (!filtered.length) return `<div class="empty" style="padding:28px 0;">找不到符合的人員</div>`;
   let html = "", curUnit = null;
   for (const x of filtered) {
@@ -4156,7 +4210,7 @@ function selectPersonFromPicker(id){
   if (x) {
     personPickerCtx.hiddenInput.value = x.name;
     const textEl = personPickerCtx.triggerBtn.querySelector(".picker-field-text");
-    textEl.textContent = `${x.name}${x.title ? ' · ' + x.title : ''}${x.unit ? ' · ' + unitLabel(x.unit) : ''}`;
+    textEl.textContent = `${x.name}${x.title ? ' ' + x.title : ''}`;
     textEl.classList.remove("placeholder");
   }
   closePersonPicker();
@@ -4169,11 +4223,14 @@ function closePersonPicker(){
 window.__openPersonPicker = (fieldName, triggerBtn) => {
   const hiddenInput = triggerBtn.parentElement.querySelector(`input[name="${fieldName}"]`);
   const currentValue = hiddenInput.value;
+  const unit = triggerBtn.dataset.unit;
   const eligible = fieldName === "crewLeader" ? eligibleForCrewLeader : eligibleForDriver;
   const pool = state.personnel
     .filter(x => x.active !== false && (eligible(x) || x.name === currentValue))
     .slice()
     .sort((a,b) => unitWeight(a.unit) - unitWeight(b.unit) || rankWeight(a.title) - rankWeight(b.title));
+  const currentPerson = currentValue ? pool.find(x => x.name === currentValue) : null;
+  const crossUnit = !!(currentPerson && currentPerson.unit !== unit);
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay person-picker-overlay";
   overlay.onclick = (e) => { if (e.target === overlay) closePersonPicker(); };
@@ -4182,16 +4239,27 @@ window.__openPersonPicker = (fieldName, triggerBtn) => {
       <div class="modal-handle"></div>
       <div class="modal-title">${fieldName === "crewLeader" ? "選擇車長" : "選擇駕駛"}</div>
       <input type="text" class="picker-search" placeholder="輸入姓名、階級或單位搜尋" oninput="window.__filterPersonPicker(this.value)">
-      <div id="person-picker-list">${personPickerRows(pool, "")}</div>
+      <label class="checkbox-inline" style="margin:8px 0;"><input type="checkbox" ${crossUnit?'checked':''} onchange="window.__togglePersonPickerCrossUnit(this)"> 跨單位選人</label>
+      <div id="person-picker-list">${personPickerRows(pool, unit, crossUnit, "")}</div>
     </div>`;
   document.body.appendChild(overlay);
-  personPickerCtx = { pool, hiddenInput, triggerBtn };
+  personPickerCtx = { pool, unit, crossUnit, hiddenInput, triggerBtn };
   wirePersonPickerOptions(overlay);
 };
 window.__filterPersonPicker = (query) => {
   if (!personPickerCtx) return;
+  const { pool, unit, crossUnit } = personPickerCtx;
   const list = document.getElementById("person-picker-list");
-  list.innerHTML = personPickerRows(personPickerCtx.pool, query);
+  list.innerHTML = personPickerRows(pool, unit, crossUnit, query);
+  wirePersonPickerOptions(list);
+};
+window.__togglePersonPickerCrossUnit = (checkbox) => {
+  if (!personPickerCtx) return;
+  personPickerCtx.crossUnit = checkbox.checked;
+  const { pool, unit } = personPickerCtx;
+  const list = document.getElementById("person-picker-list");
+  const query = checkbox.closest(".modal-sheet")?.querySelector(".picker-search")?.value || "";
+  list.innerHTML = personPickerRows(pool, unit, checkbox.checked, query);
   wirePersonPickerOptions(list);
 };
 /* =========================================================
@@ -4381,10 +4449,12 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
     ? (coll === "personnel" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"" })
        : coll === "vehicles" ? updateBaseData(coll, id, { plate: f.get("plate"), type: f.get("type") })
        : coll === "hospitals" ? updateBaseData(coll, id, { name: f.get("name"), county: f.get("county"), level: f.get("level"), phone: f.get("phone")||"", note: f.get("note")||"" })
+       : coll === "doctors" ? updateBaseData(coll, id, { name: f.get("name"), phone: f.get("phone")||"" })
        : updateBaseData(coll, id, { code: f.get("code") }))
     : (coll === "personnel" ? addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone"))
        : coll === "vehicles" ? addVehicle(unit, f.get("plate"), f.get("type"))
        : coll === "hospitals" ? addHospital(f.get("county"), f.get("name"), f.get("level"), f.get("phone"), f.get("note"))
+       : coll === "doctors" ? addDoctor(f.get("name"), f.get("phone"))
        : addRecorder(unit, f.get("code")));
   action.then(() => { state.baseDataModal = null; render(); }).catch(baseDataErr);
 };
