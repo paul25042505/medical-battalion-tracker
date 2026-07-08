@@ -67,7 +67,9 @@
     --glass-btn-bg: rgba(255,255,255,0.55);
     --glass-btn-bg-active: rgba(255,255,255,0.75);
     --glass-btn-border: rgba(255,255,255,0.4);
+    --glass-btn-border-active: rgba(255,255,255,0.7);
     --glass-btn-highlight: rgba(255,255,255,0.6);
+    --glass-btn-glow: rgba(255,255,255,0.55);
   }
   /* ---- 深色模式：預設跟隨系統設定（設定 → 一般 → 外觀），使用者也可以在
      「更多 → 外觀模式」手動固定選淺色/深色（見 window.__setThemeMode，會在
@@ -108,7 +110,9 @@
       --glass-btn-bg: rgba(60,60,67,0.55);
       --glass-btn-bg-active: rgba(80,80,88,0.75);
       --glass-btn-border: rgba(255,255,255,0.12);
+      --glass-btn-border-active: rgba(255,255,255,0.3);
       --glass-btn-highlight: rgba(255,255,255,0.16);
+      --glass-btn-glow: rgba(120,170,255,0.4);
     }
   }
   :root[data-theme="dark"]{
@@ -136,7 +140,9 @@
     --glass-btn-bg: rgba(60,60,67,0.55);
     --glass-btn-bg-active: rgba(80,80,88,0.75);
     --glass-btn-border: rgba(255,255,255,0.12);
+    --glass-btn-border-active: rgba(255,255,255,0.3);
     --glass-btn-highlight: rgba(255,255,255,0.16);
+    --glass-btn-glow: rgba(120,170,255,0.4);
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   /* 全站禁止選取文字（比照原生 App 手感，長按/雙點不會跳出選取把手或
@@ -513,13 +519,22 @@
     -webkit-backdrop-filter:blur(20px) saturate(180%);
     box-shadow:0 1px 3px rgba(0,0,0,0.08), inset 0 1px 1px var(--glass-btn-highlight), inset 0 -1px 1px rgba(0,0,0,0.04);
     border:0.5px solid var(--glass-btn-border);
-    transition:background 0.15s ease;
+    transition:background 0.2s cubic-bezier(0.25,1,0.5,1), border-color 0.2s cubic-bezier(0.25,1,0.5,1),
+      box-shadow 0.2s cubic-bezier(0.25,1,0.5,1), filter 0.2s cubic-bezier(0.25,1,0.5,1);
   }
   /* 蓋掉全域 button:active 的 scale(0.96)（那是縮小，這裡要放大），改用
      液態玻璃鍵自己的縮放幅度；選擇器套在 .back-btn（實際的 <button>）上
      而不是內層的 .back-btn-circle，避免兩層各自 transform 疊加變形過頭。 */
   .back-btn:active{transform:scale(1.12); transition:transform 0.1s ease-out;}
-  .back-btn:active .back-btn-circle{background:var(--glass-btn-bg-active);}
+  /* 按下去再疊加提亮＋外發光，玻璃質感更明顯：background 加深、邊框變亮、
+     filter 整體提亮、外圍加一圈柔光（跟 inset 高光疊在一起模擬玻璃被按亮的
+     觸覺回饋），跟 :root 定義的按壓態 token 一樣分淺色/深色兩組色調。 */
+  .back-btn:active .back-btn-circle{
+    background:var(--glass-btn-bg-active);
+    border-color:var(--glass-btn-border-active);
+    filter:brightness(1.15);
+    box-shadow:0 1px 3px rgba(0,0,0,0.08), inset 0 1px 1px var(--glass-btn-highlight), inset 0 -1px 1px rgba(0,0,0,0.04), 0 0 14px var(--glass-btn-glow);
+  }
   .detail-head{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:var(--space-card); margin-bottom:var(--space-section); box-shadow:var(--shadow-sm);}
   .detail-head .task-title{font-size:var(--text-lg);}
   .kv{display:grid; grid-template-columns:96px 1fr; gap:12px 12px; margin-top:14px; font-size:var(--text-sm);}
@@ -888,7 +903,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-184-vitals-erstandby-redesign";
+const BUILD_TAG = "2026-07-08-185-back-btn-press-glow";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1361,6 +1376,7 @@ const RELEASE_NOTES = [
     "全站禁止選取文字，比照原生 App 手感（長按/雙點不會跳出選取把手或系統選單）；表單輸入框不受影響，仍然可以正常選取、編輯、複製貼上",
     "患者紀錄卡片視覺改版：患者身分改成滿版淡藍色橫條，現場狀況改成大標題呈現（異常發現用紅字凸顯），主訴卡片、問診/病史欄位收進柔和的淺灰網格卡片，處置項目改成標籤化 Pills，取代原本一整排逗號分隔的文字",
     "急診待命卡片視覺改版：資訊欄位改成標準 2x2 網格並用上下分隔線收邊，車長多顯示一行 EMT 證照等級與電話（藍字），待命中狀態徽章的圓點加上微弱脈動效果",
+    "返回鍵按壓效果加強：按下去除了放大，玻璃底色/邊框會提亮、外圍加一圈柔光，觸覺回饋更明顯",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
