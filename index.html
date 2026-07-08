@@ -95,14 +95,8 @@
     padding:17px 19px calc(14px + env(safe-area-inset-top)) 19px;
     padding-top:calc(17px + env(safe-area-inset-top));
   }
-  .topbar-title-row{min-width:0;}
-  .topbar-bottom-row{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:9px;}
+  .topbar-bottom-row{display:flex; align-items:center; justify-content:space-between; gap:12px;}
   .topbar-icons{display:flex; align-items:center; gap:6px; flex-shrink:0;}
-  .topbar h1{font-size:clamp(19px, 5.8vw, 25px); font-weight:700; margin:0; letter-spacing:0.01em; line-height:1.3; white-space:nowrap;}
-  .topbar-en{
-    font-family:var(--mono); font-size:clamp(8px, 2.5vw, 12px); font-weight:600; color:var(--muted);
-    letter-spacing:0.03em; text-transform:none; margin-top:4px; white-space:nowrap;
-  }
   .topbar-sub{
     color:var(--text); min-width:0;
     display:flex; align-items:center; gap:9px;
@@ -689,7 +683,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-160-vehicle-unit-label";
+const BUILD_TAG = "2026-07-08-161-remove-header-title";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1137,6 +1131,7 @@ const RELEASE_NOTES = [
     "人員新增 EMT 證照等級欄位（EMT-1/EMT-2/EMT-P），新增帳號待審核、個人資料、基礎資料管理／人員都可以登記，出勤資訊（勤務詳情頁、任務卡片）的車長/駕駛顯示會一併帶出證照等級",
     "任務卡片版面調整：狀態徽章（待命中/出勤中…）移到跟標題同一列，車號/營內外/地點那行改成獨立滿版顯示，不會再因為地點名稱較長而擠壓換行；有患者徽章改顯示在狀態徽章左邊，同一列並排",
     "車號後面補上該車實際登記的所屬單位（例如「軍H-30001（第一連）」），任務卡片、勤務詳情頁、急診待命卡片都會顯示，跨單位借車或管理員同時檢視多單位時不會再看不出車輛是哪個單位的",
+    "移除頁面上方標題列的中英文系統名稱（衛生營車輛人員動態管制系統／Medical Battalion...），只保留姓名/階級與通知/登出按鈕，畫面更簡潔",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -4245,10 +4240,6 @@ function render(){
     <div class="sticky-head">
       ${previewBanner}
       <div class="topbar">
-        <div class="topbar-title-row">
-          <h1>衛生營車輛人員動態管制系統</h1>
-          <div class="topbar-en">Medical Battalion Vehicle &amp; Personnel Management System</div>
-        </div>
         <div class="topbar-bottom-row">
           <div class="topbar-sub">
             <span class="name">${esc(p.displayName||p.email).split(' ')[0]}</span>${p.rank ? `<span class="rank">${esc(p.rank)}</span>` : ''}
