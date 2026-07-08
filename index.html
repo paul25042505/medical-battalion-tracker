@@ -683,7 +683,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-167-task-detail-hospital-nav";
+const BUILD_TAG = "2026-07-08-168-standby-arrival-hospital-location";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1138,6 +1138,7 @@ const RELEASE_NOTES = [
     "移除內建的 8 間預設醫院清單資料，改由使用者自行到「基礎資料管理 → 醫院」逐筆新增（後續會補上經緯度座標，讓定位比對可以直接算跟醫院本身的實際距離，不用再繞經行政區/縣市這兩層近似判斷）",
     "醫院新增／編輯表單新增「座標」欄位（貼「緯度,經度」即可，例如 24.1786,120.6400），有登記座標的醫院「顯示附近醫院」會直接算出跟你目前位置的實際距離並標示「約 X 公里」、排序最優先；沒登記座標的醫院才退回用行政區/縣市概略比對",
     "勤務詳情頁的「送醫醫院」欄位補上 Google／Apple 一鍵導航按鈕，出勤中需要送醫時不用再跳到「醫院資訊」頁另外找同一間醫院才能導航",
+    "修正急診待命勤務出勤後回報「抵達現場」，勤務進度時間軸誤顯示成抵達自己出發的醫務所本身（例如「抵達現場：成功北醫務所」），改成正確顯示回報出勤時選的送醫醫院",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -4408,14 +4409,18 @@ window.__submitReport = (taskId, type) => {
   if (hospitalEl && hospitalEl.value) extra.hospital = hospitalEl.value;
   // 抵達現場本身不再另外問地點（地點在離開現場時就先問過了），但時間軸上
   // 抵達這一步也要看得出抵達的是哪裡：沿用剛才離開現場填的前往地點；如果
-  // 是出勤後第一次抵達（前面還沒有離開現場的紀錄），就沿用任務本身建立時
-  // 填的地點欄位。
+  // 是出勤後第一次抵達（前面還沒有離開現場的紀錄），待命勤務的任務「地點」
+  // 欄位固定填的是醫務所本身（待命的地方，不是真正要去的地方），改沿用
+  // 回報出勤時選的送醫醫院，才不會把「抵達現場」寫成抵達了自己出發的醫務所；
+  // 一般勤務的地點欄位本來就是真正的目的地，直接沿用（跟 currentLocationOf 邏輯一致）。
   if (type === "ARRIVED_SCENE" && !extra.location) {
     const t = state.tasks.find(x => x.id === taskId);
     if (t && t.type !== "liaison") {
       const evs = taskEvents(taskId);
       const lastEv = evs[evs.length - 1];
+      const dispatchEv = evs.find(e => e.type === "DISPATCH");
       if (lastEv && lastEv.type === "DEPART_SCENE" && lastEv.location) extra.location = lastEv.location;
+      else if (t.erStandbyKey && dispatchEv?.hospital) extra.location = dispatchEv.hospital;
       else if (t.location) extra.location = t.location;
     }
   }
