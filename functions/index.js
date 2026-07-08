@@ -61,7 +61,12 @@ async function sendPush(tokens, title, body) {
   const messaging = getMessaging();
   let resp;
   try {
-    resp = await messaging.sendEachForMulticast({ tokens, notification: { title, body } });
+    // 故意用 data（純資料）而不是 notification 欄位：背景/鎖屏收到帶
+    // notification 欄位的訊息時，瀏覽器本身會自動跳出一則通知，我們的
+    // service worker 的 onBackgroundMessage 又會自己再呼叫一次
+    // showNotification()，兩邊各顯示一次，同一則推播會變成兩則通知。
+    // 全部改成純 data，交給 service worker 自己顯示，只會顯示一次。
+    resp = await messaging.sendEachForMulticast({ tokens, data: { title, body } });
   } catch (e) {
     logger.error("推播傳送失敗", e);
     return;

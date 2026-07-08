@@ -953,7 +953,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-198-double-submit-guard";
+const BUILD_TAG = "2026-07-09-199-fcm-data-only-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1398,6 +1398,7 @@ const RELEASE_NOTES = [
     "推播通知設定頁新增目前帳號底下裝置權杖筆數顯示，方便排查是否還有重複收到推播的異常",
     "推播通知後端加上事件冪等防護：Google 底層事件傳遞偶爾會把同一次新增/回報重複投遞給函式處理，導致同一支裝置收到好幾則一樣的通知，現在同一個事件重複進來會直接被擋掉，只送一次",
     "修正建立勤務/洽公、任務進度回報、患者狀況記錄這三個表單在網路稍慢時被連點兩下會真的送出兩筆幾乎一樣的資料的問題（因此各自觸發兩次推播，看起來像重複收到通知）",
+    "修正推播通知一定會收到兩則的問題：後端改成只送純資料（data）而不是 notification 欄位，避免瀏覽器自動跳一次、我們自己的背景推播處理又跳一次，同一則推播顯示兩次",
   ] },
   { date: "2026/07/08", items: [
     "基礎資料管理新增「醫官」名冊（姓名/電話），建立勤務的「值班醫官」欄位改成從這份名冊下拉選擇，不用再手動打字",
@@ -2183,8 +2184,10 @@ function setupForegroundMessaging(){
     if (!supported) return;
     const messaging = getMessaging(app);
     onMessage(messaging, (payload) => {
-      const title = (payload.notification && payload.notification.title) || "新通知";
-      const body = (payload.notification && payload.notification.body) || "";
+      // 後端故意送 data（純資料）而不是 notification 欄位，見
+      // firebase-messaging-sw.js 上方的說明。
+      const title = (payload.data && payload.data.title) || "新通知";
+      const body = (payload.data && payload.data.body) || "";
       showToast(body ? `${title}：${body}` : title);
     });
   }).catch(e => console.error("前景推播監聽設定失敗", e));

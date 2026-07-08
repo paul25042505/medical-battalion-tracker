@@ -17,9 +17,11 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+// 後端故意送 data（純資料）而不是 notification 欄位，瀏覽器才不會自動
+// 跳一次通知、我們這裡又跳第二次，變成同一則推播收到兩則通知。
 messaging.onBackgroundMessage((payload) => {
-  const title = (payload.notification && payload.notification.title) || "MEDTRACK 通知";
-  const body = (payload.notification && payload.notification.body) || "";
+  const title = (payload.data && payload.data.title) || "MEDTRACK 通知";
+  const body = (payload.data && payload.data.body) || "";
   self.registration.showNotification(title, {
     body,
     icon: "icons/apple-touch-icon.png",
