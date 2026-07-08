@@ -316,9 +316,9 @@
      一眼就能分辨哪一筆是基準值（初評）、哪一筆是後續追蹤（二評）。 */
   .vitals-entry.stage-initial{border-left-color:var(--blue);}
   .vitals-entry.stage-followup{border-left-color:var(--amber);}
-  .vitals-entry-head{display:flex; justify-content:space-between; align-items:center; padding:14px 16px 0 16px;}
+  .vitals-entry-head{display:flex; justify-content:space-between; align-items:center; padding:16px var(--space-card) 0 var(--space-card);}
   .vitals-entry-time{font-family:var(--mono); font-size:var(--text-xs); color:var(--muted); font-weight:600;}
-  .vitals-entry-body{padding:16px 16px 18px 16px; display:flex; flex-direction:column; gap:18px;}
+  .vitals-entry-body{padding:var(--space-card); display:flex; flex-direction:column; gap:var(--space-section);}
   /* 現場狀況改成大標題：底色跟細節網格拉開視覺層級，異常發現用紅字凸顯，
      附加說明用一般灰字弱化，不跟主要發現搶焦點。 */
   .vitals-scene-block{display:flex; flex-direction:column; gap:4px;}
@@ -350,12 +350,12 @@
   .vitals-patient-line{
     display:flex; align-items:center; gap:8px; font-size:var(--text-sm); font-weight:700; color:var(--blue);
     background:color-mix(in srgb, var(--blue) 6%, transparent); border-top:1px solid color-mix(in srgb, var(--blue) 10%, transparent);
-    border-bottom:1px solid color-mix(in srgb, var(--blue) 10%, transparent); padding:12px 16px; margin-top:12px;
+    border-bottom:1px solid color-mix(in srgb, var(--blue) 10%, transparent); padding:12px var(--space-card); margin-top:12px;
   }
   .vitals-patient-line .dot{width:8px; height:8px; border-radius:50%; background:var(--blue); flex-shrink:0;}
   /* 主訴細節、過去病史、過敏史這些文字型資訊：收納進淺灰底的網格卡片，
      標籤淺灰小字、內容一般字重（非粗體），不需要跟生命徵象數值搶視覺重量。 */
-  .detail-panel{background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 16px;}
+  .detail-panel{background:var(--panel-2); border-radius:var(--radius-md); padding:16px;}
   .detail-panel .detail-grid{margin-bottom:0;}
   .detail-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:10px var(--space-section); margin-bottom:10px;}
   .detail-item{display:flex; flex-direction:column; gap:var(--space-label-gap);}
@@ -369,7 +369,7 @@
      GCS/血糖）維持較小字級的清單樣式，視覺權重明顯低於核心指標。 */
   .vitals-grid-core{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
   .vitals-core-item{
-    background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 8px; text-align:center;
+    background:var(--panel-2); border-radius:var(--radius-md); padding:14px 8px; text-align:center;
   }
   .vitals-core-item .lbl{font-size:var(--text-xs); color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;}
   .vitals-core-item .val{font-family:var(--mono); font-size:26px; font-weight:700; color:var(--text); line-height:1.3; margin-top:2px; display:block;}
@@ -380,7 +380,7 @@
      收進淺灰底卡片、置中對齊，欄位之間用細直線分隔（比照核心指標的卡片感）。 */
   .vitals-grid{
     display:grid; grid-template-columns:repeat(auto-fit, minmax(70px,1fr)); gap:0;
-    background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-md); padding:10px 6px;
+    background:var(--panel-2); border-radius:var(--radius-md); padding:10px 6px;
   }
   .vitals-item{display:flex; flex-direction:column; align-items:center; text-align:center; gap:var(--space-label-gap); padding:0 8px;}
   .vitals-item:not(:first-child){border-left:1px solid var(--border);}
@@ -903,7 +903,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-185-back-btn-press-glow";
+const BUILD_TAG = "2026-07-08-186-vitals-card-soften-density";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1377,6 +1377,7 @@ const RELEASE_NOTES = [
     "患者紀錄卡片視覺改版：患者身分改成滿版淡藍色橫條，現場狀況改成大標題呈現（異常發現用紅字凸顯），主訴卡片、問診/病史欄位收進柔和的淺灰網格卡片，處置項目改成標籤化 Pills，取代原本一整排逗號分隔的文字",
     "急診待命卡片視覺改版：資訊欄位改成標準 2x2 網格並用上下分隔線收邊，車長多顯示一行 EMT 證照等級與電話（藍字），待命中狀態徽章的圓點加上微弱脈動效果",
     "返回鍵按壓效果加強：按下去除了放大，玻璃底色/邊框會提亮、外圍加一圈柔光，觸覺回饋更明顯",
+    "患者紀錄卡片密度調整：移除問診/病史網格卡片、生命徵象格子原本偏明顯的邊框線，改成單純用底色深淺區分區塊，並加大卡片內邊距與段落間距，視覺更貼近原始設計稿的柔和留白風格",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
