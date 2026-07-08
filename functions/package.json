@@ -1,0 +1,13 @@
+{
+  "name": "medtrack-functions",
+  "description": "MEDTRACK 推播通知後端：任務新增/進度回報、患者生命徵象危急異常時觸發 FCM 推播",
+  "private": true,
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^5.1.0"
+  }
+}
