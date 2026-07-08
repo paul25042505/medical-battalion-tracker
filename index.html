@@ -147,9 +147,9 @@
   .task-card.s-transit::before{background:#6B23C7;}
   .task-card.s-returning::before{background:var(--blue);}
   .task-card.s-completed::before{background:var(--green);}
-  .task-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
-  .task-title{font-size:var(--text-lg); font-weight:700; margin:0 0 4px 0; letter-spacing:-0.01em;}
-  .task-meta{color:var(--muted); font-size:var(--text-sm); font-family:var(--mono); font-weight:500;}
+  .task-top{display:flex; justify-content:space-between; align-items:center; gap:10px;}
+  .task-title{font-size:var(--text-lg); font-weight:700; margin:0; letter-spacing:-0.01em;}
+  .task-meta{color:var(--muted); font-size:var(--text-sm); font-family:var(--mono); font-weight:500; margin-top:4px;}
   .badge{
     display:inline-flex; align-items:center; gap:6px; font-size:var(--text-xs); font-family:var(--mono); font-weight:700;
     padding:7px 13px; border-radius:var(--radius-sm); white-space:nowrap;
@@ -689,7 +689,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-158-emt-certification-level";
+const BUILD_TAG = "2026-07-08-159-task-card-layout";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1128,6 +1128,7 @@ const RELEASE_NOTES = [
     "急診待命卡片的「非今日建立」提醒改成依每日 08:00 換班時間判斷：現在還沒到今天 08:00 就不會誤跳警告，過了 08:00 若車長/駕駛還沒換班更新才會提醒",
     "新增規則：勤務回報（出勤/抵達現場/離開現場/返營/抵達營區、患者紀錄）只開放給該筆勤務指定的車長、駕駛或洽公人員本人，同單位其他成員不能代為回報不是自己的勤務；管理員維持後台支援權限不受影響",
     "人員新增 EMT 證照等級欄位（EMT-1/EMT-2/EMT-P），新增帳號待審核、個人資料、基礎資料管理／人員都可以登記，出勤資訊（勤務詳情頁、任務卡片）的車長/駕駛顯示會一併帶出證照等級",
+    "任務卡片版面調整：狀態徽章（待命中/出勤中…）移到跟標題同一列，車號/營內外/地點那行改成獨立滿版顯示，不會再因為地點名稱較長而擠壓換行；有患者徽章改顯示在狀態徽章左邊，同一列並排",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -2342,15 +2343,13 @@ function taskCard(t){
   return `
   <div class="task-card ${taskCardClass(s)}${hasPatient ? ' has-patient' : ''}" onclick="if(!event.target.closest('a')) window.__nav({name:'task', id:'${t.id}'})">
     <div class="task-top">
-      <div>
-        <p class="task-title">${esc(t.title)}</p>
-        <div class="task-meta">${isLiaison ? '洽公' : `${esc(t.vehicle||'—')} · ${taskScope(t)}`} · ${esc(t.location||'—')}</div>
-      </div>
-      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+      <p class="task-title">${esc(t.title)}</p>
+      <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
         ${hasPatient ? `<span class="patient-badge">${icon('alert',13)} 有患者</span>` : ""}
         ${statusBadge(s)}
       </div>
     </div>
+    <div class="task-meta">${isLiaison ? '洽公' : `${esc(t.vehicle||'—')} · ${taskScope(t)}`} · ${esc(t.location||'—')}</div>
     <div class="task-crew">
       ${locationLine ? `<span>目前位置：${locationLine}</span>` : ""}
       ${isLiaison
