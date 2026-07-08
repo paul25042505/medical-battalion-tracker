@@ -98,12 +98,18 @@ service cloud.firestore {
                     (isSignedIn() && myRole() == 'member'
                      && isAssignedToTaskData(get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data));
       // 時間、里程有時候會回報錯誤，需要能修正；開放對象跟 create 一致
-      // （admin 或該筆勤務指定的本人），維持「誰能回報、誰就能修正自己回報的內容」；
-      // 但不開放刪除，避免整筆歷史紀錄憑空消失。
+      // （admin 或該筆勤務指定的本人），維持「誰能回報、誰就能修正自己回報的內容」。
       allow update: if isAdmin() ||
                     (isSignedIn() && myRole() == 'member'
                      && isAssignedToTaskData(get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data));
-      allow delete: if false;
+      // 誤按到不該回報的步驟時要能整筆撤銷；開放對象跟 update 一致。rules 語言
+      // 無法查詢「這是不是這筆勤務時間軸上最後一筆事件」（沒有跨文件比較機制），
+      // 所以「只能刪最後一筆」這條限制是在前端（見 index.html 的 eventEditModal，
+      // 只有時間軸最後一筆才會顯示刪除鈕）執行，rules 這層仍然只把關「誰」能刪
+      // （限定該筆勤務指定的本人或 admin），不是把關「刪哪一筆」。
+      allow delete: if isAdmin() ||
+                    (isSignedIn() && myRole() == 'member'
+                     && isAssignedToTaskData(get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data));
     }
 
     match /vitals/{id} {
