@@ -689,7 +689,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-156-standby-stale-0800-cutoff";
+const BUILD_TAG = "2026-07-08-157-report-restricted-to-assigned-personnel";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1122,6 +1122,7 @@ const RELEASE_NOTES = [
     "「值班醫官」欄位改成只有急診待命建立出來的勤務才會顯示（建立/編輯都是），一般勤務不會用到，不再顯示",
     "勤務進度時間軸目前所在的那一步，圓點加上往外擴散的漣漪動畫，更容易一眼看出目前走到哪一步",
     "急診待命卡片的「非今日建立」提醒改成依每日 08:00 換班時間判斷：現在還沒到今天 08:00 就不會誤跳警告，過了 08:00 若車長/駕駛還沒換班更新才會提醒",
+    "新增規則：勤務回報（出勤/抵達現場/離開現場/返營/抵達營區、患者紀錄）只開放給該筆勤務指定的車長、駕駛或洽公人員本人，同單位其他成員不能代為回報不是自己的勤務；管理員維持後台支援權限不受影響",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -1406,9 +1407,21 @@ function canForceEndTask(p){ return myRole(p) === "admin"; }
 // 不再能自己建立勤務。
 function canCreateTask(p){ const r = myRole(p); return r === "admin" || r === "member"; }
 function canEditTask(p, t){ return myRole(p) === "admin"; }
-// 回報（出勤/抵達現場/返營/抵達營區）僅開放給實際執行勤務的一般成員，以及 admin（後台支援用）；
-// 高勤官、主官管屬於督導/查看角色，不進行第一線回報操作。
-function canReport(p, task){ const r = myRole(p); return r === "admin" || r === "member"; }
+// 車長／駕駛／洽公人員都是直接記錄「姓名」字串，跟登入者個人資料的
+// displayName 同步而來（見 updateOwnProfile／personnel 名冊自動同步），
+// 用 displayName 直接比對，就能知道目前登入者是不是這筆勤務指定的人員。
+function isAssignedToTask(p, t){
+  if (!p || !t) return false;
+  const name = p.displayName;
+  if (!name) return false;
+  if (t.type === "liaison") return Array.isArray(t.personnel) && t.personnel.includes(name);
+  return t.crewLeader === name || t.driver === name;
+}
+// 回報（出勤/抵達現場/返營/抵達營區）僅開放給這筆勤務指定的車長/駕駛/洽公
+// 人員本人，以及 admin（後台支援用）——同單位其他成員不能代替沒有被指派
+// 到的勤務回報，避免誤觸或代填別人的紀錄；高勤官、主官管屬於督導/查看
+// 角色，不進行第一線回報操作。
+function canReport(p, task){ const r = myRole(p); return r === "admin" || (r === "member" && isAssignedToTask(p, task)); }
 // 患者紀錄的「查看」跟「回報/編輯」分開：高勤官、主官管雖然不能自己記錄
 // 患者狀況，但督導角色仍需要看得到既有紀錄內容（例如遠端掌握傷病患狀況），
 // 所以查看權限比照 canManageTasks，比 canReport 更寬。

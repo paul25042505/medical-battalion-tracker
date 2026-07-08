@@ -15,6 +15,19 @@ service cloud.firestore {
     function isCommander() { return isSignedIn() && myRole() == 'commander'; }
     function isActive() { return isSignedIn() && myRole() != 'pending' && myRole() != 'disabled'; }
     function sameUnit(unit) { return isSignedIn() && myUnit() == unit; }
+    // 車長／駕駛／洽公人員都是直接記錄「姓名」字串，跟登入者個人資料的
+    // displayName 同步而來（見 personnel 名冊自動同步），比對 displayName
+    // 就能知道目前登入者是不是這筆勤務指定的人員——回報（events/vitals）
+    // 只開放給這筆勤務本人，不能由同單位其他成員代填。額外放行建立者
+    // （createdBy）：建立勤務當下會自動補一筆出勤事件，建立者不一定就是
+    // 車長/駕駛本人（可能是幫忙代建立），這筆系統自動寫入不能被擋下來。
+    function isAssignedToTaskData(taskData) {
+      return request.auth.uid == taskData.createdBy || (
+        taskData.type == 'liaison'
+          ? (myUserDoc().displayName in taskData.personnel)
+          : (myUserDoc().displayName == taskData.crewLeader || myUserDoc().displayName == taskData.driver)
+      );
+    }
 
     match /users/{uid} {
       allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
@@ -77,28 +90,33 @@ service cloud.firestore {
     match /events/{eventId} {
       // events 皆綁定 taskId 對應的勤務單位；讀取時比對該勤務的 unit，確保伺服器端也真正
       // 限制資料存取範圍，不只是前端隱藏按鈕。
-      // 回報（建立 event）僅開放給一般成員（限自己單位的勤務）與 admin（後台支援／強制結束用）；
+      // 回報（建立 event）僅開放給這筆勤務指定的車長/駕駛/洽公人員本人與 admin
+      // （後台支援／強制結束用）；同單位其他成員不能代填沒有被指派到的勤務；
       // 高勤官、主官管屬於督導/查看角色，不進行第一線回報操作。
       allow read: if isStaff() || sameUnit(get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.unit);
       allow create: if isAdmin() ||
-                    (isSignedIn() && myRole() == 'member' && sameUnit(get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.unit));
+                    (isSignedIn() && myRole() == 'member'
+                     && isAssignedToTaskData(get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data));
       // 時間、里程有時候會回報錯誤，需要能修正；開放對象跟 create 一致
-      // （admin 或該單位一般成員），維持「誰能回報、誰就能修正自己回報的內容」；
+      // （admin 或該筆勤務指定的本人），維持「誰能回報、誰就能修正自己回報的內容」；
       // 但不開放刪除，避免整筆歷史紀錄憑空消失。
       allow update: if isAdmin() ||
-                    (isSignedIn() && myRole() == 'member' && sameUnit(get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.unit));
+                    (isSignedIn() && myRole() == 'member'
+                     && isAssignedToTaskData(get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data));
       allow delete: if false;
     }
 
     match /vitals/{id} {
-      // 患者生命徵象/主訴紀錄，權限比照 events：綁定 taskId 對應的勤務單位，
-      // 誰能回報（admin、該單位一般成員）就能修正自己填錯的內容；不開放刪除，
-      // 避免病歷紀錄憑空消失。
+      // 患者生命徵象/主訴紀錄，權限比照 events：誰能回報這筆勤務（admin、
+      // 該勤務指定的車長/駕駛/洽公人員本人）就能修正自己填錯的內容；不開放
+      // 刪除，避免病歷紀錄憑空消失。
       allow read: if isStaff() || sameUnit(get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.unit);
       allow create: if isAdmin() ||
-                    (isSignedIn() && myRole() == 'member' && sameUnit(get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.unit));
+                    (isSignedIn() && myRole() == 'member'
+                     && isAssignedToTaskData(get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data));
       allow update: if isAdmin() ||
-                    (isSignedIn() && myRole() == 'member' && sameUnit(get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.unit));
+                    (isSignedIn() && myRole() == 'member'
+                     && isAssignedToTaskData(get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data));
       allow delete: if false;
     }
 
