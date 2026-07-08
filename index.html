@@ -676,7 +676,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-147-doctor-rank-basedata-hub-crew-picker-fix";
+const BUILD_TAG = "2026-07-08-148-standby-task-locked-fields";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1092,6 +1092,7 @@ const RELEASE_NOTES = [
     "醫官名冊補上階級欄位，值班醫官下拉選單同步顯示姓名＋階級",
     "車長／駕駛選人固定預設不勾選跨單位選人，不再因為目前指派的人是不是跨單位借調而有例外",
     "基礎資料管理改成分區列表入口：人員/車輛/行車紀錄器歸在「單位資料」、醫院/醫官歸在「共用資料」，每個類別各自獨立頁面，之後陸續增加類別只要多加一列，不會讓頁籤越擠越亂",
+    "急診待命「建立待命勤務」表單鎖定固定欄位：不顯示任務類型（一定是勤務）與營內／營外（一定是營外），地點改標示「醫務所」並鎖定不可修改",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -2442,7 +2443,11 @@ function viewCreateTask(){
   const unit = canSwitch ? (state.createTaskUnit || myUnit(p) || UNITS[0].code) : myUnit(p);
   if (!unit) return `<div class="empty">您尚未被指派單位，請聯繫管理員。</div>`;
 
-  const taskType = state.createTaskType || "duty";
+  // 急診待命頁「建立待命勤務」導過來時帶著 presetLocation（固定的醫務所
+  // 地點），這種待命勤務一定是勤務（不是洽公）、一定是營外（車輛要離開
+  // 醫務所才需要待命出勤），地點也固定是該醫務所，不開放使用者更改。
+  const isStandbyDispatch = !!state.route.presetLocation;
+  const taskType = isStandbyDispatch ? "duty" : (state.createTaskType || "duty");
   const isLiaison = taskType === "liaison";
   // 車長／駕駛／洽公人員都可跨單位選人，對應的人員選擇器打開時會直接讀取
   // 當下的 state.personnel 動態建立候選名單，這裡不用先篩好。
@@ -2452,16 +2457,18 @@ function viewCreateTask(){
 
   return `
     <div class="section-label">建立勤務</div>
+    ${isStandbyDispatch ? "" : `
     <div class="field"><label>任務類型 *</label>
       <div class="seg-toggle">
         ${TASK_TYPES.map(x => `<button type="button" class="${taskType===x.key?'active':''}" onclick="window.__setCreateTaskType('${x.key}')">${x.label}</button>`).join("")}
       </div>
-    </div>
-    ${!isLiaison ? `
+    </div>`}
+    ${!isLiaison && !isStandbyDispatch ? `
     <div class="field"><label>營內／營外 *</label>
       ${chipGroup('scope', TASK_SCOPE_OPTIONS, '營外', false)}
     </div>` : ""}
     <form onsubmit="window.__createTask(event, '${unit}', '${taskType}')">
+      ${isStandbyDispatch ? `<input type="hidden" name="scope" value="營外">` : ""}
       ${canSwitch ? `
         <div class="field"><label>單位 *</label>
           <select onchange="window.__setCreateTaskUnit(this.value)">
@@ -2469,7 +2476,12 @@ function viewCreateTask(){
           </select>
         </div>` : `<div class="field"><label>單位</label><input value="${unitLabel(unit)}" disabled></div>`}
       <div class="field"><label>任務名稱 *</label><input name="title" required placeholder="${isLiaison?'例如：軍公民任務現勘':'例如：OHCA 患者搶救'}"></div>
-      <div class="field"><label>地點${isLiaison?'（可多個，用頓號分隔）':''}</label><input name="location" value="${esc(state.route.presetLocation||'')}" placeholder="${isLiaison?'例如：烏日高鐵站、福田水資源回收中心、天后宮':'例如：潭子區豐興路一段'}"></div>
+      ${isStandbyDispatch ? `
+      <div class="field"><label>醫務所</label>
+        <input value="${esc(state.route.presetLocation)}" disabled>
+        <input type="hidden" name="location" value="${esc(state.route.presetLocation)}">
+      </div>` : `
+      <div class="field"><label>地點${isLiaison?'（可多個，用頓號分隔）':''}</label><input name="location" placeholder="${isLiaison?'例如：烏日高鐵站、福田水資源回收中心、天后宮':'例如：潭子區豐興路一段'}"></div>`}
       ${isLiaison ? `
       <div class="field"><label>人員（可複選）*</label>
         <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openMultiPersonPicker(this)">
