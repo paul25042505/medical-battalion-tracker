@@ -676,7 +676,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-149-standby-pending-label-date-filter";
+const BUILD_TAG = "2026-07-08-150-doctor-rank-dispatch-hospital";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1095,6 +1095,8 @@ const RELEASE_NOTES = [
     "急診待命「建立待命勤務」表單鎖定固定欄位：不顯示任務類型（一定是勤務）與營內／營外（一定是營外），地點改標示「醫務所」並鎖定不可修改",
     "勤務狀態「待出勤」改名「待命中」，任務頁上方篩選新增「待命中」頁籤",
     "急診待命卡片補上待命勤務的建立時間，如果不是今天建立會額外顯示提醒，避免今天忘記更新車長/駕駛卻沒發現還是昨天的舊資料",
+    "值班醫官姓名顯示的地方（勤務詳情頁、急診待命卡片）補上階級，顯示格式跟車長/駕駛一致（姓名 階級，不加括號）",
+    "回報「出勤」新增「送醫醫院（選填）」下拉選單，沿用醫院名冊選擇，勤務詳情頁會顯示已選的送醫醫院",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -2182,6 +2184,12 @@ function crewDisplayLabel(name, taskUnit){
   if (!match) return name;
   return `${match.name}${match.title ? ' ' + match.title : ''}`;
 }
+// 值班醫官姓名＋階級，格式跟車長／駕駛一致：空格分隔、不加括號。
+function doctorLabel(name){
+  if (!name) return "";
+  const match = state.doctors.find(d => d.name === name);
+  return match && match.title ? `${name} ${match.title}` : name;
+}
 // 姓名 + 階級 + 電話（可點擊撥打），給車長/駕駛這種需要聯絡方式的欄位用。
 // iOS Safari 對 tel: 連結一律會跳出「已阻擋此網站自動開始通話」的系統提示，不管
 // 連結上有沒有掛 JS、也不管有沒有先跳自訂確認視窗，這是瀏覽器層級的行為，網頁端
@@ -2515,7 +2523,7 @@ function viewCreateTask(){
       <div class="field"><label>值班醫官（選填）</label>
         <select name="dutyOfficer">
           <option value="">請選擇醫官</option>
-          ${state.doctors.filter(x=>x.active!==false).map(x => `<option value="${esc(x.name)}" ${state.route.presetDutyOfficer===x.name?'selected':''}>${esc(x.name)}${x.title?'（'+esc(x.title)+'）':''}</option>`).join("")}
+          ${state.doctors.filter(x=>x.active!==false).map(x => `<option value="${esc(x.name)}" ${state.route.presetDutyOfficer===x.name?'selected':''}>${esc(x.name)}${x.title?' '+esc(x.title):''}</option>`).join("")}
         </select>
       </div>
       <div class="field"><label>行車紀錄器（可多選）</label>
@@ -2595,7 +2603,7 @@ function viewEditTask(taskId){
       <div class="field"><label>值班醫官（選填）</label>
         <select name="dutyOfficer">
           <option value="">請選擇醫官</option>
-          ${state.doctors.filter(x=>x.active!==false).map(x => `<option value="${esc(x.name)}" ${t.dutyOfficer===x.name?'selected':''}>${esc(x.name)}</option>`).join("")}
+          ${state.doctors.filter(x=>x.active!==false).map(x => `<option value="${esc(x.name)}" ${t.dutyOfficer===x.name?'selected':''}>${esc(x.name)}${x.title?' '+esc(x.title):''}</option>`).join("")}
         </select>
       </div>
       <div class="field"><label>行車紀錄器（可多選）</label>
@@ -2954,6 +2962,9 @@ function viewTaskDetail(taskId){
     // 第一次抵達現場的地點則沿用建立勤務時填的任務「地點」欄位，也不用問。
     // 洽公任務地點單一、沒有多站分岔，不會有這個情況。
     const needsLocation = !isLiaison && draft.type === "DEPART_SCENE";
+    // 出勤當下先問清楚預計送去的醫院（選填，現場評估後可能會變，之後有需要
+    // 再補），沿用「基礎資料管理」維護的醫院名冊，不用手動打字。
+    const needsHospital = !isLiaison && draft.type === "DISPATCH";
     const formTitle = (!isLiaison && draft.type === "ARRIVED_SCENE" && lastType === "DEPART_SCENE") ? "抵達下一個地點" : def.label;
     // 離開現場、開始返營的當下，車輛都還沒有移動（人剛在原地回報），里程
     // 理論上跟上一筆回報的里程一樣，直接帶入避免重複輸入；抵達下一個地點
@@ -2973,6 +2984,12 @@ function viewTaskDetail(taskId){
           <div class="modal-title">${icon(def.icon,19)} 回報：${formTitle}</div>
           <form onsubmit="event.preventDefault(); window.__submitReport('${t.id}','${draft.type}')">
             ${needsLocation ? `<div class="field"><label>前往地點</label><input id="rf-location" placeholder="例如：加油站、OO超商" required></div>` : ""}
+            ${needsHospital ? `<div class="field"><label>送醫醫院（選填）</label>
+              <select id="rf-hospital">
+                <option value="">請選擇醫院</option>
+                ${state.hospitals.map(h => `<option value="${esc(h.name)}">${esc(h.name)}</option>`).join("")}
+              </select>
+            </div>` : ""}
             <div class="field">
               <label>時間</label>
               <div style="display:flex; gap:8px;">
@@ -3059,7 +3076,7 @@ function viewTaskDetail(taskId){
         ${!isLiaison ? `
         <div class="k">車長</div><div class="v">${crewLabel(t.crewLeader, t.unit)}</div>
         <div class="k">駕駛</div><div class="v">${crewLabel(t.driver, t.unit)}</div>
-        ${t.dutyOfficer ? `<div class="k">值班醫官</div><div class="v">${esc(t.dutyOfficer)}</div>` : ""}
+        ${t.dutyOfficer ? `<div class="k">值班醫官</div><div class="v">${esc(doctorLabel(t.dutyOfficer))}</div>` : ""}
         <div class="k">紀錄器</div><div class="v">${esc((t.recorders||[]).join('、') || '—')}</div>` : ""}
         <div class="k">建立人</div><div class="v">${nameWithRank(t.createdByName, t.unit)}</div>
         <div class="k">建立時間</div><div class="v">${fmtTime(new Date(t.createdAt||0).getTime())}</div>
@@ -3076,6 +3093,7 @@ function viewTaskDetail(taskId){
     <div class="detail-head">
       <div class="kv">
         <div class="k">出發里程</div><div class="v">${startMileage!=null ? startMileage+' km' : '—'}</div>
+        ${dispatchEv?.hospital ? `<div class="k">送醫醫院</div><div class="v">${esc(dispatchEv.hospital)}</div>` : ""}
         ${arrivalRows}
         ${departRows}
         <div class="k">返營里程</div><div class="v">${returningEv?.mileage!=null ? returningEv.mileage+' km' : '—'}</div>
@@ -3564,7 +3582,7 @@ function viewErStandby(){
           <div class="detail-item"><span class="lbl">車號</span><span class="val">${esc(boundTask.vehicle||'—')}</span></div>
           <div class="detail-item"><span class="lbl">車長</span><span class="val">${crewLabel(boundTask.crewLeader, boundTask.unit)}</span></div>
           <div class="detail-item"><span class="lbl">駕駛</span><span class="val">${crewLabel(boundTask.driver, boundTask.unit)}</span></div>
-          <div class="detail-item"><span class="lbl">值班醫官</span><span class="val">${boundTask.dutyOfficer ? esc(boundTask.dutyOfficer) : "尚未設定"}</span></div>
+          <div class="detail-item"><span class="lbl">值班醫官</span><span class="val">${boundTask.dutyOfficer ? esc(doctorLabel(boundTask.dutyOfficer)) : "尚未設定"}</span></div>
         </div>
         <button class="btn-primary" style="width:100%;margin-top:12px;" onclick="window.__nav({name:'task', id:'${boundTask.id}'})">查看／管理</button>
         ` : `
@@ -4150,12 +4168,14 @@ window.__submitReport = (taskId, type) => {
   const noteEl = document.getElementById("rf-note");
   const timeEl = document.getElementById("rf-time");
   const locationEl = document.getElementById("rf-location");
+  const hospitalEl = document.getElementById("rf-hospital");
   const extra = {};
   if (mileageEl && mileageEl.value !== "") extra.mileage = Number(mileageEl.value);
   if (noteEl && noteEl.value) extra.note = noteEl.value;
   if (fuelEl && fuelEl.value) extra.endFuel = fuelEl.value;
   if (timeEl && timeEl.value) extra.timestamp = todayAt(timeEl.value);
   if (locationEl && locationEl.value) extra.location = locationEl.value;
+  if (hospitalEl && hospitalEl.value) extra.hospital = hospitalEl.value;
   // 抵達現場本身不再另外問地點（地點在離開現場時就先問過了），但時間軸上
   // 抵達這一步也要看得出抵達的是哪裡：沿用剛才離開現場填的前往地點；如果
   // 是出勤後第一次抵達（前面還沒有離開現場的紀錄），就沿用任務本身建立時
