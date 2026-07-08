@@ -683,7 +683,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-162-nearby-hospital-navigation";
+const BUILD_TAG = "2026-07-08-163-geolocation-error-message";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1133,6 +1133,7 @@ const RELEASE_NOTES = [
     "車號後面補上該車實際登記的所屬單位（例如「軍H-30001（第一連）」），任務卡片、勤務詳情頁、急診待命卡片都會顯示，跨單位借車或管理員同時檢視多單位時不會再看不出車輛是哪個單位的",
     "移除頁面上方標題列的中英文系統名稱（衛生營車輛人員動態管制系統／Medical Battalion...），只保留姓名/階級與通知/登出按鈕，畫面更簡潔",
     "醫院資訊頁新增「顯示附近醫院」：用手機定位算出目前概略所在縣市，同縣市的醫院自動排到最前面並標示「鄰近」；每間醫院新增「Google 導航」「Apple 導航」按鈕，點一下直接開對應地圖 App 開始導航",
+    "修正「顯示附近醫院」定位失敗時只顯示英文原始錯誤訊息看不懂的問題，改成依情況給出可以實際照做的中文提示（例如拒絕權限時提示去手機設定開啟）",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -4740,7 +4741,17 @@ window.__locateNearbyHospitals = () => {
     },
     (err) => {
       state.locatingHospital = false; render();
-      showToast(`定位失敗：${err.message || '請確認已開啟定位權限'}`);
+      // 瀏覽器回傳的 err.message 是英文原文（例如 "User denied Geolocation"），
+      // 直接顯示看不懂也不知道怎麼處理；依 GeolocationPositionError 的
+      // code 給出可以實際照做的中文提示。
+      const msg = err.code === 1
+        ? "定位權限被拒絕，請到手機設定 → 瀏覽器（或本網頁）的「位置」權限改成允許，再回來點一次「顯示附近醫院」"
+        : err.code === 2
+        ? "目前無法取得定位，請確認手機的定位服務（GPS）已開啟，或移動到訊號較好的地方再試一次"
+        : err.code === 3
+        ? "定位逾時，請確認手機定位服務已開啟且訊號穩定，再試一次"
+        : "定位失敗，請確認已開啟定位權限";
+      showToast(msg);
     },
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
   );
