@@ -685,7 +685,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-174-fleet-count-standby-fix";
+const BUILD_TAG = "2026-07-08-175-liaison-no-patient-card";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1147,6 +1147,7 @@ const RELEASE_NOTES = [
     "移除勤務詳情頁「勤務資訊」送醫醫院那一列重複的導航按鈕，導航統一只在底部「抵達現場」回報按鈕上方顯示，避免同一頁面出現兩組功能相同的導航按鈕",
     "修正首頁「今日概況」營內車／營外車統計：待命中（急診待命尚未出勤）的車輛不會再被誤算成營外車，要等真的回報「出勤」、離開營區之後才會列入統計",
     "首頁「今日概況」的營內車／營外車改成獨立一列各佔一半寬度，不再跟其他三格統計數字擠成同一個三欄網格、留白不對稱",
+    "洽公任務的勤務詳情頁不再顯示「患者狀況」卡片，洽公性質上不會有患者",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -3133,7 +3134,7 @@ function viewTaskDetail(taskId){
   const patientCardTag = canOpenPatientCard ? "button" : "div";
   const patientCardClickAttr = canOpenPatientCard ? ` onclick="window.__startVitals('${taskId}')"` : "";
   const patientActionLabel = hasPatient ? (canDoReport ? '查看／更新紀錄' : '查看紀錄') : '開始記錄';
-  const vitalsSection = canDoReport || hasPatient ? `
+  const vitalsSection = !isLiaison && (canDoReport || hasPatient) ? `
     <div class="section-label">患者狀況</div>
     <${patientCardTag} class="patient-card${hasPatient ? ' has-record' : ''}"${patientCardClickAttr}>
       <div class="patient-card-top">
