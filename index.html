@@ -61,6 +61,13 @@
     --space-label-gap: 6px;
     --btn-height: 56px;
     --radius-btn: 18px;
+    /* 液態玻璃返回鍵的玻璃色調（淺色模式），深色模式覆寫見下方兩個
+       @media/[data-theme="dark"] 區塊，不能沿用這組淺色半透明白，深色
+       背景上會變成突兀的亮斑。 */
+    --glass-btn-bg: rgba(255,255,255,0.55);
+    --glass-btn-bg-active: rgba(255,255,255,0.75);
+    --glass-btn-border: rgba(255,255,255,0.4);
+    --glass-btn-highlight: rgba(255,255,255,0.6);
   }
   /* ---- 深色模式：預設跟隨系統設定（設定 → 一般 → 外觀），使用者也可以在
      「更多 → 外觀模式」手動固定選淺色/深色（見 window.__setThemeMode，會在
@@ -98,6 +105,10 @@
       --shadow-xs: 0 1px 2px rgba(0,0,0,0.24);
       --shadow-sm: 0 1px 2px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.24);
       --shadow-md: 0 6px 20px rgba(0,0,0,0.36), 0 1px 3px rgba(0,0,0,0.24);
+      --glass-btn-bg: rgba(60,60,67,0.55);
+      --glass-btn-bg-active: rgba(80,80,88,0.75);
+      --glass-btn-border: rgba(255,255,255,0.12);
+      --glass-btn-highlight: rgba(255,255,255,0.16);
     }
   }
   :root[data-theme="dark"]{
@@ -122,6 +133,10 @@
     --shadow-xs: 0 1px 2px rgba(0,0,0,0.24);
     --shadow-sm: 0 1px 2px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.24);
     --shadow-md: 0 6px 20px rgba(0,0,0,0.36), 0 1px 3px rgba(0,0,0,0.24);
+    --glass-btn-bg: rgba(60,60,67,0.55);
+    --glass-btn-bg-active: rgba(80,80,88,0.75);
+    --glass-btn-border: rgba(255,255,255,0.12);
+    --glass-btn-highlight: rgba(255,255,255,0.16);
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html{scroll-behavior:smooth; overscroll-behavior-y:contain;}
@@ -422,18 +437,28 @@
   /* ---- task detail ---- */
   .back-row{display:flex; align-items:center; gap:8px; margin-bottom:16px; color:var(--blue); font-size:var(--text-sm); font-weight:600;}
   .back-row button{background:none; border:none; color:var(--blue); font-size:var(--text-sm); font-weight:600; padding:6px 0; font-family:var(--sans);}
-  /* iOS 風格返回鍵：純圖示（圓圈裡放「‹」），不接文字、右邊也不接標題，
-     全站統一。圓圈底色不能用 --panel-2（跟頁面底色 --bg 幾乎同色，肉眼看
-     不出來，會變成只看到一個「‹」符號飄在畫面上，沒有圓圈感），改用對比
-     明顯的 --border 當底色；箭頭用 --text（黑色）而不是藍色，跟灰底更
-     搭。箭頭字重改細（細圓體），並用 ui-rounded 讓 iOS 上顯示圓體效果；
-     flex 置中 + 明確的行高/置中屬性，確保在圓圈裡水平垂直都置中。 */
+  /* 液態玻璃返回鍵：純圖示（圓圈裡放 chevron SVG），不接文字、右邊也不接
+     標題，全站統一。用 backdrop-filter 做出毛玻璃質感，inset 高光/陰影
+     模擬玻璃厚度與立體感，按下去縮小＋加深背景色給觸覺回饋。淺色/深色
+     模式的玻璃色調不同（深色模式用偏灰的半透明底，不能沿用淺色模式的
+     半透明白，不然在深色背景上會變成一塊突兀的亮斑)，所以拆成 token
+     在 :root 與深色模式覆寫區塊分別定義。 */
   .back-btn{display:inline-flex; align-items:center; background:none; border:none; padding:2px 0; color:var(--text); font-family:var(--sans); cursor:pointer;}
   .back-btn-circle{
     display:flex; align-items:center; justify-content:center; flex-shrink:0;
-    width:28px; height:28px; border-radius:50%; background:var(--border); color:var(--text);
-    font-size:19px; font-weight:300; line-height:1; font-family:ui-rounded, var(--sans); text-align:center;
+    width:36px; height:36px; border-radius:50%; color:var(--text);
+    background:var(--glass-btn-bg);
+    backdrop-filter:blur(20px) saturate(180%);
+    -webkit-backdrop-filter:blur(20px) saturate(180%);
+    box-shadow:0 1px 3px rgba(0,0,0,0.08), inset 0 1px 1px var(--glass-btn-highlight), inset 0 -1px 1px rgba(0,0,0,0.04);
+    border:0.5px solid var(--glass-btn-border);
+    transition:transform 0.15s ease, background 0.15s ease;
   }
+  /* 蓋掉全域 button:active 的 scale(0.96)，改用液態玻璃鍵自己的縮放幅度；
+     選擇器套在 .back-btn（實際的 <button>）上而不是內層的 .back-btn-circle，
+     避免兩層各自 transform 疊加縮過頭。 */
+  .back-btn:active{transform:scale(0.9);}
+  .back-btn:active .back-btn-circle{background:var(--glass-btn-bg-active);}
   .detail-head{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:var(--space-card); margin-bottom:var(--space-section); box-shadow:var(--shadow-sm);}
   .detail-head .task-title{font-size:var(--text-lg);}
   .kv{display:grid; grid-template-columns:96px 1fr; gap:12px 12px; margin-top:14px; font-size:var(--text-sm);}
@@ -802,7 +827,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-08-179-ios-style-appearance-page";
+const BUILD_TAG = "2026-07-08-180-liquid-glass-back-button";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1269,6 +1294,7 @@ const RELEASE_NOTES = [
     "視覺設計系統升級（第二階段：微互動按壓回饋）：導航連結按鈕（Google/Apple 導航）、洽公人員多選標籤、意見回饋類別選項、角色預覽列點按時補上縮放回饋，跟全站其他按鈕/卡片的觸覺回饋一致",
     "新增外觀模式手動切換：「更多」頁新增「外觀模式」（跟隨系統／淺色／深色），選好之後會固定使用該模式，不用再跟著手機系統設定走；選擇會記在裝置上，下次打開還是同一個模式",
     "外觀設定改版成獨立頁面「螢幕顯示」，比照 iOS 設定 → 螢幕顯示與亮度：淺色/深色兩張預覽卡並排，點卡片直接鎖定該外觀；新增「自動」開關，開啟跟隨系統、關閉會鎖定目前系統實際顯示的外觀，跟原生 iOS 行為一致",
+    "全站返回鍵改成「液態玻璃」風格：毛玻璃透明圓圈＋高光/陰影營造玻璃厚度感，按下去有縮放＋加深回饋；淺色/深色模式各有專屬的玻璃色調，不會在深色畫面上變成突兀的亮斑",
   ] },
   { date: "2026/07/07", items: [
     "建立勤務的權限改為一般成員與管理員專用，高勤官／主官管維持督導/查看角色",
@@ -2366,12 +2392,14 @@ function icon(name, size){
   size = size || 20;
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;flex-shrink:0;">${ICON_PATHS[name]||''}</svg>`;
 }
-// 全站共用的返回鍵：純圖示的圓圈＋‹（不接文字、右邊不接標題），不管目的
-// 地是哪裡都一樣，不要再依頁面各自寫「返回列表」「返回更多」等。onclick
-// 屬性務必用單引號包起來，因為裡面的 JSON.stringify(route) 輸出是雙引號
-// 字串，跟雙引號屬性會互相截斷（曾造成整個返回鍵完全沒反應的 bug）。
+// 全站共用的返回鍵：純圖示的液態玻璃圓圈＋chevron SVG（不接文字、右邊不接
+// 標題），不管目的地是哪裡都一樣，不要再依頁面各自寫「返回列表」「返回
+// 更多」等。onclick 屬性務必用單引號包起來，因為裡面的 JSON.stringify(route)
+// 輸出是雙引號字串，跟雙引號屬性會互相截斷（曾造成整個返回鍵完全沒反應的
+// bug）。chevron 用行內 SVG（stroke-width 2.5，比全站圖標系統的 1.8 粗一點，
+// 圓圈變大之後細線條比例上會顯得太細）而不是共用的 icon() helper。
 function backBtn(route){
-  return `<button class="back-btn" onclick='window.__nav(${JSON.stringify(route)})'><span class="back-btn-circle">‹</span></button>`;
+  return `<button class="back-btn" onclick='window.__nav(${JSON.stringify(route)})'><span class="back-btn-circle"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></span></button>`;
 }
 // 多選（checkbox）/單選（radio）標籤群組，用於過去病史／過敏史／處置項目／意識狀態。
 // triggers（選填）：[{ values:[...], wrapId }]，勾選到指定選項時，只切換對應
