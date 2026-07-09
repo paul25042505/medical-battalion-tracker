@@ -1250,7 +1250,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-250-typhoon-track-stats";
+const BUILD_TAG = "2026-07-09-251-nav-records-hospitals-swap";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1722,6 +1722,7 @@ const RELEASE_NOTES = [
       "上述「勤務／天氣」子選單改成固定在畫面最上面，捲動底下的狀態頁籤/清單內容時不會跟著被捲走",
       "修正上述子選單固定在最上面時，跟頂欄中間還留一截縫隙、捲動內容會從縫隙露出來的問題：改成緊貼頂欄，中間沒有空隙",
       "修正天氣／天氣特報資料連不上時（例如訊號不好的環境）會一直重複發出請求、畫面跟著一直重繪的問題：改成失敗結果也會先記住 2 分鐘，不會每次畫面重繪就再打一次",
+      "底部導覽「紀錄」併入「任務」頁，變成「勤務／天氣／紀錄」三個子選單（原本的查詢篩選功能不變）；底部導覽該位置改放「醫院資訊」（原本在「更多」頁裡），「更多」頁不再重複顯示",
     ] },
     { category: "關於系統／意見回饋", items: [
       "「關於系統 → 更新紀錄」改成依功能區塊分類顯示（例如「患者紀錄」「急診待命」），不再是同一天所有異動擠成一長串沒有結構的清單",
@@ -2083,7 +2084,7 @@ const state = {
   recordsFiltersExpanded: false,
   recordsApplied: null, // 查詢後的篩選條件快照；null 代表尚未按下查詢
   tasksTab: "all",
-  tasksMainTab: "duty", // 任務頁最上面的子選單：duty（勤務，預設）／weather（天氣）
+  tasksMainTab: "duty", // 任務頁最上面的子選單：duty（勤務，預設）／weather（天氣）／records（紀錄）
   statsPeriod: "today",
   profileEditing: false,
   baseDataUnit: "", baseDataModal: null, // 基礎資料管理目前選的單位；baseDataModal: {coll, id, unit} | null
@@ -3378,12 +3379,14 @@ function advanceToastQueue(){
 // 意見回饋、角色預覽、個人資料等）完全不重抓，沿用登入時的初始資料就好。
 const ROUTE_REFRESH = {
   home: ['tasks','events','vitals'],
-  tasks: ['tasks','events'],
+  // 任務頁現在把「紀錄」子選單也併進來（見 TASKS_MAIN_TABS），紀錄的查詢
+  // 結果跟篩選下拉選單要用到的集合（vitals/personnel/vehicles）一併列在
+  // 這裡，不能只列勤務清單本身用到的 tasks/events。
+  tasks: ['tasks','events','vitals','personnel','vehicles'],
   task: ['tasks','events','vitals'],
   vitals: ['tasks','events','vitals'],
   editTask: ['tasks','events','personnel','vehicles','recorders','doctors'],
   createTask: ['personnel','vehicles','recorders','doctors'],
-  records: ['tasks','events','vitals','personnel','vehicles'],
   stats: ['tasks','events'],
   hospitals: ['hospitals'],
   erStandby: ['erStandby','tasks','events'],
@@ -4174,10 +4177,13 @@ const TASKS_TABS = [
 ];
 function tabStatuses(tb){ return tb.statuses || [tb.key]; }
 // 任務頁最上面的子選單：勤務（原本的狀態頁籤＋清單）／天氣（原本首頁的
-// 天氣資訊，移到這裡集中管理，首頁不再重複顯示）。
+// 天氣資訊，移到這裡集中管理，首頁不再重複顯示）／紀錄（原本底部導覽
+// 自己一個分頁，併進這裡跟勤務放在同一個頁面切換；底部導覽該位置改放
+// 醫院資訊，見 NAV_ITEMS）。
 const TASKS_MAIN_TABS = [
   { key:"duty", label:"勤務", iconName:"tasks" },
-  { key:"weather", label:"天氣", iconName:"cloud" }
+  { key:"weather", label:"天氣", iconName:"cloud" },
+  { key:"records", label:"紀錄", iconName:"records" }
 ];
 function viewTasks(){
   const p = state.profile;
@@ -4205,6 +4211,13 @@ function viewTasks(){
       ${renderWeatherMainCard(unit)}
       ${renderWeatherStatsGrid(unit)}
       ${renderForecastStrip(unit)}
+    `;
+  }
+
+  if (state.tasksMainTab === "records") {
+    return `
+      ${mainTabs}
+      ${viewRecords()}
     `;
   }
 
@@ -5194,7 +5207,6 @@ function viewProfile(){
 
   // Section 1：使用者功能，所有登入使用者皆可見。
   const userRows = [
-    settingsRow({icon:'hospital', bg:'#FFF2E0', fg:'#B45F00', title:'醫院資訊', onclick:"window.__nav({name:'hospitals'})"}),
     settingsRow({icon:'user', bg:'#E8F1FF', fg:'#0056C7', title:'個人資料', onclick:"window.__editProfile()"}),
     settingsRow({icon:'sun', bg:'#F2E9FE', fg:'#6B23C7', title:'螢幕顯示', subtitle:THEME_MODE_LABEL[state.themeMode], onclick:"window.__nav({name:'displayAppearance'})"}),
     settingsRow({icon:'bell', bg:'#FFEAEA', fg:'#C7233B', title:'推播通知', subtitle:pushStatusLabel(), onclick:"window.__nav({name:'pushSettings'})"}),
@@ -5486,7 +5498,6 @@ function viewHospitals(){
       ${state.myCounty ? `<div style="color:var(--muted); font-size:var(--text-xs); margin-top:6px;">目前定位：靠近${state.myDistrict ? esc(state.myCounty)+esc(state.myDistrict) : esc(state.myCounty)}，已登記座標的醫院會顯示實際距離並排最前面，其餘${state.myDistrict ? '同行政區優先，其次同縣市' : '同縣市醫院優先'}</div>` : ''}
     </div>`;
   return `
-    <div class="back-row">${backBtn({name:'profile'})}</div>
     <div class="section-label">醫院資訊</div>
     ${locateBar}
     ${canEdit ? `<button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('hospitals', null, '')">${icon('plus',15)} 新增醫院</button>` : ""}
@@ -5524,7 +5535,7 @@ function viewHospitals(){
    「待出勤」狀態；erStandby/{key} 只存一個 currentTaskId 指標，實際
    資料都在 tasks 集合裡，這樣才能直接沿用平常的勤務詳情頁出勤、記錄
    患者狀況，不用另外維護一套獨立資料。這是底部導覽的一個分頁（不是
-   子頁面），所以跟首頁/任務/紀錄一樣不接返回鍵。
+   子頁面），所以跟首頁/任務/醫院資訊一樣不接返回鍵。
    ========================================================= */
 function viewErStandby(){
   const p = state.profile;
@@ -6027,7 +6038,6 @@ const ROUTE_VIEWS = {
   editTask: () => viewEditTask(state.route.id),
   task: () => viewTaskDetail(state.route.id),
   vitals: () => viewVitalsPage(state.route.taskId, state.route.id, state.route.adding),
-  records: viewRecords,
   erStandby: viewErStandby,
   stats: viewStats,
   notifications: viewNotifications,
@@ -6059,7 +6069,7 @@ const NAV_ITEMS = [
   { name:"home", iconName:"home", label:"首頁", accent:"#007AFF" },
   { name:"tasks", iconName:"tasks", label:"任務", accent:"#FF9500" },
   { name:"erStandby", iconName:"hospital", label:"急診待命", accent:"#FF3B30" },
-  { name:"records", iconName:"records", label:"紀錄", accent:"#6B23C7" },
+  { name:"hospitals", iconName:"pin", label:"醫院資訊", accent:"#6B23C7" },
   { name:"profile", iconName:"user", label:"更多", accent:"#34C759" }
 ];
 
