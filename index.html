@@ -954,7 +954,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-200-toast-duration-redesign";
+const BUILD_TAG = "2026-07-09-201-toast-render-wipe-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1401,6 +1401,7 @@ const RELEASE_NOTES = [
     "修正建立勤務/洽公、任務進度回報、患者狀況記錄這三個表單在網路稍慢時被連點兩下會真的送出兩筆幾乎一樣的資料的問題（因此各自觸發兩次推播，看起來像重複收到通知）",
     "修正推播通知一定會收到兩則的問題：後端改成只送純資料（data）而不是 notification 欄位，避免瀏覽器自動跳一次、我們自己的背景推播處理又跳一次，同一則推播顯示兩次",
     "底部黑色提示（toast）重新設計：停留時間改成依訊息長短自動拉長（原本固定 2.2 秒，太短的話推播內容這種比較長的提示看不完就消失），加上最大寬度讓長訊息換行不會被切斷，也可以直接點一下提前關閉",
+    "修正回報進度、建立待命勤務等操作後，成功提示文字大概只閃 0.1 秒就不見的問題：提示視窗其實是被緊接著發生的畫面重新整理整個蓋掉了（跟訊息停留時間長短無關），現在提示視窗獨立於畫面內容之外，不會再被重新整理清空",
   ] },
   { date: "2026/07/08", items: [
     "基礎資料管理新增「醫官」名冊（姓名/電話），建立勤務的「值班醫官」欄位改成從這份名冊下拉選擇，不用再手動打字",
@@ -2194,11 +2195,10 @@ function setupForegroundMessaging(){
     });
   }).catch(e => console.error("前景推播監聽設定失敗", e));
 }
-// 注意：render() 每次都會整個重畫 #app.innerHTML（含 #toast 節點本身），
-// 如果在 showToast() 之後才呼叫 render()，剛設定好的 toast 文字/顯示狀態
-// 會被新產生的空白 toast 節點整個蓋掉，畫面上等於完全沒看到 toast 閃過。
-// 所以這裡每個分支都刻意讓 render() 先於對應的 showToast()，不能用
-// try/finally 圖方便統一收尾。
+// （render()/showToast() 呼叫順序現在已經不影響 toast 顯示——toast 節點
+// 是掛在 document.body 底下、不在 #app 範圍內，render() 只會重畫
+// #app.innerHTML，不會動到它，見 render() 內的說明。這裡沿用先 render()
+// 再 showToast() 的寫法純粹是維持一致的程式碼風格。）
 async function enablePush(){
   if (state.pushEnabling) return;
   state.pushEnabling = true; render();
@@ -5011,7 +5011,6 @@ function render(){
         </button>`).join("")}
     </div>
     ${viewBaseDataModal()}
-    <div id="toast" class="toast"></div>
   `;
 }
 
