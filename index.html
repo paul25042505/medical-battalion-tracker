@@ -156,8 +156,18 @@
     -webkit-user-select:text; -moz-user-select:text; user-select:text;
     -webkit-touch-callout:default;
   }
-  html{scroll-behavior:smooth; overscroll-behavior-y:contain;}
-  html,body{margin:0; padding:0; background:var(--bg-gradient); background-attachment:fixed; color:var(--text); font-family:var(--sans); font-size:var(--text-base); overflow-x:hidden; max-width:100%; -webkit-font-smoothing:antialiased;}
+  /* overflow-x:hidden 只能放在 html，不能跟著放在 body：CSS 規則是「overflow-x
+     跟 overflow-y 其中一個不是 visible，另一個沒指定就會被隱性算成 auto」，
+     所以 body 只要有 overflow-x:hidden，body 的 overflow-y 也會被瀏覽器隱性
+     當成 auto，等於 body 也變成一個「捲動容器」。雖然 body 實際上不會真的
+     用自己的 scrollTop 捲動（見下面 body 的註解，min-height 撐開讓 html 才是
+     真正在捲），但 position:sticky 找「最近的捲動祖先」時只看 overflow 計算值，
+     不管那個祖先實際上有沒有真的在捲——找到 body 就會誤把 body 當成 sticky
+     的參考容器，而 body 自己從來沒有真的捲動過，sticky 元素就會完全貼不住、
+     整個當成普通排版元素處理。底部分頁列／回報按鈕列改用 position:sticky
+     後失效就是這個原因。 */
+  html{scroll-behavior:smooth; overscroll-behavior-y:contain; overflow-x:hidden;}
+  html,body{margin:0; padding:0; background:var(--bg-gradient); background-attachment:fixed; color:var(--text); font-family:var(--sans); font-size:var(--text-base); max-width:100%; -webkit-font-smoothing:antialiased;}
   input,select,textarea{accent-color:var(--blue);}
   html{height:100%;}
   /* 注意：body 這裡務必用 min-height 而不是 height —— 兩者都設 height:100% 會讓
@@ -686,10 +696,16 @@
 
   /* ---- Sticky Bottom Action Bar：主要回報按鈕固定在畫面底部，方便單手操作 ---- */
   .sticky-action-bar{
-    position:fixed; left:0; right:0; bottom:calc(var(--bottomnav-h) + env(safe-area-inset-bottom)); z-index:26;
+    /* 跟 .bottomnav 同樣的理由改用 position:sticky 取代 position:fixed（見
+       .bottomnav 註解）。這裡多一個問題：這個元素是畫在 <main> 裡面的，
+       main 本身左右各有 16px padding，直接用 sticky 會被夾在內容欄寬裡、
+       兩側露出留白，不再是滿版。用左右各 -16px 的負 margin 把 main 自己的
+       padding 抵消掉，讓這個按鈕列還原成貼齊 main 本身版面寬度的滿版
+       （手機版面下 main 本身就是滿版寬度，視覺上等同貼齊螢幕左右邊）。 */
+    position:sticky; margin:0 -16px;
+    bottom:calc(var(--bottomnav-h) + env(safe-area-inset-bottom)); z-index:26;
     background:var(--navbar-bg); backdrop-filter:blur(14px);
     box-shadow:0 -1px 0 var(--border), 0 -8px 20px rgba(15,15,20,0.05);
-    transform:translateZ(0); -webkit-backface-visibility:hidden;
     padding:12px 16px; display:flex; gap:10px;
   }
   .sticky-action-bar .btn-primary, .sticky-action-bar .btn-ghost{
@@ -885,14 +901,16 @@
 
   /* ---- bottom nav ---- */
   .bottomnav{
-    position:fixed; left:0; right:0; bottom:0; z-index:30;
+    /* 原本用 position:fixed，疊加 backdrop-filter 後在 iOS Safari 快速滑動時
+       畫面會看起來「跟著內容一起被往上捲走」，放開手指才彈回底部——先前
+       試過用 translateZ(0) 強制獨立合成層，但實測沒有解決（那個手法只能
+       降低重繪成本，沒辦法解決 fixed 元素在畫面捲動當下沒有即時貼齊視窗
+       底部的根本問題）。改用 position:sticky：因為整份文件本身就是唯一的
+       捲動容器（body/html 沒有另外包一層 overflow 容器），sticky 元素的
+       位置是排版階段跟捲動位置同步算出來的，不是另外合成一層疊上去，
+       天生就不會有「跟著捲動內容位移」這個問題，不需要再靠 GPU 合成層繞過。 */
+    position:sticky; left:0; right:0; bottom:0; z-index:30;
     background:var(--navbar-bg); backdrop-filter:blur(14px); box-shadow:0 -1px 0 var(--border), 0 -8px 24px rgba(15,15,20,0.04);
-    /* iOS Safari 的已知問題：position:fixed 疊加 backdrop-filter 時，快速滑動
-       過程中 WebKit 有時來不及把這層貼回視窗底部，畫面上會看起來「跟著內容
-       一起被往上捲走」，放開手指後才彈回正確位置。強制獨立的合成層（GPU
-       加速）可以讓瀏覽器把這層跟底下內容的重繪分開處理，滑動時就會一直貼齊
-       視窗底部，不會跟著捲動位移。 */
-    transform:translateZ(0); -webkit-backface-visibility:hidden;
     display:flex; padding-bottom:env(safe-area-inset-bottom);
   }
   .navbtn{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:11px 4px 10px 4px; color:var(--muted); background:none; border:none; font-family:var(--sans);}
@@ -993,7 +1011,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-213-release-notes-categorized";
+const BUILD_TAG = "2026-07-09-214-fixed-bar-sticky-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1465,6 +1483,7 @@ const RELEASE_NOTES = [
       "修正快速滑動時，底部分頁列跟回報按鈕會跟著內容一起被往上帶走、放開手指後才彈回底部的問題（iOS 上模糊背景疊加固定定位的已知副作用）",
       "「任務」頁右下角新增任務的藍色圓形按鈕改成毛玻璃質感，會透出底下內容的模糊效果，不再是純色實心圓",
       "上述新增任務按鈕補上跟返回鍵一樣的按壓回饋：按下去會放大＋發光，放開後有彈簧回彈感，取代原本全站按鈕預設的縮小效果",
+      "修正底部分頁列／回報按鈕列快速滑動時仍會跟著內容跑掉的問題：先前用 GPU 合成層的方式沒有真正解決，這次改用 position:sticky 取代 position:fixed，並修正 body 因為 overflow-x:hidden 被隱性當成捲動容器、導致 sticky 完全貼不住的根本原因",
     ] },
   ] },
   { date: "2026/07/08", groups: [
