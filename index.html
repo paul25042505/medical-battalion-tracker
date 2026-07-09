@@ -1258,7 +1258,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-252-typhoon-collapse-rain-fsc-fix";
+const BUILD_TAG = "2026-07-09-253-fix-wuri-district-match";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1782,6 +1782,9 @@ const RELEASE_NOTES = [
       "天氣卡片也補上同一套懸浮陰影深度感，溫度數字改用等寬字體＋加粗，跟數值型資訊（車號、時間）的呈現方式一致",
       "任務卡片／急診待命卡片的標題（勤務名稱、醫務所名稱）字級放大、字重加粗，跟底下欄位標籤（車號/車長/駕駛等）拉開對比——欄位標籤改細體，內容值字級縮小一級，數字（車號、電話、時間、降雨機率）全面補上等寬對齊（tabular-nums），標題突出、內文收斂，閱讀節奏更清楚",
       "「更多」頁系統資訊新增「分享 App 網址」：手機上會直接叫出原生分享面板（可以直接用 LINE／簡訊等既有管道轉發），沒有分享面板的裝置（例如電腦版瀏覽器）改成複製網址到剪貼簿並跳出提示",
+    ] },
+    { category: "醫院資訊", items: [
+      "修正「重新定位」在烏日區（成功北醫務所所在地）會誤判成臺中市南區的問題：行政區代表點清單原本沒收錄烏日區，導致抓到最近的「南區」硬配上去；同時加上距離上限，往後遇到清單裡沒收錄的行政區，會誠實顯示只定位到縣市層級，不會再隨便配一個其實有段距離的行政區",
     ] },
   ] },
   { date: "2026/07/08", groups: [
@@ -2887,12 +2890,18 @@ const COUNTY_CENTERS = {
   "嘉義縣": { lat: 23.4623, lng: 120.3333 }
 };
 // key 用「縣市|行政區」，避免不同縣市剛好同名行政區（例如各地都有「東區」）互相搞混。
+// 烏日區（成功北醫務所所在地，見 UNIT_WEATHER_TOWNSHIP）原本不在這份清單裡，
+// 導致實際人在烏日的使用者定位會被錯配到最近的「已列出」行政區（南區，仍有
+// 數公里之遙），誤判成南區——座標取自烏日分局烏日派出所（中山路二段309號）
+// 公開地址資料，跟烏日區公所（新興路316號）在同一個市區範圍內，作為代表點
+// 精度足夠。
 const DISTRICT_CENTERS = {
   "臺中市|北區": { lat: 24.1512, lng: 120.6839 },
   "臺中市|西屯區": { lat: 24.1786, lng: 120.6400 },
   "臺中市|南區": { lat: 24.1253, lng: 120.6653 },
   "臺中市|梧棲區": { lat: 24.2547, lng: 120.5308 },
   "臺中市|大甲區": { lat: 24.3486, lng: 120.6222 },
+  "臺中市|烏日區": { lat: 24.1062, lng: 120.6227 },
   "嘉義市|東區": { lat: 23.4801, lng: 120.4491 },
   "嘉義縣|朴子市": { lat: 23.4650, lng: 120.2458 }
 };
@@ -2913,13 +2922,20 @@ function nearestCounty(lat, lng){
 }
 // 回傳 { county, district }：先找最接近的行政區代表點，再從 key 拆出對應
 // 縣市，兩層資訊一起回傳，排序時可以優先比對行政區、比對不到才退回縣市。
+// DISTRICT_CENTERS 目前只收錄少數幾個行政區，不是全臺完整清單；人如果實際
+// 是在清單以外的行政區（例如大林鎮，還沒收錄），單純找「最近的一個」還是
+// 會硬配一個其實有段距離的行政區，變成很肯定地講錯。這裡加一個距離上限
+// （DISTRICT_MATCH_MAX_KM），超過就當作「這份清單裡沒有對得上的行政區」，
+// 退回只用縣市比對（nearestCounty），不要不管多遠都硬報一個看似精確、
+// 實際上是錯的行政區名稱。
+const DISTRICT_MATCH_MAX_KM = 10;
 function nearestDistrict(lat, lng){
   let best = null, bestDist = Infinity;
   for (const [key, c] of Object.entries(DISTRICT_CENTERS)) {
     const d = haversineKm(lat, lng, c.lat, c.lng);
     if (d < bestDist) { bestDist = d; best = key; }
   }
-  if (!best) return { county: nearestCounty(lat, lng), district: null };
+  if (!best || bestDist > DISTRICT_MATCH_MAX_KM) return { county: nearestCounty(lat, lng), district: null };
   const [county, district] = best.split("|");
   return { county, district };
 }
