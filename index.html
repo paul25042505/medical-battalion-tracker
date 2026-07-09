@@ -156,33 +156,34 @@
     -webkit-user-select:text; -moz-user-select:text; user-select:text;
     -webkit-touch-callout:default;
   }
-  /* overflow-x:hidden 只能放在 html，不能跟著放在 body：CSS 規則是「overflow-x
-     跟 overflow-y 其中一個不是 visible，另一個沒指定就會被隱性算成 auto」，
-     所以 body 只要有 overflow-x:hidden，body 的 overflow-y 也會被瀏覽器隱性
-     當成 auto，等於 body 也變成一個「捲動容器」。雖然 body 實際上不會真的
-     用自己的 scrollTop 捲動（見下面 body 的註解，min-height 撐開讓 html 才是
-     真正在捲），但 position:sticky 找「最近的捲動祖先」時只看 overflow 計算值，
-     不管那個祖先實際上有沒有真的在捲——找到 body 就會誤把 body 當成 sticky
-     的參考容器，而 body 自己從來沒有真的捲動過，sticky 元素就會完全貼不住、
-     整個當成普通排版元素處理。底部分頁列／回報按鈕列改用 position:sticky
-     後失效就是這個原因。 */
-  html{scroll-behavior:smooth; overscroll-behavior-y:contain; overflow-x:hidden;}
+  /* App Shell 版面：#app 固定成裝置目前實際可視高度（100dvh，隨網址列／
+     工具列收合即時更新，不是收起來後的最大高度），本身 overflow:hidden
+     不捲動；裡面拆三層 flex 直式排列——頂部 .sticky-head、底部 .bottomnav
+     都是 flex-shrink:0，永遠原地不動、不需要 position:fixed/sticky 這類
+     額外定位；只有中間的 <main> 是 overflow-y:auto，實際捲動內容的是
+     main 自己，不是整個網頁。這樣「畫面快速滑動時固定列跟著跑掉」「內容
+     較短的頁面固定列貼在畫面中間、下面留白」這兩個問題從架構上就不會
+     發生——不像過去 position:fixed／position:sticky 那樣是靠瀏覽器把某個
+     元素定位到「看起來」在視窗邊緣，這裡固定列本來就真的是版面裡固定
+     大小、固定位置的一塊，沒有捲動這件事需要它去追。
+     副作用：window/document 本身不再捲動（window.scrollY 永遠是 0），所有
+     原本靠 window.scrollY／window.scrollTo 判斷的邏輯（下拉重新整理、換頁
+     捲回頂端）都要改成看 main 的 scrollTop／呼叫 main.scrollTo，見
+     scrollContentToTop() 與 setupPullToRefresh()。 */
+  html{scroll-behavior:smooth; overflow:hidden;}
   html,body{margin:0; padding:0; background:var(--bg-gradient); background-attachment:fixed; color:var(--text); font-family:var(--sans); font-size:var(--text-base); max-width:100%; -webkit-font-smoothing:antialiased;}
   input,select,textarea{accent-color:var(--blue);}
-  html{height:100%;}
-  /* 注意：body 這裡務必用 min-height 而不是 height —— 兩者都設 height:100% 會讓
-     body 變成自己獨立捲動（body.scrollTop 捲動），導致 window.scrollY 永遠停在 0，
-     下拉重新整理／換頁捲回頂端等所有靠 window.scrollY 判斷的邏輯都會失效。 */
-  body{ min-height:100%; padding-bottom:env(safe-area-inset-bottom); }
-  #app{min-height:100vh; display:flex; flex-direction:column;}
+  html,body{height:100%; overflow:hidden;}
+  body{ padding-bottom:env(safe-area-inset-bottom); }
+  #app{height:100vh; height:100dvh; display:flex; flex-direction:column; overflow:hidden;}
   button{font-family:var(--sans); cursor:pointer; transition:transform 0.12s ease, opacity 0.12s ease;}
   button:active{transform:scale(0.96);}
   button:disabled{cursor:default;}
   .tab2, .task-card, .service-row{transition:transform 0.12s ease, box-shadow 0.12s ease;}
   .tab2:active, .task-card:active, .service-row:active{transform:scale(0.985);}
 
-  /* ---- 固定頂部區塊（預覽 banner + topbar 一起 sticky，避免疊在一起） ---- */
-  .sticky-head{position:sticky; top:0; z-index:20;}
+  /* ---- 固定頂部區塊（預覽 banner + topbar），App Shell 的非捲動 flex 子項 ---- */
+  .sticky-head{flex-shrink:0; z-index:20;}
   .preview-banner{
     background:var(--amber); color:#1A1200;
     padding:10px 14px; padding-top:calc(10px + env(safe-area-inset-top));
@@ -253,7 +254,12 @@
       border-color 0.2s cubic-bezier(0.25,1,0.5,1), box-shadow 0.2s cubic-bezier(0.25,1,0.5,1), filter 0.2s cubic-bezier(0.25,1,0.5,1);
   }
 
-  main{flex:1; padding:16px 16px 100px 16px; max-width:680px; width:100%; margin:0 auto;}
+  /* main 是 App Shell 裡真正在捲動的區域（見上面 #app 的說明），底部原本
+     留 100px padding 是因為以前 .bottomnav 用 position:fixed 蓋在內容
+     最下面，要留空間才不會擋住最後一項內容；現在 .bottomnav 是版面外
+     實實在在佔位置的 flex 兄弟元素，不會再蓋住 main 的內容，底部 padding
+     改回跟其他三邊接近、只是單純的捲動到底留白。 */
+  main{flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain; padding:16px 16px 24px 16px; max-width:680px; width:100%; margin:0 auto;}
 
   /* ---- login ---- */
   .login-wrap{min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; text-align:center;}
@@ -696,14 +702,18 @@
 
   /* ---- Sticky Bottom Action Bar：主要回報按鈕固定在畫面底部，方便單手操作 ---- */
   .sticky-action-bar{
-    /* 跟 .bottomnav 同樣的理由改用 position:sticky 取代 position:fixed（見
-       .bottomnav 註解）。這裡多一個問題：這個元素是畫在 <main> 裡面的，
-       main 本身左右各有 16px padding，直接用 sticky 會被夾在內容欄寬裡、
-       兩側露出留白，不再是滿版。用左右各 -16px 的負 margin 把 main 自己的
-       padding 抵消掉，讓這個按鈕列還原成貼齊 main 本身版面寬度的滿版
-       （手機版面下 main 本身就是滿版寬度，視覺上等同貼齊螢幕左右邊）。 */
-    position:sticky; margin:0 -16px;
-    bottom:calc(var(--bottomnav-h) + env(safe-area-inset-bottom)); z-index:26;
+    /* main 現在是 App Shell 裡真正的捲動容器（見 #app 的說明），.bottomnav
+       是 main 外面的固定 flex 兄弟元素、不會再疊在 main 的內容上面，所以
+       這裡用 position:sticky; bottom:0（相對 main 自己），貼齊的剛好就是
+       main 可視範圍的最下緣，正好接在 .bottomnav 上緣，不用再額外加
+       --bottomnav-h 的偏移量去閃避重疊（那是以前 bottomnav 蓋在內容上面
+       時才需要的算法）。
+       這個元素畫在 <main> 裡面，main 本身左右各有 16px padding，直接用
+       sticky 會被夾在內容欄寬裡兩側露出留白，不再是滿版——用左右各 -16px
+       的負 margin 把 main 自己的 padding 抵消掉，還原成貼齊 main 本身版面
+       寬度的滿版（手機版面下 main 本身就是滿版寬度，視覺上等同貼齊螢幕
+       左右邊）。 */
+    position:sticky; bottom:0; margin:0 -16px; z-index:26;
     background:var(--navbar-bg); backdrop-filter:blur(14px);
     box-shadow:0 -1px 0 var(--border), 0 -8px 20px rgba(15,15,20,0.05);
     padding:12px 16px; display:flex; gap:10px;
@@ -901,15 +911,14 @@
 
   /* ---- bottom nav ---- */
   .bottomnav{
-    /* 原本用 position:fixed，疊加 backdrop-filter 後在 iOS Safari 快速滑動時
-       畫面會看起來「跟著內容一起被往上捲走」，放開手指才彈回底部——先前
-       試過用 translateZ(0) 強制獨立合成層，但實測沒有解決（那個手法只能
-       降低重繪成本，沒辦法解決 fixed 元素在畫面捲動當下沒有即時貼齊視窗
-       底部的根本問題）。改用 position:sticky：因為整份文件本身就是唯一的
-       捲動容器（body/html 沒有另外包一層 overflow 容器），sticky 元素的
-       位置是排版階段跟捲動位置同步算出來的，不是另外合成一層疊上去，
-       天生就不會有「跟著捲動內容位移」這個問題，不需要再靠 GPU 合成層繞過。 */
-    position:sticky; left:0; right:0; bottom:0; z-index:30;
+    /* 先後試過 position:fixed（+translateZ(0)）、position:sticky，在真機上
+       都各自有問題（滑動時跟著內容跑掉／內容較短的頁面貼在畫面中間留白）
+       ——這兩種做法本質上都是「讓某個元素在視覺上看起來釘在視窗邊緣」，
+       實際的排版位置、捲動範圍計算都還是另一套邏輯，兩者對不齊就會出這
+       些問題。現在改成 App Shell 架構（見 #app 的說明）：.bottomnav 只是
+       固定高度 flex 版面裡最後一個「不捲動」的兄弟元素，不需要任何特殊
+       定位，天生就會一直待在畫面最下面。 */
+    flex-shrink:0; z-index:30;
     background:var(--navbar-bg); backdrop-filter:blur(14px); box-shadow:0 -1px 0 var(--border), 0 -8px 24px rgba(15,15,20,0.04);
     display:flex; padding-bottom:env(safe-area-inset-bottom);
   }
@@ -1011,7 +1020,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-214-fixed-bar-sticky-fix";
+const BUILD_TAG = "2026-07-09-215-app-shell-rewrite";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1484,6 +1493,7 @@ const RELEASE_NOTES = [
       "「任務」頁右下角新增任務的藍色圓形按鈕改成毛玻璃質感，會透出底下內容的模糊效果，不再是純色實心圓",
       "上述新增任務按鈕補上跟返回鍵一樣的按壓回饋：按下去會放大＋發光，放開後有彈簧回彈感，取代原本全站按鈕預設的縮小效果",
       "修正底部分頁列／回報按鈕列快速滑動時仍會跟著內容跑掉的問題：先前用 GPU 合成層的方式沒有真正解決，這次改用 position:sticky 取代 position:fixed，並修正 body 因為 overflow-x:hidden 被隱性當成捲動容器、導致 sticky 完全貼不住的根本原因",
+      "徹底重構版面架構解決底部分頁列的一系列問題：先前不管用 position:fixed 還是 position:sticky，快速滑動時跟著內容跑掉、內容較短的頁面貼在畫面中間留白，這兩個問題各自换了做法都還是會出現。這次改成整個畫面固定成裝置目前實際可視高度（不隨內容多寡變動），只有中間內容區自己捲動，頂部欄位跟底部分頁列變成版面裡真正固定佔位的區塊，不需要任何特殊定位就一直待在原地，兩個問題從架構上一次解決；連帶把「下拉重新整理」「換頁捲回頂端」等原本靠整頁捲動判斷的邏輯，改成看內容區自己的捲動位置",
     ] },
   ] },
   { date: "2026/07/08", groups: [
@@ -2829,6 +2839,12 @@ const ROUTE_REFRESH = {
   baseDataHospitals: ['hospitals'],
   baseDataDoctors: ['doctors'],
 };
+// App Shell 改成 <main> 自己捲動（見 #app 的 CSS 註解）以後，window 本身
+// 不會再捲動，換頁／換頁籤要回頂端得改成重設 main 的 scrollTop。
+function scrollContentToTop(){
+  const m = document.querySelector('main');
+  if (m) m.scrollTop = 0;
+}
 function nav(route){
   state.route = route; state.reportDraft = null;
   // 成員管理／意見回饋是進頁籤時現抓一次的簡易快取（見 viewAdminUsers／
@@ -2836,7 +2852,7 @@ function nav(route){
   // 才看得到最新的角色/單位異動或剛送出的意見回饋。
   if (route.name === "adminUsers") state._usersCache = null;
   if (route.name === "adminFeedback") state._feedbackCache = null;
-  render(); window.scrollTo(0,0);
+  render(); scrollContentToTop();
   const polls = { tasks: tasksPoll, events: eventsPoll, personnel: personnelPoll, vehicles: vehiclesPoll, recorders: recordersPoll, hospitals: hospitalsPoll, vitals: vitalsPoll, erStandby: erStandbyPoll, doctors: doctorsPoll };
   (ROUTE_REFRESH[route.name] || []).forEach(key => { if (polls[key]) polls[key].refreshNow(); });
 }
@@ -5619,7 +5635,7 @@ window.__setRole = (uid) => {
   const unit = document.getElementById(`unit-${uid}`).value;
   setUserRole(uid, role, unit).then(() => { state._usersCache = null; render(); });
 };
-window.__setBaseDataUnit = (code) => { state.baseDataUnit = code; state.baseDataModal = null; render(); window.scrollTo(0,0); };
+window.__setBaseDataUnit = (code) => { state.baseDataUnit = code; state.baseDataModal = null; render(); scrollContentToTop(); };
 function baseDataErr(err){ showToast(`操作失敗：[${err.code||'?'}] ${err.message||err}`); console.error("基礎資料操作失敗", err); }
 window.__toggleBaseData = (coll, id, active) => toggleBaseDataActive(coll, id, active).catch(baseDataErr);
 window.__deleteBaseData = (coll, id) => { if (confirm("確定刪除此筆資料？此動作無法復原。")) deleteBaseData(coll, id).catch(baseDataErr); };
@@ -5766,8 +5782,8 @@ window.__runRecordsDeepQuery = async () => {
   }
   render();
 };
-window.__setTasksTab = (key) => { state.tasksTab = key; render(); window.scrollTo(0,0); };
-window.__setStatsPeriod = (key) => { state.statsPeriod = key; render(); window.scrollTo(0,0); };
+window.__setTasksTab = (key) => { state.tasksTab = key; render(); scrollContentToTop(); };
+window.__setStatsPeriod = (key) => { state.statsPeriod = key; render(); scrollContentToTop(); };
 window.__setCreateTaskUnit = (code) => { state.createTaskUnit = code; render(); };
 window.__setCreateTaskType = (key) => { state.createTaskType = key; render(); };
 // 急診待命頁「建立待命勤務」：一定是勤務（不是洽公），先把建立勤務頁的
@@ -5876,21 +5892,25 @@ window.__saveTaskEdit = (ev, taskId) => {
   }
   window.addEventListener('touchstart', (e) => {
     if (refreshing) return;
-    // 彈窗（.modal-sheet）跟底部導覽列都有各自獨立的互動區域，跟外層頁面的
-    // scrollY 無關；在這些區域內手勢不應誤觸外層下拉重新整理。
+    // 彈窗（.modal-sheet）跟底部導覽列都有各自獨立的互動區域，跟 main 的
+    // scrollTop 無關；在這些區域內手勢不應誤觸外層下拉重新整理。
     const inModal = e.target.closest && e.target.closest('.modal-sheet, .bottomnav');
-    // 頁面內容不足一螢幕（例如首頁任務不多時）根本沒有可捲動的空間，scrollY
-    // 永遠是 0，這種情況下「頁面最上方」跟「頁面最下方」沒有實質區別——只
-    // 靠 scrollY 判斷會導致在畫面任何位置下拉都被誤判成「已在頂端」。因此
+    // App Shell 改成 main 自己捲動以後（見 #app 的 CSS 註解），要判斷的是
+    // main 的 scrollHeight／scrollTop，不是 window 的。頁面內容不足一螢幕
+    // （例如首頁任務不多時）main 根本沒有可捲動的空間，scrollTop 永遠是
+    // 0，這種情況下「頁面最上方」跟「頁面最下方」沒有實質區別——只靠
+    // scrollTop 判斷會導致在畫面任何位置下拉都被誤判成「已在頂端」。因此
     // 下拉重新整理只在頁面「真的可以捲動」時才允許觸發，且必須確實捲到頂部。
-    const canScroll = document.documentElement.scrollHeight > window.innerHeight + 1;
-    startY = (!inModal && canScroll && window.scrollY <= 0) ? e.touches[0].clientY : null;
+    const m = document.querySelector('main');
+    const canScroll = !!m && m.scrollHeight > m.clientHeight + 1;
+    startY = (!inModal && canScroll && m.scrollTop <= 0) ? e.touches[0].clientY : null;
   }, { passive: true });
 
   window.addEventListener('touchmove', (e) => {
     if (startY == null || refreshing) return;
     const dy = e.touches[0].clientY - startY;
-    if (dy <= 0 || window.scrollY > 0) { if (pulling) reset(); return; }
+    const m = document.querySelector('main');
+    if (dy <= 0 || (m && m.scrollTop > 0)) { if (pulling) reset(); return; }
     pulling = true;
     indicator.classList.add('show');
     setDist(dy * 0.5);
