@@ -45,6 +45,15 @@
     --card-shadow: var(--shadow-sm);
     --mono:'SF Mono', ui-monospace, 'JetBrains Mono', monospace;
     --sans:-apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+    /* 「空間感／流體擬態」卡片（任務卡片／急診待命卡片）用的濃淡 token，
+       淺色模式是白瓷卡片＋柔和陰影，深色模式是懸浮發光卡片——同一份
+       .spatial-card 規則靠這幾個 token 切換濃淡，不用另外寫一份深色專用
+       規則，深色模式的覆寫見下方兩個 dark 區塊。 */
+    --spatial-tint: 10%;
+    --spatial-border-tint: 20%;
+    --spatial-glow-alpha: 14%;
+    --spatial-blob-alpha: 0.08;
+    --spatial-depth-shadow: 0 16px 36px -18px rgba(15,15,20,0.16);
     /* ---- Typography tokens（比照 iOS 26 / Apple Health · Wallet · Reminders 的字級節奏）----
        全站一律從這 6 級挑，不要再各頁面自己開字級，資訊層級靠字重/顏色/留白，不要靠一堆
        微調過的字級（13.5px、14.5px...）。 */
@@ -113,6 +122,11 @@
       --glass-btn-border-active: rgba(255,255,255,0.3);
       --glass-btn-highlight: rgba(255,255,255,0.16);
       --glass-btn-glow: rgba(120,170,255,0.4);
+      --spatial-tint: 20%;
+      --spatial-border-tint: 45%;
+      --spatial-glow-alpha: 30%;
+      --spatial-blob-alpha: 0.28;
+      --spatial-depth-shadow: 0 22px 48px -18px rgba(0,0,0,0.6);
     }
   }
   :root[data-theme="dark"]{
@@ -143,6 +157,11 @@
     --glass-btn-border-active: rgba(255,255,255,0.3);
     --glass-btn-highlight: rgba(255,255,255,0.16);
     --glass-btn-glow: rgba(120,170,255,0.4);
+    --spatial-tint: 20%;
+    --spatial-border-tint: 45%;
+    --spatial-glow-alpha: 30%;
+    --spatial-blob-alpha: 0.28;
+    --spatial-depth-shadow: 0 22px 48px -18px rgba(0,0,0,0.6);
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   /* 全站禁止選取文字（比照原生 App 手感，長按/雙點不會跳出選取把手或
@@ -294,17 +313,43 @@
   .section-label{font-family:var(--mono); font-size:var(--text-xs); font-weight:700; color:var(--muted); letter-spacing:0.09em; text-transform:uppercase; margin:var(--space-section) 4px 13px 4px;}
   .section-label.tight{margin-top:6px;}
   .section-label:first-child{margin-top:0;}
-  .task-card{
-    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg);
-    padding:20px; margin-bottom:14px; position:relative; overflow:hidden; box-shadow:var(--shadow-sm);
+  /* ---- 「空間感／流體擬態」卡片語言：任務卡片／急診待命卡片共用。
+     不再用一條 4px 純色塊當狀態指示（土味的扁平色塊），改成整張卡片
+     用既有的六種狀態色（--gray/--red/--amber/--purple/--blue/--green，
+     跟 badge 顏色是同一組，語意不變、只是表現方式換了）做「智慧流體
+     變色」：卡片本身疊三層陰影做出懸浮的空間深度（頂部內縮高光＋大範圍
+     黑色陰影＋狀態色的柔光陰影），背後再疊一顆模糊的狀態色光斑
+     （.spatial-card::before）營造「有生命力的液體」質感。--spatial-*
+     這組 token 控制濃淡：淺色模式底下同一份規則會自動變成白瓷卡片＋
+     柔和彩色陰影，深色模式會自動變成發光邊框＋懸浮夜光卡片，不用另外
+     為深色模式寫一份規則（見 :root 與兩個 dark 區塊的 token 定義）。 */
+  .spatial-card{
+    position:relative; overflow:hidden; isolation:isolate;
+    background:linear-gradient(165deg,
+      color-mix(in srgb, var(--card-accent, var(--border)) var(--spatial-tint), var(--panel)) 0%,
+      var(--panel) 60%);
+    border:1px solid color-mix(in srgb, var(--card-accent, var(--border)) var(--spatial-border-tint), var(--border));
+    box-shadow:
+      0 1px 0 0 color-mix(in srgb, #fff 8%, transparent) inset,
+      var(--spatial-depth-shadow),
+      0 12px 28px -16px color-mix(in srgb, var(--card-accent, transparent) var(--spatial-glow-alpha), transparent);
   }
-  .task-card::before{content:''; position:absolute; left:0; top:0; bottom:0; width:4px; border-radius:0 4px 4px 0;}
-  .task-card.s-pending::before{background:var(--gray);}
-  .task-card.s-dispatch::before{background:var(--red);}
-  .task-card.s-onscene::before{background:var(--amber);}
-  .task-card.s-transit::before{background:var(--purple);}
-  .task-card.s-returning::before{background:var(--blue);}
-  .task-card.s-completed::before{background:var(--green);}
+  .spatial-card::before{
+    content:''; position:absolute; top:-32%; right:-18%; width:60%; aspect-ratio:1;
+    border-radius:50%; pointer-events:none; z-index:0;
+    background:radial-gradient(circle, var(--card-accent, var(--blue)) 0%, transparent 72%);
+    opacity:var(--spatial-blob-alpha); filter:blur(30px);
+  }
+  .spatial-card > *{position:relative; z-index:1;}
+  .task-card{
+    padding:20px; margin-bottom:14px; border-radius:var(--radius-lg);
+  }
+  .task-card.s-pending, .er-standby-card.s-pending{--card-accent:var(--gray);}
+  .task-card.s-dispatch, .er-standby-card.s-dispatch{--card-accent:var(--red);}
+  .task-card.s-onscene, .er-standby-card.s-onscene{--card-accent:var(--amber);}
+  .task-card.s-transit, .er-standby-card.s-transit{--card-accent:var(--purple);}
+  .task-card.s-returning, .er-standby-card.s-returning{--card-accent:var(--blue);}
+  .task-card.s-completed, .er-standby-card.s-completed{--card-accent:var(--green);}
   .task-top{display:flex; justify-content:space-between; align-items:center; gap:10px;}
   .task-title{font-size:var(--text-lg); font-weight:700; margin:0; letter-spacing:-0.01em;}
   .task-meta{color:var(--muted); font-size:var(--text-sm); font-family:var(--mono); font-weight:500; margin-top:4px;}
@@ -323,9 +368,18 @@
   .task-crew{display:flex; flex-direction:column; gap:6px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border); font-size:var(--text-sm); color:var(--text); font-family:var(--mono); font-weight:500;}
   .empty{color:var(--muted); font-size:var(--text-sm); text-align:center; padding:46px 22px; border:1px dashed var(--border-strong); border-radius:var(--radius-lg);}
 
-  /* ---- 患者狀況：突發狀況時記錄生命徵象/主訴，任務卡片凸顯提示 ---- */
-  .task-card.has-patient{border-color:color-mix(in srgb, var(--red) 35%, transparent); box-shadow:0 0 0 1px color-mix(in srgb, var(--red) 16%, transparent), var(--shadow-sm);}
-  .task-card.has-patient::before{background:var(--red); width:6px;}
+  /* ---- 患者狀況：突發狀況時記錄生命徵象/主訴，任務卡片凸顯提示。
+     有患者的急迫性比單純的勤務狀態更高，所以整張卡片的液態變色強制蓋成
+     紅色（不管當下勤務狀態本來是哪個顏色），外圍再疊一圈慢速呼吸的紅色
+     光暈，跟一般狀態卡片的光斑區分開來。 ---- */
+  .task-card.has-patient{
+    --card-accent: var(--red);
+    animation:patientCardGlow 2.4s ease-in-out infinite;
+  }
+  @keyframes patientCardGlow{
+    0%, 100%{ box-shadow:0 1px 0 0 color-mix(in srgb, #fff 8%, transparent) inset, var(--spatial-depth-shadow), 0 0 0 1px color-mix(in srgb, var(--red) 30%, transparent), 0 12px 30px -14px color-mix(in srgb, var(--red) 45%, transparent); }
+    50%{ box-shadow:0 1px 0 0 color-mix(in srgb, #fff 8%, transparent) inset, var(--spatial-depth-shadow), 0 0 0 1px color-mix(in srgb, var(--red) 55%, transparent), 0 12px 34px -14px color-mix(in srgb, var(--red) 65%, transparent); }
+  }
   .patient-badge{
     display:inline-flex; align-items:center; gap:4px; padding:5px 10px; border-radius:999px;
     background:var(--red); color:#fff; font-size:var(--text-xs); font-weight:700; white-space:nowrap;
@@ -478,18 +532,35 @@
   .home-date{font-size:var(--text-sm); color:var(--muted); font-weight:600; font-family:var(--mono); margin-bottom:16px;}
   /* 天氣卡片參考 iOS 原生天氣 App：依天氣狀況換漸層底色＋白字，圖示放大
      並用半透明圓底襯托，溫度範圍是視覺主角。載入中／失敗時退回中性卡片，
-     不套用漸層，避免看起來像正常天氣資料。 */
+     不套用漸層，避免看起來像正常天氣資料。
+     跟任務卡片／急診待命卡片一樣疊三層陰影做出懸浮的空間深度感（頂部
+     內縮高光＋大範圍黑色陰影＋同色系柔光陰影），背後再疊一顆更亮的
+     同色系光斑（::before）呼應「智慧流體變色」的液態質感——天氣卡片
+     本身已經是彩色漸層，光斑只需要疊一層更亮的白色調高光，不需要像
+     中性色的任務卡片那樣額外引入狀態色。 */
   .weather-card{
-    position:relative; display:flex; align-items:center; gap:16px;
+    position:relative; display:flex; align-items:center; gap:16px; overflow:hidden; isolation:isolate;
     border-radius:var(--radius-lg); padding:18px 20px; margin-bottom:18px;
-    color:#fff; box-shadow:var(--shadow-sm);
+    color:#fff;
     background:linear-gradient(135deg,#5B9BE0,#2F6FCB);
+    box-shadow:
+      0 1px 0 0 rgba(255,255,255,0.22) inset,
+      var(--spatial-depth-shadow),
+      0 14px 30px -16px rgba(47,111,203,0.45);
   }
-  .weather-card.wx-sun{background:linear-gradient(135deg,#FFC761,#FF9A44);}
-  .weather-card.wx-rain{background:linear-gradient(135deg,#7E93AC,#48607C);}
+  .weather-card::before{
+    content:''; position:absolute; top:-40%; right:-15%; width:65%; aspect-ratio:1; z-index:0;
+    border-radius:50%; pointer-events:none;
+    background:radial-gradient(circle, rgba(255,255,255,0.5) 0%, transparent 70%);
+    opacity:0.35; filter:blur(26px);
+  }
+  .weather-card > *{position:relative; z-index:1;}
+  .weather-card.wx-sun{background:linear-gradient(135deg,#FFC761,#FF9A44); box-shadow:0 1px 0 0 rgba(255,255,255,0.22) inset, var(--spatial-depth-shadow), 0 14px 30px -16px rgba(255,154,68,0.5);}
+  .weather-card.wx-rain{background:linear-gradient(135deg,#7E93AC,#48607C); box-shadow:0 1px 0 0 rgba(255,255,255,0.22) inset, var(--spatial-depth-shadow), 0 14px 30px -16px rgba(72,96,124,0.5);}
   .weather-card.wx-muted{
     background:var(--panel); border:1px solid var(--border); color:var(--muted); box-shadow:var(--shadow-xs);
   }
+  .weather-card.wx-muted::before{content:none;}
   .weather-card-icon{
     width:52px; height:52px; border-radius:50%; flex-shrink:0;
     display:flex; align-items:center; justify-content:center;
@@ -497,9 +568,9 @@
   }
   .weather-card.wx-muted .weather-card-icon{background:var(--panel-2); color:var(--muted);}
   .weather-card-body{flex:1; min-width:0;}
-  .weather-card-loc{font-size:var(--text-sm); font-weight:700; opacity:0.95;}
+  .weather-card-loc{font-size:var(--text-sm); font-weight:500; opacity:0.85; letter-spacing:0.02em;}
   .weather-card-desc{font-size:var(--text-base); font-weight:700; margin-top:1px;}
-  .weather-card-temp{font-size:var(--text-2xl); font-weight:800; margin-top:8px; letter-spacing:0.01em;}
+  .weather-card-temp{font-size:var(--text-2xl); font-weight:900; font-family:var(--mono); font-variant-numeric:tabular-nums; margin-top:8px; letter-spacing:0.01em;}
   .weather-card-pills{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
   .weather-card-pop{
     display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px;
@@ -598,10 +669,11 @@
     transition:transform 0.1s ease-out, border-color 0.2s cubic-bezier(0.25,1,0.5,1),
       box-shadow 0.2s cubic-bezier(0.25,1,0.5,1), filter 0.2s cubic-bezier(0.25,1,0.5,1);
   }
-  /* 急診待命：兩個地點各一張卡片，樣式比照 task-card 但沒有左側狀態色條。 */
+  /* 急診待命：兩個地點各一張卡片，跟任務卡片共用 .spatial-card 那套空間感
+     語言；還沒綁定待命勤務時不加狀態 class，--card-accent 沒有值，退回
+     中性邊框色，維持「目前閒置」的低調感。 */
   .er-standby-card{
-    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg);
-    padding:24px; margin-bottom:14px; box-shadow:var(--shadow-sm);
+    border-radius:var(--radius-lg); padding:24px; margin-bottom:14px;
   }
   .er-standby-head{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:4px;}
   .er-standby-head .name{font-size:var(--text-lg); font-weight:700; letter-spacing:-0.01em;}
@@ -614,9 +686,10 @@
     padding:18px 0; margin-bottom:20px;
   }
   .er-standby-grid .detail-item .sub-line{font-size:var(--text-xs); color:var(--blue); font-weight:600; margin-top:2px;}
-  /* 待命中狀態的圓點做微弱脈動，呼應待命中「還在等待」的狀態感；開啟
-     「減少動態效果」時會被全站統一的 reduced-motion 規則壓成瞬間完成。 */
-  .badge.pending .dot{animation:badgePulse 1.6s ease-in-out infinite;}
+  /* 進行中狀態（除了已完成）的圓點都做微弱脈動的「呼吸感」，像即時監控
+     中的指示燈——已完成是靜止的終態，不需要再吸引注意力。開啟「減少
+     動態效果」時會被全站統一的 reduced-motion 規則壓成瞬間完成。 */
+  .badge:not(.completed) .dot{animation:badgePulse 1.6s ease-in-out infinite;}
   @keyframes badgePulse{
     0%, 100%{ opacity:1; } 50%{ opacity:0.35; }
   }
@@ -1108,7 +1181,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-229-hazard-card-redesign";
+const BUILD_TAG = "2026-07-09-230-spatial-card-redesign";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1602,6 +1675,11 @@ const RELEASE_NOTES = [
       "天氣卡片＋未來預報清單新增「舒適度」資訊（例如舒適／悶熱／悶熱至炎熱），體感偏悶熱或偏冷時，下方提醒文字也會補一句提醒留意人員身體狀況",
       "天氣卡片新增「體感溫度」（成功北醫務所、精北醫務所各自對應烏日區、大林鎮），當體感溫度比預報最高氣溫高出 3°C 以上時，下方提醒文字會額外提醒戶外執勤留意",
       "天氣特報（例如陸上強風特報）改成跟天氣卡片同等視覺份量的警示卡：漸層紅底＋白字，右上角「特報中」徽章加上脈動圓點，取代原本淡粉紅色細框、跟一般提示訊息分不出輕重的樣式",
+    ] },
+    { category: "介面優化", items: [
+      "任務卡片／急診待命卡片重新設計：拿掉原本左側 4px 純色狀態色條，改成整張卡片依狀態（待命中/出勤中/已抵達現場/前往下一地點/返營中/已完成）呈現柔和的液態光暈色調，疊三層陰影做出懸浮的空間深度感；有患者記錄的任務卡片會強制蓋成紅色光暈並加上緩慢的呼吸感光圈，比一般狀態更搶眼",
+      "狀態徽章的圓點呼吸感效果從只有「待命中」擴大到所有進行中的狀態（出勤中/已抵達現場/前往下一地點/返營中），只有「已完成」維持靜止；深色模式下這套設計會自動變成發光邊框＋懸浮夜光卡片，淺色模式維持白瓷卡片＋柔和彩色陰影，同一份規則兩種模式共用",
+      "天氣卡片也補上同一套懸浮陰影深度感，溫度數字改用等寬字體＋加粗，跟數值型資訊（車號、時間）的呈現方式一致",
     ] },
   ] },
   { date: "2026/07/08", groups: [
@@ -3333,7 +3411,7 @@ function taskCard(t){
   // 任務蓋過去（首頁清單排序見 viewHome，這裡只負責視覺樣式）。
   const hasPatient = state.vitals.some(v => v.taskId === t.id);
   return `
-  <div class="task-card ${taskCardClass(s)}${hasPatient ? ' has-patient' : ''}" onclick="if(!event.target.closest('a')) window.__nav({name:'task', id:'${t.id}'})">
+  <div class="task-card spatial-card ${taskCardClass(s)}${hasPatient ? ' has-patient' : ''}" onclick="if(!event.target.closest('a')) window.__nav({name:'task', id:'${t.id}'})">
     <div class="task-top">
       <p class="task-title">${esc(t.title)}</p>
       <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
@@ -4911,7 +4989,7 @@ function viewErStandby(){
       const driverLine = isBound ? personCardLine(boundTask.driver, boundTask.unit) : null;
       const doctorLine = isBound && boundTask.dutyOfficer ? doctorCardLine(boundTask.dutyOfficer) : null;
       return `
-      <div class="er-standby-card">
+      <div class="er-standby-card spatial-card${isBound ? ' s-'+boundStatus : ''}">
         <div class="er-standby-head">
           <div class="name">${esc(loc.label)}</div>
           ${isBound ? statusBadge(boundStatus) : ""}
