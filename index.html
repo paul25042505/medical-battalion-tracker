@@ -1189,7 +1189,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-232-weather-ambient-glow-ai-insight";
+const BUILD_TAG = "2026-07-09-233-weekly-forecast-humidity-dewpoint";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1690,6 +1690,7 @@ const RELEASE_NOTES = [
       "天氣卡片新增「體感溫度」（成功北醫務所、精北醫務所各自對應烏日區、大林鎮），當體感溫度比預報最高氣溫高出 3°C 以上時，下方提醒文字會額外提醒戶外執勤留意",
       "天氣特報（例如陸上強風特報）改成跟天氣卡片同等視覺份量的警示卡：漸層紅底＋白字，右上角「特報中」徽章加上脈動圓點，取代原本淡粉紅色細框、跟一般提示訊息分不出輕重的樣式",
       "天氣卡片背景改成低飽和度的環境微光玻璃質感（跟任務卡片／急診待命卡片同一套設計語言），取代原本晴天橘、雨天灰藍那種高飽和度純色漸層；新增「Core-AI Insight」區塊，會依目前天氣數據（天氣現況/氣溫/降雨機率/舒適度/體感溫度）即時生成一句風險預測與行動建議",
+      "天氣卡片新增「相對濕度」「露點溫度」；天氣頁新增「未來一週」預報清單（縣市層級，跟原本 36 小時內的「未來預報」分開顯示，是比較粗略的長期展望）",
     ] },
     { category: "介面優化", items: [
       "任務卡片／急診待命卡片重新設計：拿掉原本左側 4px 純色狀態色條，改成整張卡片依狀態（待命中/出勤中/已抵達現場/前往下一地點/返營中/已完成）呈現柔和的液態光暈色調，疊三層陰影做出懸浮的空間深度感；有患者記錄的任務卡片會強制蓋成紅色光暈並加上緩慢的呼吸感光圈，比一般狀態更搶眼",
@@ -2020,6 +2021,7 @@ const state = {
   hazards: null, // 任務頁「天氣」子選單的天氣特報／陸上警報（依單位對應縣市，見 ensureHazardsLoaded）
   apparentTemp: null, // 任務頁「天氣」子選單的體感溫度（依單位對應鄉鎮，見 ensureApparentTempLoaded）
   aiInsight: null, // 任務頁「天氣」子選單的 Core-AI Insight 建議文字（見 ensureAiInsightLoaded）
+  weeklyForecast: null, // 任務頁「天氣」子選單的一週天氣預報（依單位對應縣市，見 ensureWeeklyForecastLoaded）
   myLat: null, // 醫院資訊頁：手機 GPS 定位的原始緯度，null 代表尚未定位；有登記座標的醫院直接拿這個算實際距離
   myLng: null, // 醫院資訊頁：手機 GPS 定位的原始經度
   myCounty: null, // 醫院資訊頁：手機 GPS 定位算出的概略縣市（見 nearestDistrict），沒座標的醫院退回用這個比對；null 代表尚未定位
@@ -2924,6 +2926,58 @@ function ensureWeatherLoaded(unit){
     safeRender();
   });
 }
+// 一週縣市天氣預報（F-C0032-005），跟今明 36 小時預報（F-C0032-001）是
+// 同一個「一般天氣預報」資料集家族，schema 完全一樣（Wx/PoP/MinT/MaxT/
+// CI，time[].parameter.parameterName 結構），只是時間範圍拉長到 7 天、
+// 每個時段代表一整天而不是 12 小時，所以直接沿用同一套解析邏輯即可。
+const weeklyForecastCache = {}; // { [縣市名稱]: { data, fetchedAt } }
+let weeklyForecastLoadingCounty = null;
+async function fetchWeeklyForecast(county){
+  const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-005?Authorization=${CWA_API_KEY}&locationName=${encodeURIComponent(county)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  const loc = json?.records?.location?.[0];
+  if (!loc) throw new Error("查無一週預報資料");
+  const els = {};
+  loc.weatherElement.forEach(e => { els[e.elementName] = e.time; });
+  const count = els.Wx?.length || 0;
+  const periods = [];
+  for (let i = 0; i < count; i++){
+    periods.push({
+      startTime: els.Wx?.[i]?.startTime || null,
+      endTime: els.Wx?.[i]?.endTime || null,
+      wx: els.Wx?.[i]?.parameter?.parameterName || "—",
+      pop: els.PoP?.[i]?.parameter?.parameterName ?? null,
+      minT: els.MinT?.[i]?.parameter?.parameterName ?? null,
+      maxT: els.MaxT?.[i]?.parameter?.parameterName ?? null,
+      ci: els.CI?.[i]?.parameter?.parameterName ?? null
+    });
+  }
+  return { county, periods };
+}
+function ensureWeeklyForecastLoaded(unit){
+  const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
+  const cached = weeklyForecastCache[county];
+  // 一週預報不需要跟 36 小時預報一樣頻繁更新，成功快取拉長到 1 小時；
+  // 失敗快取理由同 ensureWeatherLoaded，避免無限重試迴圈。
+  const freshFor = cached?.error ? 2*60*1000 : 60*60*1000;
+  if (cached && Date.now() - cached.fetchedAt < freshFor) { state.weeklyForecast = cached.error ? { county, error: true } : { county, periods: cached.data.periods }; return; }
+  if (weeklyForecastLoadingCounty === county) return;
+  weeklyForecastLoadingCounty = county;
+  fetchWeeklyForecast(county).then(data => {
+    weeklyForecastCache[county] = { data, fetchedAt: Date.now() };
+    state.weeklyForecast = { county, periods: data.periods };
+    weeklyForecastLoadingCounty = null;
+    safeRender();
+  }).catch(err => {
+    console.error("一週預報載入失敗", err);
+    weeklyForecastCache[county] = { fetchedAt: Date.now(), error: true };
+    state.weeklyForecast = { county, error: true };
+    weeklyForecastLoadingCounty = null;
+    safeRender();
+  });
+}
 function weatherIconFor(wx){
   if (!wx) return "cloud";
   if (wx.includes("雷") || wx.includes("雨")) return "rain";
@@ -2985,16 +3039,11 @@ function ensureHazardsLoaded(unit){
 // （筆數本來就對不上，勉強對齊反而容易出錯）。
 const apparentTempCache = {}; // { [鄉鎮名稱]: { data, fetchedAt } }
 let apparentTempLoadingTownship = null;
-async function fetchApparentTemp(township){
-  const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-093?Authorization=${CWA_API_KEY}&locationName=${encodeURIComponent(township)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const json = await res.json();
-  const loc = json?.records?.locations?.[0]?.location?.[0];
-  if (!loc) throw new Error("查無體感溫度資料");
-  const atEl = loc.weatherElement?.find(e => e.elementName === "AT");
-  const times = atEl?.time || [];
-  if (!times.length) return { township, at: null };
+// 取離現在最近的一筆「單一時間點」數值（AT/WS/WD/RH/Td 這幾個鄉鎮預報
+// 欄位都是逐時的瞬時值，用 dataTime 標記，不是像 Wx/PoP 那樣的時間區間）。
+function nearestInstantValue(el){
+  const times = el?.time || [];
+  if (!times.length) return null;
   const now = Date.now();
   let best = times[0];
   let bestDiff = Infinity;
@@ -3004,18 +3053,40 @@ async function fetchApparentTemp(township){
     if (diff < bestDiff) { bestDiff = diff; best = t; }
   });
   const val = best.elementValue?.[0]?.value;
-  return { township, at: val != null && val !== "" ? Number(val) : null };
+  return val != null && val !== "" ? val : null;
+}
+async function fetchApparentTemp(township){
+  const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-093?Authorization=${CWA_API_KEY}&locationName=${encodeURIComponent(township)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  const loc = json?.records?.locations?.[0]?.location?.[0];
+  if (!loc) throw new Error("查無體感溫度資料");
+  const els = {};
+  (loc.weatherElement || []).forEach(e => { els[e.elementName] = e; });
+  // 這組資料集實際查證過沒有風速／風向欄位（只有 Wx/AT/T/RH/CI/Td/
+  // WeatherDescription/PoP6h），風速風向要另外找有提供的資料集，先不
+  // 假裝有這個能力。
+  const atVal = nearestInstantValue(els.AT);
+  const rhVal = nearestInstantValue(els.RH);
+  const tdVal = nearestInstantValue(els.Td);
+  return {
+    township,
+    at: atVal != null ? Number(atVal) : null,
+    rh: rhVal != null ? Number(rhVal) : null,
+    td: tdVal != null ? Number(tdVal) : null
+  };
 }
 function ensureApparentTempLoaded(unit){
   const township = UNIT_WEATHER_TOWNSHIP[unit] || UNIT_WEATHER_TOWNSHIP.hq;
   const cached = apparentTempCache[township];
   const freshFor = cached?.error ? 2*60*1000 : 30*60*1000;
-  if (cached && Date.now() - cached.fetchedAt < freshFor) { state.apparentTemp = cached.error ? { township, error: true } : { township, at: cached.data.at }; return; }
+  if (cached && Date.now() - cached.fetchedAt < freshFor) { state.apparentTemp = cached.error ? { township, error: true } : { township, ...cached.data }; return; }
   if (apparentTempLoadingTownship === township) return;
   apparentTempLoadingTownship = township;
   fetchApparentTemp(township).then(data => {
     apparentTempCache[township] = { data, fetchedAt: Date.now() };
-    state.apparentTemp = { township, at: data.at };
+    state.apparentTemp = { township, ...data };
     apparentTempLoadingTownship = null;
     safeRender();
   }).catch(err => {
@@ -3517,7 +3588,10 @@ function renderWeatherCard(unit){
   const range = (w.minT!=null && w.maxT!=null) ? `${w.minT}°<span style="opacity:0.6;font-weight:600;"> / </span>${w.maxT}°` : "";
   const township = UNIT_WEATHER_TOWNSHIP[unit] || UNIT_WEATHER_TOWNSHIP.hq;
   const at = state.apparentTemp;
-  const atValue = (at && at.township === township && !at.error && at.at != null) ? at.at : null;
+  const townshipOk = at && at.township === township && !at.error;
+  const atValue = townshipOk && at.at != null ? at.at : null;
+  const rhValue = townshipOk && at.rh != null ? at.rh : null;
+  const tdValue = townshipOk && at.td != null ? at.td : null;
   return `
     <div class="weather-card spatial-card wx-${wxType}">
       <span class="weather-card-icon">${icon(wxType,28)}</span>
@@ -3529,6 +3603,8 @@ function renderWeatherCard(unit){
           ${w.pop!=null ? `<div class="weather-card-pop">${icon('rain',12)} 降雨機率 ${w.pop}%</div>` : ""}
           ${w.ci ? `<div class="weather-card-pop">${icon('sun',12)} ${esc(w.ci)}</div>` : ""}
           ${atValue!=null ? `<div class="weather-card-pop">${icon('heartbeat',12)} 體感 ${atValue}°</div>` : ""}
+          ${rhValue!=null ? `<div class="weather-card-pop">${icon('cloud',12)} 濕度 ${rhValue}%</div>` : ""}
+          ${tdValue!=null ? `<div class="weather-card-pop">${icon('cloud',12)} 露點 ${tdValue}°</div>` : ""}
         </div>
       </div>
     </div>`;
@@ -3575,6 +3651,37 @@ function renderWeatherForecastList(unit){
         <div class="weather-forecast-row">
           <div class="wf-top">
             <div class="wf-label">${weatherPeriodLabel(p.startTime)}</div>
+            <div class="wf-icon">${icon(wxType,20)}</div>
+            <div class="wf-desc">${esc(p.wx)}</div>
+            <div class="wf-temp">${range}</div>
+          </div>
+          <div class="wf-bottom">
+            <span class="wf-pop">${icon('rain',11)} 降雨機率 ${p.pop!=null ? `${p.pop}%` : "—"}</span>
+            ${p.ci ? `<span class="wf-ci">${icon('sun',11)} ${esc(p.ci)}</span>` : ""}
+          </div>
+        </div>`;
+      }).join("")}
+    </div>`;
+}
+// 一週預報清單：跟「未來預報」（36 小時內的時段）分開顯示，資料來源不同
+// （F-C0032-005，一整天一個時段，不分白天/晚上），排在更下面當作比較
+// 粗略的長期展望，兩份清單各自獨立、不互相取代。
+function renderWeeklyForecastList(unit){
+  const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
+  const wk = state.weeklyForecast;
+  if (!wk || wk.error || wk.county !== county || !wk.periods || !wk.periods.length) return "";
+  return `
+    <div class="section-label">未來一週</div>
+    <div class="weather-forecast-list">
+      ${wk.periods.map(p => {
+        const wxType = weatherIconFor(p.wx);
+        const range = (p.minT!=null && p.maxT!=null) ? `${p.minT}° / ${p.maxT}°` : "—";
+        const d = p.startTime ? new Date(p.startTime) : null;
+        const dayLabel = d ? `${d.getMonth()+1}/${d.getDate()}` : "";
+        return `
+        <div class="weather-forecast-row">
+          <div class="wf-top">
+            <div class="wf-label">${esc(dayLabel)}</div>
             <div class="wf-icon">${icon(wxType,20)}</div>
             <div class="wf-desc">${esc(p.wx)}</div>
             <div class="wf-temp">${range}</div>
@@ -3730,6 +3837,7 @@ function viewTasks(){
   ensureHazardsLoaded(unit);
   ensureApparentTempLoaded(unit);
   ensureAiInsightLoaded(unit);
+  ensureWeeklyForecastLoaded(unit);
   const mainTabs = `
     <div class="icon-subtabs">
       ${TASKS_MAIN_TABS.map(tb => `
@@ -3746,6 +3854,7 @@ function viewTasks(){
       ${renderWeatherCard(unit)}
       ${renderAiInsightBanner(unit)}
       ${renderWeatherForecastList(unit)}
+      ${renderWeeklyForecastList(unit)}
       ${renderWeatherTip(unit)}
     `;
   }
