@@ -892,11 +892,17 @@
   }
   .icon-subtab-icon{
     width:60px; height:60px; border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center;
-    background:var(--panel-2); color:var(--muted);
-    transition:background 0.15s cubic-bezier(0.25,1,0.5,1), color 0.15s cubic-bezier(0.25,1,0.5,1), box-shadow 0.15s cubic-bezier(0.25,1,0.5,1);
+    background:var(--glass-btn-bg); border:0.5px solid var(--glass-btn-border); color:var(--muted);
+    backdrop-filter:blur(12px) saturate(160%); -webkit-backdrop-filter:blur(12px) saturate(160%);
+    box-shadow:0 1px 3px rgba(0,0,0,0.08), inset 0 1px 1px var(--glass-btn-highlight), inset 0 -1px 1px rgba(0,0,0,0.04);
+    transition:background 0.15s cubic-bezier(0.25,1,0.5,1), border-color 0.15s cubic-bezier(0.25,1,0.5,1), color 0.15s cubic-bezier(0.25,1,0.5,1), box-shadow 0.15s cubic-bezier(0.25,1,0.5,1);
   }
   .icon-subtab .label{font-size:var(--text-xs); font-weight:700; color:var(--muted); transition:color 0.15s cubic-bezier(0.25,1,0.5,1);}
-  .icon-subtab.active .icon-subtab-icon{background:var(--blue); color:#fff; box-shadow:0 4px 12px color-mix(in srgb, var(--blue) 32%, transparent);}
+  .icon-subtab.active .icon-subtab-icon{
+    background:color-mix(in srgb, var(--blue) 55%, var(--glass-btn-bg-active));
+    border-color:var(--glass-btn-border-active); color:#fff;
+    box-shadow:0 1px 3px rgba(0,0,0,0.08), inset 0 1px 1px var(--glass-btn-highlight), inset 0 -1px 1px rgba(0,0,0,0.04), 0 4px 14px color-mix(in srgb, var(--blue) 40%, transparent);
+  }
   .icon-subtab.active .label{color:var(--blue);}
 
   /* ---- records search ---- */
@@ -1069,7 +1075,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-220-topbar-bg-shadow";
+const BUILD_TAG = "2026-07-09-222-icon-subtab-crystal-glass";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1550,6 +1556,7 @@ const RELEASE_NOTES = [
       "徹底重構版面架構解決底部分頁列的一系列問題：先前不管用 position:fixed 還是 position:sticky，快速滑動時跟著內容跑掉、內容較短的頁面貼在畫面中間留白，這兩個問題各自换了做法都還是會出現。這次改成整個畫面固定成裝置目前實際可視高度（不隨內容多寡變動），只有中間內容區自己捲動，頂部欄位跟底部分頁列變成版面裡真正固定佔位的區塊，不需要任何特殊定位就一直待在原地，兩個問題從架構上一次解決；連帶把「下拉重新整理」「換頁捲回頂端」等原本靠整頁捲動判斷的邏輯，改成看內容區自己的捲動位置",
       "頂欄（姓名/階級/通知/登出那一列）背景改成跟頁面同色，不再是一塊獨立的白色色塊——原本跟下面「勤務／天氣」子選單貼在一起時會出現色差明顯的接縫，現在融成同一個底色，改用比較明顯的陰影表現頂欄浮在內容上層的層次感；子選單本身跟頂欄之間的留白也一併縮小",
       "「勤務／天氣」子選單背景改成半透明毛玻璃效果（跟返回鍵/底部分頁列同一套質感），捲動內容時底下的卡片顏色會透出模糊的光暈，不再是一塊不透光的純色",
+      "「勤務／天氣」子選單的圖示磚也改成透明玻璃質感（原本是純色底），未選中的磚是半透明白霧玻璃、選中的磚是半透明藍色玻璃並帶淡淡光暈邊框，捲動時底下內容顏色一樣會透出來，晶瑩剔透感更完整",
     ] },
   ] },
   { date: "2026/07/08", groups: [
