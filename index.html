@@ -586,11 +586,16 @@
   .weather-stat-tile{
     display:flex; align-items:center; justify-content:space-between; gap:6px;
     background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md);
-    padding:10px 12px; box-shadow:var(--shadow-xs);
+    padding:18px 14px; box-shadow:var(--shadow-xs);
   }
   .weather-stat-tile .lbl{font-size:11px; color:var(--muted); font-weight:600;}
   .weather-stat-tile .val{font-size:13px; font-weight:700; color:var(--text); font-family:var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap;}
+  /* 數值超過門檻（見 weatherStatAccent()）變色警示：amber 是留意、red 是
+     危險等級，底色跟邊框也跟著染色，不只是文字變色，掃過去更容易注意到。 */
+  .weather-stat-tile.accent-amber{background:color-mix(in srgb, var(--amber) 10%, var(--panel)); border-color:color-mix(in srgb, var(--amber) 28%, var(--border));}
   .weather-stat-tile.accent-amber .val{color:var(--amber-text);}
+  .weather-stat-tile.accent-red{background:color-mix(in srgb, var(--red) 10%, var(--panel)); border-color:color-mix(in srgb, var(--red) 30%, var(--border));}
+  .weather-stat-tile.accent-red .val{color:var(--red); font-weight:800;}
   /* 未來預報橫向捲動：36 小時內的時段＋一週縣市預報接在同一條軸上，
      每張卡固定寬度，用左右滑動取代原本上下疊兩份直向清單；上面補一行
      小標籤＋滑動提示箭頭，呼應資料實際涵蓋的天數（不寫死「14天」）。 */
@@ -1215,7 +1220,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-245-weather-stats-grid-2x3";
+const BUILD_TAG = "2026-07-09-246-weather-stats-accent-warning";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1730,6 +1735,7 @@ const RELEASE_NOTES = [
       "Core-AI Insight 現在會一併參考目前生效中的天氣特報（颱風/豪雨/強風等），生成的建議會針對特報類型給具體因應方式，不再只根據氣溫/降雨機率給空泛的天氣小提醒",
       "未來預報清單的天氣圖示改用 emoji；拿掉「未來 N 個時段」這行字，只留「滑動看更多」提示",
       "觀測數據小卡改成 2 欄 3 列排列（體感/濕度/露點/風速/紫外線/雨量剛好 6 格），每格改成標籤在左、數值在右的橫向排列，字級也跟著縮小，資訊密度更高",
+      "觀測數據小卡加高、加上超過門檻變色警示：體感溫度 33/36°C、露點溫度 24/27°C、風速依蒲福風級 6/8 級、紫外線依氣象署自己的分級文字（過量級/危險級）、近3小時雨量 15/40mm，超過會整格染成琥珀色（留意）或紅色（危險）",
     ] },
     { category: "介面優化", items: [
       "任務卡片／急診待命卡片重新設計：拿掉原本左側 4px 純色狀態色條，改成整張卡片依狀態（待命中/出勤中/已抵達現場/前往下一地點/返營中/已完成）呈現柔和的液態光暈色調，疊三層陰影做出懸浮的空間深度感；有患者記錄的任務卡片會強制蓋成紅色光暈並加上緩慢的呼吸感光圈，比一般狀態更搶眼",
@@ -3802,6 +3808,23 @@ function renderWeatherMainCard(unit){
 // 觀測數據便當盒：體感溫度／相對濕度／露點／風速風向／紫外線指數／
 // 近 3 小時雨量，每項獨立一格，資訊密度比塞進天氣卡片的一排 pill 高，
 // 掃過去比較容易一眼抓到重點數值。沒有值的項目直接不佔格，不會留白格。
+// 每項數值超過門檻時變色警示（amber=留意、red=危險），門檻參考：
+// 體感溫度 33/36°C 是氣象署對高溫的分級用詞（36 以上會發布高溫資訊，
+// 是危險級）；露點溫度 24/27°C 是氣象上普遍用來描述「悶熱／極不舒適」
+// 的分界；風速用蒲福風級 6/8 級（強風/大風，已經是有實際危害的等級）；
+// 紫外線直接沿用氣象署自己回傳的 uvLevel 分級文字（過量級/危險級）；
+// 雨量用 15mm／40mm 對應「大雨」等級近 3 小時累積的粗略換算。這些都是
+// 既有的氣象/職業安全分級標準，不是憑感覺編的數字。
+function weatherStatAccent(key, val){
+  if (val == null) return null;
+  if (key === "at") return val >= 36 ? "red" : val >= 33 ? "amber" : null;
+  if (key === "td") return val >= 27 ? "red" : val >= 24 ? "amber" : null;
+  if (key === "windSpeed") return null; // 風速用蒲福風級判斷，見下面呼叫端
+  if (key === "beaufort") return val >= 8 ? "red" : val >= 6 ? "amber" : null;
+  if (key === "uvLevel") return /危險|危险/.test(val) ? "red" : /過量|过量/.test(val) ? "amber" : null;
+  if (key === "rainHour3") return val >= 40 ? "red" : val >= 15 ? "amber" : null;
+  return null;
+}
 function renderWeatherStatsGrid(unit){
   const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
   const township = UNIT_WEATHER_TOWNSHIP[unit] || UNIT_WEATHER_TOWNSHIP.hq;
@@ -3812,12 +3835,12 @@ function renderWeatherStatsGrid(unit){
   const rainOk = rain && rain.county === county && !rain.error;
   const rainError = rain && rain.county === county && rain.error;
   const items = [];
-  if (townshipOk && at.at != null) items.push({ lbl:"體感溫度", val:`${at.at}°C` });
+  if (townshipOk && at.at != null) items.push({ lbl:"體感溫度", val:`${at.at}°C`, accent: weatherStatAccent("at", at.at) });
   if (townshipOk && at.rh != null) items.push({ lbl:"相對濕度", val:`${at.rh}%` });
-  if (townshipOk && at.td != null) items.push({ lbl:"露點溫度", val:`${at.td}°C` });
-  if (townshipOk && at.windSpeed != null) items.push({ lbl:"風速", val:`${at.windDir ? esc(at.windDir)+' ' : ''}${at.windSpeed}m/s`, accent:"amber" });
-  if (townshipOk && at.uvIndex != null) items.push({ lbl:"紫外線指數", val:`${at.uvIndex}${at.uvLevel ? '／'+esc(at.uvLevel) : ''}` });
-  if (rainOk && rain.hour3 != null && rain.hour3 > 0) items.push({ lbl:"近3小時雨量", val:`${rain.hour3}mm` });
+  if (townshipOk && at.td != null) items.push({ lbl:"露點溫度", val:`${at.td}°C`, accent: weatherStatAccent("td", at.td) });
+  if (townshipOk && at.windSpeed != null) items.push({ lbl:"風速", val:`${at.windDir ? esc(at.windDir)+' ' : ''}${at.windSpeed}m/s`, accent: weatherStatAccent("beaufort", at.beaufort) });
+  if (townshipOk && at.uvIndex != null) items.push({ lbl:"紫外線指數", val:`${at.uvIndex}${at.uvLevel ? '／'+esc(at.uvLevel) : ''}`, accent: weatherStatAccent("uvLevel", at.uvLevel || "") });
+  if (rainOk && rain.hour3 != null && rain.hour3 > 0) items.push({ lbl:"近3小時雨量", val:`${rain.hour3}mm`, accent: weatherStatAccent("rainHour3", rain.hour3) });
   const gridHtml = items.length ? `
     <div class="weather-stats-grid">
       ${items.map(i => `<div class="weather-stat-tile${i.accent?' accent-'+i.accent:''}"><span class="lbl">${esc(i.lbl)}</span><span class="val">${i.val}</span></div>`).join("")}
