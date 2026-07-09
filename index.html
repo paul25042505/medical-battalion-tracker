@@ -850,6 +850,24 @@
   .tabs2.scroll::-webkit-scrollbar{display:none;}
   .tabs2.scroll .tab2{flex:0 0 auto; padding:9px 15px; scroll-snap-align:start;}
 
+  /* ---- 圖示式子選單（例如「任務」頁最上面的勤務／天氣切換）：一排方形
+     圖示磚，選中的那顆填滿主題色、圖示變白，其餘保持淺灰底＋灰字，
+     跟純文字的 .tabs2 頁籤區隔開來，用在「切換的是完全不同的畫面內容」
+     而不是「同一份清單的篩選條件」這種情境。 */
+  .icon-subtabs{display:flex; gap:14px; margin-bottom:20px;}
+  .icon-subtab{
+    display:flex; flex-direction:column; align-items:center; gap:8px; flex-shrink:0;
+    background:none; border:none; font-family:var(--sans); color:var(--muted);
+  }
+  .icon-subtab-icon{
+    width:60px; height:60px; border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center;
+    background:var(--panel-2); color:var(--muted);
+    transition:background 0.15s cubic-bezier(0.25,1,0.5,1), color 0.15s cubic-bezier(0.25,1,0.5,1), box-shadow 0.15s cubic-bezier(0.25,1,0.5,1);
+  }
+  .icon-subtab .label{font-size:var(--text-xs); font-weight:700; color:var(--muted); transition:color 0.15s cubic-bezier(0.25,1,0.5,1);}
+  .icon-subtab.active .icon-subtab-icon{background:var(--blue); color:#fff; box-shadow:0 4px 12px color-mix(in srgb, var(--blue) 32%, transparent);}
+  .icon-subtab.active .label{color:var(--blue);}
+
   /* ---- records search ---- */
   .search-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;}
   .search-grid .field{margin-bottom:0;}
@@ -1020,7 +1038,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-216-tasks-weather-subtab";
+const BUILD_TAG = "2026-07-09-217-icon-subtab-style";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1485,6 +1503,7 @@ const RELEASE_NOTES = [
     { category: "任務管理", items: [
       "「任務」頁的狀態頁籤把「出勤中」跟「前往中」合併成同一個「出勤中」頁籤（對調度來說都是車輛還在路上，拆兩個頁籤沒有實益），單筆勤務卡片上顯示的狀態文字不受影響，還是會分別顯示「出勤中」或「前往下一地點」",
       "「任務」頁最上面新增「勤務／天氣」子選單：「勤務」就是原本的狀態頁籤跟勤務清單；「天氣」是原本首頁的天氣資訊（天氣卡片、貼心提醒、特報橫幅）搬過來的新頁面，首頁不再重複顯示天氣資訊",
+      "上述「勤務／天氣」子選單改成圖示磚樣式：選中的項目整塊填滿主題色、圖示變白，其餘保持淺灰底，取代原本純文字的膠囊頁籤",
     ] },
     { category: "關於系統／意見回饋", items: [
       "「關於系統 → 更新紀錄」改成依功能區塊分類顯示（例如「患者紀錄」「急診待命」），不再是同一天所有異動擠成一長串沒有結構的清單",
@@ -3303,8 +3322,8 @@ function tabStatuses(tb){ return tb.statuses || [tb.key]; }
 // 任務頁最上面的子選單：勤務（原本的狀態頁籤＋清單）／天氣（原本首頁的
 // 天氣資訊，移到這裡集中管理，首頁不再重複顯示）。
 const TASKS_MAIN_TABS = [
-  { key:"duty", label:"勤務" },
-  { key:"weather", label:"天氣" }
+  { key:"duty", label:"勤務", iconName:"tasks" },
+  { key:"weather", label:"天氣", iconName:"cloud" }
 ];
 function viewTasks(){
   const p = state.profile;
@@ -3312,9 +3331,12 @@ function viewTasks(){
   ensureWeatherLoaded(unit);
   ensureHazardsLoaded(unit);
   const mainTabs = `
-    <div class="tabs2">
+    <div class="icon-subtabs">
       ${TASKS_MAIN_TABS.map(tb => `
-        <div class="tab2 ${state.tasksMainTab===tb.key?'active':''}" onclick="window.__setTasksMainTab('${tb.key}')">${tb.label}</div>`).join("")}
+        <button type="button" class="icon-subtab ${state.tasksMainTab===tb.key?'active':''}" onclick="window.__setTasksMainTab('${tb.key}')">
+          <span class="icon-subtab-icon">${icon(tb.iconName,26)}</span>
+          <span class="label">${tb.label}</span>
+        </button>`).join("")}
     </div>`;
 
   if (state.tasksMainTab === "weather") {
