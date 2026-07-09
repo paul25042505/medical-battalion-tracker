@@ -531,16 +531,29 @@
     font-size:var(--text-sm); color:var(--muted); line-height:1.6; box-shadow:var(--shadow-xs);
   }
   .weather-tip svg{color:var(--blue); flex-shrink:0; margin-top:1px;}
-  .hazard-banner{margin-bottom:14px;}
-  .hazard-row{
-    display:flex; align-items:flex-start; gap:10px; color:var(--red);
-    background:color-mix(in srgb, var(--red) 8%, transparent); border:1px solid color-mix(in srgb, var(--red) 22%, transparent);
-    border-radius:var(--radius-md); padding:12px 14px; margin-bottom:8px;
+  .hazard-banner{margin-bottom:18px;}
+  /* 天氣特報改成跟天氣卡片同等視覺份量的警示卡（漸層底＋白字），原本
+     淡粉紅色細框太不顯眼，跟一般提示訊息分不出輕重——陸上警報這類資訊
+     應該要比日常天氣資訊更搶眼。右上角「特報中」徽章的圓點用跟待命中
+     狀態同一組脈動效果，強化「現在生效中」的動態感。 */
+  .hazard-card{
+    position:relative; border-radius:var(--radius-lg); padding:16px 18px; margin-bottom:10px;
+    color:#fff; box-shadow:var(--shadow-sm);
+    background:linear-gradient(135deg,#FF7A59,#E0342A);
   }
-  .hazard-row:last-child{margin-bottom:0;}
-  .hazard-txt{flex:1; min-width:0;}
-  .hazard-name{font-weight:700; font-size:var(--text-sm); color:var(--text);}
-  .hazard-time{font-size:var(--text-xs); color:var(--muted); font-family:var(--mono); margin-top:2px;}
+  .hazard-card:last-child{margin-bottom:0;}
+  .hazard-card-top{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
+  .hazard-card-icon{
+    width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    background:rgba(255,255,255,0.24);
+  }
+  .hazard-card-live{
+    display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:999px;
+    background:rgba(255,255,255,0.24); font-size:var(--text-xs); font-weight:700;
+  }
+  .hazard-card-live .dot{width:6px; height:6px; border-radius:50%; background:#fff; animation:badgePulse 1.6s ease-in-out infinite;}
+  .hazard-card-name{font-size:var(--text-base); font-weight:700;}
+  .hazard-card-time{font-size:var(--text-xs); font-weight:600; font-family:var(--mono); opacity:0.9; margin-top:4px;}
   /* 首頁統計卡片：改成白底＋小色塊圖示（比照 iOS Health/Widget 摘要卡的做法），
      不再整塊塗滿飽和背景色——原本 5 個色塊一字排開太花，數字改回中性深色，
      只用小色塊圖示保留辨識度。 */
@@ -1095,7 +1108,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-228-apparent-temp";
+const BUILD_TAG = "2026-07-09-229-hazard-card-redesign";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1588,6 +1601,7 @@ const RELEASE_NOTES = [
       "天氣頁新增「未來預報」清單：原本只顯示最近一個時段（今天白天/晚上），中央氣象署 API 其實一次會給 3 個時段（涵蓋未來 36 小時），現在把剩下的時段（例如今晚、明天白天）也條列出來，各自顯示天氣狀況、溫度區間、降雨機率",
       "天氣卡片＋未來預報清單新增「舒適度」資訊（例如舒適／悶熱／悶熱至炎熱），體感偏悶熱或偏冷時，下方提醒文字也會補一句提醒留意人員身體狀況",
       "天氣卡片新增「體感溫度」（成功北醫務所、精北醫務所各自對應烏日區、大林鎮），當體感溫度比預報最高氣溫高出 3°C 以上時，下方提醒文字會額外提醒戶外執勤留意",
+      "天氣特報（例如陸上強風特報）改成跟天氣卡片同等視覺份量的警示卡：漸層紅底＋白字，右上角「特報中」徽章加上脈動圓點，取代原本淡粉紅色細框、跟一般提示訊息分不出輕重的樣式",
     ] },
   ] },
   { date: "2026/07/08", groups: [
@@ -3448,12 +3462,13 @@ function renderHazardBanner(unit){
   return `
     <div class="hazard-banner">
       ${h.list.map(x => `
-        <div class="hazard-row">
-          ${icon('alert',18)}
-          <div class="hazard-txt">
-            <div class="hazard-name">${esc(county)} ${esc(x.phenomena)}${esc(x.significance)}</div>
-            ${x.startTime ? `<div class="hazard-time">${fmtTime(new Date(x.startTime).getTime())}${x.endTime?' 至 '+fmtTime(new Date(x.endTime).getTime()):''}</div>` : ""}
+        <div class="hazard-card">
+          <div class="hazard-card-top">
+            <span class="hazard-card-icon">${icon('alert',20)}</span>
+            <span class="hazard-card-live"><span class="dot"></span>特報中</span>
           </div>
+          <div class="hazard-card-name">${esc(county)} ${esc(x.phenomena)}${esc(x.significance)}</div>
+          ${x.startTime ? `<div class="hazard-card-time">${fmtTime(new Date(x.startTime).getTime())}${x.endTime?' 至 '+fmtTime(new Date(x.endTime).getTime()):''}</div>` : ""}
         </div>`).join("")}
     </div>`;
 }
