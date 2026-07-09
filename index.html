@@ -578,7 +578,7 @@
   .ai-insight-text.muted{color:var(--muted);}
   /* 觀測數據便當盒：體感/濕度/露點/風速風向/紫外線/雨量各自一格，3 欄
      排列，沒有值的項目不佔格。 */
-  .weather-stats-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px;}
+  .weather-stats-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:14px;}
   .weather-stat-tile{
     background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md);
     padding:12px 8px; text-align:center; box-shadow:var(--shadow-xs);
@@ -590,7 +590,7 @@
      每張卡固定寬度，用左右滑動取代原本上下疊兩份直向清單；上面補一行
      小標籤＋滑動提示箭頭，呼應資料實際涵蓋的天數（不寫死「14天」）。 */
   .forecast-strip-head{
-    display:flex; justify-content:space-between; align-items:center;
+    display:flex; justify-content:flex-end; align-items:center;
     font-size:var(--text-xs); font-weight:700; color:var(--muted); font-family:var(--mono);
     letter-spacing:0.04em; margin:-5px 4px 8px 4px;
   }
@@ -602,6 +602,7 @@
   }
   .fsc-label{font-size:var(--text-xs); font-weight:700; color:var(--muted); white-space:nowrap;}
   .fsc-icon{color:var(--blue); display:flex; justify-content:center; margin:6px 0;}
+  .fsc-icon.fsc-emoji{font-size:22px; line-height:1;}
   .fsc-range{font-size:var(--text-sm); font-weight:700; font-family:var(--mono); font-variant-numeric:tabular-nums; color:var(--text); white-space:nowrap;}
   .fsc-pop{display:flex; align-items:center; justify-content:center; gap:2px; font-size:var(--text-xs); color:var(--blue); font-weight:700; margin-top:4px;}
   .weather-tip{
@@ -1209,7 +1210,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-243-weather-redesign-ai-hazard";
+const BUILD_TAG = "2026-07-09-244-weather-page-polish";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1722,6 +1723,7 @@ const RELEASE_NOTES = [
       "天氣卡片新增風速、風向、紫外線指數：修正鄉鎮預報資料來源後，順便補上原本以為這組資料集沒有的欄位（風速風向）與紫外線指數（先前因為抓不到可靠資料來源而擱置的項目）",
       "天氣頁版型重新設計：特報卡改成琥珀色漸層＋毛玻璃面板，補上真實的蒲福風級徽章（依鄉鎮預報資料的風速欄位換算，不是編造的陣風數字）跟依特報類型（強風/大雨/低溫/高溫）給的行動提醒；天氣現況卡跟 Core-AI Insight 合併成同一張卡片；體感/濕度/露點/風速/紫外線/雨量改成獨立的觀測數據小卡；未來預報改成橫向捲動清單，取代原本上下疊兩份直向清單",
       "Core-AI Insight 現在會一併參考目前生效中的天氣特報（颱風/豪雨/強風等），生成的建議會針對特報類型給具體因應方式，不再只根據氣溫/降雨機率給空泛的天氣小提醒",
+      "觀測數據小卡拿掉露點溫度、改成 2 欄排列；未來預報清單的天氣圖示改用 emoji；拿掉「未來 N 個時段」這行字，只留「滑動看更多」提示",
     ] },
     { category: "介面優化", items: [
       "任務卡片／急診待命卡片重新設計：拿掉原本左側 4px 純色狀態色條，改成整張卡片依狀態（待命中/出勤中/已抵達現場/前往下一地點/返營中/已完成）呈現柔和的液態光暈色調，疊三層陰影做出懸浮的空間深度感；有患者記錄的任務卡片會強制蓋成紅色光暈並加上緩慢的呼吸感光圈，比一般狀態更搶眼",
@@ -3096,6 +3098,14 @@ function weatherIconFor(wx){
   if (wx.startsWith("晴") && !wx.includes("多雲") && !wx.includes("陰")) return "sun";
   return "cloud";
 }
+// 未來預報橫向捲動清單改用 emoji（比照使用者提供的設計參考稿），跟站內
+// 其他地方用的 SVG 圖示系統是兩套獨立的視覺語言，只有這個清單這樣用。
+function weatherEmojiFor(wx){
+  const type = weatherIconFor(wx);
+  if (type === "rain") return "🌧️";
+  if (type === "sun") return "☀️";
+  return "☁️";
+}
 
 // 天氣特報（W-C0033-001，各縣市目前有效的天氣警特報，含颱風陸上警報／大雨特報等）。
 // 縣市層級的特報 feed 本身就會涵蓋「颱風陸上警報」：陸上警報生效時，受影響縣市會
@@ -3798,7 +3808,6 @@ function renderWeatherStatsGrid(unit){
   const items = [];
   if (townshipOk && at.at != null) items.push({ lbl:"體感溫度", val:`${at.at}°C` });
   if (townshipOk && at.rh != null) items.push({ lbl:"相對濕度", val:`${at.rh}%` });
-  if (townshipOk && at.td != null) items.push({ lbl:"露點溫度", val:`${at.td}°C` });
   if (townshipOk && at.windSpeed != null) items.push({ lbl:"風速", val:`${at.windDir ? esc(at.windDir)+' ' : ''}${at.windSpeed}m/s`, accent:"amber" });
   if (townshipOk && at.uvIndex != null) items.push({ lbl:"紫外線指數", val:`${at.uvIndex}${at.uvLevel ? '／'+esc(at.uvLevel) : ''}` });
   if (rainOk && rain.hour3 != null && rain.hour3 > 0) items.push({ lbl:"近3小時雨量", val:`${rain.hour3}mm` });
@@ -3806,7 +3815,7 @@ function renderWeatherStatsGrid(unit){
     <div class="weather-stats-grid">
       ${items.map(i => `<div class="weather-stat-tile${i.accent?' accent-'+i.accent:''}"><span class="lbl">${esc(i.lbl)}</span><span class="val">${i.val}</span></div>`).join("")}
     </div>` : "";
-  const atErrorHtml = atError ? `<div class="weather-tip">${icon('bell',16)}<div>體感/濕度/露點/風速/紫外線載入失敗${at.message ? '：'+esc(at.message) : ''}</div></div>` : "";
+  const atErrorHtml = atError ? `<div class="weather-tip">${icon('bell',16)}<div>體感/濕度/風速/紫外線載入失敗${at.message ? '：'+esc(at.message) : ''}</div></div>` : "";
   const rainErrorHtml = rainError ? `<div class="weather-tip">${icon('bell',16)}<div>雨量資料載入失敗${rain.message ? '：'+esc(rain.message) : ''}</div></div>` : "";
   return gridHtml + atErrorHtml + rainErrorHtml;
 }
@@ -3821,14 +3830,14 @@ function renderForecastStrip(unit){
   if (w && !w.error && w.county === county && w.periods && w.periods.length > 1) {
     w.periods.slice(1).forEach(p => {
       const range = (p.minT!=null && p.maxT!=null) ? `${p.minT}° / ${p.maxT}°` : "—";
-      cards.push({ label: weatherPeriodLabel(p.startTime), wxType: weatherIconFor(p.wx), range, pop: p.pop });
+      cards.push({ label: weatherPeriodLabel(p.startTime), emoji: weatherEmojiFor(p.wx), range, pop: p.pop });
     });
   }
   if (wk && !wk.error && wk.county === county && wk.periods && wk.periods.length) {
     wk.periods.forEach(p => {
       const range = (p.minT!=null && p.maxT!=null) ? `${p.minT}° / ${p.maxT}°` : "—";
       const d = p.startTime ? new Date(p.startTime) : null;
-      cards.push({ label: d ? `${d.getMonth()+1}/${d.getDate()}` : "", wxType: weatherIconFor(p.wx), range, pop: null });
+      cards.push({ label: d ? `${d.getMonth()+1}/${d.getDate()}` : "", emoji: weatherEmojiFor(p.wx), range, pop: null });
     });
   }
   if (!cards.length) {
@@ -3839,12 +3848,12 @@ function renderForecastStrip(unit){
   }
   return `
     <div class="section-label">未來預報</div>
-    <div class="forecast-strip-head"><span>未來 ${cards.length} 個時段</span><span>滑動看更多 →</span></div>
+    <div class="forecast-strip-head"><span>滑動看更多 →</span></div>
     <div class="forecast-strip">
       ${cards.map(c => `
         <div class="forecast-strip-card">
           <div class="fsc-label">${esc(c.label)}</div>
-          <div class="fsc-icon">${icon(c.wxType,22)}</div>
+          <div class="fsc-icon fsc-emoji">${c.emoji}</div>
           <div class="fsc-range">${c.range}</div>
           ${c.pop!=null ? `<div class="fsc-pop">${icon('rain',10)} ${c.pop}%</div>` : ""}
         </div>`).join("")}
