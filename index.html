@@ -1189,7 +1189,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-236-weather-error-visibility";
+const BUILD_TAG = "2026-07-09-237-gemini-model-3-5-flash";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1694,6 +1694,7 @@ const RELEASE_NOTES = [
       "天氣卡片新增即時雨量資訊：取單位所在縣市範圍內雨量站近 3 小時累積雨量最高的一筆當代表值，只有真的測到雨才會顯示，沒下雨時不佔版面",
       "「Core-AI Insight」正式啟用：先前只有畫面框架，現在補上金鑰後會真的依當下天氣數據生成風險預測與行動建議",
       "修正一週預報／雨量／體感溫度濕度露點資料抓取失敗時，畫面會直接不顯示整個區塊，跟「還在載入中」看起來一樣，完全看不出來是失敗還是還沒載完：現在失敗時會明確顯示「載入失敗」提示，方便排查問題",
+      "修正「Core-AI Insight」實機一律顯示「AI 建議暫時無法取得」的問題：呼叫的 Gemini 1.5 Flash 模型已經被 Google 下架（呼叫會回傳 404），改成呼叫目前還在服務的 Gemini 3.5 Flash",
     ] },
     { category: "介面優化", items: [
       "任務卡片／急診待命卡片重新設計：拿掉原本左側 4px 純色狀態色條，改成整張卡片依狀態（待命中/出勤中/已抵達現場/前往下一地點/返營中/已完成）呈現柔和的液態光暈色調，疊三層陰影做出懸浮的空間深度感；有患者記錄的任務卡片會強制蓋成紅色光暈並加上緩慢的呼吸感光圈，比一般狀態更搶眼",
@@ -3154,7 +3155,7 @@ function ensureApparentTempLoaded(unit){
   });
 }
 
-// Core-AI Insight：把目前天氣數據組成 prompt 丟給 Gemini 1.5 Flash，取得
+// Core-AI Insight：把目前天氣數據組成 prompt 丟給 Gemini 3.5 Flash，取得
 // 一句「風險預測與行動建議」文字，顯示在天氣卡片底部。快取 30 分鐘（跟
 // 天氣資料同一個更新頻率），避免每次畫面重繪都重打一次計費 API；失敗
 // （例如金鑰還沒換成實際申請到的值）快取縮短成 2 分鐘，理由跟
@@ -3162,7 +3163,7 @@ function ensureApparentTempLoaded(unit){
 const aiInsightCache = {}; // { [縣市名稱]: { text, fetchedAt, error } }
 let aiInsightLoadingCounty = null;
 async function fetchGeminiInsight(weatherData){
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`;
   const promptText = `你是一個專業的氣象 AI 助手。請根據以下即時氣象數據：地點 ${weatherData.county}、天氣現況 ${weatherData.wx}、氣溫 ${weatherData.minT}–${weatherData.maxT}°C${weatherData.at != null ? `、體感溫度 ${weatherData.at}°C` : ""}、降雨機率 ${weatherData.pop}%${weatherData.ci ? `、舒適度 ${weatherData.ci}` : ""}，生成一句 60 字以內、針對戶外執勤與隨車設備安全的「風險預測與行動建議」。`;
   const res = await fetch(url, {
     method: "POST",
