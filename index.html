@@ -1189,7 +1189,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-241-fix-weekly-township-endpoints";
+const BUILD_TAG = "2026-07-09-242-share-app-url";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1706,6 +1706,7 @@ const RELEASE_NOTES = [
       "狀態徽章的圓點呼吸感效果從只有「待命中」擴大到所有進行中的狀態（出勤中/已抵達現場/前往下一地點/返營中），只有「已完成」維持靜止；深色模式下這套設計會自動變成發光邊框＋懸浮夜光卡片，淺色模式維持白瓷卡片＋柔和彩色陰影，同一份規則兩種模式共用",
       "天氣卡片也補上同一套懸浮陰影深度感，溫度數字改用等寬字體＋加粗，跟數值型資訊（車號、時間）的呈現方式一致",
       "任務卡片／急診待命卡片的標題（勤務名稱、醫務所名稱）字級放大、字重加粗，跟底下欄位標籤（車號/車長/駕駛等）拉開對比——欄位標籤改細體，內容值字級縮小一級，數字（車號、電話、時間、降雨機率）全面補上等寬對齊（tabular-nums），標題突出、內文收斂，閱讀節奏更清楚",
+      "「更多」頁系統資訊新增「分享 App 網址」：手機上會直接叫出原生分享面板（可以直接用 LINE／簡訊等既有管道轉發），沒有分享面板的裝置（例如電腦版瀏覽器）改成複製網址到剪貼簿並跳出提示",
     ] },
   ] },
   { date: "2026/07/08", groups: [
@@ -3430,7 +3431,8 @@ const ICON_PATHS = {
   refresh: `<path d="M4 12a8 8 0 0 1 14-5.2M20 12a8 8 0 0 1-14 5.2"/><path d="M18 3v4h-4M6 21v-4h4"/>`,
   lightbulb: `<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8 1 .8 1.6v.5h5.4v-.5c0-.6.3-1.2.8-1.6A6 6 0 0 0 12 3Z"/>`,
   sparkle: `<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/>`,
-  chat: `<path d="M4 5h16v11H8l-4 4V5Z"/>`
+  chat: `<path d="M4 5h16v11H8l-4 4V5Z"/>`,
+  share: `<path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>`
 };
 function icon(name, size){
   size = size || 20;
@@ -5014,6 +5016,7 @@ function viewProfile(){
   }
   // Section 3：系統資訊，所有使用者皆可見。
   const systemRows = [
+    settingsRow({icon:'share', bg:'#E8F1FF', fg:'#0056C7', title:'分享 App 網址', onclick:"window.__shareApp()"}),
     settingsRow({icon:'check', bg:'#F2E9FE', fg:'#6B23C7', title:'關於系統', subtitle:`build ${BUILD_TAG}`, onclick:"window.__nav({name:'about'})"}),
   ];
 
@@ -5922,6 +5925,23 @@ function render(){
    ========================================================= */
 window.__login = doLogin;
 window.__logout = doLogout;
+// 分享 App 網址：有原生分享面板（iOS/Android 瀏覽器都支援）就優先用那個，
+// 讓使用者可以直接透過 LINE／簡訊等既有管道轉發；沒有的話（例如桌面版
+// 瀏覽器）退回複製到剪貼簿＋toast 提示，兩種情況使用者都會拿到網址。
+window.__shareApp = async () => {
+  const url = location.origin + location.pathname;
+  if (navigator.share) {
+    try { await navigator.share({ title: "MEDTRACK 衛生營車輛人員動態管制系統", url }); }
+    catch (e) { /* 使用者按取消，不算錯誤，不用提示 */ }
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast("已複製網址");
+  } catch (e) {
+    showToast("複製網址失敗：" + (e.message || e));
+  }
+};
 window.__confirmLogout = () => { if (confirm("確定要登出嗎？")) doLogout(); };
 window.__refreshProfile = () => { if (profilePoll) profilePoll.refreshNow(); };
 window.__nav = nav;
