@@ -318,7 +318,7 @@
      是首頁/任務頁清單最主要的分節，比一般區塊標題更需要突出。 */
   .section-label.section-label-duty{
     display:flex; align-items:baseline; gap:6px; font-size:var(--text-lg); font-weight:800;
-    color:var(--text); text-transform:none; letter-spacing:0;
+    color:var(--muted); text-transform:none; letter-spacing:0;
   }
   .section-label-duty .en{font-size:var(--text-xs); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em;}
   .section-label-duty .slash{color:var(--border); font-weight:400;}
@@ -1273,7 +1273,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-256-stat-grid-duty-label-redesign";
+const BUILD_TAG = "2026-07-10-257-duty-label-gray-geocode-by-name";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1720,6 +1720,10 @@ const RELEASE_NOTES = [
     { category: "介面優化", items: [
       "首頁「今日概況」統計卡片改版：標籤跟色塊圖示改到頂排（標籤左、圖示右），大數字移到最下面靠左，取代原本圖示/數字/標籤整個置中堆疊的排法，數字字級也再放大一階更醒目",
       "首頁與任務頁「勤務」「洽公」清單標題改成雙語大標（例如「SERVICE／勤務」「LIAISON／洽公」），字級放大、中文加粗，跟其他區塊標題的小型全大寫樣式區分開來，兩份清單更容易一眼分辨",
+      "上述「勤務」「洽公」雙語大標顏色改成灰色，不用跟卡片標題一樣的黑色，維持「標題」該有的次要視覺份量",
+    ] },
+    { category: "醫院資訊", items: [
+      "新增醫院表單的「名稱查詢座標」改用醫院名稱查詢（原本是查地址）：地址是選填欄位、常常沒填或格式不一致，醫院名稱幾乎一定會填，也比較容易對到 OpenStreetMap 資料庫裡實際登記的地點",
     ] },
   ] },
   { date: "2026/07/09", groups: [
@@ -5984,7 +5988,7 @@ function viewBaseDataModal(){
   } else if (coll === "hospitals") {
     title = editing ? "編輯醫院" : "新增醫院";
     fields = `
-      <div class="field"><label>醫院名稱</label><input name="name" required value="${esc(editing?.name||'')}"></div>
+      <div class="field"><label>醫院名稱</label><input id="hospitalNameInput" name="name" required value="${esc(editing?.name||'')}"></div>
       <div class="field"><label>縣市</label>
         <select name="county" required>
           <option value="">請選擇縣市</option>
@@ -5996,9 +6000,9 @@ function viewBaseDataModal(){
       <div class="field"><label>座標（選填，格式：緯度,經度）</label><input id="hospitalCoordsInput" name="coords" value="${(editing && editing.lat != null && editing.lng != null) ? `${editing.lat},${editing.lng}` : ''}" placeholder="例如：24.1786,120.6400"></div>
       <div style="display:flex; gap:8px; margin:-8px 0 8px;">
         <button type="button" class="icon-btn" onclick="window.__fillHospitalCoordsFromGPS()">${icon('pin',14)} <span class="btn-label">抓取目前位置</span></button>
-        <button type="button" class="icon-btn" id="geocodeAddressBtn" onclick="window.__geocodeHospitalAddress()">${icon('pin',14)} <span class="btn-label">地址查詢座標</span></button>
+        <button type="button" class="icon-btn" id="geocodeNameBtn" onclick="window.__geocodeHospitalName()">${icon('pin',14)} <span class="btn-label">名稱查詢座標</span></button>
       </div>
-      <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">填了座標，「顯示附近醫院」會直接算你跟這間醫院的實際距離（比行政區/縣市更準）；不填就退回用行政區/縣市概略比對。人在醫院現場可以直接按「抓取目前位置」，或是填好地址後按「地址查詢座標」自動換算（地址查詢由 OpenStreetMap 貢獻者的 Nominatim 服務提供，查不到時請改用抓取目前位置或手動輸入）。</div>
+      <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">填了座標，「顯示附近醫院」會直接算你跟這間醫院的實際距離（比行政區/縣市更準）；不填就退回用行政區/縣市概略比對。人在醫院現場可以直接按「抓取目前位置」，或是填好醫院名稱後按「名稱查詢座標」自動換算（查詢由 OpenStreetMap 貢獻者的 Nominatim 服務提供，查不到時請改用抓取目前位置或手動輸入）。</div>
       <div class="field"><label>急救責任等級</label>
         <select name="level" required>
           <option value="">請選擇等級</option>
@@ -6780,35 +6784,37 @@ window.__fillHospitalCoordsFromGPS = () => {
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
   );
 };
-// 新增/編輯醫院表單「地址查詢座標」：用 OpenStreetMap 的 Nominatim 地理編碼
-// 服務把地址欄位反查成座標，免費、不用金鑰。
+// 新增/編輯醫院表單「名稱查詢座標」：用 OpenStreetMap 的 Nominatim 地理編碼
+// 服務把醫院名稱反查成座標，免費、不用金鑰。改用醫院名稱而不是地址查詢——
+// 地址欄位是選填、常常沒填或格式不一致，醫院名稱幾乎一定會填，用名稱查詢
+// 也比較容易對到 Nominatim/OSM 資料庫裡實際登記的地點。
 //
 // 注意：Nominatim 使用規範要求識別身分用的 User-Agent 或 Referer，但瀏覽器
 // 的 fetch() 不允許腳本自訂 User-Agent（屬於 forbidden header，設了也會被
 // 瀏覽器忽略，不會真的送出去）——這點在瀏覽器環境下無法照字面做到，改靠
 // 瀏覽器自動帶的 Referer（本站網域）滿足身分識別需求，這是瀏覽器端呼叫
-// Nominatim 唯一可行的方式。加 countrycodes=tw 限制在臺灣境內，避免地址
-// 名稱剛好跟國外地名重複而查到錯的地方。
+// Nominatim 唯一可行的方式。加 countrycodes=tw 限制在臺灣境內，避免名稱
+// 剛好跟國外地名重複而查到錯的地方。
 // 查詢失敗（連線問題、CORS 被擋、查無結果）一律跳溫和的 alert 提示，不佔用
 // 站內既有的 toast 佇列（這是使用者主動點擊等待結果的操作，跟背景資料
 // 載入失敗的情境不同，用跟瀏覽器原生互動一致的 alert 比較符合當下情境）。
-window.__geocodeHospitalAddress = async () => {
-  const addressInput = document.getElementById("hospitalAddressInput");
+window.__geocodeHospitalName = async () => {
+  const nameInput = document.getElementById("hospitalNameInput");
   const coordsInput = document.getElementById("hospitalCoordsInput");
-  const btn = document.getElementById("geocodeAddressBtn");
+  const btn = document.getElementById("geocodeNameBtn");
   const label = btn?.querySelector(".btn-label");
-  const address = (addressInput?.value || "").trim();
-  if (!address) { alert("請先填寫地址欄位，再查詢座標"); return; }
+  const name = (nameInput?.value || "").trim();
+  if (!name) { alert("請先填寫醫院名稱，再查詢座標"); return; }
   if (!coordsInput || !btn || !label) return;
   btn.disabled = true;
   label.textContent = "查詢中…";
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&countrycodes=tw`;
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)}&format=json&limit=1&countrycodes=tw`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const results = await res.json();
     if (!Array.isArray(results) || !results.length) {
-      alert("查不到這個地址對應的座標，請確認地址是否正確，或改用「抓取目前位置」／手動輸入");
+      alert("查不到這個醫院名稱對應的座標，請確認名稱是否正確，或改用「抓取目前位置」／手動輸入");
       return;
     }
     coordsInput.value = `${Number(results[0].lat).toFixed(5)},${Number(results[0].lon).toFixed(5)}`;
@@ -6816,7 +6822,7 @@ window.__geocodeHospitalAddress = async () => {
     alert("查詢座標失敗，請檢查網路連線後再試一次，或改用「抓取目前位置」／手動輸入");
   } finally {
     btn.disabled = false;
-    label.textContent = "地址查詢座標";
+    label.textContent = "名稱查詢座標";
   }
 };
 window.__setThemeMode = (mode) => {
