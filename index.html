@@ -380,6 +380,12 @@
     border-bottom:1px solid color-mix(in srgb, var(--blue) 10%, transparent); padding:12px var(--space-card); margin-top:12px;
   }
   .vitals-patient-line .dot{width:8px; height:8px; border-radius:50%; background:var(--blue); flex-shrink:0;}
+  .vitals-liaison-line{
+    display:flex; align-items:center; gap:8px; font-size:var(--text-sm); font-weight:600; color:var(--muted);
+    background:color-mix(in srgb, var(--muted) 6%, transparent); border-bottom:1px solid color-mix(in srgb, var(--muted) 12%, transparent);
+    padding:10px var(--space-card);
+  }
+  .vitals-liaison-line .dot{width:8px; height:8px; border-radius:50%; background:var(--muted); flex-shrink:0;}
   /* 主訴細節、過去病史、過敏史這些文字型資訊：收納進淺灰底的網格卡片，
      標籤淺灰小字、內容一般字重（非粗體），不需要跟生命徵象數值搶視覺重量。 */
   .detail-panel{background:var(--panel-2); border-radius:var(--radius-md); padding:16px;}
@@ -953,7 +959,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-207-vitals-negative-finding-smaller";
+const BUILD_TAG = "2026-07-09-208-vitals-liaison-cadre-section";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -961,7 +967,7 @@ const BUILD_TAG = "2026-07-09-207-vitals-negative-finding-smaller";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "1.11";
+const APP_MAJOR_MINOR = "1.12";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -1406,6 +1412,7 @@ const RELEASE_NOTES = [
     "修正患者紀錄「主訴」欄位標籤誤導的問題：「主訴」其實是整組問診資訊（哪裡不舒服/怎麼不舒服/多久了/其他不適/脊椎評估）的統稱，不是只指地點欄位，現在改成「主訴」放在整組最上面當標題，「哪裡不舒服」合併進跟「怎麼不舒服／多久了」同一個灰底面板，不再獨立用淡紅卡片凸顯",
     "患者紀錄的脊椎評估／過去病史／過敏史，回答是「否，無疑似損傷」或「無」這類正常/陰性結果時，文字改成灰色淡化顯示，讓真正異常的內容比較容易一眼看出來",
     "上述灰色淡化的正常/陰性結果文字再縮小字級，進一步降低存在感",
+    "患者紀錄的「患者基本資料」新增「對職幹部」欄位（單位／階級／職稱／姓名／手機電話），單位可以一鍵套用跟患者相同的單位，方便記錄現場協助處理的幹部聯絡資訊",
   ] },
   { date: "2026/07/08", items: [
     "基礎資料管理新增「醫官」名冊（姓名/電話），建立勤務的「值班醫官」欄位改成從這份名冊下拉選擇，不用再手動打字",
@@ -3424,6 +3431,11 @@ function viewVitalsPage(taskId, id, adding){
             <span class="dot"></span>
             <span>${[v.patientUnit, v.patientRank, v.patientName].filter(Boolean).map(esc).join('　')}${v.patientGender?`（${esc(v.patientGender)}）`:''}</span>
           </div>` : ""}
+          ${v.liaisonName || v.liaisonUnit || v.liaisonRank || v.liaisonTitle || v.liaisonPhone ? `
+          <div class="vitals-liaison-line">
+            <span class="dot"></span>
+            <span>對職幹部：${[v.liaisonUnit, v.liaisonRank, v.liaisonName].filter(Boolean).map(esc).join('　')}${v.liaisonTitle?`（${esc(v.liaisonTitle)}）`:''}${v.liaisonPhone?`　${esc(v.liaisonPhone)}`:''}</span>
+          </div>` : ""}
           <div class="vitals-entry-body">
           ${v.sceneType ? `
           <div class="vitals-scene-block">
@@ -3456,6 +3468,17 @@ function viewVitalsPage(taskId, id, adding){
         <div class="field"><label>級職（選填）</label><input id="vf-patient-rank" value="${esc(editingVitals?.patientRank||'')}" placeholder="例如：上等兵"></div>
         <div class="field"><label>姓名（選填）</label><input id="vf-patient-name" value="${esc(editingVitals?.patientName||'')}" placeholder="例如：王小明"></div>
         <div class="field"><label>性別（選填）</label>${chipGroup('vf-patient-gender', GENDER_OPTIONS, editingVitals?.patientGender||'', false)}</div>
+        <div class="form-section-title" style="margin-top:20px;">對職幹部</div>
+        <div class="field"><div class="field-label-row"><label>單位（選填）</label><button type="button" class="icon-btn" onclick="window.__copyPatientUnitToLiaison()">同患者單位</button></div><input id="vf-liaison-unit" value="${esc(editingVitals?.liaisonUnit||'')}" placeholder="例如：第一連"></div>
+        <div class="field"><label>階級（選填）</label>
+          <select id="vf-liaison-rank">
+            <option value="">請選擇階級</option>
+            ${RANKS.map(r => `<option value="${r}" ${editingVitals?.liaisonRank===r?'selected':''}>${r}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field"><label>職稱（選填）</label><input id="vf-liaison-title" value="${esc(editingVitals?.liaisonTitle||'')}" placeholder="例如：連長、輔導長"></div>
+        <div class="field"><label>姓名（選填）</label><input id="vf-liaison-name" value="${esc(editingVitals?.liaisonName||'')}" placeholder="例如：王小明"></div>
+        <div class="field"><label>手機電話（選填）</label><input id="vf-liaison-phone" type="tel" inputmode="tel" value="${esc(editingVitals?.liaisonPhone||'')}" placeholder="例如：0912345678"></div>
       </div>
       <div class="form-section">
         <div class="form-section-title"><span class="step-num">2</span>現場狀況</div>
@@ -5145,6 +5168,11 @@ window.__resetVitalsTime = () => {
   const el = document.getElementById("vf-time");
   if (el) el.value = hhmmValue(new Date());
 };
+window.__copyPatientUnitToLiaison = () => {
+  const src = document.getElementById("vf-patient-unit");
+  const dst = document.getElementById("vf-liaison-unit");
+  if (src && dst) dst.value = src.value;
+};
 // GCS 三個下拉選單一有變動就重新組字串寫回隱藏欄位（vf-gcs），格式維持
 // 跟舊資料相容的 "E4V5M6"，後面加註總分方便直接閱讀；三個選單沒有全部
 // 選完之前先不算總分，避免顯示誤導的不完整分數。
@@ -5421,6 +5449,11 @@ window.__submitVitals = (taskId, id) => {
     data.patientRank = get("vf-patient-rank");
     data.patientName = get("vf-patient-name");
     data.patientGender = checkedValues("vf-patient-gender")[0] || "";
+    data.liaisonUnit = get("vf-liaison-unit");
+    data.liaisonRank = get("vf-liaison-rank");
+    data.liaisonTitle = get("vf-liaison-title");
+    data.liaisonName = get("vf-liaison-name");
+    data.liaisonPhone = get("vf-liaison-phone");
     const sceneTypeVal = checkedValues("vf-scene-type")[0] || "";
     data.sceneType = sceneTypeVal;
     data.sceneFindings = sceneTypeVal === "創傷" ? checkedValues("vf-scene-trauma") : sceneTypeVal === "非創傷" ? checkedValues("vf-scene-nontrauma") : [];
