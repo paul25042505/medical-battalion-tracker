@@ -880,30 +880,13 @@
      改在 padding-top 用等量的值補回視覺間距——不然 main 的 padding-top
      不算進這個 sticky 元素自己的範圍，捲動時清單內容會從那段沒被蓋到
      的縫隙偷跑出來，變成頂欄跟子選單中間卡著一截露餡的內容。 */
-  /* 子選單玻璃質感背後放兩顆模糊彩色光斑（藍＋紫），讓「晶瑩剔透」的感覺
-     不用等捲動到剛好有色卡片經過才看得出來。光斑是 icon-subtabs 自己的
-     ::before/::after，疊在被模糊的玻璃背景之上、圖示磚下方（圖示磚另外
-     設 z-index 蓋過去），並靠 icon-subtabs 自己的 overflow:hidden 精確
-     裁切在這塊玻璃範圍內，不會溢出到底下的頁籤列。 */
   .icon-subtabs{
-    display:flex; gap:14px; position:sticky; top:0; z-index:15; overflow:hidden;
+    display:flex; gap:14px; position:sticky; top:0; z-index:15;
     margin:-16px -16px 20px -16px; padding:22px 16px 10px 16px;
-    background:color-mix(in srgb, var(--bg) 68%, transparent);
+    background:color-mix(in srgb, var(--bg) 82%, transparent);
     backdrop-filter:blur(16px) saturate(180%); -webkit-backdrop-filter:blur(16px) saturate(180%);
   }
-  .icon-subtabs::before, .icon-subtabs::after{
-    content:""; position:absolute; border-radius:50%; filter:blur(28px); opacity:0.85; pointer-events:none;
-  }
-  .icon-subtabs::before{
-    width:150px; height:150px; top:-40px; left:-20px;
-    background:radial-gradient(circle, var(--blue) 0%, transparent 72%);
-  }
-  .icon-subtabs::after{
-    width:150px; height:150px; top:-30px; right:-20px;
-    background:radial-gradient(circle, var(--purple) 0%, transparent 72%);
-  }
   .icon-subtab{
-    position:relative; z-index:1;
     display:flex; flex-direction:column; align-items:center; gap:8px; flex-shrink:0;
     background:none; border:none; font-family:var(--sans); color:var(--muted);
   }
@@ -1092,7 +1075,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-223-subtab-aura-glow";
+const BUILD_TAG = "2026-07-09-224-subtab-aura-remove";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1574,7 +1557,6 @@ const RELEASE_NOTES = [
       "頂欄（姓名/階級/通知/登出那一列）背景改成跟頁面同色，不再是一塊獨立的白色色塊——原本跟下面「勤務／天氣」子選單貼在一起時會出現色差明顯的接縫，現在融成同一個底色，改用比較明顯的陰影表現頂欄浮在內容上層的層次感；子選單本身跟頂欄之間的留白也一併縮小",
       "「勤務／天氣」子選單背景改成半透明毛玻璃效果（跟返回鍵/底部分頁列同一套質感），捲動內容時底下的卡片顏色會透出模糊的光暈，不再是一塊不透光的純色",
       "「勤務／天氣」子選單的圖示磚也改成透明玻璃質感（原本是純色底），未選中的磚是半透明白霧玻璃、選中的磚是半透明藍色玻璃並帶淡淡光暈邊框，捲動時底下內容顏色一樣會透出來，晶瑩剔透感更完整",
-      "「勤務／天氣」子選單背後加上藍＋紫兩顆模糊光斑，不用捲動到剛好有色卡片經過，隨時都看得出玻璃透光的晶瑩剔透感；玻璃背景也調得更透一點，讓光斑透出來更明顯",
     ] },
   ] },
   { date: "2026/07/08", groups: [
