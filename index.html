@@ -259,7 +259,17 @@
      最下面，要留空間才不會擋住最後一項內容；現在 .bottomnav 是版面外
      實實在在佔位置的 flex 兄弟元素，不會再蓋住 main 的內容，底部 padding
      改回跟其他三邊接近、只是單純的捲動到底留白。 */
-  main{flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain; padding:16px 16px 24px 16px; max-width:680px; width:100%; margin:0 auto;}
+  /* main 本身（真正的捲動容器）不能有 padding：position:sticky 的 top 偏移
+     量是相對於「最近的捲動祖先」的 padding box 算的，如果 main 自己有
+     padding-top，sticky 元素貼齊的「頂端」就會是 main 的內容區頂端（padding
+     之後），不是 main 真正的邊緣——用 margin 負值想抵消都沒用（試過，
+     sticky 的定位基準不吃子元素的 margin 調整），只能整個不讓 main 自己有
+     padding。實際的版面留白改放到 .main-content 這層（main 的子層、本身
+     不捲動），這樣 sticky 的參考點永遠是 main 沒有 padding 的真正邊緣，
+     子選單之類需要「貼齊捲動區最上方」的元素才能真的貼齊，不會卡著一段
+     main 留白的縫隙。 */
+  main{flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain;}
+  .main-content{padding:16px 16px 24px 16px; max-width:680px; width:100%; margin:0 auto;}
 
   /* ---- login ---- */
   .login-wrap{min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; text-align:center;}
@@ -859,10 +869,14 @@
      捲動容器（見 #app 的 CSS 註解），sticky 相對它自己的捲動位置計算，
      不會有 fixed 元素過去踩過的那些問題。左右用 -16px 負 margin 抵消
      main 自己的 padding，撐成貼齊螢幕邊緣的滿版；補一層跟頁面同色的
-     背景+模糊，捲動的清單內容從底下滑過去才不會透出來。 */
+     背景+模糊，捲動的清單內容從底下滑過去才不會透出來。
+     上面也要用 -16px 負 margin 把 main 自己的 padding-top 一併吃掉、
+     改在 padding-top 用等量的值補回視覺間距——不然 main 的 padding-top
+     不算進這個 sticky 元素自己的範圍，捲動時清單內容會從那段沒被蓋到
+     的縫隙偷跑出來，變成頂欄跟子選單中間卡著一截露餡的內容。 */
   .icon-subtabs{
     display:flex; gap:14px; position:sticky; top:0; z-index:15;
-    margin:0 -16px 20px -16px; padding:14px 16px 10px 16px;
+    margin:-16px -16px 20px -16px; padding:30px 16px 10px 16px;
     background:var(--bg); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
   }
   .icon-subtab{
@@ -1048,7 +1062,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-218-icon-subtab-sticky";
+const BUILD_TAG = "2026-07-09-219-subtab-flush-header";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1515,6 +1529,8 @@ const RELEASE_NOTES = [
       "「任務」頁最上面新增「勤務／天氣」子選單：「勤務」就是原本的狀態頁籤跟勤務清單；「天氣」是原本首頁的天氣資訊（天氣卡片、貼心提醒、特報橫幅）搬過來的新頁面，首頁不再重複顯示天氣資訊",
       "上述「勤務／天氣」子選單改成圖示磚樣式：選中的項目整塊填滿主題色、圖示變白，其餘保持淺灰底，取代原本純文字的膠囊頁籤",
       "上述「勤務／天氣」子選單改成固定在畫面最上面，捲動底下的狀態頁籤/清單內容時不會跟著被捲走",
+      "修正上述子選單固定在最上面時，跟頂欄中間還留一截縫隙、捲動內容會從縫隙露出來的問題：改成緊貼頂欄，中間沒有空隙",
+      "修正天氣／天氣特報資料連不上時（例如訊號不好的環境）會一直重複發出請求、畫面跟著一直重繪的問題：改成失敗結果也會先記住 2 分鐘，不會每次畫面重繪就再打一次",
     ] },
     { category: "關於系統／意見回饋", items: [
       "「關於系統 → 更新紀錄」改成依功能區塊分類顯示（例如「患者紀錄」「急診待命」），不再是同一天所有異動擠成一長串沒有結構的清單",
@@ -2695,7 +2711,12 @@ async function fetchWeather(county){
 function ensureWeatherLoaded(unit){
   const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
   const cached = weatherCache[county];
-  if (cached && Date.now() - cached.fetchedAt < 30*60*1000) { state.weather = cached.data; return; }
+  // 失敗結果也要存進快取（用比較短的有效期，2 分鐘），不然每次畫面重繪
+  // 都會看到「沒有快取」又重新發一次請求，網路真的斷線/API 打不通時會
+  // 變成無限重試迴圈——每次重試又會呼叫 safeRender() 整個重繪，使用者
+  // 畫面上的捲動位置、正在做的操作都會一直被打斷。
+  const freshFor = cached?.error ? 2*60*1000 : 30*60*1000;
+  if (cached && Date.now() - cached.fetchedAt < freshFor) { state.weather = cached.data; return; }
   if (weatherLoadingCounty === county) return;
   weatherLoadingCounty = county;
   fetchWeather(county).then(data => {
@@ -2705,7 +2726,9 @@ function ensureWeatherLoaded(unit){
     safeRender();
   }).catch(err => {
     console.error("天氣資訊載入失敗", err);
-    state.weather = { error: true, county, message: err.message || String(err) };
+    const data = { error: true, county, message: err.message || String(err) };
+    weatherCache[county] = { data, fetchedAt: Date.now(), error: true };
+    state.weather = data;
     weatherLoadingCounty = null;
     safeRender();
   });
@@ -2741,7 +2764,10 @@ async function fetchHazards(county){
 function ensureHazardsLoaded(unit){
   const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
   const cached = hazardCache[county];
-  if (cached && Date.now() - cached.fetchedAt < 10*60*1000) { state.hazards = { county, list: cached.data }; return; }
+  // 理由同 ensureWeatherLoaded：失敗也要存快取（較短的 2 分鐘有效期），
+  // 避免網路不通時每次重繪都重新發請求，變成無限重試迴圈。
+  const freshFor = cached?.error ? 2*60*1000 : 10*60*1000;
+  if (cached && Date.now() - cached.fetchedAt < freshFor) { state.hazards = cached.error ? { county, error: true, message: cached.message } : { county, list: cached.data }; return; }
   if (hazardLoadingCounty === county) return;
   hazardLoadingCounty = county;
   fetchHazards(county).then(data => {
@@ -2751,7 +2777,9 @@ function ensureHazardsLoaded(unit){
     safeRender();
   }).catch(err => {
     console.error("天氣特報載入失敗", err);
-    state.hazards = { county, error: true, message: err.message || String(err) };
+    const message = err.message || String(err);
+    hazardCache[county] = { fetchedAt: Date.now(), error: true, message };
+    state.hazards = { county, error: true, message };
     hazardLoadingCounty = null;
     safeRender();
   });
@@ -5261,7 +5289,7 @@ function render(){
         </div>
       </div>
     </div>
-    <main>${body}</main>
+    <main><div class="main-content">${body}</div></main>
     <div class="bottomnav">
       ${NAV_ITEMS.map(n => `
         <button class="navbtn ${state.route.name===n.name?'active':''}" style="${state.route.name===n.name?`color:${n.accent};`:''}" onclick="window.__nav({name:'${n.name}'})">
