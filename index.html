@@ -873,7 +873,9 @@
      捲動容器（見 #app 的 CSS 註解），sticky 相對它自己的捲動位置計算，
      不會有 fixed 元素過去踩過的那些問題。左右用 -16px 負 margin 抵消
      main 自己的 padding，撐成貼齊螢幕邊緣的滿版；補一層跟頁面同色的
-     背景+模糊，捲動的清單內容從底下滑過去才不會透出來。
+     背景改成半透明＋模糊的毛玻璃質感（跟底部分頁列／回報按鈕列同一套液態
+     玻璃語彙一致），捲動的清單內容從底下滑過去時會透出模糊的痕跡，不是
+     完全遮住看不到。
      上面也要用 -16px 負 margin 把 main 自己的 padding-top 一併吃掉、
      改在 padding-top 用等量的值補回視覺間距——不然 main 的 padding-top
      不算進這個 sticky 元素自己的範圍，捲動時清單內容會從那段沒被蓋到
@@ -881,7 +883,8 @@
   .icon-subtabs{
     display:flex; gap:14px; position:sticky; top:0; z-index:15;
     margin:-16px -16px 20px -16px; padding:22px 16px 10px 16px;
-    background:var(--bg); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    background:color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter:blur(16px) saturate(180%); -webkit-backdrop-filter:blur(16px) saturate(180%);
   }
   .icon-subtab{
     display:flex; flex-direction:column; align-items:center; gap:8px; flex-shrink:0;
@@ -1546,6 +1549,7 @@ const RELEASE_NOTES = [
       "修正底部分頁列／回報按鈕列快速滑動時仍會跟著內容跑掉的問題：先前用 GPU 合成層的方式沒有真正解決，這次改用 position:sticky 取代 position:fixed，並修正 body 因為 overflow-x:hidden 被隱性當成捲動容器、導致 sticky 完全貼不住的根本原因",
       "徹底重構版面架構解決底部分頁列的一系列問題：先前不管用 position:fixed 還是 position:sticky，快速滑動時跟著內容跑掉、內容較短的頁面貼在畫面中間留白，這兩個問題各自换了做法都還是會出現。這次改成整個畫面固定成裝置目前實際可視高度（不隨內容多寡變動），只有中間內容區自己捲動，頂部欄位跟底部分頁列變成版面裡真正固定佔位的區塊，不需要任何特殊定位就一直待在原地，兩個問題從架構上一次解決；連帶把「下拉重新整理」「換頁捲回頂端」等原本靠整頁捲動判斷的邏輯，改成看內容區自己的捲動位置",
       "頂欄（姓名/階級/通知/登出那一列）背景改成跟頁面同色，不再是一塊獨立的白色色塊——原本跟下面「勤務／天氣」子選單貼在一起時會出現色差明顯的接縫，現在融成同一個底色，改用比較明顯的陰影表現頂欄浮在內容上層的層次感；子選單本身跟頂欄之間的留白也一併縮小",
+      "「勤務／天氣」子選單背景改成半透明毛玻璃效果（跟返回鍵/底部分頁列同一套質感），捲動內容時底下的卡片顏色會透出模糊的光暈，不再是一塊不透光的純色",
     ] },
   ] },
   { date: "2026/07/08", groups: [
