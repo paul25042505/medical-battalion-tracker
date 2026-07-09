@@ -1189,7 +1189,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-233-weekly-forecast-humidity-dewpoint";
+const BUILD_TAG = "2026-07-09-234-rainfall-station";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1691,6 +1691,7 @@ const RELEASE_NOTES = [
       "天氣特報（例如陸上強風特報）改成跟天氣卡片同等視覺份量的警示卡：漸層紅底＋白字，右上角「特報中」徽章加上脈動圓點，取代原本淡粉紅色細框、跟一般提示訊息分不出輕重的樣式",
       "天氣卡片背景改成低飽和度的環境微光玻璃質感（跟任務卡片／急診待命卡片同一套設計語言），取代原本晴天橘、雨天灰藍那種高飽和度純色漸層；新增「Core-AI Insight」區塊，會依目前天氣數據（天氣現況/氣溫/降雨機率/舒適度/體感溫度）即時生成一句風險預測與行動建議",
       "天氣卡片新增「相對濕度」「露點溫度」；天氣頁新增「未來一週」預報清單（縣市層級，跟原本 36 小時內的「未來預報」分開顯示，是比較粗略的長期展望）",
+      "天氣卡片新增即時雨量資訊：取單位所在縣市範圍內雨量站近 3 小時累積雨量最高的一筆當代表值，只有真的測到雨才會顯示，沒下雨時不佔版面",
     ] },
     { category: "介面優化", items: [
       "任務卡片／急診待命卡片重新設計：拿掉原本左側 4px 純色狀態色條，改成整張卡片依狀態（待命中/出勤中/已抵達現場/前往下一地點/返營中/已完成）呈現柔和的液態光暈色調，疊三層陰影做出懸浮的空間深度感；有患者記錄的任務卡片會強制蓋成紅色光暈並加上緩慢的呼吸感光圈，比一般狀態更搶眼",
@@ -2022,6 +2023,7 @@ const state = {
   apparentTemp: null, // 任務頁「天氣」子選單的體感溫度（依單位對應鄉鎮，見 ensureApparentTempLoaded）
   aiInsight: null, // 任務頁「天氣」子選單的 Core-AI Insight 建議文字（見 ensureAiInsightLoaded）
   weeklyForecast: null, // 任務頁「天氣」子選單的一週天氣預報（依單位對應縣市，見 ensureWeeklyForecastLoaded）
+  rainfall: null, // 任務頁「天氣」子選單的雨量站觀測（依單位對應縣市，見 ensureRainfallLoaded）
   myLat: null, // 醫院資訊頁：手機 GPS 定位的原始緯度，null 代表尚未定位；有登記座標的醫院直接拿這個算實際距離
   myLng: null, // 醫院資訊頁：手機 GPS 定位的原始經度
   myCounty: null, // 醫院資訊頁：手機 GPS 定位算出的概略縣市（見 nearestDistrict），沒座標的醫院退回用這個比對；null 代表尚未定位
@@ -2978,6 +2980,58 @@ function ensureWeeklyForecastLoaded(unit){
     safeRender();
   });
 }
+// 雨量站觀測（O-A0002-001）：這組資料集沒有縣市查詢參數，一次回傳全臺
+// 所有雨量站，要靠每筆資料自帶的 parameter（CITY/TOWN）自己篩出目標縣市
+// 範圍內的測站。同一個縣市裡通常有好幾個測站，這裡取「近 3 小時累積雨量」
+// 最高的那一個當代表值——比隨便挑第一筆更保守，對執勤安全判斷更有意義
+// （最糟情況才是該注意的情況）。負值（-99 之類）是氣象署慣用的缺測標記，
+// 一律當成無效值處理。
+const rainfallCache = {}; // { [縣市名稱]: { data, fetchedAt } }
+let rainfallLoadingCounty = null;
+async function fetchRainfallStation(county){
+  const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0002-001?Authorization=${CWA_API_KEY}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  const stations = json?.records?.location || [];
+  const matches = stations.filter(s => (s.parameter || []).some(p => p.parameterName === "CITY" && p.parameterValue === county));
+  if (!matches.length) return { county, stationName: null, hour3: null, hour24: null };
+  const val = (s, name) => {
+    const el = (s.weatherElement || []).find(e => e.elementName === name);
+    const v = el ? Number(el.elementValue) : NaN;
+    return Number.isFinite(v) && v >= 0 ? v : -1;
+  };
+  let best = matches[0];
+  matches.forEach(s => { if (val(s, "HOUR_3") > val(best, "HOUR_3")) best = s; });
+  const hour3 = val(best, "HOUR_3");
+  const hour24 = val(best, "HOUR_24");
+  return {
+    county,
+    stationName: best.locationName || null,
+    hour3: hour3 >= 0 ? hour3 : null,
+    hour24: hour24 >= 0 ? hour24 : null
+  };
+}
+function ensureRainfallLoaded(unit){
+  const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
+  const cached = rainfallCache[county];
+  const freshFor = cached?.error ? 2*60*1000 : 15*60*1000;
+  if (cached && Date.now() - cached.fetchedAt < freshFor) { state.rainfall = cached.error ? { county, error: true } : { county, ...cached.data }; return; }
+  if (rainfallLoadingCounty === county) return;
+  rainfallLoadingCounty = county;
+  fetchRainfallStation(county).then(data => {
+    rainfallCache[county] = { data, fetchedAt: Date.now() };
+    state.rainfall = { county, ...data };
+    rainfallLoadingCounty = null;
+    safeRender();
+  }).catch(err => {
+    console.error("雨量站資料載入失敗", err);
+    rainfallCache[county] = { fetchedAt: Date.now(), error: true };
+    state.rainfall = { county, error: true };
+    rainfallLoadingCounty = null;
+    safeRender();
+  });
+}
 function weatherIconFor(wx){
   if (!wx) return "cloud";
   if (wx.includes("雷") || wx.includes("雨")) return "rain";
@@ -3592,6 +3646,10 @@ function renderWeatherCard(unit){
   const atValue = townshipOk && at.at != null ? at.at : null;
   const rhValue = townshipOk && at.rh != null ? at.rh : null;
   const tdValue = townshipOk && at.td != null ? at.td : null;
+  const rain = state.rainfall;
+  // 雨量只有真的測到雨才顯示，沒下雨（0mm）就不加這個 pill，避免卡片
+  // 一堆資訊卻大多時候都是「沒事」，只在真的有事的時候才凸顯出來。
+  const rainHour3 = (rain && rain.county === county && !rain.error && rain.hour3 != null && rain.hour3 > 0) ? rain.hour3 : null;
   return `
     <div class="weather-card spatial-card wx-${wxType}">
       <span class="weather-card-icon">${icon(wxType,28)}</span>
@@ -3605,6 +3663,7 @@ function renderWeatherCard(unit){
           ${atValue!=null ? `<div class="weather-card-pop">${icon('heartbeat',12)} 體感 ${atValue}°</div>` : ""}
           ${rhValue!=null ? `<div class="weather-card-pop">${icon('cloud',12)} 濕度 ${rhValue}%</div>` : ""}
           ${tdValue!=null ? `<div class="weather-card-pop">${icon('cloud',12)} 露點 ${tdValue}°</div>` : ""}
+          ${rainHour3!=null ? `<div class="weather-card-pop">${icon('rain',12)} 近3小時雨量 ${rainHour3}mm</div>` : ""}
         </div>
       </div>
     </div>`;
@@ -3838,6 +3897,7 @@ function viewTasks(){
   ensureApparentTempLoaded(unit);
   ensureAiInsightLoaded(unit);
   ensureWeeklyForecastLoaded(unit);
+  ensureRainfallLoaded(unit);
   const mainTabs = `
     <div class="icon-subtabs">
       ${TASKS_MAIN_TABS.map(tb => `
