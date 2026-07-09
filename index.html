@@ -1258,7 +1258,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-253-fix-wuri-district-match";
+const BUILD_TAG = "2026-07-09-254-hospital-osrm-road-distance";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1785,6 +1785,7 @@ const RELEASE_NOTES = [
     ] },
     { category: "醫院資訊", items: [
       "修正「重新定位」在烏日區（成功北醫務所所在地）會誤判成臺中市南區的問題：行政區代表點清單原本沒收錄烏日區，導致抓到最近的「南區」硬配上去；同時加上距離上限，往後遇到清單裡沒收錄的行政區，會誠實顯示只定位到縣市層級，不會再隨便配一個其實有段距離的行政區",
+      "「顯示附近醫院」新增道路距離：對直線距離 50 公里內、最近的前 15 間已登記座標的醫院，改抓實際路程公里數（會標示「路程」，跟原本的「直線」距離區分開來，避免誤把直線距離當成要開的路程），抓不到（連線不穩、逾時等）會靜默退回原本的直線距離，不影響排序功能本身",
     ] },
   ] },
   { date: "2026/07/08", groups: [
@@ -2117,6 +2118,9 @@ const state = {
   myCounty: null, // 醫院資訊頁：手機 GPS 定位算出的概略縣市（見 nearestDistrict），沒座標的醫院退回用這個比對；null 代表尚未定位
   myDistrict: null, // 醫院資訊頁：手機 GPS 定位算出的概略行政區（比縣市更準），null 代表定位不到已知行政區或尚未定位
   locatingHospital: false, // 醫院資訊頁定位中的載入狀態
+  roadDistances: {}, // 醫院資訊頁：{ [醫院id]: 道路公里數 }，OSRM 算出來的實際路程距離（見 fetchRoadDistances），
+                      // 只對距離最近的前 15 間、50 公里內的醫院計算；抓不到的（demo server 不穩定/逾時/限流）
+                      // 這裡就不會有這間醫院的 key，畫面上會自動退回直線距離，不是這裡存 null 占位
   // 「紀錄」頁自訂日期查詢往回查超過 RECENT_WINDOW_DAYS 時另外抓的舊資料，
   // 累積在這裡跟平常只抓最近期間的 tasks/events/vitals 合併，不然下一次
   // 背景刷新（只抓最近期間）會把這些額外查到的舊資料整個蓋掉。
@@ -5514,9 +5518,14 @@ function viewHospitals(){
   const canEdit = canManageBaseData(p);
   // 排序優先度：醫院本身有登記座標時（tier 0）直接算實際距離最準；沒有
   // 座標才退回用行政區（tier 1）/ 縣市（tier 2）概略比對；都比對不到排最後（tier 3）。
+  // tier 0 內部一律用同一個 km 值排序——有算到 OSRM 道路距離（roadDistances）
+  // 就用道路距離，抓不到才用 haversine 直線距離頂替，呼叫端不用另外分兩套
+  // 排序邏輯。
   function matchInfo(h){
     if (h.lat != null && h.lng != null && state.myLat != null) {
-      return { tier: 0, km: haversineKm(state.myLat, state.myLng, h.lat, h.lng) };
+      const roadKm = state.roadDistances[h.id];
+      if (roadKm != null) return { tier: 0, km: roadKm, roadKm: true };
+      return { tier: 0, km: haversineKm(state.myLat, state.myLng, h.lat, h.lng), roadKm: false };
     }
     if (state.myDistrict && h.district === state.myDistrict && h.county === state.myCounty) return { tier: 1, km: null };
     if (state.myCounty && h.county === state.myCounty) return { tier: 2, km: null };
@@ -5543,7 +5552,9 @@ function viewHospitals(){
     ${canEdit ? `<button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('hospitals', null, '')">${icon('plus',15)} 新增醫院</button>` : ""}
     ${rows.length ? rows.map(x => {
       const info = (state.myCounty || state.myLat != null) ? matchInfo(x) : { tier: 3, km: null };
-      const nearBadge = info.tier === 0 ? `<span class="badge dispatch" style="padding:3px 8px;">約 ${info.km.toFixed(1)} 公里</span>`
+      // 有算到道路距離／退回直線距離，文字上明確標出來（路程/直線），
+      // 避免第一線人員誤把直線距離當成實際要開的路程來判斷。
+      const nearBadge = info.tier === 0 ? `<span class="badge dispatch" style="padding:3px 8px;">約 ${info.km.toFixed(1)} 公里${info.roadKm ? '（路程）' : '（直線）'}</span>`
         : info.tier === 1 ? `<span class="badge dispatch" style="padding:3px 8px;">同行政區</span>`
         : info.tier === 2 ? `<span class="badge dispatch" style="padding:3px 8px;">同縣市</span>` : '';
       return `
@@ -6628,6 +6639,55 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
        : addRecorder(unit, f.get("code")));
   action.then(() => { state.baseDataModal = null; render(); }).catch(baseDataErr);
 };
+// 醫院道路距離（OSRM Table API，router.project-osrm.org 公開 demo server）：
+// 只當直線距離之外的加分項，永遠不擋主流程。這台 demo server 官方明講不
+// 保證 uptime／延遲，限流 1 req/秒，也可能隨時停用（見 OSRM 專案 wiki 的
+// Api usage policy）——所以任何失敗情況（逾時、限流 429、CORS 被擋、伺服器
+// 掛掉）一律靜默放棄，不 console.error 洗版、也不跳錯誤提示，直接讓
+// matchInfo() 退回原本的 haversine 直線距離即可，使用者本來就看得到那組
+// 排序結果，沒有東西「壞掉」。
+// 只對「直線距離 50 公里內、最近的前 15 間」算道路距離：一來 OSRM Table
+// API 的座標是接在網址路徑上，醫院數一多網址會太長；二來排序前段之外的
+// 醫院算不算路程差異不大，沒必要為了它們消耗有限的請求額度。
+// 注意 OSRM 的座標順序是「經度,緯度」（跟站內其他地方慣用的「緯度,經度」
+// 相反），串網址時要特別小心不要接反。
+let roadDistanceReqId = 0;
+async function fetchRoadDistances(lat, lng){
+  const myReqId = ++roadDistanceReqId;
+  const candidates = state.hospitals
+    .filter(h => h.lat != null && h.lng != null)
+    .map(h => ({ h, km: haversineKm(lat, lng, h.lat, h.lng) }))
+    .filter(x => x.km <= 50)
+    .sort((a,b) => a.km - b.km)
+    .slice(0, 15);
+  if (!candidates.length) return;
+  const coordsStr = [`${lng},${lat}`, ...candidates.map(x => `${x.h.lng},${x.h.lat}`)].join(";");
+  const url = `https://router.project-osrm.org/table/v1/driving/${coordsStr}?sources=0&annotations=distance`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 2000);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) return;
+    const json = await res.json();
+    // distances[0] 是「起點（使用者自己）到每個座標」的那一列，row-major、
+    // 單位公尺；index 0 是起點到自己（不用理），index 1 開始才依序對應
+    // candidates 裡的醫院。
+    const distances = json?.distances?.[0];
+    if (!Array.isArray(distances)) return;
+    if (myReqId !== roadDistanceReqId) return; // 這段抓取期間使用者又按了一次重新定位，這筆已經過期，不要蓋掉新結果
+    const next = {};
+    candidates.forEach((x, i) => {
+      const meters = distances[i + 1];
+      if (Number.isFinite(meters)) next[x.h.id] = meters / 1000;
+    });
+    state.roadDistances = next;
+    render();
+  } catch (e) {
+    // 靜默失敗（逾時／CORS／限流／任何錯誤都一樣處理，理由見上方註解）。
+  } finally {
+    clearTimeout(timer);
+  }
+}
 // 醫院資訊頁「顯示附近醫院」：用瀏覽器定位 API 抓 GPS 座標，換算最接近
 // 哪個行政區（見 nearestDistrict，比只到縣市層級更準——臺中市範圍很大，
 // 同縣市不代表距離近），同行政區的醫院排最前面，其次是同縣市但行政區
@@ -6643,8 +6703,12 @@ window.__locateNearbyHospitals = () => {
       state.myLng = pos.coords.longitude;
       state.myCounty = county;
       state.myDistrict = district;
+      // 位置變了，舊的道路距離是算給上一個位置的，先清掉退回直線距離，
+      // 等新的 fetchRoadDistances 抓到才會再蓋回來。
+      state.roadDistances = {};
       state.locatingHospital = false;
       render();
+      fetchRoadDistances(state.myLat, state.myLng);
     },
     (err) => {
       state.locatingHospital = false; render();
