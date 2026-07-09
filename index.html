@@ -1189,7 +1189,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-240-gemini-auth-key-rotate";
+const BUILD_TAG = "2026-07-09-241-fix-weekly-township-endpoints";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1698,6 +1698,8 @@ const RELEASE_NOTES = [
       "一週預報／雨量／體感溫度濕度露點／Core-AI Insight 的「載入失敗」提示補上實際錯誤原因（HTTP 狀態碼＋伺服器回傳的錯誤訊息），先前只顯示「載入失敗」四個字看不出問題出在哪，回報時把這段訊息一起附上就能直接定位問題",
       "修正天氣頁一進去體感/濕度/露點、一週預報、雨量三項常常顯示「Load failed」連線失敗的問題：進天氣頁時原本會同時對氣象署開 5 條連線，疑似撞到對方的併發連線限制，改成排隊一次一支",
       "換發新的 Gemini API 金鑰（Google 新版 AQ. 格式），並改用 x-goog-api-key 標頭傳遞金鑰（不再放在網址查詢字串裡），修正 Core-AI Insight 因金鑰外洩偵測被 Google 停用的問題",
+      "修正一週預報、體感/濕度/露點持續顯示「Load failed」的問題：實際查證後發現這兩組資料集根本不是走原本假設的查詢方式——一週預報改用氣象署另外提供的靜態檔案來源；鄉鎮預報要用縣市專屬的資料集代碼查詢，不能直接用鄉鎮名稱查",
+      "天氣卡片新增風速、風向、紫外線指數：修正鄉鎮預報資料來源後，順便補上原本以為這組資料集沒有的欄位（風速風向）與紫外線指數（先前因為抓不到可靠資料來源而擱置的項目）",
     ] },
     { category: "介面優化", items: [
       "任務卡片／急診待命卡片重新設計：拿掉原本左側 4px 純色狀態色條，改成整張卡片依狀態（待命中/出勤中/已抵達現場/前往下一地點/返營中/已完成）呈現柔和的液態光暈色調，疊三層陰影做出懸浮的空間深度感；有患者記錄的任務卡片會強制蓋成紅色光暈並加上緩慢的呼吸感光圈，比一般狀態更搶眼",
@@ -2947,21 +2949,24 @@ function ensureWeatherLoaded(unit){
     safeRender();
   });
 }
-// 一週縣市天氣預報（F-C0032-005），跟今明 36 小時預報（F-C0032-001）是
-// 同一個「一般天氣預報」資料集家族，schema 完全一樣（Wx/PoP/MinT/MaxT/
-// CI，time[].parameter.parameterName 結構），只是時間範圍拉長到 7 天、
-// 每個時段代表一整天而不是 12 小時，所以直接沿用同一套解析邏輯即可。
+// 一週縣市天氣預報（F-C0032-005）：這組資料集實際查證過並不在氣象署
+// REST datastore／Swagger 文件裡（跟今明 36 小時預報 F-C0032-001 不是走
+// 同一條路），只透過資料集頁面的靜態檔案下載提供，放在 AWS S3、不需要
+// 授權碼，格式也是完全不同的 cwaopendata/dataset/location 包法（不是
+// records/location）。欄位也比 36 小時預報少，只有 Wx/MaxT/MinT，沒有
+// PoP／CI，所以畫面上這兩項不會顯示。
 const weeklyForecastCache = {}; // { [縣市名稱]: { data, fetchedAt } }
 let weeklyForecastLoadingCounty = null;
 async function fetchWeeklyForecast(county){
-  const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-005?Authorization=${CWA_API_KEY}&locationName=${encodeURIComponent(county)}`;
-  const res = await fetchCwa(url);
+  const url = `https://cwaopendata.s3.ap-northeast-1.amazonaws.com/Forecast/F-C0032-005.json`;
+  const res = await fetch(url);
   if (!res.ok) {
     let detail = ""; try { detail = (await res.text()).slice(0,200); } catch(e){}
     throw new Error(`HTTP ${res.status}${detail ? `：${detail}` : ""}`);
   }
   const json = await res.json();
-  const loc = json?.records?.location?.[0];
+  const locs = json?.cwaopendata?.dataset?.location || [];
+  const loc = locs.find(l => l.locationName === county);
   if (!loc) throw new Error("查無一週預報資料");
   const els = {};
   loc.weatherElement.forEach(e => { els[e.elementName] = e.time; });
@@ -2972,10 +2977,8 @@ async function fetchWeeklyForecast(county){
       startTime: els.Wx?.[i]?.startTime || null,
       endTime: els.Wx?.[i]?.endTime || null,
       wx: els.Wx?.[i]?.parameter?.parameterName || "—",
-      pop: els.PoP?.[i]?.parameter?.parameterName ?? null,
       minT: els.MinT?.[i]?.parameter?.parameterName ?? null,
-      maxT: els.MaxT?.[i]?.parameter?.parameterName ?? null,
-      ci: els.CI?.[i]?.parameter?.parameterName ?? null
+      maxT: els.MaxT?.[i]?.parameter?.parameterName ?? null
     });
   }
   return { county, periods };
@@ -3111,64 +3114,73 @@ function ensureHazardsLoaded(unit){
   });
 }
 
-// 體感溫度來自「鄉鎮天氣預報」資料集（F-D0047-093），跟現有 36 小時預報
-// 是完全不同的資料格式：用鄉鎮查詢、每個 weatherElement 底下是
-// time[].elementValue[].value（不是 time[].parameter.parameterName），
-// 而且 AT（體感溫度）是逐時的單一時間點（dataTime），不是像 Wx/PoP 那樣
-// 一段時間區間（startTime/endTime）。這裡只取離現在最近的一筆 AT 數值，
-// 當作「現在體感溫度」附加在天氣卡片上，不嘗試跟現有的 3 個時段對齊
-// （筆數本來就對不上，勉強對齊反而容易出錯）。
+// 鄉鎮天氣預報（F-D0047-093）：這組資料集不接受用鄉鎮名稱查詢，實際
+// 查證（透過氣象署 Swagger 文件的 Try it out 對照真實請求)確認要用
+// locationId 帶「該縣市專屬的子資料集代碼」（例如臺中市是 F-D0047-075、
+// 嘉義縣是 F-D0047-031，不是 093 本身），回應包裹格式也跟其他資料集不同：
+// records.Locations[]（該縣市）→ Location[]（鄉鎮）→ WeatherElement[]
+// （中文 ElementName，例如「平均相對濕度」）→ Time[]（12 小時一個區間，
+// 不是瞬時值）→ ElementValue[0]（依欄位名稱各自命名的值，例如
+// {RelativeHumidity:"76"}）。這組資料實際查證後才發現原來也有風速風向、
+// 紫外線指數，先前用另一份舊資料判斷「沒有風速風向」是錯的。
+const COUNTY_TOWNSHIP_DATASET_ID = { "臺中市": "F-D0047-075", "嘉義縣": "F-D0047-031" };
 const apparentTempCache = {}; // { [鄉鎮名稱]: { data, fetchedAt } }
 let apparentTempLoadingTownship = null;
-// 取離現在最近的一筆「單一時間點」數值（AT/WS/WD/RH/Td 這幾個鄉鎮預報
-// 欄位都是逐時的瞬時值，用 dataTime 標記，不是像 Wx/PoP 那樣的時間區間）。
-function nearestInstantValue(el){
-  const times = el?.time || [];
+// 取「現在」所在的 12 小時區間（找不到就退回第一筆），回傳該區間的
+// ElementValue[0]（一個物件，key 是欄位名稱，例如 {RelativeHumidity:"76"}）。
+function currentWindowValue(el){
+  const times = el?.Time || [];
   if (!times.length) return null;
   const now = Date.now();
-  let best = times[0];
-  let bestDiff = Infinity;
-  times.forEach(t => {
-    const ts = new Date(t.dataTime || t.startTime).getTime();
-    const diff = Math.abs(ts - now);
-    if (diff < bestDiff) { bestDiff = diff; best = t; }
+  const match = times.find(t => {
+    const s = new Date(t.StartTime).getTime();
+    const e = new Date(t.EndTime).getTime();
+    return now >= s && now < e;
   });
-  const val = best.elementValue?.[0]?.value;
-  return val != null && val !== "" ? val : null;
+  return (match || times[0])?.ElementValue?.[0] || null;
 }
-async function fetchApparentTemp(township){
-  const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-093?Authorization=${CWA_API_KEY}&locationName=${encodeURIComponent(township)}`;
+async function fetchApparentTemp(county, township){
+  const datasetId = COUNTY_TOWNSHIP_DATASET_ID[county];
+  if (!datasetId) throw new Error(`${county} 沒有對應的鄉鎮預報資料集代碼`);
+  const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-093?Authorization=${CWA_API_KEY}&format=JSON&locationId=${datasetId}`;
   const res = await fetchCwa(url);
   if (!res.ok) {
     let detail = ""; try { detail = (await res.text()).slice(0,200); } catch(e){}
     throw new Error(`HTTP ${res.status}${detail ? `：${detail}` : ""}`);
   }
   const json = await res.json();
-  const loc = json?.records?.locations?.[0]?.location?.[0];
-  if (!loc) throw new Error("查無體感溫度資料");
+  const loc = (json?.records?.Locations?.[0]?.Location || []).find(l => l.LocationName === township);
+  if (!loc) throw new Error("查無鄉鎮預報資料");
   const els = {};
-  (loc.weatherElement || []).forEach(e => { els[e.elementName] = e; });
-  // 這組資料集實際查證過沒有風速／風向欄位（只有 Wx/AT/T/RH/CI/Td/
-  // WeatherDescription/PoP6h），風速風向要另外找有提供的資料集，先不
-  // 假裝有這個能力。
-  const atVal = nearestInstantValue(els.AT);
-  const rhVal = nearestInstantValue(els.RH);
-  const tdVal = nearestInstantValue(els.Td);
+  (loc.WeatherElement || []).forEach(e => { els[e.ElementName] = e; });
+  const rh = currentWindowValue(els["平均相對濕度"])?.RelativeHumidity;
+  const td = currentWindowValue(els["平均露點溫度"])?.DewPoint;
+  const atMax = currentWindowValue(els["最高體感溫度"])?.MaxApparentTemperature;
+  const windVal = currentWindowValue(els["風速"]);
+  const windDirVal = currentWindowValue(els["風向"])?.WindDirection;
+  const uvVal = currentWindowValue(els["紫外線指數"]);
+  const toNum = v => (v != null && v !== "" ? Number(v) : null);
   return {
     township,
-    at: atVal != null ? Number(atVal) : null,
-    rh: rhVal != null ? Number(rhVal) : null,
-    td: tdVal != null ? Number(tdVal) : null
+    at: toNum(atMax),
+    rh: toNum(rh),
+    td: toNum(td),
+    windSpeed: toNum(windVal?.WindSpeed),
+    beaufort: toNum(windVal?.BeaufortScale),
+    windDir: windDirVal || null,
+    uvIndex: toNum(uvVal?.UVIndex),
+    uvLevel: uvVal?.UVExposureLevel || null
   };
 }
 function ensureApparentTempLoaded(unit){
+  const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
   const township = UNIT_WEATHER_TOWNSHIP[unit] || UNIT_WEATHER_TOWNSHIP.hq;
   const cached = apparentTempCache[township];
   const freshFor = cached?.error ? 2*60*1000 : 30*60*1000;
   if (cached && Date.now() - cached.fetchedAt < freshFor) { state.apparentTemp = cached.error ? { township, error: true, message: cached.message } : { township, ...cached.data }; return; }
   if (apparentTempLoadingTownship === township) return;
   apparentTempLoadingTownship = township;
-  fetchApparentTemp(township).then(data => {
+  fetchApparentTemp(county, township).then(data => {
     apparentTempCache[township] = { data, fetchedAt: Date.now() };
     state.apparentTemp = { township, ...data };
     apparentTempLoadingTownship = null;
@@ -3688,6 +3700,10 @@ function renderWeatherCard(unit){
   const atValue = townshipOk && at.at != null ? at.at : null;
   const rhValue = townshipOk && at.rh != null ? at.rh : null;
   const tdValue = townshipOk && at.td != null ? at.td : null;
+  const windValue = townshipOk && at.windSpeed != null ? at.windSpeed : null;
+  const windDirValue = townshipOk ? at.windDir : null;
+  const uvValue = townshipOk && at.uvIndex != null ? at.uvIndex : null;
+  const uvLevelValue = townshipOk ? at.uvLevel : null;
   // at.error 原本會讓體感/濕度/露點三個 pill 直接不顯示、跟「還在載入中」
   // 沒有視覺區別，抓不到問題出在哪。這裡補一個明確的失敗提示。
   const atError = at && at.township === township && at.error;
@@ -3710,8 +3726,10 @@ function renderWeatherCard(unit){
           ${atValue!=null ? `<div class="weather-card-pop">${icon('heartbeat',12)} 體感 ${atValue}°</div>` : ""}
           ${rhValue!=null ? `<div class="weather-card-pop">${icon('cloud',12)} 濕度 ${rhValue}%</div>` : ""}
           ${tdValue!=null ? `<div class="weather-card-pop">${icon('cloud',12)} 露點 ${tdValue}°</div>` : ""}
+          ${windValue!=null ? `<div class="weather-card-pop">${icon('cloud',12)} ${windDirValue ? esc(windDirValue)+' ' : ''}風速 ${windValue}m/s</div>` : ""}
+          ${uvValue!=null ? `<div class="weather-card-pop">${icon('sun',12)} 紫外線 ${uvValue}${uvLevelValue ? '（'+esc(uvLevelValue)+'）' : ''}</div>` : ""}
           ${rainHour3!=null ? `<div class="weather-card-pop">${icon('rain',12)} 近3小時雨量 ${rainHour3}mm</div>` : ""}
-          ${atError ? `<div class="weather-card-pop">${icon('heartbeat',12)} 體感/濕度/露點載入失敗${at.message ? '：'+esc(at.message) : ''}</div>` : ""}
+          ${atError ? `<div class="weather-card-pop">${icon('heartbeat',12)} 體感/濕度/露點/風速/紫外線載入失敗${at.message ? '：'+esc(at.message) : ''}</div>` : ""}
           ${rainError ? `<div class="weather-card-pop">${icon('rain',12)} 雨量資料載入失敗${rain.message ? '：'+esc(rain.message) : ''}</div>` : ""}
         </div>
       </div>
@@ -3799,10 +3817,6 @@ function renderWeeklyForecastList(unit){
             <div class="wf-icon">${icon(wxType,20)}</div>
             <div class="wf-desc">${esc(p.wx)}</div>
             <div class="wf-temp">${range}</div>
-          </div>
-          <div class="wf-bottom">
-            <span class="wf-pop">${icon('rain',11)} 降雨機率 ${p.pop!=null ? `${p.pop}%` : "—"}</span>
-            ${p.ci ? `<span class="wf-ci">${icon('sun',11)} ${esc(p.ci)}</span>` : ""}
           </div>
         </div>`;
       }).join("")}
