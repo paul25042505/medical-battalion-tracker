@@ -351,8 +351,8 @@
   .task-card.s-returning, .er-standby-card.s-returning{--card-accent:var(--blue);}
   .task-card.s-completed, .er-standby-card.s-completed{--card-accent:var(--green);}
   .task-top{display:flex; justify-content:space-between; align-items:center; gap:10px;}
-  .task-title{font-size:var(--text-lg); font-weight:700; margin:0; letter-spacing:-0.01em;}
-  .task-meta{color:var(--muted); font-size:var(--text-sm); font-family:var(--mono); font-weight:500; margin-top:4px;}
+  .task-title{font-size:var(--text-xl); font-weight:800; margin:0; letter-spacing:-0.015em;}
+  .task-meta{color:var(--muted); font-size:var(--text-sm); font-family:var(--mono); font-variant-numeric:tabular-nums; font-weight:500; margin-top:4px;}
   .badge{
     display:inline-flex; align-items:center; gap:6px; font-size:var(--text-xs); font-family:var(--mono); font-weight:700;
     padding:7px 13px; border-radius:var(--radius-sm); white-space:nowrap;
@@ -365,7 +365,7 @@
   .badge.returning{background:color-mix(in srgb, var(--blue) 12%, transparent); color:var(--blue);}
   .badge.completed{background:color-mix(in srgb, var(--green) 13%, transparent); color:var(--green-text);}
   .task-foot{display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:var(--text-xs); color:var(--muted);}
-  .task-crew{display:flex; flex-direction:column; gap:6px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border); font-size:var(--text-sm); color:var(--text); font-family:var(--mono); font-weight:500;}
+  .task-crew{display:flex; flex-direction:column; gap:6px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border); font-size:var(--text-sm); color:var(--text); font-family:var(--mono); font-variant-numeric:tabular-nums; font-weight:500;}
   .empty{color:var(--muted); font-size:var(--text-sm); text-align:center; padding:46px 22px; border:1px dashed var(--border-strong); border-radius:var(--radius-lg);}
 
   /* ---- 患者狀況：突發狀況時記錄生命徵象/主訴，任務卡片凸顯提示。
@@ -574,7 +574,7 @@
   .weather-card-pills{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
   .weather-card-pop{
     display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px;
-    background:rgba(255,255,255,0.24); font-size:var(--text-xs); font-weight:700;
+    background:rgba(255,255,255,0.24); font-size:var(--text-xs); font-weight:700; font-variant-numeric:tabular-nums;
   }
   .weather-card.wx-muted .weather-card-pop{background:var(--panel-2);}
   /* 未來預報清單：每列一個時段，左邊標籤（今晚/明天白天）、中間圖示＋
@@ -590,11 +590,11 @@
   .wf-label{width:64px; flex-shrink:0; font-size:var(--text-xs); font-weight:700; color:var(--muted);}
   .wf-icon{flex-shrink:0; color:var(--blue); display:flex;}
   .wf-desc{flex:1; min-width:0; font-size:var(--text-sm); font-weight:600; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .wf-temp{flex-shrink:0; font-size:var(--text-sm); font-weight:700; font-family:var(--mono); color:var(--text);}
+  .wf-temp{flex-shrink:0; font-size:var(--text-sm); font-weight:700; font-family:var(--mono); font-variant-numeric:tabular-nums; color:var(--text);}
   .wf-bottom{display:flex; flex-wrap:wrap; gap:10px; margin-top:6px; padding-left:74px;}
   .wf-pop, .wf-ci{
     display:inline-flex; align-items:center; gap:3px;
-    font-size:var(--text-xs); font-weight:600; color:var(--muted);
+    font-size:var(--text-xs); font-weight:600; color:var(--muted); font-variant-numeric:tabular-nums;
   }
   .weather-tip{
     display:flex; align-items:flex-start; gap:8px; background:var(--panel); border:1px solid var(--border);
@@ -676,16 +676,22 @@
     border-radius:var(--radius-lg); padding:24px; margin-bottom:14px;
   }
   .er-standby-head{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:4px;}
-  .er-standby-head .name{font-size:var(--text-lg); font-weight:700; letter-spacing:-0.01em;}
-  .er-standby-meta{font-size:var(--text-xs); color:var(--muted); font-family:var(--mono); margin-bottom:20px;}
+  .er-standby-head .name{font-size:var(--text-xl); font-weight:800; letter-spacing:-0.015em;}
+  .er-standby-meta{font-size:var(--text-xs); color:var(--muted); font-family:var(--mono); font-variant-numeric:tabular-nums; margin-bottom:20px;}
   /* 中間資訊改成標準 2x2 網格，上下用細線收邊跟按鈕拉開距離；車長多一行
-     藍字小字顯示 EMT 等級與電話，跟姓名階級那行區隔開，不搶主要資訊焦點。 */
+     藍字小字顯示 EMT 等級與電話，跟姓名階級那行區隔開，不搶主要資訊焦點。
+     標籤（車號/車長/駕駛...）改細體、內容值稍微縮小，跟上面加大加粗的
+     標題拉開對比，數字全面補 tabular-nums 對齊——這幾條只在急診待命卡片
+     的 2x2 網格裡覆寫，共用的 .detail-item／.lbl／.val（vitals 問診卡片
+     也在用）本身不動，避免波及其他畫面。 */
   .er-standby-grid{
     display:grid; grid-template-columns:1fr 1fr; gap:16px 24px;
     border-top:1px solid var(--border); border-bottom:1px solid var(--border);
     padding:18px 0; margin-bottom:20px;
   }
-  .er-standby-grid .detail-item .sub-line{font-size:var(--text-xs); color:var(--blue); font-weight:600; margin-top:2px;}
+  .er-standby-grid .detail-item .lbl{font-weight:500;}
+  .er-standby-grid .detail-item .val{font-size:var(--text-base); font-variant-numeric:tabular-nums;}
+  .er-standby-grid .detail-item .sub-line{font-size:var(--text-xs); color:var(--blue); font-weight:600; margin-top:2px; font-variant-numeric:tabular-nums;}
   /* 進行中狀態（除了已完成）的圓點都做微弱脈動的「呼吸感」，像即時監控
      中的指示燈——已完成是靜止的終態，不需要再吸引注意力。開啟「減少
      動態效果」時會被全站統一的 reduced-motion 規則壓成瞬間完成。 */
@@ -1181,7 +1187,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-230-spatial-card-redesign";
+const BUILD_TAG = "2026-07-09-231-spatial-card-typography";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1680,6 +1686,7 @@ const RELEASE_NOTES = [
       "任務卡片／急診待命卡片重新設計：拿掉原本左側 4px 純色狀態色條，改成整張卡片依狀態（待命中/出勤中/已抵達現場/前往下一地點/返營中/已完成）呈現柔和的液態光暈色調，疊三層陰影做出懸浮的空間深度感；有患者記錄的任務卡片會強制蓋成紅色光暈並加上緩慢的呼吸感光圈，比一般狀態更搶眼",
       "狀態徽章的圓點呼吸感效果從只有「待命中」擴大到所有進行中的狀態（出勤中/已抵達現場/前往下一地點/返營中），只有「已完成」維持靜止；深色模式下這套設計會自動變成發光邊框＋懸浮夜光卡片，淺色模式維持白瓷卡片＋柔和彩色陰影，同一份規則兩種模式共用",
       "天氣卡片也補上同一套懸浮陰影深度感，溫度數字改用等寬字體＋加粗，跟數值型資訊（車號、時間）的呈現方式一致",
+      "任務卡片／急診待命卡片的標題（勤務名稱、醫務所名稱）字級放大、字重加粗，跟底下欄位標籤（車號/車長/駕駛等）拉開對比——欄位標籤改細體，內容值字級縮小一級，數字（車號、電話、時間、降雨機率）全面補上等寬對齊（tabular-nums），標題突出、內文收斂，閱讀節奏更清楚",
     ] },
   ] },
   { date: "2026/07/08", groups: [
