@@ -1189,7 +1189,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-237-gemini-model-3-5-flash";
+const BUILD_TAG = "2026-07-09-238-weather-error-detail";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1695,6 +1695,7 @@ const RELEASE_NOTES = [
       "「Core-AI Insight」正式啟用：先前只有畫面框架，現在補上金鑰後會真的依當下天氣數據生成風險預測與行動建議",
       "修正一週預報／雨量／體感溫度濕度露點資料抓取失敗時，畫面會直接不顯示整個區塊，跟「還在載入中」看起來一樣，完全看不出來是失敗還是還沒載完：現在失敗時會明確顯示「載入失敗」提示，方便排查問題",
       "修正「Core-AI Insight」實機一律顯示「AI 建議暫時無法取得」的問題：呼叫的 Gemini 1.5 Flash 模型已經被 Google 下架（呼叫會回傳 404），改成呼叫目前還在服務的 Gemini 3.5 Flash",
+      "一週預報／雨量／體感溫度濕度露點／Core-AI Insight 的「載入失敗」提示補上實際錯誤原因（HTTP 狀態碼＋伺服器回傳的錯誤訊息），先前只顯示「載入失敗」四個字看不出問題出在哪，回報時把這段訊息一起附上就能直接定位問題",
     ] },
     { category: "介面優化", items: [
       "任務卡片／急診待命卡片重新設計：拿掉原本左側 4px 純色狀態色條，改成整張卡片依狀態（待命中/出勤中/已抵達現場/前往下一地點/返營中/已完成）呈現柔和的液態光暈色調，疊三層陰影做出懸浮的空間深度感；有患者記錄的任務卡片會強制蓋成紅色光暈並加上緩慢的呼吸感光圈，比一般狀態更搶眼",
@@ -2940,7 +2941,10 @@ let weeklyForecastLoadingCounty = null;
 async function fetchWeeklyForecast(county){
   const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-005?Authorization=${CWA_API_KEY}&locationName=${encodeURIComponent(county)}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    let detail = ""; try { detail = (await res.text()).slice(0,200); } catch(e){}
+    throw new Error(`HTTP ${res.status}${detail ? `：${detail}` : ""}`);
+  }
   const json = await res.json();
   const loc = json?.records?.location?.[0];
   if (!loc) throw new Error("查無一週預報資料");
@@ -2967,7 +2971,7 @@ function ensureWeeklyForecastLoaded(unit){
   // 一週預報不需要跟 36 小時預報一樣頻繁更新，成功快取拉長到 1 小時；
   // 失敗快取理由同 ensureWeatherLoaded，避免無限重試迴圈。
   const freshFor = cached?.error ? 2*60*1000 : 60*60*1000;
-  if (cached && Date.now() - cached.fetchedAt < freshFor) { state.weeklyForecast = cached.error ? { county, error: true } : { county, periods: cached.data.periods }; return; }
+  if (cached && Date.now() - cached.fetchedAt < freshFor) { state.weeklyForecast = cached.error ? { county, error: true, message: cached.message } : { county, periods: cached.data.periods }; return; }
   if (weeklyForecastLoadingCounty === county) return;
   weeklyForecastLoadingCounty = county;
   fetchWeeklyForecast(county).then(data => {
@@ -2977,8 +2981,9 @@ function ensureWeeklyForecastLoaded(unit){
     safeRender();
   }).catch(err => {
     console.error("一週預報載入失敗", err);
-    weeklyForecastCache[county] = { fetchedAt: Date.now(), error: true };
-    state.weeklyForecast = { county, error: true };
+    const message = err.message || String(err);
+    weeklyForecastCache[county] = { fetchedAt: Date.now(), error: true, message };
+    state.weeklyForecast = { county, error: true, message };
     weeklyForecastLoadingCounty = null;
     safeRender();
   });
@@ -2994,7 +2999,10 @@ let rainfallLoadingCounty = null;
 async function fetchRainfallStation(county){
   const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0002-001?Authorization=${CWA_API_KEY}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    let detail = ""; try { detail = (await res.text()).slice(0,200); } catch(e){}
+    throw new Error(`HTTP ${res.status}${detail ? `：${detail}` : ""}`);
+  }
   const json = await res.json();
   const stations = json?.records?.location || [];
   const matches = stations.filter(s => (s.parameter || []).some(p => p.parameterName === "CITY" && p.parameterValue === county));
@@ -3019,7 +3027,7 @@ function ensureRainfallLoaded(unit){
   const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
   const cached = rainfallCache[county];
   const freshFor = cached?.error ? 2*60*1000 : 15*60*1000;
-  if (cached && Date.now() - cached.fetchedAt < freshFor) { state.rainfall = cached.error ? { county, error: true } : { county, ...cached.data }; return; }
+  if (cached && Date.now() - cached.fetchedAt < freshFor) { state.rainfall = cached.error ? { county, error: true, message: cached.message } : { county, ...cached.data }; return; }
   if (rainfallLoadingCounty === county) return;
   rainfallLoadingCounty = county;
   fetchRainfallStation(county).then(data => {
@@ -3029,8 +3037,9 @@ function ensureRainfallLoaded(unit){
     safeRender();
   }).catch(err => {
     console.error("雨量站資料載入失敗", err);
-    rainfallCache[county] = { fetchedAt: Date.now(), error: true };
-    state.rainfall = { county, error: true };
+    const message = err.message || String(err);
+    rainfallCache[county] = { fetchedAt: Date.now(), error: true, message };
+    state.rainfall = { county, error: true, message };
     rainfallLoadingCounty = null;
     safeRender();
   });
@@ -3115,7 +3124,10 @@ function nearestInstantValue(el){
 async function fetchApparentTemp(township){
   const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-093?Authorization=${CWA_API_KEY}&locationName=${encodeURIComponent(township)}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    let detail = ""; try { detail = (await res.text()).slice(0,200); } catch(e){}
+    throw new Error(`HTTP ${res.status}${detail ? `：${detail}` : ""}`);
+  }
   const json = await res.json();
   const loc = json?.records?.locations?.[0]?.location?.[0];
   if (!loc) throw new Error("查無體感溫度資料");
@@ -3138,7 +3150,7 @@ function ensureApparentTempLoaded(unit){
   const township = UNIT_WEATHER_TOWNSHIP[unit] || UNIT_WEATHER_TOWNSHIP.hq;
   const cached = apparentTempCache[township];
   const freshFor = cached?.error ? 2*60*1000 : 30*60*1000;
-  if (cached && Date.now() - cached.fetchedAt < freshFor) { state.apparentTemp = cached.error ? { township, error: true } : { township, ...cached.data }; return; }
+  if (cached && Date.now() - cached.fetchedAt < freshFor) { state.apparentTemp = cached.error ? { township, error: true, message: cached.message } : { township, ...cached.data }; return; }
   if (apparentTempLoadingTownship === township) return;
   apparentTempLoadingTownship = township;
   fetchApparentTemp(township).then(data => {
@@ -3148,8 +3160,9 @@ function ensureApparentTempLoaded(unit){
     safeRender();
   }).catch(err => {
     console.error("體感溫度載入失敗", err);
-    apparentTempCache[township] = { fetchedAt: Date.now(), error: true };
-    state.apparentTemp = { township, error: true };
+    const message = err.message || String(err);
+    apparentTempCache[township] = { fetchedAt: Date.now(), error: true, message };
+    state.apparentTemp = { township, error: true, message };
     apparentTempLoadingTownship = null;
     safeRender();
   });
@@ -3170,7 +3183,14 @@ async function fetchGeminiInsight(weatherData){
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    // Google 的錯誤回應本身通常帶有 { error: { code, message, status } }，
+    // 只回報 HTTP 狀態碼看不出真正原因（金鑰無效／模型未啟用／額度用盡
+    // 各自對應不同訊息），這裡盡量把 Google 回傳的原因帶出來。
+    let detail = "";
+    try { const errJson = await res.json(); detail = errJson?.error?.message || ""; } catch(e){}
+    throw new Error(`HTTP ${res.status}${detail ? `：${detail}` : ""}`);
+  }
   const json = await res.json();
   const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error("Gemini 未回傳建議文字");
@@ -3184,7 +3204,7 @@ function ensureAiInsightLoaded(unit){
   if (!w || w.error || w.county !== county) return;
   const cached = aiInsightCache[county];
   const freshFor = cached?.error ? 2*60*1000 : 30*60*1000;
-  if (cached && Date.now() - cached.fetchedAt < freshFor) { state.aiInsight = cached.error ? { county, error: true } : { county, text: cached.text }; return; }
+  if (cached && Date.now() - cached.fetchedAt < freshFor) { state.aiInsight = cached.error ? { county, error: true, message: cached.message } : { county, text: cached.text }; return; }
   if (aiInsightLoadingCounty === county) return;
   aiInsightLoadingCounty = county;
   const township = UNIT_WEATHER_TOWNSHIP[unit] || UNIT_WEATHER_TOWNSHIP.hq;
@@ -3196,8 +3216,9 @@ function ensureAiInsightLoaded(unit){
     safeRender();
   }).catch(err => {
     console.error("Core-AI Insight 載入失敗", err);
-    aiInsightCache[county] = { fetchedAt: Date.now(), error: true };
-    state.aiInsight = { county, error: true };
+    const message = err.message || String(err);
+    aiInsightCache[county] = { fetchedAt: Date.now(), error: true, message };
+    state.aiInsight = { county, error: true, message };
     aiInsightLoadingCounty = null;
     safeRender();
   });
@@ -3672,8 +3693,8 @@ function renderWeatherCard(unit){
           ${rhValue!=null ? `<div class="weather-card-pop">${icon('cloud',12)} 濕度 ${rhValue}%</div>` : ""}
           ${tdValue!=null ? `<div class="weather-card-pop">${icon('cloud',12)} 露點 ${tdValue}°</div>` : ""}
           ${rainHour3!=null ? `<div class="weather-card-pop">${icon('rain',12)} 近3小時雨量 ${rainHour3}mm</div>` : ""}
-          ${atError ? `<div class="weather-card-pop">${icon('heartbeat',12)} 體感/濕度/露點載入失敗</div>` : ""}
-          ${rainError ? `<div class="weather-card-pop">${icon('rain',12)} 雨量資料載入失敗</div>` : ""}
+          ${atError ? `<div class="weather-card-pop">${icon('heartbeat',12)} 體感/濕度/露點載入失敗${at.message ? '：'+esc(at.message) : ''}</div>` : ""}
+          ${rainError ? `<div class="weather-card-pop">${icon('rain',12)} 雨量資料載入失敗${rain.message ? '：'+esc(rain.message) : ''}</div>` : ""}
         </div>
       </div>
     </div>`;
@@ -3690,7 +3711,7 @@ function renderAiInsightBanner(unit){
   if (!ai || ai.county !== county) {
     bodyHtml = `<div class="ai-insight-text muted" id="ai-insight-text">分析中，正在生成風險預測建議…</div>`;
   } else if (ai.error) {
-    bodyHtml = `<div class="ai-insight-text muted" id="ai-insight-text">AI 建議暫時無法取得，請依標準程序執行今日勤務。</div>`;
+    bodyHtml = `<div class="ai-insight-text muted" id="ai-insight-text">AI 建議暫時無法取得${ai.message ? '（'+esc(ai.message)+'）' : ''}，請依標準程序執行今日勤務。</div>`;
   } else {
     bodyHtml = `<div class="ai-insight-text" id="ai-insight-text">${esc(ai.text)}</div>`;
   }
@@ -3743,7 +3764,7 @@ function renderWeeklyForecastList(unit){
   // 分辨到底是還沒載完還是真的失敗了。這裡補一個明確的失敗提示。
   if (wk.error) return `
     <div class="section-label">未來一週</div>
-    <div class="weather-tip">${icon('bell',16)}<div>${esc(county)}一週預報載入失敗，稍後重新整理再試一次</div></div>`;
+    <div class="weather-tip">${icon('bell',16)}<div>${esc(county)}一週預報載入失敗${wk.message ? '：'+esc(wk.message) : ''}，稍後重新整理再試一次</div></div>`;
   if (!wk.periods || !wk.periods.length) return "";
   return `
     <div class="section-label">未來一週</div>
