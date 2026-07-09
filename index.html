@@ -853,8 +853,18 @@
   /* ---- 圖示式子選單（例如「任務」頁最上面的勤務／天氣切換）：一排方形
      圖示磚，選中的那顆填滿主題色、圖示變白，其餘保持淺灰底＋灰字，
      跟純文字的 .tabs2 頁籤區隔開來，用在「切換的是完全不同的畫面內容」
-     而不是「同一份清單的篩選條件」這種情境。 */
-  .icon-subtabs{display:flex; gap:14px; margin-bottom:20px;}
+     而不是「同一份清單的篩選條件」這種情境。
+     position:sticky; top:0 讓這排子選單捲動時固定在 main 可視範圍最上面、
+     不會跟著清單內容一起被捲走——main 現在是 App Shell 裡貨真價實的
+     捲動容器（見 #app 的 CSS 註解），sticky 相對它自己的捲動位置計算，
+     不會有 fixed 元素過去踩過的那些問題。左右用 -16px 負 margin 抵消
+     main 自己的 padding，撐成貼齊螢幕邊緣的滿版；補一層跟頁面同色的
+     背景+模糊，捲動的清單內容從底下滑過去才不會透出來。 */
+  .icon-subtabs{
+    display:flex; gap:14px; position:sticky; top:0; z-index:15;
+    margin:0 -16px 20px -16px; padding:14px 16px 10px 16px;
+    background:var(--bg); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  }
   .icon-subtab{
     display:flex; flex-direction:column; align-items:center; gap:8px; flex-shrink:0;
     background:none; border:none; font-family:var(--sans); color:var(--muted);
@@ -1038,7 +1048,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-217-icon-subtab-style";
+const BUILD_TAG = "2026-07-09-218-icon-subtab-sticky";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1504,6 +1514,7 @@ const RELEASE_NOTES = [
       "「任務」頁的狀態頁籤把「出勤中」跟「前往中」合併成同一個「出勤中」頁籤（對調度來說都是車輛還在路上，拆兩個頁籤沒有實益），單筆勤務卡片上顯示的狀態文字不受影響，還是會分別顯示「出勤中」或「前往下一地點」",
       "「任務」頁最上面新增「勤務／天氣」子選單：「勤務」就是原本的狀態頁籤跟勤務清單；「天氣」是原本首頁的天氣資訊（天氣卡片、貼心提醒、特報橫幅）搬過來的新頁面，首頁不再重複顯示天氣資訊",
       "上述「勤務／天氣」子選單改成圖示磚樣式：選中的項目整塊填滿主題色、圖示變白，其餘保持淺灰底，取代原本純文字的膠囊頁籤",
+      "上述「勤務／天氣」子選單改成固定在畫面最上面，捲動底下的狀態頁籤/清單內容時不會跟著被捲走",
     ] },
     { category: "關於系統／意見回饋", items: [
       "「關於系統 → 更新紀錄」改成依功能區塊分類顯示（例如「患者紀錄」「急診待命」），不再是同一天所有異動擠成一長串沒有結構的清單",
