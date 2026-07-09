@@ -1258,7 +1258,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-254-hospital-osrm-road-distance";
+const BUILD_TAG = "2026-07-09-255-hospital-coords-gps-geocode";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1786,6 +1786,7 @@ const RELEASE_NOTES = [
     { category: "醫院資訊", items: [
       "修正「重新定位」在烏日區（成功北醫務所所在地）會誤判成臺中市南區的問題：行政區代表點清單原本沒收錄烏日區，導致抓到最近的「南區」硬配上去；同時加上距離上限，往後遇到清單裡沒收錄的行政區，會誠實顯示只定位到縣市層級，不會再隨便配一個其實有段距離的行政區",
       "「顯示附近醫院」新增道路距離：對直線距離 50 公里內、最近的前 15 間已登記座標的醫院，改抓實際路程公里數（會標示「路程」，跟原本的「直線」距離區分開來，避免誤把直線距離當成要開的路程），抓不到（連線不穩、逾時等）會靜默退回原本的直線距離，不影響排序功能本身",
+      "新增/編輯醫院表單的「座標」欄位補上兩個輔助按鈕：「抓取目前位置」可以在醫院現場直接帶入目前 GPS 座標；「地址查詢座標」會把已填的地址反查成座標（透過 OpenStreetMap 的 Nominatim 服務），都不用再手動去地圖 App 查、複製貼上",
     ] },
   ] },
   { date: "2026/07/08", groups: [
@@ -5954,9 +5955,13 @@ function viewBaseDataModal(){
         </select>
       </div>
       <div class="field"><label>行政區（選填，用於定位比對）</label><input name="district" value="${esc(editing?.district||'')}" placeholder="例如：西屯區"></div>
-      <div class="field"><label>地址（選填，用於一鍵導航）</label><input name="address" value="${esc(editing?.address||'')}" placeholder="例如：臺中市西屯區臺灣大道四段1650號"></div>
-      <div class="field"><label>座標（選填，格式：緯度,經度）</label><input name="coords" value="${(editing && editing.lat != null && editing.lng != null) ? `${editing.lat},${editing.lng}` : ''}" placeholder="例如：24.1786,120.6400"></div>
-      <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">填了座標，「顯示附近醫院」會直接算你跟這間醫院的實際距離（比行政區/縣市更準）；不填就退回用行政區/縣市概略比對。手機地圖 App 長按地點通常可以複製出「緯度,經度」。</div>
+      <div class="field"><label>地址（選填，用於一鍵導航）</label><input id="hospitalAddressInput" name="address" value="${esc(editing?.address||'')}" placeholder="例如：臺中市西屯區臺灣大道四段1650號"></div>
+      <div class="field"><label>座標（選填，格式：緯度,經度）</label><input id="hospitalCoordsInput" name="coords" value="${(editing && editing.lat != null && editing.lng != null) ? `${editing.lat},${editing.lng}` : ''}" placeholder="例如：24.1786,120.6400"></div>
+      <div style="display:flex; gap:8px; margin:-8px 0 8px;">
+        <button type="button" class="icon-btn" onclick="window.__fillHospitalCoordsFromGPS()">${icon('pin',14)} <span class="btn-label">抓取目前位置</span></button>
+        <button type="button" class="icon-btn" id="geocodeAddressBtn" onclick="window.__geocodeHospitalAddress()">${icon('pin',14)} <span class="btn-label">地址查詢座標</span></button>
+      </div>
+      <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">填了座標，「顯示附近醫院」會直接算你跟這間醫院的實際距離（比行政區/縣市更準）；不填就退回用行政區/縣市概略比對。人在醫院現場可以直接按「抓取目前位置」，或是填好地址後按「地址查詢座標」自動換算（地址查詢由 OpenStreetMap 貢獻者的 Nominatim 服務提供，查不到時請改用抓取目前位置或手動輸入）。</div>
       <div class="field"><label>急救責任等級</label>
         <select name="level" required>
           <option value="">請選擇等級</option>
@@ -6688,6 +6693,17 @@ async function fetchRoadDistances(lat, lng){
     clearTimeout(timer);
   }
 }
+// GeolocationPositionError.code 對應的中文提示：瀏覽器回傳的 err.message 是
+// 英文原文（例如 "User denied Geolocation"），直接顯示看不懂也不知道怎麼
+// 處理。retryActionLabel 是失敗後建議使用者重新觸發的動作名稱，「顯示附近
+// 醫院」（醫院資訊頁定位）跟「抓取目前位置」（新增/編輯醫院表單填座標）
+// 共用同一份訊息，只有建議重試的動作名稱不同。
+function geolocationErrorMessage(err, retryActionLabel){
+  if (err.code === 1) return `定位權限被拒絕，請到手機設定 → 瀏覽器（或本網頁）的「位置」權限改成允許，再回來點一次「${retryActionLabel}」`;
+  if (err.code === 2) return "目前無法取得定位，請確認手機的定位服務（GPS）已開啟，或移動到訊號較好的地方再試一次";
+  if (err.code === 3) return "定位逾時，請確認手機定位服務已開啟且訊號穩定，再試一次";
+  return "定位失敗，請確認已開啟定位權限";
+}
 // 醫院資訊頁「顯示附近醫院」：用瀏覽器定位 API 抓 GPS 座標，換算最接近
 // 哪個行政區（見 nearestDistrict，比只到縣市層級更準——臺中市範圍很大，
 // 同縣市不代表距離近），同行政區的醫院排最前面，其次是同縣市但行政區
@@ -6710,22 +6726,61 @@ window.__locateNearbyHospitals = () => {
       render();
       fetchRoadDistances(state.myLat, state.myLng);
     },
-    (err) => {
-      state.locatingHospital = false; render();
-      // 瀏覽器回傳的 err.message 是英文原文（例如 "User denied Geolocation"），
-      // 直接顯示看不懂也不知道怎麼處理；依 GeolocationPositionError 的
-      // code 給出可以實際照做的中文提示。
-      const msg = err.code === 1
-        ? "定位權限被拒絕，請到手機設定 → 瀏覽器（或本網頁）的「位置」權限改成允許，再回來點一次「顯示附近醫院」"
-        : err.code === 2
-        ? "目前無法取得定位，請確認手機的定位服務（GPS）已開啟，或移動到訊號較好的地方再試一次"
-        : err.code === 3
-        ? "定位逾時，請確認手機定位服務已開啟且訊號穩定，再試一次"
-        : "定位失敗，請確認已開啟定位權限";
-      showToast(msg);
-    },
+    (err) => { state.locatingHospital = false; render(); showToast(geolocationErrorMessage(err, "顯示附近醫院")); },
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
   );
+};
+// 新增/編輯醫院表單「抓取目前位置」：直接把目前 GPS 座標填進座標欄位，
+// 免得要另外開地圖 App 查、複製貼上。純瀏覽器定位 API，不牽涉任何外部
+// 服務，沒有額度/CORS 疑慮。
+window.__fillHospitalCoordsFromGPS = () => {
+  if (!navigator.geolocation) { showToast("此裝置/瀏覽器不支援定位功能"); return; }
+  const input = document.getElementById("hospitalCoordsInput");
+  if (!input) return;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => { input.value = `${pos.coords.latitude.toFixed(5)},${pos.coords.longitude.toFixed(5)}`; },
+    (err) => showToast(geolocationErrorMessage(err, "抓取目前位置")),
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  );
+};
+// 新增/編輯醫院表單「地址查詢座標」：用 OpenStreetMap 的 Nominatim 地理編碼
+// 服務把地址欄位反查成座標，免費、不用金鑰。
+//
+// 注意：Nominatim 使用規範要求識別身分用的 User-Agent 或 Referer，但瀏覽器
+// 的 fetch() 不允許腳本自訂 User-Agent（屬於 forbidden header，設了也會被
+// 瀏覽器忽略，不會真的送出去）——這點在瀏覽器環境下無法照字面做到，改靠
+// 瀏覽器自動帶的 Referer（本站網域）滿足身分識別需求，這是瀏覽器端呼叫
+// Nominatim 唯一可行的方式。加 countrycodes=tw 限制在臺灣境內，避免地址
+// 名稱剛好跟國外地名重複而查到錯的地方。
+// 查詢失敗（連線問題、CORS 被擋、查無結果）一律跳溫和的 alert 提示，不佔用
+// 站內既有的 toast 佇列（這是使用者主動點擊等待結果的操作，跟背景資料
+// 載入失敗的情境不同，用跟瀏覽器原生互動一致的 alert 比較符合當下情境）。
+window.__geocodeHospitalAddress = async () => {
+  const addressInput = document.getElementById("hospitalAddressInput");
+  const coordsInput = document.getElementById("hospitalCoordsInput");
+  const btn = document.getElementById("geocodeAddressBtn");
+  const label = btn?.querySelector(".btn-label");
+  const address = (addressInput?.value || "").trim();
+  if (!address) { alert("請先填寫地址欄位，再查詢座標"); return; }
+  if (!coordsInput || !btn || !label) return;
+  btn.disabled = true;
+  label.textContent = "查詢中…";
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&countrycodes=tw`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const results = await res.json();
+    if (!Array.isArray(results) || !results.length) {
+      alert("查不到這個地址對應的座標，請確認地址是否正確，或改用「抓取目前位置」／手動輸入");
+      return;
+    }
+    coordsInput.value = `${Number(results[0].lat).toFixed(5)},${Number(results[0].lon).toFixed(5)}`;
+  } catch (e) {
+    alert("查詢座標失敗，請檢查網路連線後再試一次，或改用「抓取目前位置」／手動輸入");
+  } finally {
+    btn.disabled = false;
+    label.textContent = "地址查詢座標";
+  }
 };
 window.__setThemeMode = (mode) => {
   state.themeMode = mode;
