@@ -500,11 +500,31 @@
   .weather-card-loc{font-size:var(--text-sm); font-weight:700; opacity:0.95;}
   .weather-card-desc{font-size:var(--text-base); font-weight:700; margin-top:1px;}
   .weather-card-temp{font-size:var(--text-2xl); font-weight:800; margin-top:8px; letter-spacing:0.01em;}
+  .weather-card-pills{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
   .weather-card-pop{
-    display:inline-flex; align-items:center; gap:4px; margin-top:8px; padding:3px 10px; border-radius:999px;
+    display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px;
     background:rgba(255,255,255,0.24); font-size:var(--text-xs); font-weight:700;
   }
   .weather-card.wx-muted .weather-card-pop{background:var(--panel-2);}
+  /* 未來預報清單：每列一個時段，左邊標籤（今晚/明天白天）、中間圖示＋
+     天氣描述（含舒適度），右邊溫度區間跟降雨機率各自靠右對齊，資訊密度
+     比大卡片高但保持一行不換行，方便一眼掃過去比較每個時段。 */
+  .weather-forecast-list{
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md);
+    box-shadow:var(--shadow-xs); margin-bottom:18px; overflow:hidden;
+  }
+  .weather-forecast-row{padding:11px 14px; border-bottom:1px solid var(--border);}
+  .weather-forecast-row:last-child{border-bottom:none;}
+  .wf-top{display:flex; align-items:center; gap:10px;}
+  .wf-label{width:64px; flex-shrink:0; font-size:var(--text-xs); font-weight:700; color:var(--muted);}
+  .wf-icon{flex-shrink:0; color:var(--blue); display:flex;}
+  .wf-desc{flex:1; min-width:0; font-size:var(--text-sm); font-weight:600; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .wf-temp{flex-shrink:0; font-size:var(--text-sm); font-weight:700; font-family:var(--mono); color:var(--text);}
+  .wf-bottom{display:flex; flex-wrap:wrap; gap:10px; margin-top:6px; padding-left:74px;}
+  .wf-pop, .wf-ci{
+    display:inline-flex; align-items:center; gap:3px;
+    font-size:var(--text-xs); font-weight:600; color:var(--muted);
+  }
   .weather-tip{
     display:flex; align-items:flex-start; gap:8px; background:var(--panel); border:1px solid var(--border);
     border-radius:var(--radius-md); padding:12px 14px; margin-bottom:18px;
@@ -1075,7 +1095,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-226-camp-tile-format";
+const BUILD_TAG = "2026-07-09-228-apparent-temp";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1083,7 +1103,7 @@ const BUILD_TAG = "2026-07-09-226-camp-tile-format";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "1.13";
+const APP_MAJOR_MINOR = "1.14";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -1380,6 +1400,10 @@ function taskTypeLabel(t){ return t && t.type === "liaison" ? "洽公" : "勤務
    ========================================================= */
 const CWA_API_KEY = "CWA-C471B712-733E-4115-9AD2-0E1D96D3A10E";
 const UNIT_WEATHER_LOCATION = { hq: "臺中市", co1: "臺中市", co2: "嘉義縣" };
+// 體感溫度用「鄉鎮天氣預報」資料集（F-D0047-093），這組資料是用鄉鎮查詢，
+// 不是縣市，所以另外設一組單位→鄉鎮的對應（成功北醫務所在烏日區、精北
+// 醫務所在大林鎮）。
+const UNIT_WEATHER_TOWNSHIP = { hq: "烏日區", co1: "烏日區", co2: "大林鎮" };
 
 /* =========================================================
    2c) 階級（依權重排序，數字越小階級越高）
@@ -1559,6 +1583,11 @@ const RELEASE_NOTES = [
       "「勤務／天氣」子選單的圖示磚也改成透明玻璃質感（原本是純色底），未選中的磚是半透明白霧玻璃、選中的磚是半透明藍色玻璃並帶淡淡光暈邊框，捲動時底下內容顏色一樣會透出來，晶瑩剔透感更完整",
       "修正頂欄姓名旁邊的階級徽章（例如「上士」）幾乎看不見的問題：先前改頂欄背景色時，徽章底色剛好跟新背景色太接近，等於整塊融在一起消失，改成用卡片白底＋邊框，跟背景明顯分開",
       "首頁「今日概況」統計卡片改成 2×2 排列：洽公中人數移到左下角，原本分開的營內車／營外車合併成一格，數字（◯／◯）在上、「營內／營外」文字說明在下，跟其他三格的排版方式一致",
+    ] },
+    { category: "天氣資訊", items: [
+      "天氣頁新增「未來預報」清單：原本只顯示最近一個時段（今天白天/晚上），中央氣象署 API 其實一次會給 3 個時段（涵蓋未來 36 小時），現在把剩下的時段（例如今晚、明天白天）也條列出來，各自顯示天氣狀況、溫度區間、降雨機率",
+      "天氣卡片＋未來預報清單新增「舒適度」資訊（例如舒適／悶熱／悶熱至炎熱），體感偏悶熱或偏冷時，下方提醒文字也會補一句提醒留意人員身體狀況",
+      "天氣卡片新增「體感溫度」（成功北醫務所、精北醫務所各自對應烏日區、大林鎮），當體感溫度比預報最高氣溫高出 3°C 以上時，下方提醒文字會額外提醒戶外執勤留意",
     ] },
   ] },
   { date: "2026/07/08", groups: [
@@ -1881,6 +1910,7 @@ const state = {
   previewActive: false, realRoleUnit: null, // 角色權限預覽（僅限 admin）
   weather: null, // 任務頁「天氣」子選單的氣象預報（依單位對應縣市，見 ensureWeatherLoaded）
   hazards: null, // 任務頁「天氣」子選單的天氣特報／陸上警報（依單位對應縣市，見 ensureHazardsLoaded）
+  apparentTemp: null, // 任務頁「天氣」子選單的體感溫度（依單位對應鄉鎮，見 ensureApparentTempLoaded）
   myLat: null, // 醫院資訊頁：手機 GPS 定位的原始緯度，null 代表尚未定位；有登記座標的醫院直接拿這個算實際距離
   myLng: null, // 醫院資訊頁：手機 GPS 定位的原始經度
   myCounty: null, // 醫院資訊頁：手機 GPS 定位算出的概略縣市（見 nearestDistrict），沒座標的醫院退回用這個比對；null 代表尚未定位
@@ -2718,13 +2748,47 @@ async function fetchWeather(county){
   if (!loc) throw new Error("查無天氣資料");
   const els = {};
   loc.weatherElement.forEach(e => { els[e.elementName] = e.time; });
+  // 36 小時預報資料本身就有 3 個時段（今天白天/晚上、明天白天，依實際
+  // 發布時間會往後移動），只取第一個時段當「現在」的話，後面兩個時段的
+  // 資料等於白抓了。這裡把所有時段都留著，天氣頁除了大卡片顯示第一個
+  // 時段，底下再補一個「未來預報」清單顯示其餘時段。
+  const count = els.Wx?.length || 0;
+  const periods = [];
+  for (let i = 0; i < count; i++){
+    periods.push({
+      startTime: els.Wx?.[i]?.startTime || null,
+      endTime: els.Wx?.[i]?.endTime || null,
+      wx: els.Wx?.[i]?.parameter?.parameterName || "—",
+      pop: els.PoP?.[i]?.parameter?.parameterName ?? null,
+      minT: els.MinT?.[i]?.parameter?.parameterName ?? null,
+      maxT: els.MaxT?.[i]?.parameter?.parameterName ?? null,
+      ci: els.CI?.[i]?.parameter?.parameterName ?? null
+    });
+  }
+  const first = periods[0] || {};
   return {
     county,
-    wx: els.Wx?.[0]?.parameter?.parameterName || "—",
-    pop: els.PoP?.[0]?.parameter?.parameterName ?? null,
-    minT: els.MinT?.[0]?.parameter?.parameterName ?? null,
-    maxT: els.MaxT?.[0]?.parameter?.parameterName ?? null
+    wx: first.wx ?? "—",
+    pop: first.pop ?? null,
+    minT: first.minT ?? null,
+    maxT: first.maxT ?? null,
+    ci: first.ci ?? null,
+    periods
   };
+}
+// 把時段的 startTime 轉成「今天白天／今天晚上／明天白天」這種好讀的標籤：
+// 依日期差判斷今天/明天/後天，依小時判斷白天(06-18)或晚上。
+function weatherPeriodLabel(startIso){
+  if (!startIso) return "";
+  const d = new Date(startIso);
+  const now = new Date();
+  const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dayDiff = Math.round((dayStart - todayStart) / 86400000);
+  const dayLabel = dayDiff <= 0 ? "今天" : dayDiff === 1 ? "明天" : dayDiff === 2 ? "後天" : `${d.getMonth()+1}/${d.getDate()}`;
+  const hour = d.getHours();
+  const isNight = hour >= 18 || hour < 6;
+  return `${dayLabel}${isNight ? "晚上" : "白天"}`;
 }
 function ensureWeatherLoaded(unit){
   const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
@@ -2799,6 +2863,57 @@ function ensureHazardsLoaded(unit){
     hazardCache[county] = { fetchedAt: Date.now(), error: true, message };
     state.hazards = { county, error: true, message };
     hazardLoadingCounty = null;
+    safeRender();
+  });
+}
+
+// 體感溫度來自「鄉鎮天氣預報」資料集（F-D0047-093），跟現有 36 小時預報
+// 是完全不同的資料格式：用鄉鎮查詢、每個 weatherElement 底下是
+// time[].elementValue[].value（不是 time[].parameter.parameterName），
+// 而且 AT（體感溫度）是逐時的單一時間點（dataTime），不是像 Wx/PoP 那樣
+// 一段時間區間（startTime/endTime）。這裡只取離現在最近的一筆 AT 數值，
+// 當作「現在體感溫度」附加在天氣卡片上，不嘗試跟現有的 3 個時段對齊
+// （筆數本來就對不上，勉強對齊反而容易出錯）。
+const apparentTempCache = {}; // { [鄉鎮名稱]: { data, fetchedAt } }
+let apparentTempLoadingTownship = null;
+async function fetchApparentTemp(township){
+  const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-093?Authorization=${CWA_API_KEY}&locationName=${encodeURIComponent(township)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  const loc = json?.records?.locations?.[0]?.location?.[0];
+  if (!loc) throw new Error("查無體感溫度資料");
+  const atEl = loc.weatherElement?.find(e => e.elementName === "AT");
+  const times = atEl?.time || [];
+  if (!times.length) return { township, at: null };
+  const now = Date.now();
+  let best = times[0];
+  let bestDiff = Infinity;
+  times.forEach(t => {
+    const ts = new Date(t.dataTime || t.startTime).getTime();
+    const diff = Math.abs(ts - now);
+    if (diff < bestDiff) { bestDiff = diff; best = t; }
+  });
+  const val = best.elementValue?.[0]?.value;
+  return { township, at: val != null && val !== "" ? Number(val) : null };
+}
+function ensureApparentTempLoaded(unit){
+  const township = UNIT_WEATHER_TOWNSHIP[unit] || UNIT_WEATHER_TOWNSHIP.hq;
+  const cached = apparentTempCache[township];
+  const freshFor = cached?.error ? 2*60*1000 : 30*60*1000;
+  if (cached && Date.now() - cached.fetchedAt < freshFor) { state.apparentTemp = cached.error ? { township, error: true } : { township, at: cached.data.at }; return; }
+  if (apparentTempLoadingTownship === township) return;
+  apparentTempLoadingTownship = township;
+  fetchApparentTemp(township).then(data => {
+    apparentTempCache[township] = { data, fetchedAt: Date.now() };
+    state.apparentTemp = { township, at: data.at };
+    apparentTempLoadingTownship = null;
+    safeRender();
+  }).catch(err => {
+    console.error("體感溫度載入失敗", err);
+    apparentTempCache[township] = { fetchedAt: Date.now(), error: true };
+    state.apparentTemp = { township, error: true };
+    apparentTempLoadingTownship = null;
     safeRender();
   });
 }
@@ -3243,6 +3358,9 @@ function renderWeatherCard(unit){
     </div>`;
   const wxType = weatherIconFor(w.wx);
   const range = (w.minT!=null && w.maxT!=null) ? `${w.minT}°<span style="opacity:0.6;font-weight:600;"> / </span>${w.maxT}°` : "";
+  const township = UNIT_WEATHER_TOWNSHIP[unit] || UNIT_WEATHER_TOWNSHIP.hq;
+  const at = state.apparentTemp;
+  const atValue = (at && at.township === township && !at.error && at.at != null) ? at.at : null;
   return `
     <div class="weather-card wx-${wxType}">
       <span class="weather-card-icon">${icon(wxType,28)}</span>
@@ -3250,8 +3368,41 @@ function renderWeatherCard(unit){
         <div class="weather-card-loc">${esc(county)}</div>
         <div class="weather-card-desc">${esc(w.wx)}</div>
         ${range ? `<div class="weather-card-temp">${range}</div>` : ""}
-        ${w.pop!=null ? `<div class="weather-card-pop">${icon('rain',12)} 降雨機率 ${w.pop}%</div>` : ""}
+        <div class="weather-card-pills">
+          ${w.pop!=null ? `<div class="weather-card-pop">${icon('rain',12)} 降雨機率 ${w.pop}%</div>` : ""}
+          ${w.ci ? `<div class="weather-card-pop">${icon('sun',12)} ${esc(w.ci)}</div>` : ""}
+          ${atValue!=null ? `<div class="weather-card-pop">${icon('heartbeat',12)} 體感 ${atValue}°</div>` : ""}
+        </div>
       </div>
+    </div>`;
+}
+// 未來預報清單：把「現在」之外剩下的時段（通常是今晚／明天白天）條列出來，
+// 天氣卡片只放得下第一個時段，其餘時段之前完全沒有顯示，等於白抓了資料。
+function renderWeatherForecastList(unit){
+  const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
+  const w = state.weather;
+  if (!w || w.error || w.county !== county || !w.periods || w.periods.length <= 1) return "";
+  const rest = w.periods.slice(1);
+  return `
+    <div class="section-label">未來預報</div>
+    <div class="weather-forecast-list">
+      ${rest.map(p => {
+        const wxType = weatherIconFor(p.wx);
+        const range = (p.minT!=null && p.maxT!=null) ? `${p.minT}° / ${p.maxT}°` : "—";
+        return `
+        <div class="weather-forecast-row">
+          <div class="wf-top">
+            <div class="wf-label">${weatherPeriodLabel(p.startTime)}</div>
+            <div class="wf-icon">${icon(wxType,20)}</div>
+            <div class="wf-desc">${esc(p.wx)}</div>
+            <div class="wf-temp">${range}</div>
+          </div>
+          <div class="wf-bottom">
+            <span class="wf-pop">${icon('rain',11)} 降雨機率 ${p.pop!=null ? `${p.pop}%` : "—"}</span>
+            ${p.ci ? `<span class="wf-ci">${icon('sun',11)} ${esc(p.ci)}</span>` : ""}
+          </div>
+        </div>`;
+      }).join("")}
     </div>`;
 }
 // 用兩三句話把今天天氣＋該注意的事項講清楚：第一句是概況（地點/天氣/溫度/
@@ -3270,6 +3421,12 @@ function renderWeatherTip(unit){
   if (w.maxT!=null && w.maxT >= 33) tips.push("高溫炎熱，執勤請注意補水防曬、慎防中暑");
   if (w.pop!=null && w.pop >= 50) tips.push("降雨機率高，請攜帶雨具並留意行車安全");
   if (w.minT!=null && w.maxT!=null && (w.maxT - w.minT) >= 8) tips.push("日夜溫差大，請留意保暖");
+  if (w.ci && /悶熱|寒冷|偏冷|嚴寒/.test(w.ci)) tips.push(`體感「${esc(w.ci)}」，請留意人員身體狀況`);
+  const township = UNIT_WEATHER_TOWNSHIP[unit] || UNIT_WEATHER_TOWNSHIP.hq;
+  const at = state.apparentTemp;
+  if (at && at.township === township && !at.error && at.at != null && w.maxT != null && (at.at - w.maxT) >= 3) {
+    tips.push(`體感溫度比預報氣溫高出約 ${Math.round(at.at - w.maxT)}°C，戶外執勤請提高警覺`);
+  }
   const h = state.hazards;
   if (h && h.county === county && !h.error && h.list && h.list.length) {
     tips.push(`${esc(county)}目前有${esc(h.list[0].phenomena)}生效中，請提高警覺`);
@@ -3388,6 +3545,7 @@ function viewTasks(){
   const unit = myUnit(p);
   ensureWeatherLoaded(unit);
   ensureHazardsLoaded(unit);
+  ensureApparentTempLoaded(unit);
   const mainTabs = `
     <div class="icon-subtabs">
       ${TASKS_MAIN_TABS.map(tb => `
@@ -3402,6 +3560,7 @@ function viewTasks(){
       ${mainTabs}
       ${renderHazardBanner(unit)}
       ${renderWeatherCard(unit)}
+      ${renderWeatherForecastList(unit)}
       ${renderWeatherTip(unit)}
     `;
   }
