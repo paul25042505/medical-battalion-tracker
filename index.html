@@ -313,6 +313,15 @@
   .section-label{font-family:var(--mono); font-size:var(--text-xs); font-weight:700; color:var(--muted); letter-spacing:0.09em; text-transform:uppercase; margin:var(--space-section) 4px 13px 4px;}
   .section-label.tight{margin-top:6px;}
   .section-label:first-child{margin-top:0;}
+  /* 勤務／洽公清單上方的標題比照雙語 eyebrow 的做法放大：英文縮寫小而
+     淡、中文大而粗，取代原本跟其他區塊標題一樣的小型全大寫樣式——這兩個
+     是首頁/任務頁清單最主要的分節，比一般區塊標題更需要突出。 */
+  .section-label.section-label-duty{
+    display:flex; align-items:baseline; gap:6px; font-size:var(--text-lg); font-weight:800;
+    color:var(--text); text-transform:none; letter-spacing:0;
+  }
+  .section-label-duty .en{font-size:var(--text-xs); font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em;}
+  .section-label-duty .slash{color:var(--border); font-weight:400;}
   /* ---- 「空間感／流體擬態」卡片語言：任務卡片／急診待命卡片共用。
      不再用一條 4px 純色塊當狀態指示（土味的扁平色塊），改成整張卡片
      用既有的六種狀態色（--gray/--red/--amber/--purple/--blue/--green，
@@ -701,16 +710,22 @@
      只用小色塊圖示保留辨識度。 */
   .stat-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:8px;}
   .stat-grid.stat-grid-2{grid-template-columns:repeat(2,1fr);}
+  /* 標籤+圖示放頂排（標籤左、色塊圖示右），大數字放最下面靠左——比原本
+     圖示/數字/標籤整個置中堆疊更接近儀表板摘要卡的閱讀動線（先看是什麼
+     指標，再看圖示辨識類別，最後看大數字）。 */
   .stat-tile{
     background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md);
-    padding:14px 8px; text-align:center; box-shadow:var(--shadow-xs);
+    padding:14px; text-align:left; box-shadow:var(--shadow-xs);
+    display:flex; flex-direction:column; justify-content:space-between; min-height:104px;
   }
+  .stat-tile-top{display:flex; align-items:flex-start; justify-content:space-between; gap:8px;}
   .stat-tile .stat-icon{
-    width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center;
-    margin:0 auto 8px auto;
+    width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; flex-shrink:0;
   }
-  .stat-tile .num{font-size:var(--text-2xl); font-weight:800; font-family:var(--mono); letter-spacing:-0.02em; color:var(--text);}
-  .stat-tile .lbl{font-size:var(--text-xs); font-weight:600; margin-top:3px; color:var(--muted);}
+  /* 大數字字級比全站標準的 --text-2xl 再大一階，是刻意的例外——這裡就是
+     首頁摘要卡最主要看的資訊，要比一般卡片標題更搶眼。 */
+  .stat-tile .num{font-size:32px; font-weight:800; font-family:var(--mono); letter-spacing:-0.02em; color:var(--text); margin-top:14px; line-height:1;}
+  .stat-tile .lbl{font-size:var(--text-xs); font-weight:600; color:var(--muted);}
   .stat-tile.t-blue .stat-icon{background:color-mix(in srgb, var(--blue) 12%, transparent); color:var(--blue);}
   .stat-tile.t-orange .stat-icon{background:color-mix(in srgb, var(--amber) 14%, transparent); color:var(--amber-text);}
   .stat-tile.t-green .stat-icon{background:color-mix(in srgb, var(--green) 14%, transparent); color:var(--green-text);}
@@ -1258,7 +1273,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-255-hospital-coords-gps-geocode";
+const BUILD_TAG = "2026-07-10-256-stat-grid-duty-label-redesign";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1701,6 +1716,12 @@ const HOSPITAL_COUNTIES = ["臺中市", "嘉義市", "嘉義縣"];
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/07/10", groups: [
+    { category: "介面優化", items: [
+      "首頁「今日概況」統計卡片改版：標籤跟色塊圖示改到頂排（標籤左、圖示右），大數字移到最下面靠左，取代原本圖示/數字/標籤整個置中堆疊的排法，數字字級也再放大一階更醒目",
+      "首頁與任務頁「勤務」「洽公」清單標題改成雙語大標（例如「SERVICE／勤務」「LIAISON／洽公」），字級放大、中文加粗，跟其他區塊標題的小型全大寫樣式區分開來，兩份清單更容易一眼分辨",
+    ] },
+  ] },
   { date: "2026/07/09", groups: [
     { category: "推播通知", items: [
       "新增推播通知功能（第一階段：使用者可以自行開啟/關閉）：「更多 → 推播通知」新增開關，開啟後裝置會註冊到後端；iPhone 需要先「加入主畫面」才能使用背景推播，一般 Safari 分頁不支援時會有提示",
@@ -4144,6 +4165,14 @@ function renderTyphoonBanner(unit){
         </div>`).join("")}
     </div>`;
 }
+// 勤務／洽公清單標題的雙語 eyebrow（英文縮寫／中文），首頁跟任務頁的
+// 「勤務」頁籤共用同一份清單樣式，這裡集中產生，兩處才不會各自維護
+// 一份看起來一樣、卻各自硬寫死的標籤文字。
+const DUTY_SECTION_LABEL_EN = { "勤務": "SERVICE", "洽公": "LIAISON" };
+function dutySectionLabel(zh){
+  const en = DUTY_SECTION_LABEL_EN[zh];
+  return `<div class="section-label tight section-label-duty">${en ? `<span class="en">${en}</span><span class="slash">/</span>` : ""}${esc(zh)}</div>`;
+}
 function viewHome(){
   const p = state.profile;
   const tasks = visibleTasks(p, state.tasks);
@@ -4171,8 +4200,8 @@ function viewHome(){
   const dutyActive = activeTasks.filter(t => t.type !== "liaison");
   const liaisonActive = activeTasks.filter(t => t.type === "liaison");
   const fleetSection = activeTasks.length ? `
-    ${dutyActive.length ? `<div class="section-label tight">勤務</div>${dutyActive.map(taskCard).join("")}` : ""}
-    ${liaisonActive.length ? `<div class="section-label tight">洽公</div>${liaisonActive.map(taskCard).join("")}` : ""}
+    ${dutyActive.length ? `${dutySectionLabel("勤務")}${dutyActive.map(taskCard).join("")}` : ""}
+    ${liaisonActive.length ? `${dutySectionLabel("洽公")}${liaisonActive.map(taskCard).join("")}` : ""}
   ` : `<div class="empty">目前沒有車輛執行中</div>`;
 
   // 高勤官最在意的「一眼看出」統計：目前正在執行中的勤務裡，有幾台車這趟
@@ -4190,13 +4219,21 @@ function viewHome(){
     <div class="home-date">${fmtDate(today)}</div>
     <div class="section-label">今日概況</div>
     <div class="stat-grid stat-grid-2">
-      <div class="stat-tile t-blue"><div class="stat-icon">${icon('tasks',16)}</div><div class="num">${todayTasks.length}</div><div class="lbl">今日勤務數</div></div>
-      <div class="stat-tile t-green"><div class="stat-icon">${icon('check',16)}</div><div class="num">${todayDone.length}</div><div class="lbl">已完成</div></div>
-      <div class="stat-tile t-purple"><div class="stat-icon">${icon('user',16)}</div><div class="num">${liaisonPeopleCount}</div><div class="lbl">洽公中人數</div></div>
+      <div class="stat-tile t-blue">
+        <div class="stat-tile-top"><span class="lbl">今日勤務數</span><span class="stat-icon">${icon('tasks',16)}</span></div>
+        <div class="num">${todayTasks.length}</div>
+      </div>
+      <div class="stat-tile t-green">
+        <div class="stat-tile-top"><span class="lbl">已完成</span><span class="stat-icon">${icon('check',16)}</span></div>
+        <div class="num">${todayDone.length}</div>
+      </div>
+      <div class="stat-tile t-purple">
+        <div class="stat-tile-top"><span class="lbl">洽公中人數</span><span class="stat-icon">${icon('user',16)}</span></div>
+        <div class="num">${liaisonPeopleCount}</div>
+      </div>
       <div class="stat-tile t-orange">
-        <div class="stat-icon">${icon('depart',16)}</div>
+        <div class="stat-tile-top"><span class="lbl">營內／營外</span><span class="stat-icon">${icon('depart',16)}</span></div>
         <div class="num">${inCampCount}／${outCampCount}</div>
-        <div class="lbl">營內／營外</div>
       </div>
     </div>
     ${fleetSection}
@@ -4291,8 +4328,8 @@ function viewTasks(){
   const dutyShown = shown.filter(t => t.type !== "liaison");
   const liaisonShown = shown.filter(t => t.type === "liaison");
   const listHtml = shown.length ? `
-    ${dutyShown.length ? `<div class="section-label tight">勤務</div>${dutyShown.map(taskCard).join("")}` : ""}
-    ${liaisonShown.length ? `<div class="section-label tight">洽公</div>${liaisonShown.map(taskCard).join("")}` : ""}
+    ${dutyShown.length ? `${dutySectionLabel("勤務")}${dutyShown.map(taskCard).join("")}` : ""}
+    ${liaisonShown.length ? `${dutySectionLabel("洽公")}${liaisonShown.map(taskCard).join("")}` : ""}
   ` : `<div class="empty">目前沒有符合條件的勤務</div>`;
 
   return `
