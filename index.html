@@ -1189,7 +1189,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-235-enable-gemini-key";
+const BUILD_TAG = "2026-07-09-236-weather-error-visibility";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1693,6 +1693,7 @@ const RELEASE_NOTES = [
       "天氣卡片新增「相對濕度」「露點溫度」；天氣頁新增「未來一週」預報清單（縣市層級，跟原本 36 小時內的「未來預報」分開顯示，是比較粗略的長期展望）",
       "天氣卡片新增即時雨量資訊：取單位所在縣市範圍內雨量站近 3 小時累積雨量最高的一筆當代表值，只有真的測到雨才會顯示，沒下雨時不佔版面",
       "「Core-AI Insight」正式啟用：先前只有畫面框架，現在補上金鑰後會真的依當下天氣數據生成風險預測與行動建議",
+      "修正一週預報／雨量／體感溫度濕度露點資料抓取失敗時，畫面會直接不顯示整個區塊，跟「還在載入中」看起來一樣，完全看不出來是失敗還是還沒載完：現在失敗時會明確顯示「載入失敗」提示，方便排查問題",
     ] },
     { category: "介面優化", items: [
       "任務卡片／急診待命卡片重新設計：拿掉原本左側 4px 純色狀態色條，改成整張卡片依狀態（待命中/出勤中/已抵達現場/前往下一地點/返營中/已完成）呈現柔和的液態光暈色調，疊三層陰影做出懸浮的空間深度感；有患者記錄的任務卡片會強制蓋成紅色光暈並加上緩慢的呼吸感光圈，比一般狀態更搶眼",
@@ -3647,10 +3648,15 @@ function renderWeatherCard(unit){
   const atValue = townshipOk && at.at != null ? at.at : null;
   const rhValue = townshipOk && at.rh != null ? at.rh : null;
   const tdValue = townshipOk && at.td != null ? at.td : null;
+  // at.error 原本會讓體感/濕度/露點三個 pill 直接不顯示、跟「還在載入中」
+  // 沒有視覺區別，抓不到問題出在哪。這裡補一個明確的失敗提示。
+  const atError = at && at.township === township && at.error;
   const rain = state.rainfall;
   // 雨量只有真的測到雨才顯示，沒下雨（0mm）就不加這個 pill，避免卡片
-  // 一堆資訊卻大多時候都是「沒事」，只在真的有事的時候才凸顯出來。
+  // 一堆資訊卻大多時候都是「沒事」，只在真的有事的時候才凸顯出來；但
+  // 「抓資料失敗」跟「真的沒下雨」是兩回事，失敗要讓使用者看得出來。
   const rainHour3 = (rain && rain.county === county && !rain.error && rain.hour3 != null && rain.hour3 > 0) ? rain.hour3 : null;
+  const rainError = rain && rain.county === county && rain.error;
   return `
     <div class="weather-card spatial-card wx-${wxType}">
       <span class="weather-card-icon">${icon(wxType,28)}</span>
@@ -3665,6 +3671,8 @@ function renderWeatherCard(unit){
           ${rhValue!=null ? `<div class="weather-card-pop">${icon('cloud',12)} 濕度 ${rhValue}%</div>` : ""}
           ${tdValue!=null ? `<div class="weather-card-pop">${icon('cloud',12)} 露點 ${tdValue}°</div>` : ""}
           ${rainHour3!=null ? `<div class="weather-card-pop">${icon('rain',12)} 近3小時雨量 ${rainHour3}mm</div>` : ""}
+          ${atError ? `<div class="weather-card-pop">${icon('heartbeat',12)} 體感/濕度/露點載入失敗</div>` : ""}
+          ${rainError ? `<div class="weather-card-pop">${icon('rain',12)} 雨量資料載入失敗</div>` : ""}
         </div>
       </div>
     </div>`;
@@ -3729,7 +3737,13 @@ function renderWeatherForecastList(unit){
 function renderWeeklyForecastList(unit){
   const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
   const wk = state.weeklyForecast;
-  if (!wk || wk.error || wk.county !== county || !wk.periods || !wk.periods.length) return "";
+  if (!wk || wk.county !== county) return "";
+  // 原本失敗時直接不顯示整個區塊，跟「還在載入中」看起來一樣，沒辦法
+  // 分辨到底是還沒載完還是真的失敗了。這裡補一個明確的失敗提示。
+  if (wk.error) return `
+    <div class="section-label">未來一週</div>
+    <div class="weather-tip">${icon('bell',16)}<div>${esc(county)}一週預報載入失敗，稍後重新整理再試一次</div></div>`;
+  if (!wk.periods || !wk.periods.length) return "";
   return `
     <div class="section-label">未來一週</div>
     <div class="weather-forecast-list">
