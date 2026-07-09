@@ -662,6 +662,7 @@
     position:fixed; left:0; right:0; bottom:calc(var(--bottomnav-h) + env(safe-area-inset-bottom)); z-index:26;
     background:var(--navbar-bg); backdrop-filter:blur(14px);
     box-shadow:0 -1px 0 var(--border), 0 -8px 20px rgba(15,15,20,0.05);
+    transform:translateZ(0); -webkit-backface-visibility:hidden;
     padding:12px 16px; display:flex; gap:10px;
   }
   .sticky-action-bar .btn-primary, .sticky-action-bar .btn-ghost{
@@ -859,6 +860,12 @@
   .bottomnav{
     position:fixed; left:0; right:0; bottom:0; z-index:30;
     background:var(--navbar-bg); backdrop-filter:blur(14px); box-shadow:0 -1px 0 var(--border), 0 -8px 24px rgba(15,15,20,0.04);
+    /* iOS Safari 的已知問題：position:fixed 疊加 backdrop-filter 時，快速滑動
+       過程中 WebKit 有時來不及把這層貼回視窗底部，畫面上會看起來「跟著內容
+       一起被往上捲走」，放開手指後才彈回正確位置。強制獨立的合成層（GPU
+       加速）可以讓瀏覽器把這層跟底下內容的重繪分開處理，滑動時就會一直貼齊
+       視窗底部，不會跟著捲動位移。 */
+    transform:translateZ(0); -webkit-backface-visibility:hidden;
     display:flex; padding-bottom:env(safe-area-inset-bottom);
   }
   .navbtn{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:11px 4px 10px 4px; color:var(--muted); background:none; border:none; font-family:var(--sans);}
@@ -959,7 +966,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-208-vitals-liaison-cadre-section";
+const BUILD_TAG = "2026-07-09-209-fixed-bar-scroll-jank-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1413,6 +1420,7 @@ const RELEASE_NOTES = [
     "患者紀錄的脊椎評估／過去病史／過敏史，回答是「否，無疑似損傷」或「無」這類正常/陰性結果時，文字改成灰色淡化顯示，讓真正異常的內容比較容易一眼看出來",
     "上述灰色淡化的正常/陰性結果文字再縮小字級，進一步降低存在感",
     "患者紀錄的「患者基本資料」新增「對職幹部」欄位（單位／階級／職稱／姓名／手機電話），單位可以一鍵套用跟患者相同的單位，方便記錄現場協助處理的幹部聯絡資訊",
+    "修正快速滑動時，底部分頁列跟回報按鈕會跟著內容一起被往上帶走、放開手指後才彈回底部的問題（iOS 上模糊背景疊加固定定位的已知副作用）",
   ] },
   { date: "2026/07/08", items: [
     "基礎資料管理新增「醫官」名冊（姓名/電話），建立勤務的「值班醫官」欄位改成從這份名冊下拉選擇，不用再手動打字",
