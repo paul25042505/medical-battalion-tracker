@@ -235,7 +235,7 @@
   .topbar-sub .name{font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:var(--text-xl); font-weight:700;}
   .topbar-sub .rank{
     font-family:var(--sans); font-size:var(--text-xs); font-weight:700; color:var(--muted);
-    background:var(--panel-2); padding:3px 10px; border-radius:999px; letter-spacing:0.02em;
+    background:var(--panel); border:1px solid var(--border); padding:2px 9px; border-radius:999px; letter-spacing:0.02em;
   }
   /* 右上角通知／登出按鈕改成跟返回鍵一樣的液態玻璃質感：backdrop-filter
      毛玻璃＋inset 高光/陰影模擬玻璃厚度，按下去放大＋提亮＋外圍柔光，
@@ -536,6 +536,11 @@
   }
   .stat-tile .num{font-size:var(--text-2xl); font-weight:800; font-family:var(--mono); letter-spacing:-0.02em; color:var(--text);}
   .stat-tile .lbl{font-size:var(--text-xs); font-weight:600; margin-top:3px; color:var(--muted);}
+  .stat-tile .num.camp-split{
+    font-size:var(--text-lg); display:flex; align-items:baseline; justify-content:center; flex-wrap:wrap; gap:1px;
+  }
+  .stat-tile .num.camp-split .unit{font-size:var(--text-xs); font-weight:600; font-family:var(--sans); color:var(--muted); margin-right:3px;}
+  .stat-tile .num.camp-split .sep{font-size:var(--text-xs); font-weight:600; color:var(--muted); margin:0 2px;}
   .stat-tile.t-blue .stat-icon{background:color-mix(in srgb, var(--blue) 12%, transparent); color:var(--blue);}
   .stat-tile.t-orange .stat-icon{background:color-mix(in srgb, var(--amber) 14%, transparent); color:var(--amber-text);}
   .stat-tile.t-green .stat-icon{background:color-mix(in srgb, var(--green) 14%, transparent); color:var(--green-text);}
@@ -1075,7 +1080,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-224-subtab-aura-remove";
+const BUILD_TAG = "2026-07-09-225-rank-badge-dashboard-2x2";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1557,6 +1562,8 @@ const RELEASE_NOTES = [
       "頂欄（姓名/階級/通知/登出那一列）背景改成跟頁面同色，不再是一塊獨立的白色色塊——原本跟下面「勤務／天氣」子選單貼在一起時會出現色差明顯的接縫，現在融成同一個底色，改用比較明顯的陰影表現頂欄浮在內容上層的層次感；子選單本身跟頂欄之間的留白也一併縮小",
       "「勤務／天氣」子選單背景改成半透明毛玻璃效果（跟返回鍵/底部分頁列同一套質感），捲動內容時底下的卡片顏色會透出模糊的光暈，不再是一塊不透光的純色",
       "「勤務／天氣」子選單的圖示磚也改成透明玻璃質感（原本是純色底），未選中的磚是半透明白霧玻璃、選中的磚是半透明藍色玻璃並帶淡淡光暈邊框，捲動時底下內容顏色一樣會透出來，晶瑩剔透感更完整",
+      "修正頂欄姓名旁邊的階級徽章（例如「上士」）幾乎看不見的問題：先前改頂欄背景色時，徽章底色剛好跟新背景色太接近，等於整塊融在一起消失，改成用卡片白底＋邊框，跟背景明顯分開",
+      "首頁「今日概況」統計卡片改成 2×2 排列：洽公中人數移到左下角，原本分開的營內車／營外車合併成一格「◯營內／◯營外」",
     ] },
   ] },
   { date: "2026/07/08", groups: [
@@ -3343,14 +3350,14 @@ function viewHome(){
   return `
     <div class="home-date">${fmtDate(today)}</div>
     <div class="section-label">今日概況</div>
-    <div class="stat-grid">
+    <div class="stat-grid stat-grid-2">
       <div class="stat-tile t-blue"><div class="stat-icon">${icon('tasks',16)}</div><div class="num">${todayTasks.length}</div><div class="lbl">今日勤務數</div></div>
       <div class="stat-tile t-green"><div class="stat-icon">${icon('check',16)}</div><div class="num">${todayDone.length}</div><div class="lbl">已完成</div></div>
       <div class="stat-tile t-purple"><div class="stat-icon">${icon('user',16)}</div><div class="num">${liaisonPeopleCount}</div><div class="lbl">洽公中人數</div></div>
-    </div>
-    <div class="stat-grid stat-grid-2">
-      <div class="stat-tile t-green"><div class="stat-icon">${icon('home',16)}</div><div class="num">${inCampCount}</div><div class="lbl">營內車</div></div>
-      <div class="stat-tile t-orange"><div class="stat-icon">${icon('depart',16)}</div><div class="num">${outCampCount}</div><div class="lbl">營外車</div></div>
+      <div class="stat-tile t-orange">
+        <div class="stat-icon">${icon('depart',16)}</div>
+        <div class="num camp-split">${inCampCount}<span class="unit">營內</span><span class="sep">／</span>${outCampCount}<span class="unit">營外</span></div>
+      </div>
     </div>
     ${fleetSection}
   `;
