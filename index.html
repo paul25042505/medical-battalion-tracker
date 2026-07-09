@@ -871,11 +871,17 @@
   .toast{
     position:fixed; bottom:92px; left:50%; transform:translateX(-50%); z-index:70;
     background:#1C1C1E; border:1px solid rgba(255,255,255,0.08); color:#fff; font-size:var(--text-sm); font-weight:500;
-    padding:12px 20px; border-radius:var(--radius-sm); box-shadow:0 12px 32px rgba(0,0,0,0.28);
+    padding:14px 18px; border-radius:var(--radius-md); box-shadow:0 12px 32px rgba(0,0,0,0.28);
     opacity:0; pointer-events:none; transition:opacity 0.25s, transform 0.25s;
-    max-width:86vw; text-align:center; line-height:1.45;
+    max-width:86vw; line-height:1.45;
+    display:flex; align-items:flex-start; gap:10px; overflow:hidden;
   }
   .toast.show{opacity:1; transform:translateX(-50%) translateY(-4px); pointer-events:auto;}
+  .toast-icon{flex-shrink:0; margin-top:1px;}
+  .toast-icon.ok{color:#32D74B;}
+  .toast-icon.error{color:#FF6961;}
+  .toast-text{flex:1; text-align:left; min-width:0;}
+  .toast-progress{position:absolute; left:0; bottom:0; height:3px; width:100%; background:rgba(255,255,255,0.32);}
 
   /* ---- 下拉重新整理指示條 ---- */
   #pull-indicator{
@@ -954,7 +960,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-201-toast-render-wipe-fix";
+const BUILD_TAG = "2026-07-09-202-toast-queue-redesign";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1402,6 +1408,7 @@ const RELEASE_NOTES = [
     "修正推播通知一定會收到兩則的問題：後端改成只送純資料（data）而不是 notification 欄位，避免瀏覽器自動跳一次、我們自己的背景推播處理又跳一次，同一則推播顯示兩次",
     "底部黑色提示（toast）重新設計：停留時間改成依訊息長短自動拉長（原本固定 2.2 秒，太短的話推播內容這種比較長的提示看不完就消失），加上最大寬度讓長訊息換行不會被切斷，也可以直接點一下提前關閉",
     "修正回報進度、建立待命勤務等操作後，成功提示文字大概只閃 0.1 秒就不見的問題：提示視窗其實是被緊接著發生的畫面重新整理整個蓋掉了（跟訊息停留時間長短無關），現在提示視窗獨立於畫面內容之外，不會再被重新整理清空",
+    "底部提示視窗重新設計統一模板：加上狀態圖示（成功打勾／失敗警示）跟底部倒數進度條，並且改成排隊依序顯示——像「已回報：抵達營區」緊接著「待命勤務已建立」這種前後腳觸發的情境，兩則都會各自完整顯示，不會互相蓋掉",
   ] },
   { date: "2026/07/08", items: [
     "基礎資料管理新增「醫官」名冊（姓名/電話），建立勤務的「值班醫官」欄位改成從這份名冊下拉選擇，不用再手動打字",
@@ -2624,17 +2631,48 @@ function dateAt(baseMs, hhmm){
   d.setHours(h, m, 0, 0);
   return d;
 }
+// 全站統一的提示框模板：同一時間只顯示一則，後面來的先排隊，等前一則
+// 完整顯示完（含淡出動畫）才輪到下一則——避免像「已回報：抵達營區」緊接著
+// 「待命勤務已建立…」這種前後腳觸發的情境，後面那則把前面那則直接蓋掉、
+// 兩則都沒看清楚。
+const toastQueue = [];
+let toastBusy = false;
 function showToast(msg){
+  toastQueue.push(msg);
+  if (!toastBusy) advanceToastQueue();
+}
+function advanceToastQueue(){
+  if (!toastQueue.length){ toastBusy = false; return; }
+  toastBusy = true;
+  const msg = toastQueue.shift();
   let t = document.getElementById("toast");
-  if (!t){ t = document.createElement("div"); t.id="toast"; t.className="toast"; document.body.appendChild(t); }
-  t.textContent = msg; t.classList.add("show");
-  clearTimeout(showToast._tm);
+  if (!t){
+    t = document.createElement("div"); t.id="toast"; t.className="toast";
+    t.innerHTML = `<span class="toast-icon"></span><span class="toast-text"></span><span class="toast-progress"></span>`;
+    document.body.appendChild(t);
+  }
+  // 訊息本身沒有攜帶「成功/失敗」的類型資訊，站內失敗訊息全部沿用「OO
+  // 失敗：原因」這個固定寫法，用這個特徵判斷要顯示哪種圖示/顏色就好，不用
+  // 每個呼叫端都額外傳一個 type 參數。
+  const isError = /失敗/.test(msg);
+  const iconEl = t.querySelector(".toast-icon");
+  iconEl.innerHTML = icon(isError ? "alert" : "check", 18);
+  iconEl.className = "toast-icon " + (isError ? "error" : "ok");
+  t.querySelector(".toast-text").textContent = msg;
   // 訊息越長給越多閱讀時間（例如推播內容常常一次帶標題＋內文，比原本單純
   // 的操作結果提示長很多）：基本停留 2.6 秒，每個字再加 90 毫秒，上限 6 秒
   // 避免太長的訊息把畫面擋太久。也可以直接點一下提前關閉。
   const duration = Math.min(6000, Math.max(2600, 2600 + msg.length * 90));
-  showToast._tm = setTimeout(()=>t.classList.remove("show"), duration);
-  t.onclick = () => { clearTimeout(showToast._tm); t.classList.remove("show"); };
+  const bar = t.querySelector(".toast-progress");
+  bar.style.transition = "none"; bar.style.width = "100%";
+  void bar.offsetWidth; // 強制 reflow，下面改 transition 才會真的觸發動畫
+  bar.style.transition = `width ${duration}ms linear`;
+  bar.style.width = "0%";
+  t.classList.add("show");
+  clearTimeout(showToast._tm);
+  const dismiss = () => { t.classList.remove("show"); setTimeout(advanceToastQueue, 260); };
+  showToast._tm = setTimeout(dismiss, duration);
+  t.onclick = () => { clearTimeout(showToast._tm); dismiss(); };
 }
 // 每個路由切換時只重抓「這個畫面真的會用到」的集合，不要每次切換畫面都
 // 把 7 個集合整個重抓一次——那樣讀取量太大，實測會把 Firestore 免費方案
