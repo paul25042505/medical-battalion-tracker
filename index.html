@@ -1189,7 +1189,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-238-weather-error-detail";
+const BUILD_TAG = "2026-07-09-239-serialize-cwa-requests";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1696,6 +1696,7 @@ const RELEASE_NOTES = [
       "修正一週預報／雨量／體感溫度濕度露點資料抓取失敗時，畫面會直接不顯示整個區塊，跟「還在載入中」看起來一樣，完全看不出來是失敗還是還沒載完：現在失敗時會明確顯示「載入失敗」提示，方便排查問題",
       "修正「Core-AI Insight」實機一律顯示「AI 建議暫時無法取得」的問題：呼叫的 Gemini 1.5 Flash 模型已經被 Google 下架（呼叫會回傳 404），改成呼叫目前還在服務的 Gemini 3.5 Flash",
       "一週預報／雨量／體感溫度濕度露點／Core-AI Insight 的「載入失敗」提示補上實際錯誤原因（HTTP 狀態碼＋伺服器回傳的錯誤訊息），先前只顯示「載入失敗」四個字看不出問題出在哪，回報時把這段訊息一起附上就能直接定位問題",
+      "修正天氣頁一進去體感/濕度/露點、一週預報、雨量三項常常顯示「Load failed」連線失敗的問題：進天氣頁時原本會同時對氣象署開 5 條連線，疑似撞到對方的併發連線限制，改成排隊一次一支",
     ] },
     { category: "介面優化", items: [
       "任務卡片／急診待命卡片重新設計：拿掉原本左側 4px 純色狀態色條，改成整張卡片依狀態（待命中/出勤中/已抵達現場/前往下一地點/返營中/已完成）呈現柔和的液態光暈色調，疊三層陰影做出懸浮的空間深度感；有患者記錄的任務卡片會強制蓋成紅色光暈並加上緩慢的呼吸感光圈，比一般狀態更搶眼",
@@ -2854,11 +2855,24 @@ function appleMapsUrl(query){ return `https://maps.apple.com/?daddr=${encodeURIC
    縣市層級 36 小時天氣預報，快取 30 分鐘，只在切換單位或首頁重新
    整理時才會重抓，不使用背景計時器）
    ========================================================= */
+// 進到天氣頁那一刻，weather/hazards/apparentTemp/weeklyForecast/rainfall
+// 這 5 支 ensure*Loaded 會在同一個畫面重繪的同一個 tick 裡全部觸發，快取
+// 都是空的時候等於同時對 opendata.cwa.gov.tw 開 5 條連線；實機上觀察到
+// 排在後面的請求常常直接連線失敗（Safari 顯示「Load failed」，不是正常
+// HTTP 錯誤回應），研判是撞到氣象署那邊對單一金鑰的併發連線限制。這裡用
+// 一個共用的 Promise 佇列把所有打去 CWA 的請求排成一次一支，用等待時間
+// 換穩定性。
+let cwaRequestQueue = Promise.resolve();
+function fetchCwa(url){
+  const result = cwaRequestQueue.then(() => fetch(url));
+  cwaRequestQueue = result.catch(() => {});
+  return result;
+}
 const weatherCache = {}; // { [縣市名稱]: { data, fetchedAt } }
 let weatherLoadingCounty = null;
 async function fetchWeather(county){
   const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-001?Authorization=${CWA_API_KEY}&locationName=${encodeURIComponent(county)}`;
-  const res = await fetch(url);
+  const res = await fetchCwa(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const json = await res.json();
   const loc = json?.records?.location?.[0];
@@ -2940,7 +2954,7 @@ const weeklyForecastCache = {}; // { [縣市名稱]: { data, fetchedAt } }
 let weeklyForecastLoadingCounty = null;
 async function fetchWeeklyForecast(county){
   const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-005?Authorization=${CWA_API_KEY}&locationName=${encodeURIComponent(county)}`;
-  const res = await fetch(url);
+  const res = await fetchCwa(url);
   if (!res.ok) {
     let detail = ""; try { detail = (await res.text()).slice(0,200); } catch(e){}
     throw new Error(`HTTP ${res.status}${detail ? `：${detail}` : ""}`);
@@ -2998,7 +3012,7 @@ const rainfallCache = {}; // { [縣市名稱]: { data, fetchedAt } }
 let rainfallLoadingCounty = null;
 async function fetchRainfallStation(county){
   const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0002-001?Authorization=${CWA_API_KEY}`;
-  const res = await fetch(url);
+  const res = await fetchCwa(url);
   if (!res.ok) {
     let detail = ""; try { detail = (await res.text()).slice(0,200); } catch(e){}
     throw new Error(`HTTP ${res.status}${detail ? `：${detail}` : ""}`);
@@ -3058,7 +3072,7 @@ const hazardCache = {}; // { [縣市名稱]: { data, fetchedAt } }
 let hazardLoadingCounty = null;
 async function fetchHazards(county){
   const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0033-001?Authorization=${CWA_API_KEY}&locationName=${encodeURIComponent(county)}`;
-  const res = await fetch(url);
+  const res = await fetchCwa(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const json = await res.json();
   console.log("[天氣特報原始回應]", county, json);
@@ -3123,7 +3137,7 @@ function nearestInstantValue(el){
 }
 async function fetchApparentTemp(township){
   const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-093?Authorization=${CWA_API_KEY}&locationName=${encodeURIComponent(township)}`;
-  const res = await fetch(url);
+  const res = await fetchCwa(url);
   if (!res.ok) {
     let detail = ""; try { detail = (await res.text()).slice(0,200); } catch(e){}
     throw new Error(`HTTP ${res.status}${detail ? `：${detail}` : ""}`);
