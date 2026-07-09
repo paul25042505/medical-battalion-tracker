@@ -654,6 +654,22 @@
   }
   .hazard-card-tips{display:grid; grid-template-columns:1fr 1fr; gap:6px 10px;}
   .hazard-tip-item{font-size:var(--text-xs); font-weight:600; line-height:1.4; color:var(--amber-text);}
+  /* 颱風警報跟天氣特報共用同一套卡片結構，只是換成紅色（比琥珀色警戒
+     層級更高）；內文段落直接照 CWA 原文逐字顯示（見 fetchTyphoonInfo
+     註解），不重組句子。 */
+  .typhoon-card{
+    color:var(--red);
+    background:linear-gradient(135deg, color-mix(in srgb, var(--red) 14%, var(--panel)), color-mix(in srgb, var(--red) 3%, var(--panel)) 55%, var(--panel));
+    border-color:color-mix(in srgb, var(--red) 32%, transparent);
+    box-shadow:0 10px 26px -14px color-mix(in srgb, var(--red) 32%, transparent);
+  }
+  .typhoon-card .hazard-card-live{color:var(--red);}
+  .typhoon-card .pulse-dot .ping, .typhoon-card .pulse-dot .dot{background:var(--red);}
+  .typhoon-card .hazard-card-badge{color:var(--red); background:color-mix(in srgb, var(--red) 16%, transparent);}
+  .typhoon-card .hazard-card-panel{border-color:color-mix(in srgb, var(--red) 20%, transparent);}
+  .typhoon-sections{display:flex; flex-direction:column; gap:8px;}
+  .typhoon-section-title{font-size:var(--text-xs); font-weight:800; color:var(--red);}
+  .typhoon-section-value{font-size:var(--text-xs); font-weight:500; line-height:1.6; color:var(--text); margin-top:1px;}
   /* 首頁統計卡片：改成白底＋小色塊圖示（比照 iOS Health/Widget 摘要卡的做法），
      不再整塊塗滿飽和背景色——原本 5 個色塊一字排開太花，數字改回中性深色，
      只用小色塊圖示保留辨識度。 */
@@ -1216,7 +1232,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-248-remove-core-ai-insight";
+const BUILD_TAG = "2026-07-09-249-typhoon-warning";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1727,6 +1743,7 @@ const RELEASE_NOTES = [
       "觀測數據小卡加高、加上超過門檻變色警示：體感溫度 33/36°C、露點溫度 24/27°C、風速依蒲福風級 6/8 級、紫外線依氣象署自己的分級文字（過量級/危險級）、近3小時雨量 15/40mm，超過會整格染成琥珀色（留意）或紅色（危險）",
       "近3小時雨量改成固定顯示（0mm 也顯示），湊滿 6 格，不再只有下雨時才出現",
       "取消「Core-AI Insight」：實機測試常撞到 Gemini 免費方案的請求頻率上限（HTTP 429），改回原本的「貼心提醒」（純本地規則判斷氣溫/降雨機率/日夜溫差/特報門檻，不會有 AI 額度或連線問題），搬到天氣卡片同一個版位",
+      "天氣頁新增「颱風警報」卡片：有颱風警報生效中時，會在天氣特報上方顯示颱風名稱、警報等級（海上/陸上/海上陸上颱風警報）與氣象署原文警報內容（命名位置/強度/移動路徑/警戒事項等），沒有颱風生效中時不顯示",
     ] },
     { category: "介面優化", items: [
       "任務卡片／急診待命卡片重新設計：拿掉原本左側 4px 純色狀態色條，改成整張卡片依狀態（待命中/出勤中/已抵達現場/前往下一地點/返營中/已完成）呈現柔和的液態光暈色調，疊三層陰影做出懸浮的空間深度感；有患者記錄的任務卡片會強制蓋成紅色光暈並加上緩慢的呼吸感光圈，比一般狀態更搶眼",
@@ -2059,6 +2076,7 @@ const state = {
   apparentTemp: null, // 任務頁「天氣」子選單的體感溫度（依單位對應鄉鎮，見 ensureApparentTempLoaded）
   weeklyForecast: null, // 任務頁「天氣」子選單的一週天氣預報（依單位對應縣市，見 ensureWeeklyForecastLoaded）
   rainfall: null, // 任務頁「天氣」子選單的雨量站觀測（依單位對應縣市，見 ensureRainfallLoaded）
+  typhoon: null, // 任務頁「天氣」子選單的颱風警報（全國一份，不分單位，見 ensureTyphoonLoaded）
   myLat: null, // 醫院資訊頁：手機 GPS 定位的原始緯度，null 代表尚未定位；有登記座標的醫院直接拿這個算實際距離
   myLng: null, // 醫院資訊頁：手機 GPS 定位的原始經度
   myCounty: null, // 醫院資訊頁：手機 GPS 定位算出的概略縣市（見 nearestDistrict），沒座標的醫院退回用這個比對；null 代表尚未定位
@@ -3109,9 +3127,10 @@ function weatherEmojiFor(wx){
   return "☁️";
 }
 
-// 天氣特報（W-C0033-001，各縣市目前有效的天氣警特報，含颱風陸上警報／大雨特報等）。
-// 縣市層級的特報 feed 本身就會涵蓋「颱風陸上警報」：陸上警報生效時，受影響縣市會
-// 出現在這份清單裡，不需要另外接颱風警報單的資料集。
+// 天氣特報（W-C0033-001，各縣市目前有效的天氣警特報，例如大雨特報／強風特報等）。
+// 注意：這份 feed 是否會涵蓋「颱風陸上警報」本身，實際上沒有查證過，不能假設
+// 一定會出現在這裡——颱風的完整警報內容（名稱、位置、強度、警戒事項等）要用
+// 下面獨立的 W-C0034-001（颱風警報單）資料集，見 fetchTyphoonInfo。
 const hazardCache = {}; // { [縣市名稱]: { data, fetchedAt } }
 let hazardLoadingCounty = null;
 async function fetchHazards(county){
@@ -3868,6 +3887,90 @@ function renderHazardBanner(unit){
         </div>`).join("")}
     </div>`;
 }
+
+// 颱風警報（W-C0034-001，颱風警報單）：跟 W-C0033-001 天氣特報是兩份獨立
+// 資料集，全國一份（沒有颱風生效時 records.info 是空陣列，不用帶縣市查詢
+// 參數）。description.section[] 是氣象署預先寫好的完整中文段落（命名與
+// 位置／強度與半徑／移速與預測／颱風動態／警戒區域及事項／強風特報／
+// 注意事項），直接照原文顯示，不要自己從結構化欄位重組句子（避免解讀
+// 錯誤）。description["typhoon-info"][0].section[] 底下才有結構化的
+// analysis（目前）／prediction（未來 24 小時預測）座標、氣壓、風速數值，
+// 只用來附加顯示，不取代原文段落。
+// 參考資料（實際查證方式同 F-D0047-093：透過使用者自己的授權碼在 Swagger
+// 頁面 Try it out，對照真實回應才確定的 schema，不要用臆測或搜尋結果猜）：
+// https://opendata.cwa.gov.tw/dist/opendata-swagger.html
+const typhoonCache = { data: null, fetchedAt: 0, error: false, message: "" };
+let typhoonLoading = false;
+async function fetchTyphoonInfo(){
+  const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0034-001?Authorization=${CWA_API_KEY}&format=JSON`;
+  const res = await fetchCwa(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  const infos = json?.records?.info || [];
+  return infos.map(info => {
+    const severityLevel = (info.parameter || []).find(p => p.valueName === "severity_level")?.value || info.headline || "";
+    const sections = (info.description?.section || []).map(s => ({ title: s.title || "", value: s.value || "" }));
+    const detailRow = (info.description?.["typhoon-info"]?.[0]?.section || []).find(s => s.analysis);
+    return {
+      headline: info.headline || "",
+      severityLevel,
+      expires: info.expires || null,
+      typhoonName: detailRow ? `${detailRow.cwa_typhoon_name || ""}${detailRow.typhoon_name ? `（${detailRow.typhoon_name}）` : ""}` : "",
+      scale: detailRow?.analysis?.scale?.find(s => s.lang === "zh-TW")?.value || null,
+      sections
+    };
+  });
+}
+function ensureTyphoonLoaded(){
+  const freshFor = typhoonCache.error ? 2*60*1000 : 15*60*1000;
+  if (typhoonCache.fetchedAt && Date.now() - typhoonCache.fetchedAt < freshFor) {
+    state.typhoon = typhoonCache.error ? { error: true, message: typhoonCache.message } : { list: typhoonCache.data };
+    return;
+  }
+  if (typhoonLoading) return;
+  typhoonLoading = true;
+  fetchTyphoonInfo().then(data => {
+    typhoonCache.data = data; typhoonCache.fetchedAt = Date.now(); typhoonCache.error = false;
+    state.typhoon = { list: data };
+    typhoonLoading = false;
+    safeRender();
+  }).catch(err => {
+    console.error("颱風警報載入失敗", err);
+    const message = err.message || String(err);
+    typhoonCache.fetchedAt = Date.now(); typhoonCache.error = true; typhoonCache.message = message;
+    state.typhoon = { error: true, message };
+    typhoonLoading = false;
+    safeRender();
+  });
+}
+// 沒有颱風生效中（最常見的情況）或載入中／失敗時安靜略過，理由同
+// renderHazardBanner——不用另外顯示失敗提示，避免平常沒颱風時畫面上
+// 一直有一塊多餘的錯誤訊息。
+function renderTyphoonBanner(){
+  const t = state.typhoon;
+  if (!t || t.error || !t.list || !t.list.length) return "";
+  return `
+    <div class="hazard-banner">
+      ${t.list.map(x => `
+        <div class="hazard-card typhoon-card">
+          <div class="hazard-card-top">
+            <div class="hazard-card-live"><span class="pulse-dot"><span class="ping"></span><span class="dot"></span></span>警報中</div>
+            ${x.severityLevel ? `<span class="hazard-card-badge">${esc(x.severityLevel)}</span>` : ""}
+          </div>
+          <div class="hazard-card-name">${esc(x.typhoonName || x.headline)}${x.scale ? `　${esc(x.scale)}` : ""}</div>
+          <div class="hazard-card-panel">
+            <div class="typhoon-sections">
+              ${x.sections.map(s => `
+                <div class="typhoon-section">
+                  <div class="typhoon-section-title">${esc(s.title)}</div>
+                  <div class="typhoon-section-value">${esc(s.value)}</div>
+                </div>`).join("")}
+            </div>
+          </div>
+          ${x.expires ? `<div class="hazard-card-time">效期至 ${fmtTime(new Date(x.expires).getTime())}</div>` : ""}
+        </div>`).join("")}
+    </div>`;
+}
 function viewHome(){
   const p = state.profile;
   const tasks = visibleTasks(p, state.tasks);
@@ -3959,6 +4062,7 @@ function viewTasks(){
   ensureApparentTempLoaded(unit);
   ensureWeeklyForecastLoaded(unit);
   ensureRainfallLoaded(unit);
+  ensureTyphoonLoaded();
   const mainTabs = `
     <div class="icon-subtabs">
       ${TASKS_MAIN_TABS.map(tb => `
@@ -3971,6 +4075,7 @@ function viewTasks(){
   if (state.tasksMainTab === "weather") {
     return `
       ${mainTabs}
+      ${renderTyphoonBanner()}
       ${renderHazardBanner(unit)}
       ${renderWeatherMainCard(unit)}
       ${renderWeatherStatsGrid(unit)}
