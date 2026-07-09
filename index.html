@@ -1273,7 +1273,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-257-duty-label-gray-geocode-by-name";
+const BUILD_TAG = "2026-07-10-258-erstandby-grid-rotate";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1724,6 +1724,9 @@ const RELEASE_NOTES = [
     ] },
     { category: "醫院資訊", items: [
       "新增醫院表單的「名稱查詢座標」改用醫院名稱查詢（原本是查地址）：地址是選填欄位、常常沒填或格式不一致，醫院名稱幾乎一定會填，也比較容易對到 OpenStreetMap 資料庫裡實際登記的地點",
+    ] },
+    { category: "急診待命", items: [
+      "急診待命卡片欄位順序調整：值班醫官移到車長原本的位置（右上），車長移到駕駛原本的位置（左下），駕駛移到值班醫官原本的位置（右下）",
     ] },
   ] },
   { date: "2026/07/09", groups: [
@@ -5653,9 +5656,9 @@ function viewErStandby(){
         <div class="er-standby-meta">建立於 ${fmtTime(new Date(boundTask.createdAt||0).getTime())}${isStandbyStale(new Date(boundTask.createdAt||0).getTime()) ? `　<span style="color:var(--amber);">${icon('alert',13)} 尚未於今日 08:00 後更新，請確認車長/駕駛是否需要換班</span>` : ''}</div>
         <div class="er-standby-grid">
           <div class="detail-item"><span class="lbl">車號</span><span class="val">${vehicleLabelHtml(boundTask.vehicle)}</span></div>
+          <div class="detail-item"><span class="lbl">值班醫官</span><span class="val">${doctorLine ? doctorLine.main : "尚未設定"}</span>${doctorLine && doctorLine.sub ? `<span class="sub-line">${doctorLine.sub}</span>` : ''}</div>
           <div class="detail-item"><span class="lbl">車長</span><span class="val">${crewLine.main}</span>${crewLine.sub ? `<span class="sub-line">${crewLine.sub}</span>` : ''}</div>
           <div class="detail-item"><span class="lbl">駕駛</span><span class="val">${driverLine.main}</span>${driverLine.sub ? `<span class="sub-line">${driverLine.sub}</span>` : ''}</div>
-          <div class="detail-item"><span class="lbl">值班醫官</span><span class="val">${doctorLine ? doctorLine.main : "尚未設定"}</span>${doctorLine && doctorLine.sub ? `<span class="sub-line">${doctorLine.sub}</span>` : ''}</div>
         </div>
         <button class="btn-primary" style="width:100%;" onclick="window.__nav({name:'task', id:'${boundTask.id}'})">查看／管理</button>
         ` : `
