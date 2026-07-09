@@ -516,11 +516,24 @@
     background:color-mix(in srgb, var(--blue) 78%, transparent);
     backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%);
     /* 跟底部固定列同樣是 position:fixed + backdrop-filter，先加上獨立合成層
-       避免快速滑動時跟著內容位移（同一個 iOS Safari 已知問題，見 .bottomnav）。 */
+       避免快速滑動時跟著內容位移（同一個 iOS Safari 已知問題，見 .bottomnav）。
+       :active 放大時要保留 translateZ(0)，不然疊上 scale() 會整個覆蓋掉、
+       壓下去那瞬間又跳出合成層。 */
     transform:translateZ(0); -webkit-backface-visibility:hidden;
     display:flex; align-items:center; justify-content:center;
     box-shadow:0 6px 18px color-mix(in srgb, var(--blue) 35%, transparent), inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -1px 1px rgba(0,0,0,0.08);
     z-index:25;
+    /* 按下去放大、放開彈回，比照返回鍵的液態玻璃觸覺回饋（見 .back-btn 註解）：
+       放開回彈用彈簧曲線（transform 0.32s），按下去要快、乾脆，由
+       .fab:active 自己覆寫成 0.1s ease-out。 */
+    transition:transform 0.32s cubic-bezier(0.34,1.56,0.64,1), border-color 0.2s cubic-bezier(0.25,1,0.5,1),
+      box-shadow 0.2s cubic-bezier(0.25,1,0.5,1), filter 0.2s cubic-bezier(0.25,1,0.5,1);
+  }
+  .fab:active{
+    transform:translateZ(0) scale(1.12); filter:brightness(1.15); border-color:rgba(255,255,255,0.55);
+    box-shadow:0 6px 18px color-mix(in srgb, var(--blue) 35%, transparent), inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -1px 1px rgba(0,0,0,0.08), 0 0 14px color-mix(in srgb, var(--blue) 55%, transparent);
+    transition:transform 0.1s ease-out, border-color 0.2s cubic-bezier(0.25,1,0.5,1),
+      box-shadow 0.2s cubic-bezier(0.25,1,0.5,1), filter 0.2s cubic-bezier(0.25,1,0.5,1);
   }
   /* 急診待命：兩個地點各一張卡片，樣式比照 task-card 但沒有左側狀態色條。 */
   .er-standby-card{
@@ -973,7 +986,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-210-fab-glass-effect";
+const BUILD_TAG = "2026-07-09-211-fab-press-scale";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1429,6 +1442,7 @@ const RELEASE_NOTES = [
     "患者紀錄的「患者基本資料」新增「對職幹部」欄位（單位／階級／職稱／姓名／手機電話），單位可以一鍵套用跟患者相同的單位，方便記錄現場協助處理的幹部聯絡資訊",
     "修正快速滑動時，底部分頁列跟回報按鈕會跟著內容一起被往上帶走、放開手指後才彈回底部的問題（iOS 上模糊背景疊加固定定位的已知副作用）",
     "「任務」頁右下角新增任務的藍色圓形按鈕改成毛玻璃質感，會透出底下內容的模糊效果，不再是純色實心圓",
+    "上述新增任務按鈕補上跟返回鍵一樣的按壓回饋：按下去會放大＋發光，放開後有彈簧回彈感，取代原本全站按鈕預設的縮小效果",
   ] },
   { date: "2026/07/08", items: [
     "基礎資料管理新增「醫官」名冊（姓名/電話），建立勤務的「值班醫官」欄位改成從這份名冊下拉選擇，不用再手動打字",
