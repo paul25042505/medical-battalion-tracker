@@ -3220,14 +3220,17 @@ function ensureApparentTempLoaded(unit){
 const aiInsightCache = {}; // { [縣市名稱]: { text, fetchedAt, error } }
 let aiInsightLoadingCounty = null;
 async function fetchGeminiInsight(weatherData){
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent`;
+  // 金鑰改回放在 URL 查詢字串，不用 x-goog-api-key 標頭：實機測試過標頭
+  // 版本會直接「Load failed」（連線層級失敗，連 HTTP 回應都沒有），研判
+  // 是這個標頭觸發瀏覽器對這個網域的 CORS 預檢（preflight），而
+  // generativelanguage.googleapis.com 的 CORS 設定沒有把這個自訂標頭
+  // 列入允許清單（Content-Type: application/json 本身沒有這個問題，
+  // 之前用查詢字串＋這個 header 組合是可以正常運作的）。
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`;
   const promptText = `你是一個專業的氣象 AI 助手。請根據以下即時氣象數據：地點 ${weatherData.county}、天氣現況 ${weatherData.wx}、氣溫 ${weatherData.minT}–${weatherData.maxT}°C${weatherData.at != null ? `、體感溫度 ${weatherData.at}°C` : ""}、降雨機率 ${weatherData.pop}%${weatherData.ci ? `、舒適度 ${weatherData.ci}` : ""}，生成一句 60 字以內、針對戶外執勤與隨車設備安全的「風險預測與行動建議」。`;
-  // 金鑰改用 x-goog-api-key 標頭而不是 URL 查詢字串帶：Google 目前的安全
-  // 建議是查詢字串會被記錄在瀏覽器歷史、伺服器日誌、中介層工具裡，標頭
-  // 相對不會外洩到這些地方。
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
   });
   if (!res.ok) {
