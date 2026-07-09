@@ -986,7 +986,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-211-fab-press-scale";
+const BUILD_TAG = "2026-07-09-212-merge-tasks-tab-transit";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1443,6 +1443,7 @@ const RELEASE_NOTES = [
     "修正快速滑動時，底部分頁列跟回報按鈕會跟著內容一起被往上帶走、放開手指後才彈回底部的問題（iOS 上模糊背景疊加固定定位的已知副作用）",
     "「任務」頁右下角新增任務的藍色圓形按鈕改成毛玻璃質感，會透出底下內容的模糊效果，不再是純色實心圓",
     "上述新增任務按鈕補上跟返回鍵一樣的按壓回饋：按下去會放大＋發光，放開後有彈簧回彈感，取代原本全站按鈕預設的縮小效果",
+    "「任務」頁的狀態頁籤把「出勤中」跟「前往中」合併成同一個「出勤中」頁籤（對調度來說都是車輛還在路上，拆兩個頁籤沒有實益），單筆勤務卡片上顯示的狀態文字不受影響，還是會分別顯示「出勤中」或「前往下一地點」",
   ] },
   { date: "2026/07/08", items: [
     "基礎資料管理新增「醫官」名冊（姓名/電話），建立勤務的「值班醫官」欄位改成從這份名冊下拉選擇，不用再手動打字",
@@ -3184,30 +3185,34 @@ function viewHome(){
 // 完成的勤務不能直接從清單裡消失、找不到——除了「全部」跟各進行中狀態頁籤
 // （只列尚未完成的勤務）以外，另外加一個「已完成」頁籤，才能在任務頁本身
 // 就查得到剛完成的勤務，不用跳去「紀錄」頁另外查詢。
+// 「出勤中」跟「前往中」（離開現場後前往下一個地點）對調度來說都算是車輛
+// 還在路上，拆成兩個頁籤沒有實益，這裡合併成同一個頁籤，篩選時比對
+// 底下兩種狀態都算數（見 tabStatuses）。
 const TASKS_TABS = [
   { key:"all", label:"全部" },
   { key:"pending", label:"待命中" },
-  { key:"dispatch", label:"出勤中" },
+  { key:"dispatch", label:"出勤中", statuses:["dispatch","transit"] },
   { key:"onscene", label:"現場中" },
-  { key:"transit", label:"前往中" },
   { key:"returning", label:"返營中" },
   { key:"completed", label:"已完成" }
 ];
+function tabStatuses(tb){ return tb.statuses || [tb.key]; }
 function viewTasks(){
   const p = state.profile;
   const visible = visibleTasks(p, state.tasks);
   const active = visible.filter(t => deriveStatus(t.id) !== "completed");
   const completedTasks = visible.filter(t => deriveStatus(t.id) === "completed");
+  const activeTab = TASKS_TABS.find(tb => tb.key === state.tasksTab);
   const shown = state.tasksTab === "all" ? visible
     : state.tasksTab === "completed" ? completedTasks
-    : active.filter(t => deriveStatus(t.id) === state.tasksTab);
+    : active.filter(t => tabStatuses(activeTab || {key:state.tasksTab}).includes(deriveStatus(t.id)));
 
   const tabs = `
     <div class="tabs2 scroll">
       ${TASKS_TABS.map(tb => {
         const count = tb.key === "all" ? visible.length
           : tb.key === "completed" ? completedTasks.length
-          : active.filter(t=>deriveStatus(t.id)===tb.key).length;
+          : active.filter(t=>tabStatuses(tb).includes(deriveStatus(t.id))).length;
         return `
         <div class="tab2 ${state.tasksTab===tb.key?'active':''}" onclick="window.__setTasksTab('${tb.key}')">
           ${tb.label}<span class="tab2-count">${count}</span>
