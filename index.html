@@ -2955,6 +2955,11 @@ function ensureWeatherLoaded(unit){
 // 授權碼，格式也是完全不同的 cwaopendata/dataset/location 包法（不是
 // records/location）。欄位也比 36 小時預報少，只有 Wx/MaxT/MinT，沒有
 // PoP／CI，所以畫面上這兩項不會顯示。
+//
+// 參考資料（未來要重新查證時從這裡開始，不要用舊 fixture 或搜尋結果猜
+// schema；資料集介紹頁上的「JSON」下載按鈕點下去就會看到目前這個真正
+// 在用的網址）：
+// https://opendata.cwa.gov.tw/dataset/forecast/F-C0032-005
 const weeklyForecastCache = {}; // { [縣市名稱]: { data, fetchedAt } }
 let weeklyForecastLoadingCounty = null;
 async function fetchWeeklyForecast(county){
@@ -3123,6 +3128,17 @@ function ensureHazardsLoaded(unit){
 // 不是瞬時值）→ ElementValue[0]（依欄位名稱各自命名的值，例如
 // {RelativeHumidity:"76"}）。這組資料實際查證後才發現原來也有風速風向、
 // 紫外線指數，先前用另一份舊資料判斷「沒有風速風向」是錯的。
+//
+// 參考資料（未來這組資料集又出問題時，從這裡重新查證，不要用舊 fixture
+// 或搜尋結果猜 schema）：
+// - Swagger 互動文件（可以直接用自己的授權碼 Try it out，執行後會顯示
+//   實際送出的完整請求網址／curl，這是本次查出正確用法的關鍵）：
+//   https://opendata.cwa.gov.tw/dist/opendata-swagger.html
+// - 資料集介紹頁（有「JSON／XML 檔案下載」按鈕，可以直接看到目前實際
+//   在用的縣市代碼、資料範例）：
+//   https://opendata.cwa.gov.tw/dataset/forecast/F-D0047-093
+// - 若某縣市不在 COUNTY_TOWNSHIP_DATASET_ID 對照表裡，要用上面兩個
+//   管道其中一個查出該縣市對應的 F-D0047-0XX 代碼，不要用臆測的號碼。
 const COUNTY_TOWNSHIP_DATASET_ID = { "臺中市": "F-D0047-075", "嘉義縣": "F-D0047-031" };
 const apparentTempCache = {}; // { [鄉鎮名稱]: { data, fetchedAt } }
 let apparentTempLoadingTownship = null;
