@@ -1020,7 +1020,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-215-app-shell-rewrite";
+const BUILD_TAG = "2026-07-09-216-tasks-weather-subtab";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1028,7 +1028,7 @@ const BUILD_TAG = "2026-07-09-215-app-shell-rewrite";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "1.12";
+const APP_MAJOR_MINOR = "1.13";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -1484,6 +1484,7 @@ const RELEASE_NOTES = [
     ] },
     { category: "任務管理", items: [
       "「任務」頁的狀態頁籤把「出勤中」跟「前往中」合併成同一個「出勤中」頁籤（對調度來說都是車輛還在路上，拆兩個頁籤沒有實益），單筆勤務卡片上顯示的狀態文字不受影響，還是會分別顯示「出勤中」或「前往下一地點」",
+      "「任務」頁最上面新增「勤務／天氣」子選單：「勤務」就是原本的狀態頁籤跟勤務清單；「天氣」是原本首頁的天氣資訊（天氣卡片、貼心提醒、特報橫幅）搬過來的新頁面，首頁不再重複顯示天氣資訊",
     ] },
     { category: "關於系統／意見回饋", items: [
       "「關於系統 → 更新紀錄」改成依功能區塊分類顯示（例如「患者紀錄」「急診待命」），不再是同一天所有異動擠成一長串沒有結構的清單",
@@ -1807,14 +1808,15 @@ const state = {
   recordsFiltersExpanded: false,
   recordsApplied: null, // 查詢後的篩選條件快照；null 代表尚未按下查詢
   tasksTab: "all",
+  tasksMainTab: "duty", // 任務頁最上面的子選單：duty（勤務，預設）／weather（天氣）
   statsPeriod: "today",
   profileEditing: false,
   baseDataUnit: "", baseDataModal: null, // 基礎資料管理目前選的單位；baseDataModal: {coll, id, unit} | null
   createTaskUnit: "", // 建立勤務頁面：admin/高勤官可切換的單位
   createTaskType: "duty", // 建立勤務頁面：勤務（車輛派遣）或洽公（無車輛/里程追蹤）
   previewActive: false, realRoleUnit: null, // 角色權限預覽（僅限 admin）
-  weather: null, // 首頁氣象預報（依單位對應縣市，見 ensureWeatherLoaded）
-  hazards: null, // 首頁天氣特報／陸上警報（依單位對應縣市，見 ensureHazardsLoaded）
+  weather: null, // 任務頁「天氣」子選單的氣象預報（依單位對應縣市，見 ensureWeatherLoaded）
+  hazards: null, // 任務頁「天氣」子選單的天氣特報／陸上警報（依單位對應縣市，見 ensureHazardsLoaded）
   myLat: null, // 醫院資訊頁：手機 GPS 定位的原始緯度，null 代表尚未定位；有登記座標的醫院直接拿這個算實際距離
   myLng: null, // 醫院資訊頁：手機 GPS 定位的原始經度
   myCounty: null, // 醫院資訊頁：手機 GPS 定位算出的概略縣市（見 nearestDistrict），沒座標的醫院退回用這個比對；null 代表尚未定位
@@ -3224,9 +3226,6 @@ function renderHazardBanner(unit){
 }
 function viewHome(){
   const p = state.profile;
-  const unit = myUnit(p);
-  ensureWeatherLoaded(unit);
-  ensureHazardsLoaded(unit);
   const tasks = visibleTasks(p, state.tasks);
   const today = new Date();
   const todayTasks = tasks.filter(t => isSameDay(new Date(t.createdAt||0).getTime(), today));
@@ -3269,9 +3268,6 @@ function viewHome(){
 
   return `
     <div class="home-date">${fmtDate(today)}</div>
-    ${renderHazardBanner(unit)}
-    ${renderWeatherCard(unit)}
-    ${renderWeatherTip(unit)}
     <div class="section-label">今日概況</div>
     <div class="stat-grid">
       <div class="stat-tile t-blue"><div class="stat-icon">${icon('tasks',16)}</div><div class="num">${todayTasks.length}</div><div class="lbl">今日勤務數</div></div>
@@ -3304,8 +3300,32 @@ const TASKS_TABS = [
   { key:"completed", label:"已完成" }
 ];
 function tabStatuses(tb){ return tb.statuses || [tb.key]; }
+// 任務頁最上面的子選單：勤務（原本的狀態頁籤＋清單）／天氣（原本首頁的
+// 天氣資訊，移到這裡集中管理，首頁不再重複顯示）。
+const TASKS_MAIN_TABS = [
+  { key:"duty", label:"勤務" },
+  { key:"weather", label:"天氣" }
+];
 function viewTasks(){
   const p = state.profile;
+  const unit = myUnit(p);
+  ensureWeatherLoaded(unit);
+  ensureHazardsLoaded(unit);
+  const mainTabs = `
+    <div class="tabs2">
+      ${TASKS_MAIN_TABS.map(tb => `
+        <div class="tab2 ${state.tasksMainTab===tb.key?'active':''}" onclick="window.__setTasksMainTab('${tb.key}')">${tb.label}</div>`).join("")}
+    </div>`;
+
+  if (state.tasksMainTab === "weather") {
+    return `
+      ${mainTabs}
+      ${renderHazardBanner(unit)}
+      ${renderWeatherCard(unit)}
+      ${renderWeatherTip(unit)}
+    `;
+  }
+
   const visible = visibleTasks(p, state.tasks);
   const active = visible.filter(t => deriveStatus(t.id) !== "completed");
   const completedTasks = visible.filter(t => deriveStatus(t.id) === "completed");
@@ -3336,6 +3356,7 @@ function viewTasks(){
   ` : `<div class="empty">目前沒有符合條件的勤務</div>`;
 
   return `
+    ${mainTabs}
     ${tabs}
     ${listHtml}
     ${canCreateTask(p) ? `<button class="fab" onclick="window.__nav({name:'createTask'})">${icon('plus',26)}</button>` : ""}
@@ -5783,6 +5804,7 @@ window.__runRecordsDeepQuery = async () => {
   render();
 };
 window.__setTasksTab = (key) => { state.tasksTab = key; render(); scrollContentToTop(); };
+window.__setTasksMainTab = (key) => { state.tasksMainTab = key; render(); scrollContentToTop(); };
 window.__setStatsPeriod = (key) => { state.statsPeriod = key; render(); scrollContentToTop(); };
 window.__setCreateTaskUnit = (code) => { state.createTaskUnit = code; render(); };
 window.__setCreateTaskType = (key) => { state.createTaskType = key; render(); };
