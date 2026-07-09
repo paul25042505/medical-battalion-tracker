@@ -578,13 +578,18 @@
   .ai-insight-text.muted{color:var(--muted);}
   /* 觀測數據便當盒：體感/濕度/露點/風速風向/紫外線/雨量各自一格，3 欄
      排列，沒有值的項目不佔格。 */
-  .weather-stats-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:14px;}
+  .weather-stats-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:14px;}
+  /* 標籤靠左、數值靠右的橫向排列（比照參考稿），字級比全站標準的
+     --text-xs 再小一階——這種一排排緊密的資料小卡本來就需要比一般內文
+     更高的資訊密度，跟 .vitals-item .sub 那組既有的次要數值一樣，是
+     刻意的例外，不是隨手開的字級。 */
   .weather-stat-tile{
+    display:flex; align-items:center; justify-content:space-between; gap:6px;
     background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md);
-    padding:12px 8px; text-align:center; box-shadow:var(--shadow-xs);
+    padding:10px 12px; box-shadow:var(--shadow-xs);
   }
-  .weather-stat-tile .lbl{display:block; font-size:var(--text-xs); color:var(--muted); font-weight:600;}
-  .weather-stat-tile .val{display:block; font-size:var(--text-base); font-weight:700; color:var(--text); font-family:var(--mono); font-variant-numeric:tabular-nums; margin-top:4px;}
+  .weather-stat-tile .lbl{font-size:11px; color:var(--muted); font-weight:600;}
+  .weather-stat-tile .val{font-size:13px; font-weight:700; color:var(--text); font-family:var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap;}
   .weather-stat-tile.accent-amber .val{color:var(--amber-text);}
   /* 未來預報橫向捲動：36 小時內的時段＋一週縣市預報接在同一條軸上，
      每張卡固定寬度，用左右滑動取代原本上下疊兩份直向清單；上面補一行
@@ -1210,7 +1215,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-244-weather-page-polish";
+const BUILD_TAG = "2026-07-09-245-weather-stats-grid-2x3";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1723,7 +1728,8 @@ const RELEASE_NOTES = [
       "天氣卡片新增風速、風向、紫外線指數：修正鄉鎮預報資料來源後，順便補上原本以為這組資料集沒有的欄位（風速風向）與紫外線指數（先前因為抓不到可靠資料來源而擱置的項目）",
       "天氣頁版型重新設計：特報卡改成琥珀色漸層＋毛玻璃面板，補上真實的蒲福風級徽章（依鄉鎮預報資料的風速欄位換算，不是編造的陣風數字）跟依特報類型（強風/大雨/低溫/高溫）給的行動提醒；天氣現況卡跟 Core-AI Insight 合併成同一張卡片；體感/濕度/露點/風速/紫外線/雨量改成獨立的觀測數據小卡；未來預報改成橫向捲動清單，取代原本上下疊兩份直向清單",
       "Core-AI Insight 現在會一併參考目前生效中的天氣特報（颱風/豪雨/強風等），生成的建議會針對特報類型給具體因應方式，不再只根據氣溫/降雨機率給空泛的天氣小提醒",
-      "觀測數據小卡拿掉露點溫度、改成 2 欄排列；未來預報清單的天氣圖示改用 emoji；拿掉「未來 N 個時段」這行字，只留「滑動看更多」提示",
+      "未來預報清單的天氣圖示改用 emoji；拿掉「未來 N 個時段」這行字，只留「滑動看更多」提示",
+      "觀測數據小卡改成 2 欄 3 列排列（體感/濕度/露點/風速/紫外線/雨量剛好 6 格），每格改成標籤在左、數值在右的橫向排列，字級也跟著縮小，資訊密度更高",
     ] },
     { category: "介面優化", items: [
       "任務卡片／急診待命卡片重新設計：拿掉原本左側 4px 純色狀態色條，改成整張卡片依狀態（待命中/出勤中/已抵達現場/前往下一地點/返營中/已完成）呈現柔和的液態光暈色調，疊三層陰影做出懸浮的空間深度感；有患者記錄的任務卡片會強制蓋成紅色光暈並加上緩慢的呼吸感光圈，比一般狀態更搶眼",
@@ -3808,6 +3814,7 @@ function renderWeatherStatsGrid(unit){
   const items = [];
   if (townshipOk && at.at != null) items.push({ lbl:"體感溫度", val:`${at.at}°C` });
   if (townshipOk && at.rh != null) items.push({ lbl:"相對濕度", val:`${at.rh}%` });
+  if (townshipOk && at.td != null) items.push({ lbl:"露點溫度", val:`${at.td}°C` });
   if (townshipOk && at.windSpeed != null) items.push({ lbl:"風速", val:`${at.windDir ? esc(at.windDir)+' ' : ''}${at.windSpeed}m/s`, accent:"amber" });
   if (townshipOk && at.uvIndex != null) items.push({ lbl:"紫外線指數", val:`${at.uvIndex}${at.uvLevel ? '／'+esc(at.uvLevel) : ''}` });
   if (rainOk && rain.hour3 != null && rain.hour3 > 0) items.push({ lbl:"近3小時雨量", val:`${rain.hour3}mm` });
@@ -3815,7 +3822,7 @@ function renderWeatherStatsGrid(unit){
     <div class="weather-stats-grid">
       ${items.map(i => `<div class="weather-stat-tile${i.accent?' accent-'+i.accent:''}"><span class="lbl">${esc(i.lbl)}</span><span class="val">${i.val}</span></div>`).join("")}
     </div>` : "";
-  const atErrorHtml = atError ? `<div class="weather-tip">${icon('bell',16)}<div>體感/濕度/風速/紫外線載入失敗${at.message ? '：'+esc(at.message) : ''}</div></div>` : "";
+  const atErrorHtml = atError ? `<div class="weather-tip">${icon('bell',16)}<div>體感/濕度/露點/風速/紫外線載入失敗${at.message ? '：'+esc(at.message) : ''}</div></div>` : "";
   const rainErrorHtml = rainError ? `<div class="weather-tip">${icon('bell',16)}<div>雨量資料載入失敗${rain.message ? '：'+esc(rain.message) : ''}</div></div>` : "";
   return gridHtml + atErrorHtml + rainErrorHtml;
 }
