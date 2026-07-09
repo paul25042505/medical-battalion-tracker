@@ -396,6 +396,7 @@
   .detail-item{display:flex; flex-direction:column; gap:var(--space-label-gap);}
   .detail-item .lbl{font-size:var(--text-xs); color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;}
   .detail-item .val{font-size:var(--text-lg); font-weight:600; color:var(--text); line-height:1.3;}
+  .detail-item .val.muted{color:var(--muted); font-weight:500;}
   .gcs-select-row{display:flex; gap:8px; margin-top:8px;}
   .gcs-select-row select{flex:1; min-width:0;}
   .gcs-score-display{font-size:var(--text-sm); font-weight:700; color:var(--blue); margin-top:8px; font-family:var(--mono);}
@@ -952,7 +953,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-205-vitals-complaint-merge-panel";
+const BUILD_TAG = "2026-07-09-206-vitals-negative-finding-muted";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1403,6 +1404,7 @@ const RELEASE_NOTES = [
     "底部提示視窗重新設計統一模板：加上狀態圖示（成功打勾／失敗警示）跟底部倒數進度條，並且改成排隊依序顯示——像「已回報：抵達營區」緊接著「待命勤務已建立」這種前後腳觸發的情境，兩則都會各自完整顯示，不會互相蓋掉",
     "修正提示視窗偏窄、長訊息要換好幾行的問題：改成訊息短就自動縮成剛好的寬度，訊息長就自動放寬到接近整個螢幕寬度，換行數變少",
     "修正患者紀錄「主訴」欄位標籤誤導的問題：「主訴」其實是整組問診資訊（哪裡不舒服/怎麼不舒服/多久了/其他不適/脊椎評估）的統稱，不是只指地點欄位，現在改成「主訴」放在整組最上面當標題，「哪裡不舒服」合併進跟「怎麼不舒服／多久了」同一個灰底面板，不再獨立用淡紅卡片凸顯",
+    "患者紀錄的脊椎評估／過去病史／過敏史，回答是「否，無疑似損傷」或「無」這類正常/陰性結果時，文字改成灰色淡化顯示，讓真正異常的內容比較容易一眼看出來",
   ] },
   { date: "2026/07/08", items: [
     "基礎資料管理新增「醫官」名冊（姓名/電話），建立勤務的「值班醫官」欄位改成從這份名冊下拉選擇，不用再手動打字",
@@ -1603,15 +1605,15 @@ function vitalsQaPanelHtml(v){
   if (v.complaintDuration) topRow.push({ lbl: "多久了", val: esc(v.complaintDuration) });
   if (topRow.length) groups.push(topRow);
   if (v.complaintOthers) groups.push([{ lbl: "其他不適", val: esc(v.complaintOthers) }]);
-  if (v.spineCheck) groups.push([{ lbl: "脊椎評估", val: esc(v.spineCheck) }]);
+  if (v.spineCheck) groups.push([{ lbl: "脊椎評估", val: esc(v.spineCheck), neg: /^否/.test(v.spineCheck) }]);
   const historyRow = [];
-  if (v.pastHistory && v.pastHistory.length) historyRow.push({ lbl: "過去病史", val: v.pastHistory.map(esc).join('、') + (v.pastHistoryOtherDetail?`（${esc(v.pastHistoryOtherDetail)}）`:'') });
-  if (v.allergyHistory && v.allergyHistory.length) historyRow.push({ lbl: "過敏史", val: v.allergyHistory.map(esc).join('、') + ([v.allergyDrugFoodDetail,v.allergyOtherDetail].filter(Boolean).length?`（${[v.allergyDrugFoodDetail,v.allergyOtherDetail].filter(Boolean).map(esc).join('、')}）`:'') });
+  if (v.pastHistory && v.pastHistory.length) historyRow.push({ lbl: "過去病史", val: v.pastHistory.map(esc).join('、') + (v.pastHistoryOtherDetail?`（${esc(v.pastHistoryOtherDetail)}）`:''), neg: v.pastHistory.length===1 && v.pastHistory[0]==="無" });
+  if (v.allergyHistory && v.allergyHistory.length) historyRow.push({ lbl: "過敏史", val: v.allergyHistory.map(esc).join('、') + ([v.allergyDrugFoodDetail,v.allergyOtherDetail].filter(Boolean).length?`（${[v.allergyDrugFoodDetail,v.allergyOtherDetail].filter(Boolean).map(esc).join('、')}）`:''), neg: v.allergyHistory.length===1 && v.allergyHistory[0]==="無" });
   if (historyRow.length) groups.push(historyRow);
   if (!groups.length) return "";
   return `<div class="detail-panel"><div class="qa-grid">${groups.map((items,i) => `
     <div class="qa-row${items.length===1?' full':''}${i>0?' divider':''}">
-      ${items.map(it => `<div class="detail-item"><span class="lbl">${esc(it.lbl)}</span><span class="val">${it.val}</span></div>`).join("")}
+      ${items.map(it => `<div class="detail-item"><span class="lbl">${esc(it.lbl)}</span><span class="val${it.neg?' muted':''}">${it.val}</span></div>`).join("")}
     </div>`).join("")}</div></div>`;
 }
 const PAST_HISTORY_OPTIONS = ["糖尿病", "高血壓", "心臟疾病", "中風", "氣喘", "慢性阻塞性肺病", "肝臟疾病", "腎臟疾病", "癌症", "癲癇", "精神疾病", "其他", "不清楚", "無"];
