@@ -214,12 +214,16 @@
     background:color-mix(in srgb, var(--red) 5%, transparent);
   }
 
-  /* ---- top status strip ---- */
+  /* ---- top status strip ----
+     背景改成跟頁面／子選單同一個底色（var(--bg)），不再是一塊獨立的白色
+     色塊——跟底下「勤務／天氣」子選單貼在一起時才不會出現一條色差明顯的
+     接縫。原本用漸層＋backdrop-filter 做出的「浮在內容上面」的層次感，
+     改成單純用比較明顯的 box-shadow 做出來，跟返回鍵、下面各種卡片的
+     陰影邏輯一致：顏色融為一體，靠陰影表現「這塊在上層」。 */
   .topbar{
-    background:linear-gradient(180deg, var(--panel) 0%, var(--topbar-fade) 100%);
-    backdrop-filter:blur(10px);
-    box-shadow:0 1px 0 var(--border), 0 4px 16px rgba(15,15,20,0.03);
-    padding:17px 19px calc(14px + env(safe-area-inset-top)) 19px;
+    background:var(--bg);
+    box-shadow:var(--shadow-md);
+    padding:17px 19px calc(10px + env(safe-area-inset-top)) 19px;
     padding-top:calc(17px + env(safe-area-inset-top));
   }
   .topbar-bottom-row{display:flex; align-items:center; justify-content:space-between; gap:12px;}
@@ -876,7 +880,7 @@
      的縫隙偷跑出來，變成頂欄跟子選單中間卡著一截露餡的內容。 */
   .icon-subtabs{
     display:flex; gap:14px; position:sticky; top:0; z-index:15;
-    margin:-16px -16px 20px -16px; padding:30px 16px 10px 16px;
+    margin:-16px -16px 20px -16px; padding:22px 16px 10px 16px;
     background:var(--bg); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
   }
   .icon-subtab{
@@ -1062,7 +1066,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-09-219-subtab-flush-header";
+const BUILD_TAG = "2026-07-09-220-topbar-bg-shadow";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1541,6 +1545,7 @@ const RELEASE_NOTES = [
       "上述新增任務按鈕補上跟返回鍵一樣的按壓回饋：按下去會放大＋發光，放開後有彈簧回彈感，取代原本全站按鈕預設的縮小效果",
       "修正底部分頁列／回報按鈕列快速滑動時仍會跟著內容跑掉的問題：先前用 GPU 合成層的方式沒有真正解決，這次改用 position:sticky 取代 position:fixed，並修正 body 因為 overflow-x:hidden 被隱性當成捲動容器、導致 sticky 完全貼不住的根本原因",
       "徹底重構版面架構解決底部分頁列的一系列問題：先前不管用 position:fixed 還是 position:sticky，快速滑動時跟著內容跑掉、內容較短的頁面貼在畫面中間留白，這兩個問題各自换了做法都還是會出現。這次改成整個畫面固定成裝置目前實際可視高度（不隨內容多寡變動），只有中間內容區自己捲動，頂部欄位跟底部分頁列變成版面裡真正固定佔位的區塊，不需要任何特殊定位就一直待在原地，兩個問題從架構上一次解決；連帶把「下拉重新整理」「換頁捲回頂端」等原本靠整頁捲動判斷的邏輯，改成看內容區自己的捲動位置",
+      "頂欄（姓名/階級/通知/登出那一列）背景改成跟頁面同色，不再是一塊獨立的白色色塊——原本跟下面「勤務／天氣」子選單貼在一起時會出現色差明顯的接縫，現在融成同一個底色，改用比較明顯的陰影表現頂欄浮在內容上層的層次感；子選單本身跟頂欄之間的留白也一併縮小",
     ] },
   ] },
   { date: "2026/07/08", groups: [
