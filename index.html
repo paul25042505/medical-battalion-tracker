@@ -1373,7 +1373,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-304-kb-no-rescroll-lock";
+const BUILD_TAG = "2026-07-10-305-kb-nohide-nav";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1953,6 +1953,7 @@ const RELEASE_NOTES = [
       "點選輸入框後，該欄位現在會自動捲到鍵盤上方可視範圍的中間，不用再自己手動往上滑才看得到正在打的字",
       "修正欄位自動定位常常沒有一次到位、還要自己再滑一下才對準的問題：改成偵測鍵盤動畫真正停止變化後才校正定位（原本是用固定時間猜鍵盤彈完，猜到動畫中間值就定位不準）",
       "修正鍵盤打開時手動往上/往下滑動表單，畫面會自己彈回原本聚焦欄位位置、完全滑不走的問題：欄位自動定位改成同一次聚焦只執行一次，之後使用者自己的手動捲動不會再被強制蓋掉",
+      "取消輸入文字時自動隱藏底部導覽列的功能，改成鍵盤彈起時導覽列維持原樣不再消失",
     ] },
     { category: "醫院資訊", items: [
       "新增醫院表單的「名稱查詢座標」改用醫院名稱查詢（原本是查地址）：地址是選填欄位、常常沒填或格式不一致，醫院名稱幾乎一定會填，也比較容易對到 OpenStreetMap 資料庫裡實際登記的地點",
@@ -8065,37 +8066,25 @@ window.addEventListener("scroll", () => {
   window.visualViewport.addEventListener("scroll", () => { syncAppHeight(); scheduleSettle(); });
   syncAppHeight();
   const isFieldEl = (el) => el && ["INPUT","TEXTAREA","SELECT"].includes(el.tagName);
-  // 鍵盤彈起壓縮 visualViewport 的過程中，底部導覽列（flex-shrink:0 貼齊
-  // #app 底部）的版面收合常常跟鍵盤動畫對不齊時序，短暫被鍵盤上緣頂到
-  // 畫面中間、直接蓋住正在輸入的欄位。與其一直跟鍵盤搶那段動畫時序，
-  // 比照多數行動裝置 App 的做法：輸入框一取得焦點就直接把導覽列藏起來
-  // ——反正鍵盤蓋著的那塊高度本來就看不到導覽列，藏起來不影響操作，
-  // 還能整個避開「導覽列位置該怎麼即時跟鍵盤同步」這件事；鍵盤收起、
-  // 版面確定歸位後才顯示回來。
   document.addEventListener("focusin", (e) => {
     if (!isFieldEl(e.target)) return;
     activeField = e.target;
-    const nav = document.querySelector(".bottomnav");
-    if (nav) nav.style.display = "none";
     // 保底：萬一這次鍵盤彈起沒有觸發任何 visualViewport 事件（例如外接
     // 鍵盤、或視窗高度本來就沒變化），還是排一次校正，把欄位捲到可視
     // 範圍內。
     scheduleSettle();
   }, true);
   // 保險機制：輸入框失焦（鍵盤開始收起）時，延遲一小段時間讓鍵盤收合
-  // 動畫跑完，先讓導覽列恢復顯示，再強制校正版面。這裡不能只靠
-  // syncAppHeight()——iOS Safari 就算我們的架構設計成 window/document
-  // 本身不捲動，鍵盤彈起時底層還是會強制把 window 視窗捲動掉，鍵盤收起
-  // 後 window.scrollY 不會自動歸零，所以要連 window 本身的捲動值一起
-  // 強制歸零，不能只調整 #app 的高度。
+  // 動畫跑完，強制校正版面。這裡不能只靠 syncAppHeight()——iOS Safari
+  // 就算我們的架構設計成 window/document 本身不捲動，鍵盤彈起時底層還是
+  // 會強制把 window 視窗捲動掉，鍵盤收起後 window.scrollY 不會自動歸零，
+  // 所以要連 window 本身的捲動值一起強制歸零，不能只調整 #app 的高度。
   document.addEventListener("focusout", (e) => {
     if (!isFieldEl(e.target)) return;
     if (activeField === e.target) activeField = null;
     if (positionedField === e.target) positionedField = null;
     clearTimeout(settleTimer);
     setTimeout(() => {
-      const nav = document.querySelector(".bottomnav");
-      if (nav) nav.style.display = "";
       resetRogueWindowScroll();
       syncAppHeight();
       window.dispatchEvent(new Event("resize"));
