@@ -1287,7 +1287,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-264-notification-inbox-adminmsg";
+const BUILD_TAG = "2026-07-10-265-announcement-crud";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1777,6 +1777,7 @@ const RELEASE_NOTES = [
       "新增「通知中心」收件匣：點右上角鈴鐺圖示可以看到歷史通知，依時間新到舊排序成單一列表（不分全部/未讀頁籤）；未讀的通知卡片右上角會有紅點提示，點開該筆就會標記為已讀",
       "通知中心新增「全部標記為已讀」按鈕，一次把目前所有未讀通知清掉",
       "後台管理「訊息管理」補上跟通知中心一樣的收件匣內容（原本是開發中的空白頁）",
+      "「訊息管理」新增公告管理功能：admin 可以新增公告、編輯既有公告的標題/內容、刪除公告；一般成員的通知中心維持唯讀，只能看跟標記已讀",
     ] },
   ] },
   { date: "2026/07/09", groups: [
@@ -2583,12 +2584,20 @@ async function markAllNotificationsRead(){
   await fsBatchUpdate(unread.map(n => ({ path: `notifications/${n.id}`, fields: { isRead: true } })));
   unread.forEach(n => n.isRead = true); safeRender();
 }
+// 新增公告：只有「訊息管理」（admin）有這個入口，一般成員的通知中心
+// 看不到新增/編輯/刪除的按鈕。isRead 一律從 false 開始，讓所有人看到
+// 這是一則新通知（跟目前 isRead 不分帳號的共用設計一致）。
+async function addNotification(title, body){
+  await fsAddDoc("notifications", { title, body, isRead: false, timestamp: new Date() });
+  showToast("已新增公告"); if (notificationsPoll) notificationsPoll.refreshNow();
+}
 function refreshBaseDataPoll(coll){
   if (coll === "personnel" && personnelPoll) personnelPoll.refreshNow();
   if (coll === "vehicles" && vehiclesPoll) vehiclesPoll.refreshNow();
   if (coll === "recorders" && recordersPoll) recordersPoll.refreshNow();
   if (coll === "hospitals" && hospitalsPoll) hospitalsPoll.refreshNow();
   if (coll === "doctors" && doctorsPoll) doctorsPoll.refreshNow();
+  if (coll === "notifications" && notificationsPoll) notificationsPoll.refreshNow();
 }
 // coll 是畫面上用的內部識別字串（沿用「personnel」這個名字，跟建立勤務下拉
 // 選單、基礎資料彈窗共用同一套邏輯），實際 Firestore 集合已經併入 users。
@@ -5294,18 +5303,23 @@ function viewStats(){
 /* =========================================================
    16) 畫面：通知中心（收件匣歷史紀錄，模組 A：基礎版——單一列表，新到舊
    排序，不分「全部/未讀」頁籤；未讀狀態是共用的 isRead 欄位，不分帳號）
-   同一份清單有兩個入口：右上角鈴鐺圖示（所有在職帳號都能看，個人視角）、
-   後台管理「訊息管理」（canManageUsers 專用，見 viewAdminMessages）——
-   兩邊資料一致，只是進入路徑跟外層標題/返回鍵不同，所以抽成共用的
-   renderNotificationsList()，避免同一份卡片/按鈕邏輯維護兩份。
+   同一份清單有兩個入口：右上角鈴鐺圖示（所有在職帳號都能看，個人視角，
+   唯讀）、後台管理「訊息管理」（canManageUsers 專用，見
+   viewAdminMessages，多了新增/編輯/刪除公告）——兩邊看到的通知內容一致，
+   只是「訊息管理」多一層管理操作，所以抽成共用的 renderNotificationsList()，
+   用 editable 參數決定要不要顯示新增/編輯/刪除，避免同一份卡片邏輯維護兩份。
    ========================================================= */
-function renderNotificationsList(){
+function renderNotificationsList(editable){
   const list = state.notifications;
   const hasUnread = list.some(n => !n.isRead);
+  const addBtn = editable
+    ? `<button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('notifications', null, '')">${icon('plus',15)} 新增公告</button>`
+    : "";
   const markAllBtn = hasUnread
     ? `<button class="icon-btn" style="margin-bottom:12px;" onclick="window.__markAllNotificationsRead()">全部標記為已讀</button>`
     : "";
   return `
+    ${addBtn}
     ${markAllBtn}
     ${list.length ? list.map(n => `
       <div class="notif-card" onclick="window.__markNotificationRead('${n.id}')">
@@ -5313,11 +5327,16 @@ function renderNotificationsList(){
         <div class="notif-title">${esc(n.title)}</div>
         <div class="notif-body">${esc(n.body)}</div>
         <div class="notif-time">${fmtTime(n.timestamp ? new Date(n.timestamp).getTime() : null)}</div>
+        ${editable ? `
+        <div style="display:flex; gap:6px; margin-top:10px;">
+          <button class="icon-btn" onclick="event.stopPropagation(); window.__openBaseDataModal('notifications','${n.id}','')">編輯</button>
+          <button class="icon-btn danger" onclick="event.stopPropagation(); window.__deleteBaseData('notifications','${n.id}')">刪除</button>
+        </div>` : ""}
       </div>`).join("") : `<div class="empty">尚無通知</div>`}
   `;
 }
 function viewNotifications(){
-  return `<div class="section-label">通知中心</div>${renderNotificationsList()}`;
+  return `<div class="section-label">通知中心</div>${renderNotificationsList(false)}`;
 }
 
 /* =========================================================
@@ -6008,7 +6027,7 @@ function viewBaseDataModal(){
   const m = state.baseDataModal;
   if (!m) return "";
   const { coll, id, unit } = m;
-  const pool = coll === "personnel" ? state.personnel : coll === "vehicles" ? state.vehicles : coll === "hospitals" ? state.hospitals : coll === "doctors" ? state.doctors : state.recorders;
+  const pool = coll === "personnel" ? state.personnel : coll === "vehicles" ? state.vehicles : coll === "hospitals" ? state.hospitals : coll === "doctors" ? state.doctors : coll === "notifications" ? state.notifications : state.recorders;
   const editing = id ? pool.find(x => x.id === id) : null;
   let title, fields;
   if (coll === "personnel") {
@@ -6077,6 +6096,11 @@ function viewBaseDataModal(){
         </select>
       </div>
       <div class="field"><label>電話（選填）</label><input name="phone" type="tel" inputmode="tel" value="${esc(editing?.phone||'')}"></div>`;
+  } else if (coll === "notifications") {
+    title = editing ? "編輯公告" : "新增公告";
+    fields = `
+      <div class="field"><label>標題</label><input name="title" required value="${esc(editing?.title||'')}"></div>
+      <div class="field"><label>內容</label><textarea name="body" required rows="4">${esc(editing?.body||'')}</textarea></div>`;
   } else {
     title = editing ? "編輯行車紀錄器" : "新增行車紀錄器";
     fields = `<div class="field"><label>編號</label><input name="code" required value="${esc(editing?.code||'')}"></div>`;
@@ -6148,11 +6172,11 @@ function viewAdminUsers(){
     ` : `<div class="empty">您尚未被指派單位，請聯繫管理員。</div>`}
   `;
 }
-// 訊息管理＝通知中心（收件匣歷史紀錄，模組 A），跟右上角鈴鐺圖示是
-// 同一份資料（見 renderNotificationsList），只是多一層 admin 專用的入口。
-// 系統設定目前尚未有實際內容，先放開發中的預留頁面。
+// 訊息管理＝通知中心（收件匣歷史紀錄）的 admin 管理入口，看到的通知
+// 內容跟右上角鈴鐺圖示是同一份資料（見 renderNotificationsList），差別
+// 是這裡多了新增/編輯/刪除公告的操作，一般成員的通知中心只能看、標記已讀。
 function viewAdminMessages(){
-  return `<div class="section-label">訊息管理</div>${renderNotificationsList()}`;
+  return `<div class="section-label">訊息管理</div>${renderNotificationsList(true)}`;
 }
 function viewAdminSystemSettings(){
   return `<div class="section-label">系統設定</div><div class="empty">${icon('check',32)}<div style="margin-top:10px;">系統設定開發中，之後將提供系統層級的參數設定。</div></div>`;
@@ -6745,11 +6769,13 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
        : coll === "vehicles" ? updateBaseData(coll, id, { plate: f.get("plate"), type: f.get("type") })
        : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return updateBaseData(coll, id, { name: f.get("name"), county: f.get("county"), level: f.get("level"), phone: f.get("phone")||"", note: f.get("note")||"", district: f.get("district")||"", address: f.get("address")||"", lat: c ? c.lat : null, lng: c ? c.lng : null }); })()
        : coll === "doctors" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"" })
+       : coll === "notifications" ? updateBaseData(coll, id, { title: f.get("title"), body: f.get("body") })
        : updateBaseData(coll, id, { code: f.get("code") }))
     : (coll === "personnel" ? addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone"), f.get("emtLevel"), f.get("email"))
        : coll === "vehicles" ? addVehicle(unit, f.get("plate"), f.get("type"))
        : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return addHospital(f.get("county"), f.get("name"), f.get("level"), f.get("phone"), f.get("note"), f.get("district"), f.get("address"), c ? c.lat : null, c ? c.lng : null); })()
        : coll === "doctors" ? addDoctor(f.get("name"), f.get("title"), f.get("phone"))
+       : coll === "notifications" ? addNotification(f.get("title"), f.get("body"))
        : addRecorder(unit, f.get("code")));
   action.then(() => { state.baseDataModal = null; render(); }).catch(baseDataErr);
 };
