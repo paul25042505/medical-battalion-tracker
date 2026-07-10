@@ -1373,7 +1373,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-294-unit-freetext-plus-picker";
+const BUILD_TAG = "2026-07-10-295-unit-picker-no-separator";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1992,7 +1992,7 @@ const RELEASE_NOTES = [
       "「任務→天氣」頁的天氣卡片新增「資料時間」：顯示目前這筆天氣描述/溫度對應的預報時段與起訖時間（例如「今天白天（06:00–18:00）」），避免被誤會成即時觀測資料",
     ] },
     { category: "患者紀錄", items: [
-      "患者紀錄「患者基本資料」的患者／對職幹部「單位」欄位維持自由輸入框（成員仍可自行手動填寫），旁邊新增「快速選擇」按鈕，跟洽公人員選擇器一樣彈窗選單（搜尋＋可複選＋選完按「完成」才關閉），依旅／營／連編制層級分組列出（302旅、104旅、257旅；旅部、炮兵營、步1營～步5營；旅部連、戰支連、火力連、步1連～步3連、通信連），選完會用「、」串接帶入輸入框，帶入後仍可繼續手動編輯",
+      "患者紀錄「患者基本資料」的患者／對職幹部「單位」欄位維持自由輸入框（成員仍可自行手動填寫），旁邊新增「快速選擇」按鈕，跟洽公人員選擇器一樣彈窗選單（搜尋＋可複選＋選完按「完成」才關閉），依旅／營／連編制層級分組列出（302旅、104旅、257旅；旅部、炮兵營、步1營～步5營；旅部連、戰支連、火力連、步1連～步3連、通信連），選完的項目直接接在一起（例如「步3營步2連」，不用「、」分隔），手動輸入的內容不會被覆蓋掉，帶入後仍可繼續手動編輯",
       "患者「級職」欄位改成下拉選單（沿用既有的階級清單），不用再手動打字，跟對職幹部的「階級」欄位一致",
     ] },
   ] },
@@ -6997,10 +6997,24 @@ window.__applyQuickFillSelect = (inputId, selectEl) => {
    洽公人員選擇器（multiPersonPicker）同一套彈窗互動——搜尋、可複選、
    選完按「完成」才關閉——差別只在分組依據是固定的旅／營／連編制清單
    （PATIENT_UNIT_GROUPS），不是動態的 state.personnel，所以不用「跨
-   單位選人」那個切換開關。「完成」時直接覆蓋輸入框內容（用「、」串接
-   已勾選的項目），使用者也可以在快速選擇之後再手動編輯輸入框內容。
+   單位選人」那個切換開關。單位習慣直接組合著寫（例如「步3營步2連」），
+   不像主訴是好幾句話拼起來，所以「完成」時已勾選的項目直接接在一起、
+   不用「、」分隔；輸入框裡不屬於固定清單的手動輸入內容（自訂單位）
+   會被保留，不會被快速選擇覆蓋掉——見 parseUnitSelection()。
    ========================================================= */
 let unitPickerCtx = null; // { selected: Set<string>, fieldWrap }
+// 把輸入框目前的內容拆成「屬於固定清單的已選項目」跟「其餘手動輸入的
+// 自訂文字」：固定清單依選項字串長度由長到短依序比對並從字串中「消耗
+// 掉」，避免「旅部」是「旅部連」的子字串這種短選項誤判成也有被選到。
+function parseUnitSelection(value){
+  const allOptions = PATIENT_UNIT_GROUPS.flatMap(g => g.options).sort((a,b) => b.length - a.length);
+  let manual = value || "";
+  const selected = new Set();
+  allOptions.forEach(o => {
+    if (manual.includes(o)) { selected.add(o); manual = manual.split(o).join(""); }
+  });
+  return { selected, manual };
+}
 function unitPickerRows(query, selected){
   const q = (query||"").trim().toLowerCase();
   let html = "";
@@ -7034,8 +7048,7 @@ function closeUnitPicker(){
 window.__openUnitPicker = (triggerBtn) => {
   const fieldWrap = triggerBtn.closest(".field");
   const valueInput = fieldWrap.querySelector("input");
-  const currentValues = (valueInput.value || "").split("、").map(s => s.trim()).filter(Boolean);
-  const selected = new Set(currentValues);
+  const { selected } = parseUnitSelection(valueInput.value);
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay unit-picker-overlay";
   overlay.onclick = (e) => { if (e.target === overlay) closeUnitPicker(); };
@@ -7061,7 +7074,8 @@ window.__commitUnitPicker = () => {
   if (!unitPickerCtx) return;
   const { selected, fieldWrap } = unitPickerCtx;
   const valueInput = fieldWrap.querySelector("input");
-  valueInput.value = [...selected].join('、');
+  const { manual } = parseUnitSelection(valueInput.value);
+  valueInput.value = manual + [...selected].join("");
   closeUnitPicker();
 };
 // 勾選過去病史/過敏史/處置項目的「其他」（或過敏史的「藥物」「食物」）時，
