@@ -1373,7 +1373,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-299-hide-nav-on-keyboard";
+const BUILD_TAG = "2026-07-10-300-window-scroll-lock";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1948,6 +1948,7 @@ const RELEASE_NOTES = [
       "鍵盤收起後底部導覽列卡住的修正再加一層保險：輸入框失焦時延遲讓鍵盤收合動畫跑完，再強制重新校正一次版面高度，涵蓋少數機型視窗高度變化事件沒有確實觸發的情況",
       "找到底部導覽列卡住的真正原因：iOS Safari 就算網頁架構設計成 window 本身不捲動，鍵盤彈起時底層仍會強制捲動 window 視窗，鍵盤收起後這個捲動值不會自動歸零。輸入框失焦時除了校正版面高度，也一併強制把 window/document 的捲動值歸零，才會真的貼齊畫面最下方",
       "修正點選輸入框跳出鍵盤時，底部導覽列被頂到畫面中間、直接蓋住輸入框看不到自己打了什麼的問題：改成輸入框一取得焦點就直接隱藏導覽列（反正鍵盤蓋著的那塊高度本來就看不到），鍵盤收起、版面確定歸位後才顯示回來，不用再跟鍵盤彈出的動畫時序搶拍",
+      "修正點下輸入框的瞬間畫面就跑版的問題：iOS Safari 在輸入框取得焦點那一刻，會不管網頁架構直接把 window 視窗捲動一段距離，把我們自己固定不動的頂部/底部列一起頂出畫面；改成持續監聽 window 的捲動狀態，一偵測到被捲動就立刻捲回原位，鍵盤彈出的當下就會被壓回去，不用等打完字、鍵盤收起才修正",
     ] },
     { category: "醫院資訊", items: [
       "新增醫院表單的「名稱查詢座標」改用醫院名稱查詢（原本是查地址）：地址是選填欄位、常常沒填或格式不一致，醫院名稱幾乎一定會填，也比較容易對到 OpenStreetMap 資料庫裡實際登記的地點",
@@ -7997,6 +7998,23 @@ window.__saveTaskEdit = (ev, taskId) => {
 // visualViewport 的 resize／scroll 事件，直接把當下量到的可視高度寫回
 // #app 的 inline style（優先權高於 CSS），鍵盤開跟收都會確實同步一次，
 // 不用依賴 WebKit 自己重新排版。
+// 這個 App Shell 架構的前提是 window/document 本身永遠不捲動（見 #app 的
+// 說明，真正捲動的是 <main> 自己）。但 iOS Safari 在輸入框「取得焦點的
+// 那一刻」會不管這個前提，直接在原生層把 window 視窗捲動一段距離，想把
+// 輸入框「捲到鍵盤上方看得到的地方」——結果反而把我們自己固定不動的頭尾
+// （.sticky-head／.bottomnav）一起頂出畫面，使用者會覺得「鍵盤一點下去
+// 畫面就跑版」。之前的做法是等 focusout（鍵盤收起）才校正，這段時間內
+// 畫面其實一直是跑版的；改成持續監聽 window 的 scroll 事件，只要偵測到
+// window 被捲動就立刻捲回 0——鍵盤彈出的當下、iOS 剛開始捲動就會被壓
+// 回去，不用等使用者打完字、鍵盤收起才修正。不限定要有 visualViewport
+// 支援才生效，跟下面的 setupKeyboardViewportFix() 是各自獨立的防線。
+window.addEventListener("scroll", () => {
+  if (window.scrollY === 0 && document.documentElement.scrollTop === 0 && document.body.scrollTop === 0) return;
+  window.scrollTo(0, 0);
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+}, { passive: true });
+
 (function setupKeyboardViewportFix(){
   if (!window.visualViewport) return;
   const app = document.getElementById("app");
