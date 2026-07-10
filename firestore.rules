@@ -177,5 +177,15 @@ service cloud.firestore {
       allow create: if isActive() && request.auth.uid == request.resource.data.userId;
       allow update, delete: if false;
     }
+
+    // 通知中心（收件匣歷史紀錄，模組 A：基礎版）：任何在職帳號都能查看、
+    // 標記已讀，isRead 目前是整份文件共用的欄位（不分帳號各自已讀狀態），
+    // 只開放改這一個欄位。新增/刪除通知目前還沒有前端入口，先擋掉，等
+    // 之後有後端/管理員發送通知的機制再開放。
+    match /notifications/{id} {
+      allow read: if isActive();
+      allow update: if isActive() && onlyChanged(['isRead']);
+      allow create, delete: if false;
+    }
   }
 }
