@@ -1309,7 +1309,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-272-desktop-text-select";
+const BUILD_TAG = "2026-07-10-273-reverse-geocode-address";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1787,6 +1787,7 @@ const RELEASE_NOTES = [
     ] },
     { category: "醫院資訊", items: [
       "新增醫院表單的「名稱查詢座標」改用醫院名稱查詢（原本是查地址）：地址是選填欄位、常常沒填或格式不一致，醫院名稱幾乎一定會填，也比較容易對到 OpenStreetMap 資料庫裡實際登記的地點",
+      "「重新定位／顯示附近醫院」的「目前定位」補上詳細地址（原本只顯示到縣市+行政區）：定位成功後額外反查 GPS 座標對應的地址並顯示；反查失敗時（逾時、限流等）靜默退回原本的縣市+行政區顯示，不影響醫院排序功能",
     ] },
     { category: "急診待命", items: [
       "急診待命卡片欄位順序調整：值班醫官移到車長原本的位置（右上），車長移到駕駛原本的位置（左下），駕駛移到值班醫官原本的位置（右下）",
@@ -2231,6 +2232,7 @@ const state = {
   myLng: null, // 醫院資訊頁：手機 GPS 定位的原始經度
   myCounty: null, // 醫院資訊頁：手機 GPS 定位算出的概略縣市（見 nearestDistrict），沒座標的醫院退回用這個比對；null 代表尚未定位
   myDistrict: null, // 醫院資訊頁：手機 GPS 定位算出的概略行政區（比縣市更準），null 代表定位不到已知行政區或尚未定位
+  myAddress: null, // 醫院資訊頁：GPS 座標反查回來的詳細地址（見 fetchReverseGeocodeAddress），null 代表還在查詢中／查詢失敗，畫面退回顯示縣市+行政區
   locatingHospital: false, // 醫院資訊頁定位中的載入狀態
   roadDistances: {}, // 醫院資訊頁：{ [醫院id]: 道路公里數 }，OSRM 算出來的實際路程距離（見 fetchRoadDistances），
                       // 只對距離最近的前 15 間、50 公里內的醫院計算；抓不到的（demo server 不穩定/逾時/限流）
@@ -5777,7 +5779,7 @@ function viewHospitals(){
       <button class="icon-btn primary" style="width:100%;" onclick="window.__locateNearbyHospitals()" ${state.locatingHospital ? 'disabled' : ''}>
         ${icon('pin',15)} ${state.locatingHospital ? '定位中…' : (state.myCounty ? '重新定位' : '顯示附近醫院')}
       </button>
-      ${state.myCounty ? `<div style="color:var(--muted); font-size:var(--text-xs); margin-top:6px;">目前定位：靠近${state.myDistrict ? esc(state.myCounty)+esc(state.myDistrict) : esc(state.myCounty)}，已登記座標的醫院會顯示實際距離並排最前面，其餘${state.myDistrict ? '同行政區優先，其次同縣市' : '同縣市醫院優先'}</div>` : ''}
+      ${state.myCounty ? `<div style="color:var(--muted); font-size:var(--text-xs); margin-top:6px;">目前定位：${state.myAddress ? esc(state.myAddress) : `靠近${state.myDistrict ? esc(state.myCounty)+esc(state.myDistrict) : esc(state.myCounty)}`}，已登記座標的醫院會顯示實際距離並排最前面，其餘${state.myDistrict ? '同行政區優先，其次同縣市' : '同縣市醫院優先'}</div>` : ''}
     </div>`;
   return `
     <div class="section-label">醫院資訊</div>
@@ -6919,6 +6921,32 @@ async function fetchRoadDistances(lat, lng){
     clearTimeout(timer);
   }
 }
+// GPS 座標反查詳細地址（Nominatim reverse geocoding，跟醫院表單「名稱查
+// 座標」共用同一個免費公開服務，一樣沒有 API 金鑰限制）。只當「目前定位」
+// 文字顯示的加分項，永遠不擋主流程——nearestDistrict 算出來的縣市/行政區
+// 才是排序依據，這裡查不到（逾時、限流、CORS、查無結果）就靜默放棄，
+// 畫面自動退回顯示縣市+行政區，不會卡住或跳錯誤訊息。
+let reverseGeocodeReqId = 0;
+async function fetchReverseGeocodeAddress(lat, lng){
+  const myReqId = ++reverseGeocodeReqId;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&countrycodes=tw`;
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) return;
+    const json = await res.json();
+    if (myReqId !== reverseGeocodeReqId) return; // 查詢期間使用者又按了一次重新定位，這筆已過期
+    if (json && json.display_name) {
+      state.myAddress = json.display_name;
+      render();
+    }
+  } catch (e) {
+    // 靜默失敗，理由見上方註解。
+  } finally {
+    clearTimeout(timer);
+  }
+}
 // GeolocationPositionError.code 對應的中文提示：瀏覽器回傳的 err.message 是
 // 英文原文（例如 "User denied Geolocation"），直接顯示看不懂也不知道怎麼
 // 處理。retryActionLabel 是失敗後建議使用者重新觸發的動作名稱，「顯示附近
@@ -6945,12 +6973,14 @@ window.__locateNearbyHospitals = () => {
       state.myLng = pos.coords.longitude;
       state.myCounty = county;
       state.myDistrict = district;
-      // 位置變了，舊的道路距離是算給上一個位置的，先清掉退回直線距離，
-      // 等新的 fetchRoadDistances 抓到才會再蓋回來。
+      // 位置變了，舊的道路距離／詳細地址是算給上一個位置的，先清掉，
+      // 等新的 fetchRoadDistances／fetchReverseGeocodeAddress 抓到才會再蓋回來。
       state.roadDistances = {};
+      state.myAddress = null;
       state.locatingHospital = false;
       render();
       fetchRoadDistances(state.myLat, state.myLng);
+      fetchReverseGeocodeAddress(state.myLat, state.myLng);
     },
     (err) => { state.locatingHospital = false; render(); showToast(geolocationErrorMessage(err, "顯示附近醫院")); },
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
