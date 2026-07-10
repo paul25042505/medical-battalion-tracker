@@ -1373,7 +1373,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-302-kb-scrollintoview";
+const BUILD_TAG = "2026-07-10-303-kb-settle-debounce";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1951,6 +1951,7 @@ const RELEASE_NOTES = [
       "修正點下輸入框的瞬間畫面就跑版的問題：iOS Safari 在輸入框取得焦點那一刻，會不管網頁架構直接把 window 視窗捲動一段距離，把我們自己固定不動的頂部/底部列一起頂出畫面；改成持續監聽 window 的捲動狀態，一偵測到被捲動就立刻捲回原位，鍵盤彈出的當下就會被壓回去，不用等打完字、鍵盤收起才修正",
       "修正上一版捲動校正會出現「畫面彈上去、又慢慢滑回來」動畫、而且滑回去後內容跟鍵盤之間還留一塊空白的問題：捲動校正改成暫時關閉平滑捲動效果、瞬間歸位，不再有滑動空窗期；另外輸入框取得焦點後延遲重新量一次可視高度，避免抓到鍵盤還沒彈完的中間值，版面高度校正得太保守留白",
       "點選輸入框後，該欄位現在會自動捲到鍵盤上方可視範圍的中間，不用再自己手動往上滑才看得到正在打的字",
+      "修正欄位自動定位常常沒有一次到位、還要自己再滑一下才對準的問題：改成偵測鍵盤動畫真正停止變化後才校正定位（原本是用固定時間猜鍵盤彈完，猜到動畫中間值就定位不準）",
     ] },
     { category: "醫院資訊", items: [
       "新增醫院表單的「名稱查詢座標」改用醫院名稱查詢（原本是查地址）：地址是選填欄位、常常沒填或格式不一致，醫院名稱幾乎一定會填，也比較容易對到 OpenStreetMap 資料庫裡實際登記的地點",
@@ -8032,8 +8033,24 @@ window.addEventListener("scroll", () => {
   const app = document.getElementById("app");
   if (!app) return;
   const syncAppHeight = () => { app.style.height = window.visualViewport.height + "px"; };
-  window.visualViewport.addEventListener("resize", syncAppHeight);
-  window.visualViewport.addEventListener("scroll", syncAppHeight);
+  let activeField = null;
+  let settleTimer = null;
+  // iOS 鍵盤彈起不是一次到位：visualViewport 的 resize/scroll 事件在動畫
+  // 過程中會連續觸發好幾次，用固定延遲猜「鍵盤應該彈完了」常常猜到中間
+  // 值，欄位定位一次沒對準，使用者還要自己再滑一次才會看到。改成每次
+  // visualViewport 變化就重新排一次「等安靜下來再定位」的計時器——
+  // 事件還在連續發生就一直往後延，等真正停止變化超過 100ms 才校正版面
+  // 高度、把目前聚焦的欄位捲到可視範圍，確保是鍵盤動畫真正結束後的最終
+  // 位置，一次到位不用使用者自己再滑。
+  const scheduleSettle = () => {
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => {
+      syncAppHeight();
+      if (activeField) activeField.scrollIntoView({ block: "center", behavior: "auto" });
+    }, 100);
+  };
+  window.visualViewport.addEventListener("resize", () => { syncAppHeight(); scheduleSettle(); });
+  window.visualViewport.addEventListener("scroll", () => { syncAppHeight(); scheduleSettle(); });
   syncAppHeight();
   const isFieldEl = (el) => el && ["INPUT","TEXTAREA","SELECT"].includes(el.tagName);
   // 鍵盤彈起壓縮 visualViewport 的過程中，底部導覽列（flex-shrink:0 貼齊
@@ -8045,19 +8062,13 @@ window.addEventListener("scroll", () => {
   // 版面確定歸位後才顯示回來。
   document.addEventListener("focusin", (e) => {
     if (!isFieldEl(e.target)) return;
-    const target = e.target;
+    activeField = e.target;
     const nav = document.querySelector(".bottomnav");
     if (nav) nav.style.display = "none";
-    // 剛取得焦點的當下 visualViewport.height 量到的常常是鍵盤還沒彈完、
-    // 動畫過程中的中間值，不是鍵盤完全彈出後的最終高度，導致 #app 的高度
-    // 校正得太早、太小，內容跟鍵盤之間留了一塊量不到的空白。鍵盤動畫跑完
-    // （約 300ms）後再重新量一次、校正回最終高度，接著把正在輸入的欄位
-    // 捲到（唯一真正會捲動的）<main> 可視範圍中間，確保欄位一定在鍵盤
-    // 上方看得到，不用使用者自己手動往上滑才找得到自己打的字。
-    setTimeout(() => {
-      syncAppHeight();
-      target.scrollIntoView({ block: "center", behavior: "smooth" });
-    }, 350);
+    // 保底：萬一這次鍵盤彈起沒有觸發任何 visualViewport 事件（例如外接
+    // 鍵盤、或視窗高度本來就沒變化），還是排一次校正，把欄位捲到可視
+    // 範圍內。
+    scheduleSettle();
   }, true);
   // 保險機制：輸入框失焦（鍵盤開始收起）時，延遲一小段時間讓鍵盤收合
   // 動畫跑完，先讓導覽列恢復顯示，再強制校正版面。這裡不能只靠
@@ -8067,6 +8078,8 @@ window.addEventListener("scroll", () => {
   // 強制歸零，不能只調整 #app 的高度。
   document.addEventListener("focusout", (e) => {
     if (!isFieldEl(e.target)) return;
+    if (activeField === e.target) activeField = null;
+    clearTimeout(settleTimer);
     setTimeout(() => {
       const nav = document.querySelector(".bottomnav");
       if (nav) nav.style.display = "";
