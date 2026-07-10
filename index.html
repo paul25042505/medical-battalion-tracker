@@ -1373,7 +1373,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-305-kb-nohide-nav";
+const BUILD_TAG = "2026-07-10-306-kb-raf-position-guard";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1954,6 +1954,7 @@ const RELEASE_NOTES = [
       "修正欄位自動定位常常沒有一次到位、還要自己再滑一下才對準的問題：改成偵測鍵盤動畫真正停止變化後才校正定位（原本是用固定時間猜鍵盤彈完，猜到動畫中間值就定位不準）",
       "修正鍵盤打開時手動往上/往下滑動表單，畫面會自己彈回原本聚焦欄位位置、完全滑不走的問題：欄位自動定位改成同一次聚焦只執行一次，之後使用者自己的手動捲動不會再被強制蓋掉",
       "取消輸入文字時自動隱藏底部導覽列的功能，改成鍵盤彈起時導覽列維持原樣不再消失",
+      "修正欄位有時候會被鍵盤蓋住看不到、有時候又正常的不一致問題：改成聚焦後持續盯著欄位位置一小段時間（涵蓋鍵盤動畫、自動填寫快捷列出現的時間），不管可視範圍變化幾次、什麼時候變化，都會確實把欄位拉回鍵盤上方看得到的地方，不用再猜固定的延遲時間",
     ] },
     { category: "醫院資訊", items: [
       "新增醫院表單的「名稱查詢座標」改用醫院名稱查詢（原本是查地址）：地址是選填欄位、常常沒填或格式不一致，醫院名稱幾乎一定會填，也比較容易對到 OpenStreetMap 資料庫裡實際登記的地點",
@@ -8035,44 +8036,42 @@ window.addEventListener("scroll", () => {
   const app = document.getElementById("app");
   if (!app) return;
   const syncAppHeight = () => { app.style.height = window.visualViewport.height + "px"; };
-  let activeField = null;
-  // 記錄「這次聚焦已經自動定位過的欄位」——鍵盤打開後使用者自己往下/往上
-  // 滑動 <main> 瀏覽表單其他欄位時，iOS 也會觸發 visualViewport 的
-  // resize/scroll 事件（不是只有鍵盤動畫才會觸發），如果每次事件安靜下來
-  // 都重新對 activeField 呼叫一次 scrollIntoView，會變成「使用者才剛手動
-  // 滑開，畫面就自己彈回原本聚焦欄位的位置」，等於完全不能手動捲動。
-  // 所以自動定位只在同一次聚焦裡執行一次，之後同一個欄位的 settle 都只
-  // 校正 #app 高度、不再搶著幫使用者捲動位置。
-  let positionedField = null;
-  let settleTimer = null;
-  // iOS 鍵盤彈起不是一次到位：visualViewport 的 resize/scroll 事件在動畫
-  // 過程中會連續觸發好幾次，用固定延遲猜「鍵盤應該彈完了」常常猜到中間
-  // 值，欄位定位一次沒對準，使用者還要自己再滑一次才會看到。改成每次
-  // visualViewport 變化就重新排一次「等安靜下來再定位」的計時器——
-  // 事件還在連續發生就一直往後延，等真正停止變化超過 100ms 才校正版面
-  // 高度、把目前聚焦的欄位捲到可視範圍，確保是鍵盤動畫真正結束後的最終
-  // 位置，一次到位不用使用者自己再滑。
-  const scheduleSettle = () => {
-    clearTimeout(settleTimer);
-    settleTimer = setTimeout(() => {
-      syncAppHeight();
-      if (activeField && activeField !== positionedField) {
-        activeField.scrollIntoView({ block: "center", behavior: "auto" });
-        positionedField = activeField;
-      }
-    }, 100);
-  };
-  window.visualViewport.addEventListener("resize", () => { syncAppHeight(); scheduleSettle(); });
-  window.visualViewport.addEventListener("scroll", () => { syncAppHeight(); scheduleSettle(); });
+  window.visualViewport.addEventListener("resize", syncAppHeight);
+  window.visualViewport.addEventListener("scroll", syncAppHeight);
   syncAppHeight();
   const isFieldEl = (el) => el && ["INPUT","TEXTAREA","SELECT"].includes(el.tagName);
+  let activeField = null;
+  let rafId = null;
+  // 鍵盤彈出的動畫時間、上方「自動填寫聯絡人／預測文字」快捷列出現的
+  // 時機，會依欄位類型（數字鍵盤／注音鍵盤／有無快捷列）跟裝置快慢不同，
+  // 光靠監聽 visualViewport 的 resize/scroll 事件、用固定延遲猜「這次應該
+  // 彈完了」永遠會在某些情況下猜錯：有時候量到的高度已經是最終值、有時
+  // 候還沒，導致「這次欄位剛好在鍵盤上面、下次卻被鍵盤蓋住」時好時壞。
+  // 改成聚焦後用 requestAnimationFrame 連續盯著這個欄位一小段時間（約
+  // 1 秒，足夠涵蓋鍵盤動畫＋快捷列出現的時間）：每一影格都重新校正 #app
+  // 高度、檢查欄位目前的畫面位置是否還在可視範圍內，只要跑出範圍（不論
+  // 是鍵盤還在動畫、還是快捷列讓可視範圍又變小了）就立刻捲回可視範圍，
+  // 不用再猜某個特定時間點鍵盤到底彈完了沒。這段時間過後就停止，之後
+  // 使用者自己手動捲動瀏覽表單不會再被強制拉回。
+  const POSITION_GUARD_MS = 1000;
+  const positionLoop = (deadline) => {
+    if (!activeField) return;
+    syncAppHeight();
+    const rect = activeField.getBoundingClientRect();
+    const visibleHeight = window.visualViewport.height;
+    const margin = 12;
+    if (rect.top < margin || rect.bottom > visibleHeight - margin) {
+      activeField.scrollIntoView({ block: "center", behavior: "auto" });
+    }
+    if (performance.now() < deadline) {
+      rafId = requestAnimationFrame(() => positionLoop(deadline));
+    }
+  };
   document.addEventListener("focusin", (e) => {
     if (!isFieldEl(e.target)) return;
     activeField = e.target;
-    // 保底：萬一這次鍵盤彈起沒有觸發任何 visualViewport 事件（例如外接
-    // 鍵盤、或視窗高度本來就沒變化），還是排一次校正，把欄位捲到可視
-    // 範圍內。
-    scheduleSettle();
+    cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(() => positionLoop(performance.now() + POSITION_GUARD_MS));
   }, true);
   // 保險機制：輸入框失焦（鍵盤開始收起）時，延遲一小段時間讓鍵盤收合
   // 動畫跑完，強制校正版面。這裡不能只靠 syncAppHeight()——iOS Safari
@@ -8082,8 +8081,7 @@ window.addEventListener("scroll", () => {
   document.addEventListener("focusout", (e) => {
     if (!isFieldEl(e.target)) return;
     if (activeField === e.target) activeField = null;
-    if (positionedField === e.target) positionedField = null;
-    clearTimeout(settleTimer);
+    cancelAnimationFrame(rafId);
     setTimeout(() => {
       resetRogueWindowScroll();
       syncAppHeight();
