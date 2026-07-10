@@ -13,14 +13,21 @@ service cloud.firestore {
     function isDutyOfficer() { return isSignedIn() && myRole() == 'duty_officer'; }
     function isStaff() { return isAdmin() || isDutyOfficer(); } // 可查看/管理所有單位
     function isCommander() { return isSignedIn() && myRole() == 'commander'; }
-    function isActive() { return isSignedIn() && myRole() != 'pending' && myRole() != 'disabled'; }
+    function isActive() { return isSignedIn() && myRole() != 'pending' && myRole() != 'disabled' && myRole() != 'unclaimed'; }
     function sameUnit(unit) { return isSignedIn() && myUnit() == unit; }
+    // 只改了 allowedKeys 涵蓋的欄位（例如姓名/階級/電話這類「名冊類」欄位），
+    // 不管改了幾個、改成什麼值，只要沒去動 allowedKeys 以外的欄位（尤其是
+    // role/unit/email 這幾個帳號權限欄位）就算通過——update 規則用這個把關
+    // 「一般成員/主官管能不能自己把 role 或 unit 偷改掉」。
+    function onlyChanged(allowedKeys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedKeys);
+    }
     // 車長／駕駛／洽公人員都是直接記錄「姓名」字串，跟登入者個人資料的
-    // displayName 同步而來（見 personnel 名冊自動同步），比對 displayName
-    // 就能知道目前登入者是不是這筆勤務指定的人員——回報（events/vitals）
-    // 只開放給這筆勤務本人，不能由同單位其他成員代填。額外放行建立者
-    // （createdBy）：建立勤務當下會自動補一筆出勤事件，建立者不一定就是
-    // 車長/駕駛本人（可能是幫忙代建立），這筆系統自動寫入不能被擋下來。
+    // displayName 比對——比對 displayName 就能知道目前登入者是不是這筆
+    // 勤務指定的人員——回報（events/vitals）只開放給這筆勤務指定的人員
+    // 本人，不能由同單位其他成員代填。額外放行建立者（createdBy）：建立
+    // 勤務當下會自動補一筆出勤事件，建立者不一定就是車長/駕駛本人（可能
+    // 是幫忙代建立），這筆系統自動寫入不能被擋下來。
     function isAssignedToTaskData(taskData) {
       return request.auth.uid == taskData.createdBy || (
         taskData.type == 'liaison'
@@ -29,22 +36,45 @@ service cloud.firestore {
       );
     }
 
+    // 帳號與人員名冊合併成同一份集合（原本 users／personnel 兩份分開維護，
+    // 一份存帳號權限、一份存花名冊，同一個人要對照兩邊資料容易搞混，也曾經
+    // 需要一支背景同步機制讓兩邊不要對不起來）。現在每個人只有一筆文件，
+    // role 多一個 'unclaimed' 狀態代表「管理員先預建好資料，這個人還沒
+    // 登入過」，登入時用信箱比對、由後端 Cloud Function（onUserCreated）
+    // 自動把這筆資料轉成用真實帳號 uid 命名的正式文件（詳見
+    // functions/index.js）。
+    //
+    // 讀取：admin／高勤官不分單位；一般成員/主官管只能看自己單位的（供
+    // 建立勤務下拉選單使用）——跟原本 personnel 集合的讀取範圍一致，只是
+    // 現在同一份文件裡也看得到 role/email，這是合併資料模型必然的取捨。
+    //
+    // 寫入分三種身分：
+    // 1) admin：什麼欄位都能改（角色/單位指派、花名冊資料都算）。
+    // 2) 本人：只能改「名冊類」欄位（displayName/rank/phone/emtLevel）跟
+    //    fcmTokens（開關推播通知要用），不能碰 role/unit/email，避免自己
+    //    偷改權限或跨單位。
+    // 3) 高勤官（不分單位）／主官管（限自己單位、且改前改後單位不變）：
+    //    可以改其他人的「名冊類」欄位（例如幫同單位的人補電話），但一樣
+    //    不能碰 role/unit/email——這幾個欄位的異動只有 admin 能做。
     match /users/{uid} {
-      allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
-      allow list: if isAdmin();
-      allow create: if isSignedIn() && request.auth.uid == uid
-                    && request.resource.data.role == 'pending';
-      // 使用者可編輯自己的姓名/階級等資料，但不能自己改 role；已核准後也不能
-      // 自己改 unit（只能由管理員 isAdmin 異動）。帳號還在待審核（pending）
-      // 階段例外：可以自己選/改單位，方便註冊時先選好單位給管理員審核，
-      // 反正待審核狀態本來就沒有任何實際資料存取權限，不构成安全疑慮。
+      allow read: if isStaff() || sameUnit(resource.data.unit);
+      // 建立分兩種情境：(a) 使用者自己第一次登入，前端自動建立一筆
+      // role:'pending'、unit 空白的待審核帳號；(b) 管理員/高勤官/主官管
+      // 幫還沒登入過的人預先建立資料，role 一定要是 'unclaimed'，不能藉
+      // 這個路徑直接生出一個 admin/其他高權限帳號。
+      allow create: if (isSignedIn() && request.auth.uid == uid
+                        && request.resource.data.role == 'pending' && request.resource.data.unit == '')
+                    || (request.resource.data.role == 'unclaimed'
+                        && (isStaff() || (isCommander() && sameUnit(request.resource.data.unit))));
       allow update: if isAdmin()
                     || (isSignedIn() && request.auth.uid == uid
-                        && request.resource.data.role == resource.data.role
-                        && request.resource.data.unit == resource.data.unit)
-                    || (isSignedIn() && request.auth.uid == uid
-                        && resource.data.role == 'pending' && request.resource.data.role == 'pending');
-      allow delete: if false;
+                        && onlyChanged(['displayName','rank','phone','emtLevel','fcmTokens']))
+                    || ((isDutyOfficer() || (isCommander() && sameUnit(resource.data.unit) && sameUnit(request.resource.data.unit)))
+                        && onlyChanged(['displayName','rank','phone','emtLevel']));
+      // 只能刪除還沒被登入認領過的預建資料（role 'unclaimed'）；已經是
+      // 真實帳號的文件一律不能刪除，跟原本 users 集合的規則一致。
+      allow delete: if resource.data.role == 'unclaimed'
+                    && (isStaff() || (isCommander() && sameUnit(resource.data.unit)));
     }
 
     // 單位編制固定（營部／第一連／第二連），僅供其他集合建立關聯，不提供編輯 UI。
@@ -53,20 +83,10 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // 基礎資料：人員／車輛／行車紀錄器，依單位分類。
+    // 基礎資料：車輛／行車紀錄器，依單位分類（人員已併入 users 集合，
+    // 見上方 match /users/{uid} 的說明）。
     // Admin、高勤官可管理所有單位；主官管僅能管理自己單位的資料；
     // 一般成員與主官管都只能讀取自己單位的資料（供建立勤務下拉選單使用）。
-    // 帳號綁定單位後，個人資料（姓名/階級/電話）會自動鏡射進同一份人員名冊
-    // （文件 id = 使用者 uid），所以自己也需要能更新這份對應到自己的資料；
-    // 但跟 users 集合一樣不能自己改 unit，避免藉此跨單位。
-    match /personnel/{id} {
-      allow read: if isStaff() || sameUnit(resource.data.unit);
-      allow create: if isStaff() || (isCommander() && sameUnit(request.resource.data.unit));
-      allow update: if isStaff()
-                    || (isCommander() && sameUnit(resource.data.unit) && sameUnit(request.resource.data.unit))
-                    || (isSignedIn() && request.auth.uid == id && request.resource.data.unit == resource.data.unit);
-      allow delete: if isStaff() || (isCommander() && sameUnit(resource.data.unit));
-    }
     match /vehicles/{id} {
       allow read: if isStaff() || sameUnit(resource.data.unit);
       allow create: if isStaff() || (isCommander() && sameUnit(request.resource.data.unit));

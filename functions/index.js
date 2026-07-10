@@ -215,19 +215,21 @@ exports.onVitalsCreated = onDocumentCreated("vitals/{vitalsId}", async (event) =
 });
 
 /* =========================================================
-   4) 預先建立人員帳號：管理員可以在「基礎資料管理 → 人員」先幫還沒登入過
-   的成員建好資料（含 email），對方第一次用該 email 登入時，前端會在
+   4) 預先建立人員帳號：管理員可以先幫還沒登入過的成員預建一筆資料
+   （role:"unclaimed"，含 email），對方第一次用該 email 登入時，前端會在
    users/{uid} 建立一筆 role:"pending" 的新帳號（見 index.html 的
-   onAuthStateChanged）。這裡監聽 users 新增，比對 email 找有沒有相符的
-   預建人員資料，有的話直接把單位/階級/電話/EMT證照寫回這個新帳號、
-   角色設成一般成員，不用等管理員手動審核；同時把預建的那筆人員資料
-   換成用 uid 命名的正式版本（跟 syncPersonnelFromUsers 產生的格式一致），
-   避免同一個人的名字在人員名冊/選車長駕駛下拉選單裡出現兩筆。
+   onAuthStateChanged）。這裡監聽 users 新增，只處理「使用者自己登入建立
+   的 pending 帳號」這種情況（role:"unclaimed" 的預建文件本身被建立時
+   也會觸發這個 trigger，用 role !== "pending" 直接跳過，避免處理到自己）：
+   比對 email 找有沒有相符的 role:"unclaimed" 預建資料，有的話直接把
+   單位/階級/電話/EMT證照寫回這個新帳號、角色設成一般成員，不用等管理員
+   手動審核；同時刪掉那筆預建文件（人員名冊與帳號已經合併成同一份
+   users 集合，不用再另外維護一份 mirror）。
 
    一定要用 client 端無法做到的方式（Cloud Function 的後台權限）才能查
-   personnel 集合：一個全新、還沒被指派單位的帳號，依 firestore.rules
-   （sameUnit() 需要先有單位才能讀 personnel），沒有權限自己查有沒有預建
-   資料，只能靠後端用 Admin SDK（不受安全規則限制）代為比對。
+   其他 unclaimed 文件：一個全新、還沒被指派單位的帳號，依 firestore.rules
+   （sameUnit() 需要先有單位才能讀取其他人的 users 文件），沒有權限自己
+   查有沒有預建資料，只能靠後端用 Admin SDK（不受安全規則限制）代為比對。
 
    信箱比對前先轉小寫、去頭尾空白，避免大小寫或多打空格造成配對不到；
    有重複信箱的預建資料只會取第一筆，不特別擋（表單目前也沒做唯一性
@@ -239,24 +241,89 @@ exports.onUserCreated = onDocumentCreated("users/{uid}", async (event) => {
   if (!snap) return;
   const uid = event.params.uid;
   const u = snap.data();
-  const email = u && u.email ? String(u.email).trim().toLowerCase() : "";
+  if (!u || u.role !== "pending") return;
+  const email = u.email ? String(u.email).trim().toLowerCase() : "";
   if (!email) return;
-  const match = await db.collection("personnel").where("email", "==", email).limit(1).get();
+  const match = await db.collection("users").where("role", "==", "unclaimed").where("email", "==", email).limit(1).get();
   if (match.empty) return;
   const doc = match.docs[0];
   const person = doc.data();
-  const mirrored = {
-    unit: person.unit, name: u.displayName || person.name || "", title: person.title || "",
-    phone: person.phone || "", emtLevel: person.emtLevel || "", active: true, role: "member", email,
-  };
   const batch = db.batch();
   batch.set(db.collection("users").doc(uid), {
-    role: "member", unit: person.unit, rank: person.title || "", phone: person.phone || "", emtLevel: person.emtLevel || "",
+    role: "member",
+    unit: person.unit || "",
+    rank: person.rank || "",
+    phone: person.phone || "",
+    emtLevel: person.emtLevel || "",
+    displayName: u.displayName || person.displayName || "",
   }, { merge: true });
-  batch.set(db.collection("personnel").doc(uid), mirrored);
   batch.delete(doc.ref);
   await batch.commit();
   logger.info(`帳號 ${uid}（${email}）比對到預建人員資料，已自動指派單位 ${person.unit}`);
+});
+
+/* =========================================================
+   5)【一次性遷移，跑完後要整支移除】把合併前的 personnel 集合資料轉進
+   users 集合。只能由 admin 呼叫：帶 Authorization: Bearer <Firebase ID
+   token>（登入後在瀏覽器 devtools 執行
+   `await firebase.auth().currentUser.getIdToken()` 取得），函式會驗證
+   token 並確認呼叫者在 users 集合裡的 role 是 "admin" 才會執行——不需要
+   額外另外設定密鑰，直接沿用既有的帳號權限模型。
+
+   對每一筆 personnel 文件：
+   - 文件 id 已經有對應的 users/{uid} 帳號（早期 syncPersonnelFromUsers
+     產生、id 就是真實 uid）→ 把名冊欄位併回那筆帳號文件，不動 role/email。
+   - 沒有對應帳號（純花名冊資料）→ 用同一個文件 id 在 users 建一筆
+     role:"unclaimed" 的新文件，等本人之後登入被上面的 onUserCreated 認領。
+   處理完就把原本的 personnel 文件刪掉。
+   ========================================================= */
+const { onRequest } = require("firebase-functions/v2/https");
+const { getAuth } = require("firebase-admin/auth");
+exports.migratePersonnelToUsers = onRequest(async (req, res) => {
+  try {
+    const authHeader = req.get("Authorization") || "";
+    const m = /^Bearer (.+)$/.exec(authHeader);
+    if (!m) { res.status(401).send("missing bearer token"); return; }
+    const decoded = await getAuth().verifyIdToken(m[1]);
+    const callerDoc = await db.collection("users").doc(decoded.uid).get();
+    if (!callerDoc.exists || callerDoc.data().role !== "admin") {
+      res.status(403).send("admin only");
+      return;
+    }
+    const personnelSnap = await db.collection("personnel").get();
+    let merged = 0, createdUnclaimed = 0;
+    for (const doc of personnelSnap.docs) {
+      const p = doc.data();
+      const existing = await db.collection("users").doc(doc.id).get();
+      if (existing.exists) {
+        await db.collection("users").doc(doc.id).set({
+          displayName: p.name || existing.data().displayName || "",
+          rank: p.title || "",
+          phone: p.phone || "",
+          emtLevel: p.emtLevel || "",
+        }, { merge: true });
+        merged++;
+      } else {
+        await db.collection("users").doc(doc.id).set({
+          displayName: p.name || "",
+          rank: p.title || "",
+          phone: p.phone || "",
+          emtLevel: p.emtLevel || "",
+          unit: p.unit || "",
+          email: p.email ? String(p.email).trim().toLowerCase() : "",
+          role: "unclaimed",
+          fcmTokens: [],
+          createdAt: new Date(),
+        });
+        createdUnclaimed++;
+      }
+      await doc.ref.delete();
+    }
+    res.status(200).json({ ok: true, merged, createdUnclaimed, total: personnelSnap.size });
+  } catch (e) {
+    logger.error("人員資料遷移失敗", e);
+    res.status(500).send(String(e && e.message || e));
+  }
 });
 
 // 純函式/資料存取邏輯額外匯出一份，方便寫單元測試直接呼叫驗證（不會

@@ -1279,7 +1279,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-260-personnel-prebind-email";
+const BUILD_TAG = "2026-07-10-261-merge-personnel-users";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1287,7 +1287,7 @@ const BUILD_TAG = "2026-07-10-260-personnel-prebind-email";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "1.16";
+const APP_MAJOR_MINOR = "2.0";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -1555,7 +1555,7 @@ const STATUS_ORDER = ["pending","dispatch","onscene","transit","returning","comp
 
 const ROLE_LABEL = {
   admin: "管理員", duty_officer: "高勤官", commander: "主官管",
-  member: "一般成員", pending: "待審核", disabled: "已停用"
+  member: "一般成員", pending: "待審核", disabled: "已停用", unclaimed: "尚未登入"
 };
 
 /* =========================================================
@@ -1605,9 +1605,8 @@ function emtBadgeHtml(level){
 
 // 車長／駕駛不能派給督導性質的角色（高勤官、全單位視角；主官管、連級主官），
 // 車長還要再排除資淺士兵（上等兵／一等兵／二等兵），避免資淺兵員單獨擔任
-// 車長。角色資訊來自 personnel 文件的 role 欄位（帳號綁定單位時鏡射寫入，
-// 見 syncPersonnelFromUsers）；手動新增、非帳號綁定的人員沒有 role 欄位，
-// 視為一般人員、不受角色限制。
+// 車長。角色資訊來自 users 文件的 role 欄位（見 personnelPoll 的欄位對照）；
+// 尚未登入（unclaimed）、手動預建的人員資料不受角色限制，視為一般人員。
 const CREW_EXCLUDED_ROLES = ["duty_officer", "commander"];
 const CREW_LEADER_EXCLUDED_RANKS = ["上等兵", "一等兵", "二等兵"];
 function eligibleForDriver(x){ return !CREW_EXCLUDED_ROLES.includes(x.role); }
@@ -1739,6 +1738,8 @@ const RELEASE_NOTES = [
     ] },
     { category: "帳號管理", items: [
       "「基礎資料管理 → 人員」新增人員表單補上「信箱（選填）」欄位：填了信箱的人員資料可以先建好單位/階級/電話/EMT證照，等這個人第一次用同一個信箱登入時，系統會自動比對、直接指派好這些資料並核准為一般成員，不用再手動審核；還沒登入的預建資料會在人員名冊列表標示「尚未登入」",
+      "後台管理大整理：原本分開的「基礎資料 → 人員」（花名冊）跟「成員管理」（帳號角色/單位）合併成一份資料、一個畫面「人員與帳號」，同一個人不用再對照兩邊資料；管理後台選單重新分區為「勤務」「人員與帳號」「基礎資料」「系統」四大類，層級更清楚",
+      "尚未指派單位的帳號（剛登入還沒選單位、或忘記指派的舊資料）現在會獨立列在「人員與帳號」頁最上方的「待指派單位」，不會因為切換單位頁籤而被漏掉",
     ] },
   ] },
   { date: "2026/07/09", groups: [
@@ -2456,56 +2457,12 @@ async function forceEndTask(taskId){
 async function setUserRole(uid, role, unit){
   await fsSetDoc(`users/${uid}`, { role, unit });
   showToast("角色已更新");
-}
-// 帳號已綁定單位，理應自動出現在該單位的人員名冊（基礎資料管理／建立勤務下拉選單），
-// 不必再由管理員手動重複輸入一次姓名。以 uid 作為 personnel 文件 id 做鏡射同步。
-async function syncPersonnelFromUsers(users){
-  let firstError = null;
-  for (const u of users) {
-    const r = normalizeRole(u.role);
-    if (!u.unit) { // 未指派單位：若先前有鏡射資料需一併移除，避免殘留
-      if (state.personnel.find(x => x.id === u.id)) { try { await fsDeleteDoc(`personnel/${u.id}`); } catch(e){ firstError = firstError || e; } }
-      continue;
-    }
-    const active = r !== "pending" && r !== "disabled";
-    const name = u.displayName || u.email || u.id;
-    const title = u.rank || ROLE_LABEL[r] || "";
-    const phone = u.phone || "";
-    const emtLevel = u.emtLevel || "";
-    const existing = state.personnel.find(x => x.id === u.id);
-    if (existing && existing.unit === u.unit && existing.active === active && existing.name === name && existing.title === title && (existing.phone||"") === phone && (existing.emtLevel||"") === emtLevel && existing.role === r) continue;
-    try { await fsSetDoc(`personnel/${u.id}`, { unit: u.unit, name, title, phone, emtLevel, active, role: r }); } catch(e){ console.error("同步人員資料失敗", e); firstError = firstError || e; }
-  }
   if (personnelPoll) personnelPoll.refreshNow();
-  // 同步失敗最常見的原因是 Firestore 規則還沒發布到最新版本（personnel 集合不在
-  // 舊規則裡，會被預設拒絕），這裡明確提示出來，避免又變成「看起來沒反應」的靜默失敗。
-  if (firstError) showToast(`人員資料同步失敗：[${firstError.code||'?'}] ${firstError.message||firstError}（可能是 Firestore 規則尚未更新）`);
-}
-// 先前只有實際點進「帳號權限」頁籤才會觸發同步；改成只要 admin 打開管理後台
-// （不論停留在哪個頁籤）就會在背景嘗試同步一次，避免使用者誤以為指派單位後
-// 沒去點帳號權限頁籤，人員名冊就不會更新。
-let adminPersonnelSyncTried = false;
-function ensureAdminPersonnelSync(p){
-  if (!canManageUsers(p) || adminPersonnelSyncTried) return;
-  adminPersonnelSyncTried = true;
-  fsListCollection("users").then(list => { syncPersonnelFromUsers(list); }).catch(e => console.error("同步人員資料失敗", e));
 }
 async function updateOwnProfile(displayName, rank, phone, emtLevel){
   await fsSetDoc(`users/${state.user.uid}`, { displayName, rank, phone, emtLevel: emtLevel||"" });
   state.profile = { ...state.profile, displayName, rank, phone, emtLevel: emtLevel||"" };
-  // 若自己已有對應的人員名冊資料（帳號綁定單位後會自動建立），一併同步姓名/階級/電話/
-  // EMT 證照等級，車長/駕駛卡片才會立即反映，不必等管理員重新打開帳號權限頁籤才觸發同步。
-  const existing = state.personnel.find(x => x.id === state.user.uid);
-  if (existing) {
-    try {
-      await fsSetDoc(`personnel/${state.user.uid}`, { name: displayName, title: rank, phone, emtLevel: emtLevel||"" });
-      if (personnelPoll) personnelPoll.refreshNow();
-    } catch (e) {
-      console.error("同步人員名冊失敗", e);
-      showToast(`個人資料已更新，但同步人員名冊失敗：[${e.code||'?'}] ${e.message||e}`);
-      return;
-    }
-  }
+  if (personnelPoll) personnelPoll.refreshNow();
   showToast("個人資料已更新");
 }
 // 待審核（pending）階段專用：這個階段可以自己選/改單位（firestore.rules
@@ -2520,12 +2477,17 @@ async function updatePendingProfile(unit, displayName, rank, phone, emtLevel){
 }
 
 /* ---- 基礎資料管理：人員／車輛／行車紀錄器（依單位分類，供各下拉選單動態讀取） ---- */
-// email（選填）是給「預先建立帳號」用的：填了信箱的人員資料，等那個人第一次
-// 用同一個信箱登入時，後端 Cloud Function（onUserCreated，見 functions/index.js）
-// 會自動比對、把這裡填好的單位/階級/電話/EMT 證照指派給他的新帳號，不用再等
-// 管理員手動審核；比對前先轉小寫、去頭尾空白，避免大小寫或多打空格對不起來。
+// 預先建立人員：寫進跟帳號共用的 users 集合，role 固定是 "unclaimed"（尚未
+// 登入認領）。email（選填）是給「預先建立帳號」用的：填了信箱的人員資料，
+// 等那個人第一次用同一個信箱登入時，後端 Cloud Function（onUserCreated，
+// 見 functions/index.js）會自動比對、把這裡填好的單位/階級/電話/EMT 證照
+// 指派給他的新帳號、角色改成一般成員，不用再等管理員手動審核；比對前先
+// 轉小寫、去頭尾空白，避免大小寫或多打空格對不起來。
 async function addPersonnel(unit, name, title, phone, emtLevel, email){
-  await fsAddDoc("personnel", { unit, name, title, phone: phone||"", emtLevel: emtLevel||"", email: email ? email.trim().toLowerCase() : "", active: true });
+  await fsAddDoc("users", {
+    unit, displayName: name, rank: title||"", phone: phone||"", emtLevel: emtLevel||"",
+    email: email ? email.trim().toLowerCase() : "", role: "unclaimed", fcmTokens: [], createdAt: new Date()
+  });
   showToast("已新增人員"); if (personnelPoll) personnelPoll.refreshNow();
 }
 async function addVehicle(unit, plate, type){
@@ -2557,8 +2519,7 @@ async function addDoctor(name, title, phone){
 }
 // 意見回饋：任何在職帳號都能送出，一律具名（顯示送出者姓名），只有
 // admin 能在管理後台「意見回饋」頁籤檢視，不提供列表輪詢（很少人會
-// 用到，開啟該頁籤時現抓一次就好，比照帳號權限頁籤 state._usersCache
-// 的做法）。
+// 用到，開啟該頁籤時現抓一次就好，見下方 state._feedbackCache）。
 async function submitFeedback(category, message){
   const p = state.profile;
   await fsAddDoc("feedback", {
@@ -2573,17 +2534,20 @@ function refreshBaseDataPoll(coll){
   if (coll === "hospitals" && hospitalsPoll) hospitalsPoll.refreshNow();
   if (coll === "doctors" && doctorsPoll) doctorsPoll.refreshNow();
 }
+// coll 是畫面上用的內部識別字串（沿用「personnel」這個名字，跟建立勤務下拉
+// 選單、基礎資料彈窗共用同一套邏輯），實際 Firestore 集合已經併入 users。
+function fsCollFor(coll){ return coll === "personnel" ? "users" : coll; }
 async function toggleBaseDataActive(coll, id, active){
-  await fsSetDoc(`${coll}/${id}`, { active: !active });
+  await fsSetDoc(`${fsCollFor(coll)}/${id}`, { active: !active });
   refreshBaseDataPoll(coll);
 }
 async function deleteBaseData(coll, id){
-  await fsDeleteDoc(`${coll}/${id}`);
+  await fsDeleteDoc(`${fsCollFor(coll)}/${id}`);
   showToast("已刪除");
   refreshBaseDataPoll(coll);
 }
 async function updateBaseData(coll, id, fields){
-  await fsSetDoc(`${coll}/${id}`, fields);
+  await fsSetDoc(`${fsCollFor(coll)}/${id}`, fields);
   showToast("已更新");
   refreshBaseDataPoll(coll);
 }
@@ -2820,6 +2784,23 @@ function mergeById(recentDocs, extraDocs){
   const ids = new Set(recentDocs.map(d => d.id));
   return recentDocs.concat(extraDocs.filter(d => !ids.has(d.id)));
 }
+// 人員名冊／帳號合併成同一份 users 集合後，車長/駕駛下拉選單、任務指派
+// 等既有程式碼仍然沿用舊的 personnel 資料形狀（name/title/active...），
+// 這裡把 users 文件轉成這個舊形狀，其餘呼叫端完全不用改。
+// active 比照合併前 syncPersonnelFromUsers 的邏輯：pending（審核中）跟
+// disabled（已停用）不算在職，其餘（含 unclaimed 尚未登入）都算在職，
+// 可以被選為車長/駕駛。
+function mapUserToPersonnel(u){
+  const role = normalizeRole(u.role);
+  return {
+    id: u.id, unit: u.unit || "",
+    name: u.displayName || u.email || u.id,
+    title: u.rank || ROLE_LABEL[role] || "",
+    phone: u.phone || "", emtLevel: u.emtLevel || "",
+    active: role !== "disabled" && role !== "pending",
+    email: u.email || "", role
+  };
+}
 function startDataListeners(){
   if (tasksPoll || eventsPoll) return;
   tasksPoll = poll(async () => {
@@ -2840,7 +2821,7 @@ function startDataListeners(){
     if (changed) safeRender();
   });
   personnelPoll = poll(async () => {
-    const docs = await fsListCollection("personnel");
+    const docs = (await fsListCollection("users")).map(mapUserToPersonnel);
     const changed = changedSince("personnel", docs);
     state.personnel = docs;
     if (changed) safeRender();
@@ -3472,11 +3453,11 @@ const ROUTE_REFRESH = {
   adminTasks: ['tasks','events'],
   // adminBaseData 本身只是分區列表入口，不用重抓；各類別各自的路由只
   // 重抓自己真的會用到的集合。
-  baseDataPersonnel: ['personnel'],
   baseDataVehicles: ['vehicles'],
   baseDataRecorders: ['recorders'],
   baseDataHospitals: ['hospitals'],
   baseDataDoctors: ['doctors'],
+  adminUsers: ['personnel'],
 };
 // App Shell 改成 <main> 自己捲動（見 #app 的 CSS 註解）以後，window 本身
 // 不會再捲動，換頁／換頁籤要回頂端得改成重設 main 的 scrollTop。
@@ -3486,10 +3467,8 @@ function scrollContentToTop(){
 }
 function nav(route){
   state.route = route; state.reportDraft = null;
-  // 成員管理／意見回饋是進頁籤時現抓一次的簡易快取（見 viewAdminUsers／
-  // viewAdminFeedback），不是輪詢；每次導覽過去都清掉快取強制重抓一次，
-  // 才看得到最新的角色/單位異動或剛送出的意見回饋。
-  if (route.name === "adminUsers") state._usersCache = null;
+  // 意見回饋是進頁籤時現抓一次的簡易快取（見 viewAdminFeedback），不是
+  // 輪詢；每次導覽過去都清掉快取強制重抓一次，才看得到剛送出的意見回饋。
   if (route.name === "adminFeedback") state._feedbackCache = null;
   render(); scrollContentToTop();
   const polls = { tasks: tasksPoll, events: eventsPoll, personnel: personnelPoll, vehicles: vehiclesPoll, recorders: recordersPoll, hospitals: hospitalsPoll, vitals: vitalsPoll, erStandby: erStandbyPoll, doctors: doctorsPoll };
@@ -5714,19 +5693,18 @@ function viewRolePreview(){
 function viewAdmin(){
   const p = state.profile;
   if (!canManageTasks(p)) return `<div class="empty">您沒有管理權限</div>`;
-  ensureAdminPersonnelSync(p);
 
   const taskRows = [
     settingsRow({icon:'tasks', bg:'#E8F1FF', fg:'#0056C7', title:'勤務管理', subtitle:'查看/編輯/強制結束/刪除勤務，匯出 CSV', onclick:"window.__nav({name:'adminTasks'})"}),
   ];
-  const dataRows = canManageBaseData(p) ? [
-    settingsRow({icon:'records', bg:'#FFF2E0', fg:'#B45F00', title:'基礎資料', subtitle:'人員／車輛／行車紀錄器／醫院', onclick:"window.__nav({name:'adminBaseData'})"}),
+  const peopleRows = canManageBaseData(p) ? [
+    settingsRow({icon:'user', bg:'#E9F9EF', fg:'#177A34', title:'人員與帳號', subtitle:'名冊資料、角色與單位指派', onclick:"window.__nav({name:'adminUsers'})"}),
   ] : [];
-  const memberRows = canManageUsers(p) ? [
-    settingsRow({icon:'user', bg:'#E9F9EF', fg:'#177A34', title:'成員管理', subtitle:'指派角色與單位', onclick:"window.__nav({name:'adminUsers'})"}),
-    settingsRow({icon:'bell', bg:'#F2E9FE', fg:'#6B23C7', title:'訊息管理', onclick:"window.__nav({name:'adminMessages'})"}),
+  const dataRows = canManageBaseData(p) ? [
+    settingsRow({icon:'records', bg:'#FFF2E0', fg:'#B45F00', title:'基礎資料', subtitle:'車輛／行車紀錄器／醫院／醫官', onclick:"window.__nav({name:'adminBaseData'})"}),
   ] : [];
   const systemRows = canManageUsers(p) ? [
+    settingsRow({icon:'bell', bg:'#F2E9FE', fg:'#6B23C7', title:'訊息管理', onclick:"window.__nav({name:'adminMessages'})"}),
     settingsRow({icon:'check', bg:'#EAF1FF', fg:'#0052E0', title:'系統設定', onclick:"window.__nav({name:'adminSettings'})"}),
     settingsRow({icon:'chat', bg:'#FFF2E0', fg:'#B45F00', title:'意見回饋', onclick:"window.__nav({name:'adminFeedback'})"}),
   ] : [];
@@ -5735,8 +5713,8 @@ function viewAdmin(){
     <div class="back-row">${backBtn({name:'profile'})}</div>
     <div class="section-label">管理後台${canSeeAllUnits(p) ? '' : ' · ' + unitLabel(myUnit(p))}</div>
     ${settingsSection('勤務', taskRows)}
+    ${settingsSection('人員與帳號', peopleRows)}
     ${settingsSection('基礎資料', dataRows)}
-    ${settingsSection('成員與訊息', memberRows)}
     ${settingsSection('系統', systemRows)}
   `;
 }
@@ -5749,11 +5727,6 @@ function viewAdminBaseDataPage(){
   const p = state.profile;
   if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
   return `<div class="back-row">${backBtn({name:'admin'})}</div><div class="section-label">基礎資料</div>${viewBaseDataHub()}`;
-}
-function viewBaseDataPersonnelPage(){
-  const p = state.profile;
-  if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
-  return viewBaseDataPersonnel();
 }
 function viewBaseDataVehiclesPage(){
   const p = state.profile;
@@ -5777,7 +5750,7 @@ function viewBaseDataDoctorsPage(){
 }
 function viewAdminUsersPage(){
   const p = state.profile;
-  if (!canManageUsers(p)) return `<div class="empty">您沒有管理權限</div>`;
+  if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
   return `<div class="back-row">${backBtn({name:'admin'})}</div>${viewAdminUsers()}`;
 }
 function viewAdminMessagesPage(){
@@ -5849,11 +5822,12 @@ function viewAdminTasks(){
 // 基礎資料管理改成分區列表入口（hub）＋每個類別各自獨立路由，跟管理
 // 後台首頁同一套模式——原本橫向頁籤只有 4、5 個還好排，之後陸續增加
 // 類別（例如這次新增的醫官）只會越擠越亂，改成列表後每加一類只要在
-// 對應分區多加一列，不影響既有排版。人員／車輛／行車紀錄器依單位分類
-// 歸在「單位資料」；醫院／醫官是全營共用、不綁定單位，歸在「共用資料」。
+// 對應分區多加一列，不影響既有排版。人員名冊已經併入「人員與帳號」
+// （見管理後台首頁、viewAdminUsers），這裡只剩車輛／行車紀錄器依單位
+// 分類，歸在「單位資料」；醫院／醫官是全營共用、不綁定單位，歸在
+// 「共用資料」。
 function viewBaseDataHub(){
   const unitRows = [
-    settingsRow({icon:'user', bg:'#E8F1FF', fg:'#0056C7', title:'人員', subtitle:'依單位分類的成員名冊', onclick:"window.__nav({name:'baseDataPersonnel'})"}),
     settingsRow({icon:'depart', bg:'#FFF2E0', fg:'#B45F00', title:'車輛', subtitle:'依單位分類的車輛名冊', onclick:"window.__nav({name:'baseDataVehicles'})"}),
     settingsRow({icon:'records', bg:'#F2E9FE', fg:'#6B23C7', title:'行車紀錄器', subtitle:'依單位分類', onclick:"window.__nav({name:'baseDataRecorders'})"}),
   ];
@@ -5865,29 +5839,6 @@ function viewBaseDataHub(){
     ${settingsSection('單位資料', unitRows)}
     ${settingsSection('共用資料', sharedRows)}
   `;
-}
-function viewBaseDataPersonnel(){
-  const p = state.profile;
-  const canSwitch = canSeeAllUnits(p);
-  const unit = canSwitch ? (state.baseDataUnit || UNITS[0].code) : myUnit(p);
-  if (!unit) return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="empty">您尚未被指派單位，請聯繫管理員。</div>`;
-  const unitTabs = canSwitch ? `
-    <div class="tabs2">
-      ${UNITS.map(u => `<div class="tab2 ${unit===u.code?'active':''}" onclick="window.__setBaseDataUnit('${u.code}')">${u.label}</div>`).join("")}
-    </div>` : `<div class="section-label">${unitLabel(unit)}</div>`;
-  const rows = state.personnel.filter(x => x.unit === unit).slice().sort((a,b) => rankWeight(a.title) - rankWeight(b.title));
-  const body = `
-    <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('personnel', null, '${unit}')">${icon('plus',15)} 新增人員</button>
-    ${rows.length ? rows.map(x => `
-      <div class="admin-row">
-        <div><div class="name">${esc(x.name)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.title||'—')}${x.emtLevel?' '+emtBadgeHtml(x.emtLevel):''}${x.phone?' · '+esc(x.phone):''}${x.email?' · '+esc(x.email):''}${x.email && !x.role ? ' · <span style="color:var(--amber-text); font-weight:700;">尚未登入</span>' : ''}</div></div>
-        <div style="display:flex; gap:6px; flex-wrap:wrap;">
-          <button class="icon-btn" onclick="window.__openBaseDataModal('personnel','${x.id}','${unit}')">編輯</button>
-          <button class="icon-btn" onclick="window.__toggleBaseData('personnel','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
-          <button class="icon-btn danger" onclick="window.__deleteBaseData('personnel','${x.id}')">刪除</button>
-        </div>
-      </div>`).join("") : `<div class="empty">尚無人員資料</div>`}`;
-  return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">人員</div>${unitTabs}${body}`;
 }
 function viewBaseDataVehicles(){
   const p = state.profile;
@@ -5978,7 +5929,7 @@ function viewBaseDataModal(){
   const editing = id ? pool.find(x => x.id === id) : null;
   let title, fields;
   if (coll === "personnel") {
-    title = editing ? "編輯人員" : "新增人員";
+    title = editing ? "編輯人員" : "預先建立人員";
     fields = `
       <div class="field"><label>姓名</label><input name="name" required value="${esc(editing?.name||'')}"></div>
       <div class="field"><label>階級</label>
@@ -6061,46 +6012,57 @@ function viewBaseDataModal(){
     </div>`;
 }
 
+// 人員名冊（車長/駕駛下拉選單用）跟成員帳號（角色/單位權限）已經合併成
+// 同一份 users 集合、同一個畫面：admin 可以同時指派角色/單位、也能編輯
+// 名冊類欄位；高勤官／主官管（canManageBaseData，但不到 canManageUsers）
+// 只能編輯名冊類欄位，看不到角色/單位下拉選單（跟 firestore.rules 的
+// onlyChanged 寫入限制一致）。
+// 還沒被指派單位的帳號（剛登入的 pending、或忘記選單位的舊資料）不會
+// 出現在任何單位頁籤裡，另外獨立列在「待指派單位」，確保不會被漏掉。
 function viewAdminUsers(){
-  // 使用者清單需即時讀取，這裡用簡易一次性快取（開啟頁籤時抓取）
-  if (!state._usersCache) {
-    state._usersCache = "loading";
-    fsListCollection("users").then(list => {
-      state._usersCache = list;
-      syncPersonnelFromUsers(list);
-      render();
-    }).catch(err => {
-      console.error("讀取使用者清單失敗", err);
-      showToast(`讀取使用者清單失敗：[${err.code||'?'}] ${err.message}`);
-      state._usersCache = [];
-      render();
-    });
-    return `<div class="spinner"></div>`;
-  }
-  if (state._usersCache === "loading") return `<div class="spinner"></div>`;
-
+  const p = state.profile;
+  const canAssignRole = canManageUsers(p);
+  const canSwitch = canSeeAllUnits(p);
   const roles = ["pending","member","commander","duty_officer","admin","disabled"];
-  return `
-    <div class="section-label">成員管理</div>
-    ${state._usersCache.map(u => {
-      const r = normalizeRole(u.role);
-      return `
-      <div class="admin-row">
-        <div>
-          <div class="name">${esc(u.displayName||u.email)}${u.rank?' '+esc(u.rank):''}</div>
-          <div class="sub">${esc(u.email)} · ${unitLabel(u.unit)}</div>
-        </div>
+  const renderRow = (x) => `
+    <div class="admin-row">
+      <div>
+        <div class="name">${esc(x.name)}</div>
+        <div class="sub">${esc(x.title||'—')}${x.emtLevel?' '+emtBadgeHtml(x.emtLevel):''}${x.phone?' · '+esc(x.phone):''}${x.email?' · '+esc(x.email):''}${x.role==='unclaimed' ? ' · <span style="color:var(--amber-text); font-weight:700;">尚未登入</span>' : ''}</div>
+      </div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+        ${canAssignRole && x.role !== 'unclaimed' ? `
         <div class="role-controls">
-          <select id="role-${u.id}" class="role-select" onchange="window.__setRole('${u.id}')">
-            ${roles.map(rr => `<option value="${rr}" ${r===rr?'selected':''}>${ROLE_LABEL[rr]}</option>`).join("")}
+          <select id="role-${x.id}" class="role-select" onchange="window.__setRole('${x.id}')">
+            ${roles.map(rr => `<option value="${rr}" ${x.role===rr?'selected':''}>${ROLE_LABEL[rr]}</option>`).join("")}
           </select>
-          <select id="unit-${u.id}" class="role-select" onchange="window.__setRole('${u.id}')">
+          <select id="unit-${x.id}" class="role-select" onchange="window.__setRole('${x.id}')">
             <option value="">未指派單位</option>
-            ${UNITS.map(un => `<option value="${un.code}" ${u.unit===un.code?'selected':''}>${un.label}</option>`).join("")}
+            ${UNITS.map(un => `<option value="${un.code}" ${x.unit===un.code?'selected':''}>${un.label}</option>`).join("")}
           </select>
-        </div>
-      </div>`;
-    }).join("")}
+        </div>` : ''}
+        <button class="icon-btn" onclick="window.__openBaseDataModal('personnel','${x.id}','${x.unit||''}')">編輯</button>
+        ${x.role==='unclaimed' ? `<button class="icon-btn danger" onclick="window.__deleteBaseData('personnel','${x.id}')">刪除</button>` : ''}
+      </div>
+    </div>`;
+  const unassigned = canAssignRole ? state.personnel.filter(x => !x.unit) : [];
+  const unit = canSwitch ? (state.baseDataUnit || UNITS[0].code) : myUnit(p);
+  const unitTabs = canSwitch ? `
+    <div class="tabs2">
+      ${UNITS.map(u => `<div class="tab2 ${unit===u.code?'active':''}" onclick="window.__setBaseDataUnit('${u.code}')">${u.label}</div>`).join("")}
+    </div>` : `<div class="section-label">${unitLabel(unit)}</div>`;
+  const rows = unit ? state.personnel.filter(x => x.unit === unit).slice().sort((a,b) => rankWeight(a.title) - rankWeight(b.title)) : [];
+  return `
+    <div class="section-label">人員與帳號</div>
+    ${unassigned.length ? `
+      <div class="section-label">待指派單位</div>
+      ${unassigned.map(renderRow).join("")}
+    ` : ''}
+    ${unit ? `
+      <button class="icon-btn primary" style="margin:12px 0;" onclick="window.__openBaseDataModal('personnel', null, '${unit}')">${icon('plus',15)} 預先建立人員</button>
+      ${unitTabs}
+      ${rows.length ? rows.map(renderRow).join("") : `<div class="empty">尚無人員資料</div>`}
+    ` : `<div class="empty">您尚未被指派單位，請聯繫管理員。</div>`}
   `;
 }
 // 訊息管理、系統設定目前尚未有實際內容，先放開發中的預留頁面，
@@ -6173,7 +6135,6 @@ const ROUTE_VIEWS = {
   admin: viewAdmin,
   adminTasks: viewAdminTasksPage,
   adminBaseData: viewAdminBaseDataPage,
-  baseDataPersonnel: viewBaseDataPersonnelPage,
   baseDataVehicles: viewBaseDataVehiclesPage,
   baseDataRecorders: viewBaseDataRecordersPage,
   baseDataHospitals: viewBaseDataHospitalsPage,
@@ -6682,7 +6643,7 @@ window.__exportTasks = () => exportTasksCsv();
 window.__setRole = (uid) => {
   const role = document.getElementById(`role-${uid}`).value;
   const unit = document.getElementById(`unit-${uid}`).value;
-  setUserRole(uid, role, unit).then(() => { state._usersCache = null; render(); });
+  setUserRole(uid, role, unit).catch(baseDataErr);
 };
 window.__setBaseDataUnit = (code) => { state.baseDataUnit = code; state.baseDataModal = null; render(); scrollContentToTop(); };
 function baseDataErr(err){ showToast(`操作失敗：[${err.code||'?'}] ${err.message||err}`); console.error("基礎資料操作失敗", err); }
@@ -6694,7 +6655,7 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
   const action = id
-    ? (coll === "personnel" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"", emtLevel: f.get("emtLevel")||"", email: (f.get("email")||"").trim().toLowerCase() })
+    ? (coll === "personnel" ? updateBaseData(coll, id, { displayName: f.get("name"), rank: f.get("title"), phone: f.get("phone")||"", emtLevel: f.get("emtLevel")||"", email: (f.get("email")||"").trim().toLowerCase() })
        : coll === "vehicles" ? updateBaseData(coll, id, { plate: f.get("plate"), type: f.get("type") })
        : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return updateBaseData(coll, id, { name: f.get("name"), county: f.get("county"), level: f.get("level"), phone: f.get("phone")||"", note: f.get("note")||"", district: f.get("district")||"", address: f.get("address")||"", lat: c ? c.lat : null, lng: c ? c.lng : null }); })()
        : coll === "doctors" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"" })
