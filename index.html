@@ -1063,6 +1063,7 @@
   .notif-card .notif-time{font-size:var(--text-xs); color:var(--muted); font-family:var(--mono); margin-top:2px;}
   .notif-dot{width:9px; height:9px; border-radius:50%; background:var(--red); flex-shrink:0; margin-top:6px;}
   .notif-card .notif-body{font-size:var(--text-sm); color:var(--text); margin-top:12px; line-height:1.55; word-break:break-word; white-space:pre-wrap;}
+  .notif-card .notif-expiry{font-size:var(--text-xs); color:var(--muted); font-family:var(--mono); margin-top:10px;}
   /* icon-btn 有時是 <a>（例如導航連結）不是 <button>，全站按壓縮放那條全域規則
      （見上面 button:active）只認 <button> 標籤，這裡另外補上 class 層級的按壓
      回饋，讓連結版本的按鈕也有一致的觸覺回饋。 */
@@ -1294,7 +1295,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-268-notif-card-redesign";
+const BUILD_TAG = "2026-07-10-269-notification-expiry";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1536,6 +1537,10 @@ async function fsQueryByTaskIds(collectionId, taskIds){
 }
 const RECENT_WINDOW_DAYS = 30;
 function recentCutoffDate(){ return new Date(Date.now() - RECENT_WINDOW_DAYS*24*60*60*1000); }
+// 公告效期固定一個月（不開放自訂，維持功能單純）；到期後由後端排程
+// （functions/index.js 的 cleanupExpiredNotifications，每天跑一次）
+// 自動刪除，不是前端隱藏而已。
+const NOTIFICATION_TTL_DAYS = 30;
 function isoDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
 // 不再定時自動輪詢（使用者反應一直背景更新很干擾）。改成只在建立時抓一次，
@@ -1788,6 +1793,7 @@ const RELEASE_NOTES = [
       "「訊息管理」新增公告管理功能：admin 可以新增公告、編輯既有公告的標題/內容、刪除公告；一般成員的通知中心維持唯讀，只能看跟標記已讀",
       "發布公告時新增推播：admin 在「訊息管理」新增公告會推播給所有在職帳號（不分單位），跟任務/生命徵象異常推播共用同一套後端機制；編輯、刪除公告不會重新推播",
       "通知卡片改版：套用跟任務／急診待命卡片同一套「空間感」卡片樣式，未讀通知會有淺藍發光背景＋圖示，已讀退回中性灰階，不用只靠一顆小紅點分辨有沒有看過",
+      "公告新增效期：固定從發布當下起算一個月，卡片上會顯示「效期至 MM/DD」；效期一到由後端排程自動刪除，不用管理員手動清舊公告",
     ] },
   ] },
   { date: "2026/07/09", groups: [
@@ -2596,9 +2602,12 @@ async function markAllNotificationsRead(){
 }
 // 新增公告：只有「訊息管理」（admin）有這個入口，一般成員的通知中心
 // 看不到新增/編輯/刪除的按鈕。isRead 一律從 false 開始，讓所有人看到
-// 這是一則新通知（跟目前 isRead 不分帳號的共用設計一致）。
+// 這是一則新通知（跟目前 isRead 不分帳號的共用設計一致）。效期固定從
+// 建立當下起算一個月，編輯內容不會延長效期（編輯只是修正文字，不算
+// 重新發布）。
 async function addNotification(title, body){
-  await fsAddDoc("notifications", { title, body, isRead: false, timestamp: new Date() });
+  const expiresAt = new Date(Date.now() + NOTIFICATION_TTL_DAYS*24*60*60*1000);
+  await fsAddDoc("notifications", { title, body, isRead: false, timestamp: new Date(), expiresAt });
   showToast("已新增公告"); if (notificationsPoll) notificationsPoll.refreshNow();
 }
 function refreshBaseDataPoll(coll){
@@ -3445,6 +3454,11 @@ function fmtTime(ms){
 }
 function fmtDate(d){
   return d.toLocaleDateString("zh-TW", { year:"numeric", month:"long", day:"numeric", weekday:"long" });
+}
+// 效期只需要精確到日期（不用像 fmtTime 一樣顯示到分鐘），公告卡片用。
+function fmtDateShort(ms){
+  if (!ms) return "";
+  return new Date(ms).toLocaleDateString("zh-TW", { month:"2-digit", day:"2-digit" });
 }
 // 回報表單的時間欄位只顯示「時:分」不顯示日期（勤務都是當天的），
 // 送出時再跟今天的日期組合成完整時間。
@@ -5342,6 +5356,7 @@ function renderNotificationsList(editable){
           ${!n.isRead ? `<span class="notif-dot"></span>` : ""}
         </div>
         <div class="notif-body">${esc(n.body)}</div>
+        ${n.expiresAt ? `<div class="notif-expiry">效期至 ${fmtDateShort(new Date(n.expiresAt).getTime())}</div>` : ""}
         ${editable ? `
         <div style="display:flex; gap:6px; margin-top:12px;">
           <button class="icon-btn" onclick="event.stopPropagation(); window.__openBaseDataModal('notifications','${n.id}','')">編輯</button>

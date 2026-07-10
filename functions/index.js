@@ -1,15 +1,16 @@
 /* =========================================================
    MEDTRACK 推播通知後端（Cloud Functions）
 
-   四個觸發點，都是 onCreate（不監聽 update，「時間地點更新」實際上是指
-   每一筆任務進度回報，本身就是新增一筆 events 文件，不是修改 tasks
-   文件本身；公告編輯也一樣不重新推播，只有新增才推）：
+   四個 Firestore onCreate 觸發點（不監聽 update，「時間地點更新」實際上
+   是指每一筆任務進度回報，本身就是新增一筆 events 文件，不是修改 tasks
+   文件本身；公告編輯也一樣不重新推播，只有新增才推），外加一個排程：
    1) tasks 新增 → 通知「新增勤務」（涵蓋一般勤務／待命車／洽公，待命車
       續約時 renewStandbyTask() 也會建立新的 tasks 文件，一樣會觸發）
    2) events 新增 → 通知任務進度回報（出勤/抵達現場/離開現場/返營/抵達
       營區，或洽公對應的出發/抵達/離開/返營）
    3) vitals 新增 → 若生命徵象任一項落在「danger」等級，通知生命徵象異常
    4) notifications 新增 → 訊息管理發布的公告，推播給所有在職帳號
+   5) 排程（每天一次）→ 公告效期一到就自動刪除（cleanupExpiredNotifications）
 
    收件人規則：前三個觸發（任務/事件/生命徵象）依單位隔離，跟前端 RBAC
    一致——高勤官／admin 收全單位的通知，主官管／一般成員只收自己單位的；
@@ -17,6 +18,7 @@
    resolveAllTokens）。
    ========================================================= */
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
@@ -248,7 +250,23 @@ exports.onNotificationCreated = onDocumentCreated("notifications/{id}", async (e
 });
 
 /* =========================================================
-   5) 預先建立人員帳號：管理員可以先幫還沒登入過的成員預建一筆資料
+   5) 公告效期到期自動刪除：index.html 新增公告時會帶一個 expiresAt
+   （建立當下起算一個月，見 NOTIFICATION_TTL_DAYS），這裡排程每天跑一次
+   把過期的公告刪掉，不是前端隱藏而已。舊資料（合併/上線前建立、沒有
+   expiresAt 欄位的公告）不會被這個查詢篩到，不會被誤刪，會一直留著；
+   之後要清也可以手動在 Firestore 主控台刪除。
+   ========================================================= */
+exports.cleanupExpiredNotifications = onSchedule("every 24 hours", async () => {
+  const snap = await db.collection("notifications").where("expiresAt", "<=", new Date()).get();
+  if (snap.empty) return;
+  const batch = db.batch();
+  snap.forEach((doc) => batch.delete(doc.ref));
+  await batch.commit();
+  logger.info(`清除 ${snap.size} 則過期公告`);
+});
+
+/* =========================================================
+   6) 預先建立人員帳號：管理員可以先幫還沒登入過的成員預建一筆資料
    （role:"unclaimed"，含 email），對方第一次用該 email 登入時，前端會在
    users/{uid} 建立一筆 role:"pending" 的新帳號（見 index.html 的
    onAuthStateChanged）。這裡監聽 users 新增，只處理「使用者自己登入建立
@@ -296,7 +314,7 @@ exports.onUserCreated = onDocumentCreated("users/{uid}", async (event) => {
 });
 
 /* =========================================================
-   6)【一次性遷移，跑完後要整支移除】把合併前的 personnel 集合資料轉進
+   7)【一次性遷移，跑完後要整支移除】把合併前的 personnel 集合資料轉進
    users 集合。只能由 admin 呼叫：帶 Authorization: Bearer <Firebase ID
    token>（登入後在瀏覽器 devtools 執行
    `await firebase.auth().currentUser.getIdToken()` 取得），函式會驗證
