@@ -1,17 +1,20 @@
 /* =========================================================
    MEDTRACK 推播通知後端（Cloud Functions）
 
-   三個觸發點，都是 onCreate（不監聽 update，「時間地點更新」實際上是指
+   四個觸發點，都是 onCreate（不監聽 update，「時間地點更新」實際上是指
    每一筆任務進度回報，本身就是新增一筆 events 文件，不是修改 tasks
-   文件本身）：
+   文件本身；公告編輯也一樣不重新推播，只有新增才推）：
    1) tasks 新增 → 通知「新增勤務」（涵蓋一般勤務／待命車／洽公，待命車
       續約時 renewStandbyTask() 也會建立新的 tasks 文件，一樣會觸發）
    2) events 新增 → 通知任務進度回報（出勤/抵達現場/離開現場/返營/抵達
       營區，或洽公對應的出發/抵達/離開/返營）
    3) vitals 新增 → 若生命徵象任一項落在「danger」等級，通知生命徵象異常
+   4) notifications 新增 → 訊息管理發布的公告，推播給所有在職帳號
 
-   收件人規則（跟前端 RBAC 一致）：高勤官／admin 收全單位的通知；
-   主官管／一般成員只收自己單位的通知。三種觸發共用同一套規則。
+   收件人規則：前三個觸發（任務/事件/生命徵象）依單位隔離，跟前端 RBAC
+   一致——高勤官／admin 收全單位的通知，主官管／一般成員只收自己單位的；
+   公告是全體公告，沒有單位隔離，不分單位推給所有在職帳號（見
+   resolveAllTokens）。
    ========================================================= */
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { setGlobalOptions } = require("firebase-functions/v2");
@@ -47,6 +50,21 @@ async function resolveRecipientTokens(taskUnit) {
     if (isBroad || isUnitScoped) {
       u.fcmTokens.forEach((t) => tokens.add(t));
     }
+  });
+  return [...tokens];
+}
+// 公告沒有單位隔離，是全體公告，找所有在職帳號（admin/高勤官/主官管/
+// 一般成員）的 fcmTokens，不分單位；pending/disabled/unclaimed 這幾種
+// 非在職狀態不算，跟 resolveRecipientTokens 的隱含排除邏輯一致。
+async function resolveAllTokens() {
+  const snap = await db.collection("users").get();
+  const tokens = new Set();
+  const activeRoles = ["admin", "duty_officer", "commander", "member"];
+  snap.forEach((doc) => {
+    const u = doc.data();
+    if (!Array.isArray(u.fcmTokens) || !u.fcmTokens.length) return;
+    if (!activeRoles.includes(normalizeRole(u.role))) return;
+    u.fcmTokens.forEach((t) => tokens.add(t));
   });
   return [...tokens];
 }
@@ -215,7 +233,22 @@ exports.onVitalsCreated = onDocumentCreated("vitals/{vitalsId}", async (event) =
 });
 
 /* =========================================================
-   4) 預先建立人員帳號：管理員可以先幫還沒登入過的成員預建一筆資料
+   4) 公告新增（訊息管理 → 新增公告）：只有新增才推播，編輯/刪除不重推，
+   避免同一則公告被改個字就再打擾大家一次。isRead 標記已讀是前端另外
+   直接寫 Firestore 的動作，不會新增文件，不會誤觸這個 trigger。
+   ========================================================= */
+exports.onNotificationCreated = onDocumentCreated("notifications/{id}", async (event) => {
+  if (!(await claimEventOnce(event.id))) return;
+  const snap = event.data;
+  if (!snap) return;
+  const n = snap.data();
+  if (!n || !n.title) return;
+  const tokens = await resolveAllTokens();
+  await sendPush(tokens, `公告：${n.title}`, n.body || "");
+});
+
+/* =========================================================
+   5) 預先建立人員帳號：管理員可以先幫還沒登入過的成員預建一筆資料
    （role:"unclaimed"，含 email），對方第一次用該 email 登入時，前端會在
    users/{uid} 建立一筆 role:"pending" 的新帳號（見 index.html 的
    onAuthStateChanged）。這裡監聽 users 新增，只處理「使用者自己登入建立
@@ -263,7 +296,7 @@ exports.onUserCreated = onDocumentCreated("users/{uid}", async (event) => {
 });
 
 /* =========================================================
-   5)【一次性遷移，跑完後要整支移除】把合併前的 personnel 集合資料轉進
+   6)【一次性遷移，跑完後要整支移除】把合併前的 personnel 集合資料轉進
    users 集合。只能由 admin 呼叫：帶 Authorization: Bearer <Firebase ID
    token>（登入後在瀏覽器 devtools 執行
    `await firebase.auth().currentUser.getIdToken()` 取得），函式會驗證
@@ -329,4 +362,4 @@ exports.migratePersonnelToUsers = onRequest(async (req, res) => {
 // 純函式/資料存取邏輯額外匯出一份，方便寫單元測試直接呼叫驗證（不會
 // 影響部署——firebase deploy 只認得用 onDocumentCreated 等 v2 trigger
 // builder 包起來的 exports，這個純物件會被忽略，不會變成多一個雲端函式）。
-exports._internal = { normalizeRole, resolveRecipientTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce };
+exports._internal = { normalizeRole, resolveRecipientTokens, resolveAllTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce };
