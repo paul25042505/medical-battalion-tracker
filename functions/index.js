@@ -19,7 +19,9 @@
    ========================================================= */
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onRequest } = require("firebase-functions/v2/https");
 const { setGlobalOptions } = require("firebase-functions/v2");
+const { getAuth } = require("firebase-admin/auth");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
@@ -335,8 +337,6 @@ exports.onUserCreated = onDocumentCreated("users/{uid}", async (event) => {
      role:"unclaimed" 的新文件，等本人之後登入被上面的 onUserCreated 認領。
    處理完就把原本的 personnel 文件刪掉。
    ========================================================= */
-const { onRequest } = require("firebase-functions/v2/https");
-const { getAuth } = require("firebase-admin/auth");
 exports.migratePersonnelToUsers = onRequest(async (req, res) => {
   try {
     const authHeader = req.get("Authorization") || "";
@@ -421,6 +421,46 @@ exports.syncErRealtime = onSchedule("every 15 minutes", async () => {
     logger.info(`健保署急診即時資訊同步完成，共 ${records.length} 筆`);
   } catch (e) {
     logger.error("健保署急診即時資訊同步失敗", e);
+  }
+});
+
+/* =========================================================
+   9) 推播控制台：管理員手動測試推播
+   前端「推播控制台」名冊每一列的「測試推播」按鈕呼叫這支函式，直接對
+   指定的單一使用者送一則真的推播（跟 sendPush() 共用同一套發送/清除
+   失效 token 邏輯），方便管理員現場確認某個人到底收不收得到通知，不用
+   等真的有任務/生命徵象異常才能驗證。
+
+   用 onRequest（HTTP function，cors:true 讓瀏覽器可以直接跨網域呼叫）而
+   不是 onCall：這個專案其餘前端一律用 fetch 直接打 REST API（沒有引入
+   Firebase JS SDK 的 Firestore/Functions 用戶端函式庫），跟既有的
+   migratePersonnelToUsers 同一套「Bearer ID token + 後端驗證呼叫者
+   role」的呼叫慣例一致，不用另外載入 Functions SDK。
+   ========================================================= */
+exports.sendTestPush = onRequest({ cors: true }, async (req, res) => {
+  try {
+    const authHeader = req.get("Authorization") || "";
+    const m = /^Bearer (.+)$/.exec(authHeader);
+    if (!m) { res.status(401).json({ ok: false, reason: "missing bearer token" }); return; }
+    const decoded = await getAuth().verifyIdToken(m[1]);
+    const callerDoc = await db.collection("users").doc(decoded.uid).get();
+    if (!callerDoc.exists || callerDoc.data().role !== "admin") {
+      res.status(403).json({ ok: false, reason: "admin only" });
+      return;
+    }
+    const targetUid = (req.body && req.body.uid) || "";
+    if (!targetUid) { res.status(400).json({ ok: false, reason: "missing uid" }); return; }
+    const targetDoc = await db.collection("users").doc(targetUid).get();
+    if (!targetDoc.exists) { res.status(404).json({ ok: false, reason: "user not found" }); return; }
+    const target = targetDoc.data();
+    const tokens = target.fcmTokens || [];
+    if (!tokens.length) { res.status(200).json({ ok: false, reason: "no-token" }); return; }
+    const callerName = callerDoc.data().displayName || callerDoc.data().email || "管理員";
+    await sendPush(tokens, "測試推播", `這是 ${callerName} 從推播控制台發送的測試訊號，收到代表這支裝置的推播設定正常`);
+    res.status(200).json({ ok: true, tokenCount: tokens.length });
+  } catch (e) {
+    logger.error("測試推播失敗", e);
+    res.status(500).json({ ok: false, reason: String(e && e.message || e) });
   }
 });
 

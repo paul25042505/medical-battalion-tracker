@@ -1412,7 +1412,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-308-push-console";
+const BUILD_TAG = "2026-07-10-309-push-console-real-test";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1455,6 +1455,12 @@ const FCM_VAPID_KEY = "BP0uwpNgyOr3TDnqxI_bLRuI28DH9Q4SCH_ocG5nfvgBMeJmSv0TX41L3
 // 清除」邏輯捕捉到，導致同一支裝置收到重複推播）。
 const FCM_TOKEN_STORAGE_KEY = "medtrack_fcm_token";
 const googleProvider = new GoogleAuthProvider();
+// Cloud Functions（推播通知後端，見 functions/index.js）的 HTTP 呼叫端點
+// 前綴，第 2 代（v2）函式預設部署在 us-central1，跟 setGlobalOptions()
+// 沒有另外指定其他區域的設定一致。這個專案沒有引入 Firebase Functions
+// SDK，呼叫方式比照既有的 migratePersonnelToUsers：直接 fetch 打這個
+// HTTP 端點、帶 Authorization: Bearer <ID token>，後端自己驗證身分。
+const CLOUD_FUNCTIONS_BASE = `https://us-central1-${firebaseConfig.projectId}.cloudfunctions.net`;
 
 /* =========================================================
    1b) Firestore REST 用戶端
@@ -2038,7 +2044,8 @@ const RELEASE_NOTES = [
       "通知卡片改版：套用跟任務／急診待命卡片同一套「空間感」卡片樣式，未讀通知會有淺藍發光背景＋圖示，已讀退回中性灰階，不用只靠一顆小紅點分辨有沒有看過",
       "公告新增效期：固定從發布當下起算一個月，卡片上會顯示「效期至 MM/DD」；效期一到由後端排程自動刪除，不用管理員手動清舊公告",
       "新增推播雙重安檢守門員：登入後若偵測到尚未「加入主畫面」，會全螢幕提示並附步驟教學；已加入主畫面但通知權限尚未開啟/已被封鎖，也會分別提示「立刻開通」或封鎖後的手動開啟步驟。畫面可以關閉先繼續使用，但只要還沒完成加入主畫面＋開啟通知，下次開啟本系統都會再次提示",
-      "新增管理後台「推播控制台」：顯示全體人員的通知覆蓋率（總註冊人數、訂閱率、已允許/尚未開啟/已封鎖/尚未回報人數），並提供依姓名/單位/狀態篩選的訂閱名冊，可查看每個人的裝置種類、訂閱時間、後端 Token 是否有效，並可對單一人員送出測試推播（目前為現場除錯用途，尚未串接後端實際發送）",
+      "新增管理後台「推播控制台」：顯示全體人員的通知覆蓋率（總註冊人數、訂閱率、已允許/尚未開啟/已封鎖/尚未回報人數），並提供依姓名/單位/狀態篩選的訂閱名冊，可查看每個人的裝置種類、訂閱時間、後端 Token 是否有效，並可對單一人員送出測試推播",
+      "「測試推播」按鈕改成真的呼叫後端送出一則推播給指定人員（新增 Cloud Function sendTestPush，限 admin 呼叫），不再只是畫面上的提示訊息；沒有有效裝置 token 的人員會顯示發送失敗原因",
     ] },
     { category: "天氣資訊", items: [
       "Header 鈴鐺左邊新增「天氣危險係數」徽章：資料來源改用 Open-Meteo（跟站內其他天氣資訊用的中央氣象署開放資料是不同來源），台中地區依烏日區天氣、嘉義地區依大林鎮天氣，計算方式是溫度＋（相對濕度×0.1）；34.9 以下藍燈、35～39.9 黃燈、40 以上紅燈，點一下直接跳到「任務→天氣」頁",
@@ -6963,7 +6970,7 @@ function renderPushConsoleBody(){
       <div class="push-console-cell">${tokenValid ? '🟢 有效' : '❌ 已過期失效'}</div>
       <div class="push-console-cell push-console-device">${esc(x.pushDevice || '—')}</div>
       <div class="push-console-cell push-console-date">${x.pushSubscribedAt ? fmtTime(new Date(x.pushSubscribedAt).getTime()) : '—'}</div>
-      <button class="icon-btn" ${tokenValid ? '' : 'disabled'} onclick="window.__testPushToUser('${x.id}')">測試推播</button>
+      <button class="icon-btn" ${tokenValid ? '' : 'disabled'} onclick="window.__testPushToUser('${x.id}', this)">測試推播</button>
     </div>`;
   }).join("");
 }
@@ -7172,12 +7179,36 @@ window.__setPushConsoleFilter = (key, value) => {
   const body = document.getElementById("push-console-body");
   if (body) body.innerHTML = renderPushConsoleBody();
 };
-// 目前尚未接後端測試推播的 Cloud Function，先讓管理員在現場能立刻看到
-// 「有點擊、有反應」，之後如果要接上真的送一則測試推播，只要把這裡換成
-// 呼叫對應的 callable function 就好，不用動到畫面其他部分。
-window.__testPushToUser = (id) => {
+// 呼叫 functions/index.js 的 sendTestPush（HTTP function），真的對這個人
+// 目前登記的裝置 token 送一則推播，不是只在前端假裝有反應。這個專案沒有
+// 引入 Firebase Functions SDK，比照既有的 migratePersonnelToUsers：直接
+// fetch 打 HTTP 端點、帶 Authorization: Bearer <ID token>，後端自己驗證
+// 呼叫者是不是 admin。
+window.__testPushToUser = async (id, btn) => {
   const x = state.personnel.find(p => p.id === id);
-  alert(`已向${x ? x.name : '該人員'}發送測試訊號`);
+  const name = x ? x.name : "該人員";
+  const originalLabel = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.textContent = "發送中…"; }
+  try {
+    const idToken = await state.user.getIdToken();
+    const res = await fetch(`${CLOUD_FUNCTIONS_BASE}/sendTestPush`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${idToken}` },
+      body: JSON.stringify({ uid: id }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) {
+      showToast(`已向${name}發送測試推播`);
+    } else if (data.reason === "no-token") {
+      showToast(`發送失敗：${name}目前沒有有效的裝置 token`);
+    } else {
+      showToast(`發送失敗：${data.reason || res.status}`);
+    }
+  } catch (e) {
+    showToast(`測試推播失敗：${e.message || e}`);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = originalLabel || "測試推播"; }
+  }
 };
 window.__nav = nav;
 window.__startRolePreview = (role, unit) => startRolePreview(role, unit);
