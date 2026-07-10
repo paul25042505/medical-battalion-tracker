@@ -1,6 +1,6 @@
 {
   "name": "medtrack-functions",
-  "description": "MEDTRACK 推播通知後端：任務新增/進度回報、患者生命徵象危急異常時觸發 FCM 推播",
+  "description": "MEDTRACK 推播通知後端：任務新增/進度回報、患者生命徵象危急異常、公告發布時觸發 FCM 推播",
   "private": true,
   "engines": {
     "node": "20"
