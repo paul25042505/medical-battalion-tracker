@@ -1354,7 +1354,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-284-hospital-info-card";
+const BUILD_TAG = "2026-07-10-285-pending-name-no-prefill";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1948,6 +1948,7 @@ const RELEASE_NOTES = [
       "修正新帳號第一次登入卡在「登入後初始化失敗：[403] Missing or insufficient permissions」的問題：人員名冊與帳號合併時，Firestore 規則漏掉「本人一定要能讀到自己文件」這條，導致全新使用者第一次登入、自己的帳號文件還沒建立時就先被擋下來",
       "修正待審核帳號選單位、填個人資料時「儲存失敗：[403] Missing or insufficient permissions」的問題：同一次規則重寫漏掉「待審核階段可以自己改單位」這條，導致新帳號選了單位、按儲存就被擋下來，卡在待審核畫面出不去",
       "新增 LINE 內建瀏覽器偵測：從 LINE 對話直接點連結開啟時，登入頁會偵測到並隱藏「使用 Google 帳號登入」按鈕（LINE 內建瀏覽器會讓 Google 登入直接失敗），改用步驟流程圖教學怎麼跳到手機原生瀏覽器、再加入主畫面；推播通知設定頁在 LINE 瀏覽器裡偵測到不支援推播時，也會顯示同一套流程圖取代原本籠統的「iPhone 需要加入主畫面」提示",
+      "待審核帳號的註冊頁面姓名欄位不再預先填入 Google 帳號的顯示名稱（可能是暱稱或英文名，不是本名），改成空白欄位＋提醒文字，請使用者務必填寫真實姓名，方便管理員審核與辨識身分",
     ] },
     { category: "推播通知", items: [
       "新增「通知中心」收件匣：點右上角鈴鐺圖示可以看到歷史通知，依時間新到舊排序成單一列表（不分全部/未讀頁籤）；未讀的通知卡片右上角會有紅點提示，點開該筆就會標記為已讀",
@@ -3897,7 +3898,8 @@ function viewPending(){
           ${UNITS.map(u => `<option value="${u.code}" ${p.unit===u.code?'selected':''}>${u.label}</option>`).join("")}
         </select>
       </div>
-      <div class="field"><label>姓名</label><input name="displayName" value="${esc(p.displayName||'')}"></div>
+      <div class="field"><label>姓名</label><input name="displayName" placeholder="請填寫真實姓名"></div>
+      <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">Google 帳號的顯示名稱不一定是本名（可能是暱稱或英文名），請務必填寫真實姓名，方便管理員審核與辨識身分。</div>
       <div class="field"><label>階級</label>
         <select name="rank">
           <option value="">請選擇階級</option>
