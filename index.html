@@ -1373,7 +1373,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-306-kb-raf-position-guard";
+const BUILD_TAG = "2026-07-10-307-kb-navhide-back-suppresslock";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1955,6 +1955,7 @@ const RELEASE_NOTES = [
       "修正鍵盤打開時手動往上/往下滑動表單，畫面會自己彈回原本聚焦欄位位置、完全滑不走的問題：欄位自動定位改成同一次聚焦只執行一次，之後使用者自己的手動捲動不會再被強制蓋掉",
       "取消輸入文字時自動隱藏底部導覽列的功能，改成鍵盤彈起時導覽列維持原樣不再消失",
       "修正欄位有時候會被鍵盤蓋住看不到、有時候又正常的不一致問題：改成聚焦後持續盯著欄位位置一小段時間（涵蓋鍵盤動畫、自動填寫快捷列出現的時間），不管可視範圍變化幾次、什麼時候變化，都會確實把欄位拉回鍵盤上方看得到的地方，不用再猜固定的延遲時間",
+      "重新加回輸入文字時隱藏底部導覽列的功能；並修正欄位自動捲到可視範圍的校正動作，跟 window 流氓捲動歸零機制在極短時間內互相打架、畫面出現閃動的問題",
     ] },
     { category: "醫院資訊", items: [
       "新增醫院表單的「名稱查詢座標」改用醫院名稱查詢（原本是查地址）：地址是選填欄位、常常沒填或格式不一致，醫院名稱幾乎一定會填，也比較容易對到 OpenStreetMap 資料庫裡實際登記的地點",
@@ -8026,7 +8027,18 @@ function resetRogueWindowScroll() {
   document.body.scrollTop = 0;
   document.documentElement.style.scrollBehavior = prevBehavior;
 }
+// scrollIntoView() 校正聚焦欄位位置時，理論上只會捲動 <main> 自己（唯一
+// 真正的捲動容器），跟 window/document 的捲動是各自獨立的兩件事；但 iOS
+// Safari 對「捲到聚焦欄位」這件事本來就有自己的原生流氓行為，不排除它會
+// 在我們呼叫 scrollIntoView() 的同一時間點也跟著又搓一下 window 捲動值，
+// 讓下面這個持續監聽 window scroll 的歸零機制被連續觸發、畫面出現閃動。
+// 所以校正欄位位置的當下先短暫（60ms）標記起來，這段極短時間內先不要
+// 讓歸零機制動作，避免兩邊在同一瞬間互相打架；不是整個聚焦期間都關掉，
+// 一放開就馬上恢復偵測，真正的流氓捲動（不是我們自己校正引起的）還是會
+// 立刻被壓回去。
+let suppressScrollLockUntil = 0;
 window.addEventListener("scroll", () => {
+  if (performance.now() < suppressScrollLockUntil) return;
   if (window.scrollY === 0 && document.documentElement.scrollTop === 0 && document.body.scrollTop === 0) return;
   resetRogueWindowScroll();
 }, { passive: true });
@@ -8061,28 +8073,41 @@ window.addEventListener("scroll", () => {
     const visibleHeight = window.visualViewport.height;
     const margin = 12;
     if (rect.top < margin || rect.bottom > visibleHeight - margin) {
+      suppressScrollLockUntil = performance.now() + 60;
       activeField.scrollIntoView({ block: "center", behavior: "auto" });
     }
     if (performance.now() < deadline) {
       rafId = requestAnimationFrame(() => positionLoop(deadline));
     }
   };
+  // 鍵盤彈起壓縮 visualViewport 的過程中，底部導覽列（flex-shrink:0 貼齊
+  // #app 底部）的版面收合常常跟鍵盤動畫對不齊時序，短暫被鍵盤上緣頂到
+  // 畫面中間、直接蓋住正在輸入的欄位。與其一直跟鍵盤搶那段動畫時序，
+  // 比照多數行動裝置 App 的做法：輸入框一取得焦點就直接把導覽列藏起來
+  // ——反正鍵盤蓋著的那塊高度本來就看不到導覽列，藏起來不影響操作，
+  // 還能整個避開「導覽列位置該怎麼即時跟鍵盤同步」這件事；鍵盤收起、
+  // 版面確定歸位後才顯示回來。
   document.addEventListener("focusin", (e) => {
     if (!isFieldEl(e.target)) return;
     activeField = e.target;
+    const nav = document.querySelector(".bottomnav");
+    if (nav) nav.style.display = "none";
     cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(() => positionLoop(performance.now() + POSITION_GUARD_MS));
   }, true);
   // 保險機制：輸入框失焦（鍵盤開始收起）時，延遲一小段時間讓鍵盤收合
-  // 動畫跑完，強制校正版面。這裡不能只靠 syncAppHeight()——iOS Safari
-  // 就算我們的架構設計成 window/document 本身不捲動，鍵盤彈起時底層還是
-  // 會強制把 window 視窗捲動掉，鍵盤收起後 window.scrollY 不會自動歸零，
-  // 所以要連 window 本身的捲動值一起強制歸零，不能只調整 #app 的高度。
+  // 動畫跑完，先讓導覽列恢復顯示，再強制校正版面。這裡不能只靠
+  // syncAppHeight()——iOS Safari 就算我們的架構設計成 window/document
+  // 本身不捲動，鍵盤彈起時底層還是會強制把 window 視窗捲動掉，鍵盤收起
+  // 後 window.scrollY 不會自動歸零，所以要連 window 本身的捲動值一起
+  // 強制歸零，不能只調整 #app 的高度。
   document.addEventListener("focusout", (e) => {
     if (!isFieldEl(e.target)) return;
     if (activeField === e.target) activeField = null;
     cancelAnimationFrame(rafId);
     setTimeout(() => {
+      const nav = document.querySelector(".bottomnav");
+      if (nav) nav.style.display = "";
       resetRogueWindowScroll();
       syncAppHeight();
       window.dispatchEvent(new Event("resize"));
