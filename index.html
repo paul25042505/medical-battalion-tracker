@@ -1373,7 +1373,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-298-ios-scroll-reset-fix";
+const BUILD_TAG = "2026-07-10-299-hide-nav-on-keyboard";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1947,6 +1947,7 @@ const RELEASE_NOTES = [
       "修正醫院資訊頁搜尋框每打一個注音/拼音符號，輸入法組字跟鍵盤就整個中斷消失、完全打不了字的問題：搜尋框輸入時改成只重繪醫院清單本身，不再整頁重新整理，打字時輸入框不會被打斷",
       "鍵盤收起後底部導覽列卡住的修正再加一層保險：輸入框失焦時延遲讓鍵盤收合動畫跑完，再強制重新校正一次版面高度，涵蓋少數機型視窗高度變化事件沒有確實觸發的情況",
       "找到底部導覽列卡住的真正原因：iOS Safari 就算網頁架構設計成 window 本身不捲動，鍵盤彈起時底層仍會強制捲動 window 視窗，鍵盤收起後這個捲動值不會自動歸零。輸入框失焦時除了校正版面高度，也一併強制把 window/document 的捲動值歸零，才會真的貼齊畫面最下方",
+      "修正點選輸入框跳出鍵盤時，底部導覽列被頂到畫面中間、直接蓋住輸入框看不到自己打了什麼的問題：改成輸入框一取得焦點就直接隱藏導覽列（反正鍵盤蓋著的那塊高度本來就看不到），鍵盤收起、版面確定歸位後才顯示回來，不用再跟鍵盤彈出的動畫時序搶拍",
     ] },
     { category: "醫院資訊", items: [
       "新增醫院表單的「名稱查詢座標」改用醫院名稱查詢（原本是查地址）：地址是選填欄位、常常沒填或格式不一致，醫院名稱幾乎一定會填，也比較容易對到 OpenStreetMap 資料庫裡實際登記的地點",
@@ -8004,15 +8005,30 @@ window.__saveTaskEdit = (ev, taskId) => {
   window.visualViewport.addEventListener("resize", syncAppHeight);
   window.visualViewport.addEventListener("scroll", syncAppHeight);
   syncAppHeight();
+  const isFieldEl = (el) => el && ["INPUT","TEXTAREA","SELECT"].includes(el.tagName);
+  // 鍵盤彈起壓縮 visualViewport 的過程中，底部導覽列（flex-shrink:0 貼齊
+  // #app 底部）的版面收合常常跟鍵盤動畫對不齊時序，短暫被鍵盤上緣頂到
+  // 畫面中間、直接蓋住正在輸入的欄位。與其一直跟鍵盤搶那段動畫時序，
+  // 比照多數行動裝置 App 的做法：輸入框一取得焦點就直接把導覽列藏起來
+  // ——反正鍵盤蓋著的那塊高度本來就看不到導覽列，藏起來不影響操作，
+  // 還能整個避開「導覽列位置該怎麼即時跟鍵盤同步」這件事；鍵盤收起、
+  // 版面確定歸位後才顯示回來。
+  document.addEventListener("focusin", (e) => {
+    if (!isFieldEl(e.target)) return;
+    const nav = document.querySelector(".bottomnav");
+    if (nav) nav.style.display = "none";
+  }, true);
   // 保險機制：輸入框失焦（鍵盤開始收起）時，延遲一小段時間讓鍵盤收合
-  // 動畫跑完，再強制校正一次版面。這裡不能只靠 syncAppHeight()——iOS
-  // Safari 就算我們的架構設計成 window/document 本身不捲動，鍵盤彈起時
-  // 底層還是會強制把 window 視窗捲動掉，鍵盤收起後 window.scrollY 不會
-  // 自動歸零，這才是底部導覽列懸空、卡在畫面中間的真正原因，所以要連
-  // window 本身的捲動值一起強制歸零，不能只調整 #app 的高度。
+  // 動畫跑完，先讓導覽列恢復顯示，再強制校正版面。這裡不能只靠
+  // syncAppHeight()——iOS Safari 就算我們的架構設計成 window/document
+  // 本身不捲動，鍵盤彈起時底層還是會強制把 window 視窗捲動掉，鍵盤收起
+  // 後 window.scrollY 不會自動歸零，所以要連 window 本身的捲動值一起
+  // 強制歸零，不能只調整 #app 的高度。
   document.addEventListener("focusout", (e) => {
-    if (!e.target || !["INPUT","TEXTAREA","SELECT"].includes(e.target.tagName)) return;
+    if (!isFieldEl(e.target)) return;
     setTimeout(() => {
+      const nav = document.querySelector(".bottomnav");
+      if (nav) nav.style.display = "";
       window.scrollTo(0, 0);
       document.body.scrollTop = 0;
       document.documentElement.scrollTop = 0;
