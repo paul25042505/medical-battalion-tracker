@@ -1373,7 +1373,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-293-unit-picker-modal";
+const BUILD_TAG = "2026-07-10-294-unit-freetext-plus-picker";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1992,7 +1992,7 @@ const RELEASE_NOTES = [
       "「任務→天氣」頁的天氣卡片新增「資料時間」：顯示目前這筆天氣描述/溫度對應的預報時段與起訖時間（例如「今天白天（06:00–18:00）」），避免被誤會成即時觀測資料",
     ] },
     { category: "患者紀錄", items: [
-      "患者紀錄「患者基本資料」的患者／對職幹部「單位」欄位改成跟洽公人員選擇器一樣的彈窗選單（搜尋＋可複選＋選完按「完成」才關閉），依旅／營／連編制層級分組列出（302旅、104旅、257旅；旅部、炮兵營、步1營～步5營；旅部連、戰支連、火力連、步1連～步3連、通信連），複選用「、」串接顯示",
+      "患者紀錄「患者基本資料」的患者／對職幹部「單位」欄位維持自由輸入框（成員仍可自行手動填寫），旁邊新增「快速選擇」按鈕，跟洽公人員選擇器一樣彈窗選單（搜尋＋可複選＋選完按「完成」才關閉），依旅／營／連編制層級分組列出（302旅、104旅、257旅；旅部、炮兵營、步1營～步5營；旅部連、戰支連、火力連、步1連～步3連、通信連），選完會用「、」串接帶入輸入框，帶入後仍可繼續手動編輯",
       "患者「級職」欄位改成下拉選單（沿用既有的階級清單），不用再手動打字，跟對職幹部的「階級」欄位一致",
     ] },
   ] },
@@ -3983,17 +3983,6 @@ function quickFillSelect(inputId, options){
     ${options.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("")}
   </select>`;
 }
-// 患者／對職幹部「單位」欄位：跟洽公人員選擇器一樣的彈窗選人按鈕外觀
-// （picker-field），這裡回傳按鈕＋隱藏欄位的 HTML，實際開窗互動見
-// window.__openUnitPicker。
-function unitPickerFieldHtml(inputId, value){
-  const v = value || "";
-  return `<button type="button" class="picker-field" onclick="window.__openUnitPicker(this)">
-      <span class="picker-field-text${v?'':' placeholder'}">${v ? esc(v) : '請選擇單位'}</span>${icon('chevronDown',16)}
-    </button>
-    <input type="hidden" id="${inputId}" class="unit-picker-value" value="${esc(v)}">`;
-}
-
 /* =========================================================
    9) 畫面：登入 / 待審核
    ========================================================= */
@@ -5065,7 +5054,7 @@ function viewVitalsPage(taskId, id, adding){
       ${isInitialEntry ? `
       <div class="form-section">
         <div class="form-section-title"><span class="step-num">1</span>患者基本資料</div>
-        <div class="field"><label>單位（選填）</label>${unitPickerFieldHtml('vf-patient-unit', editingVitals?.patientUnit)}</div>
+        <div class="field"><div class="field-label-row"><label>單位（選填）</label><button type="button" class="icon-btn" onclick="window.__openUnitPicker(this)">快速選擇</button></div><input id="vf-patient-unit" value="${esc(editingVitals?.patientUnit||'')}" placeholder="例如：第一連"></div>
         <div class="field"><label>級職（選填）</label>
           <select id="vf-patient-rank">
             <option value="">請選擇級職</option>
@@ -5075,7 +5064,7 @@ function viewVitalsPage(taskId, id, adding){
         <div class="field"><label>姓名（選填）</label><input id="vf-patient-name" value="${esc(editingVitals?.patientName||'')}" placeholder="例如：王小明"></div>
         <div class="field"><label>性別（選填）</label>${chipGroup('vf-patient-gender', GENDER_OPTIONS, editingVitals?.patientGender||'', false)}</div>
         <div class="form-section-title" style="margin-top:20px;">對職幹部</div>
-        <div class="field"><div class="field-label-row"><label>單位（選填）</label><button type="button" class="icon-btn" onclick="window.__copyPatientUnitToLiaison()">同患者單位</button></div>${unitPickerFieldHtml('vf-liaison-unit', editingVitals?.liaisonUnit)}</div>
+        <div class="field"><div class="field-label-row"><label>單位（選填）</label><div style="display:flex; gap:8px; align-items:center;"><button type="button" class="icon-btn" onclick="window.__openUnitPicker(this)">快速選擇</button><button type="button" class="icon-btn" onclick="window.__copyPatientUnitToLiaison()">同患者單位</button></div></div><input id="vf-liaison-unit" value="${esc(editingVitals?.liaisonUnit||'')}" placeholder="例如：第一連"></div>
         <div class="field"><label>階級（選填）</label>
           <select id="vf-liaison-rank">
             <option value="">請選擇階級</option>
@@ -6971,12 +6960,7 @@ window.__resetVitalsTime = () => {
 window.__copyPatientUnitToLiaison = () => {
   const src = document.getElementById("vf-patient-unit");
   const dst = document.getElementById("vf-liaison-unit");
-  if (!src || !dst) return;
-  dst.value = src.value;
-  const textEl = dst.closest(".field")?.querySelector(".picker-field-text");
-  if (!textEl) return;
-  if (dst.value) { textEl.textContent = dst.value; textEl.classList.remove("placeholder"); }
-  else { textEl.textContent = "請選擇單位"; textEl.classList.add("placeholder"); }
+  if (src && dst) dst.value = src.value;
 };
 // GCS 三個下拉選單一有變動就重新組字串寫回隱藏欄位（vf-gcs），格式維持
 // 跟舊資料相容的 "E4V5M6"，後面加註總分方便直接閱讀；三個選單沒有全部
@@ -7008,10 +6992,13 @@ window.__applyQuickFillSelect = (inputId, selectEl) => {
   el.value = parts.join("、");
 };
 /* =========================================================
-   患者／對職幹部「單位」選擇器：跟洽公人員選擇器（multiPersonPicker）
-   同一套彈窗互動——搜尋、可複選、選完按「完成」才關閉——差別只在分組
-   依據是固定的旅／營／連編制清單（PATIENT_UNIT_GROUPS），不是動態的
-   state.personnel，所以不用「跨單位選人」那個切換開關。
+   患者／對職幹部「單位」選擇器：欄位本身還是一般自由輸入框（成員可以
+   自己手動填寫不在清單裡的單位），旁邊「快速選擇」按鈕另外開一個跟
+   洽公人員選擇器（multiPersonPicker）同一套彈窗互動——搜尋、可複選、
+   選完按「完成」才關閉——差別只在分組依據是固定的旅／營／連編制清單
+   （PATIENT_UNIT_GROUPS），不是動態的 state.personnel，所以不用「跨
+   單位選人」那個切換開關。「完成」時直接覆蓋輸入框內容（用「、」串接
+   已勾選的項目），使用者也可以在快速選擇之後再手動編輯輸入框內容。
    ========================================================= */
 let unitPickerCtx = null; // { selected: Set<string>, fieldWrap }
 function unitPickerRows(query, selected){
@@ -7046,7 +7033,7 @@ function closeUnitPicker(){
 }
 window.__openUnitPicker = (triggerBtn) => {
   const fieldWrap = triggerBtn.closest(".field");
-  const valueInput = fieldWrap.querySelector(".unit-picker-value");
+  const valueInput = fieldWrap.querySelector("input");
   const currentValues = (valueInput.value || "").split("、").map(s => s.trim()).filter(Boolean);
   const selected = new Set(currentValues);
   const overlay = document.createElement("div");
@@ -7073,17 +7060,8 @@ window.__filterUnitPicker = (query) => {
 window.__commitUnitPicker = () => {
   if (!unitPickerCtx) return;
   const { selected, fieldWrap } = unitPickerCtx;
-  const valueInput = fieldWrap.querySelector(".unit-picker-value");
-  const textEl = fieldWrap.querySelector(".picker-field-text");
-  const joined = [...selected].join('、');
-  valueInput.value = joined;
-  if (selected.size) {
-    textEl.textContent = joined;
-    textEl.classList.remove("placeholder");
-  } else {
-    textEl.textContent = "請選擇單位";
-    textEl.classList.add("placeholder");
-  }
+  const valueInput = fieldWrap.querySelector("input");
+  valueInput.value = [...selected].join('、');
   closeUnitPicker();
 };
 // 勾選過去病史/過敏史/處置項目的「其他」（或過敏史的「藥物」「食物」）時，
