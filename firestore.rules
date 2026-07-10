@@ -51,8 +51,10 @@ service cloud.firestore {
     // 寫入分三種身分：
     // 1) admin：什麼欄位都能改（角色/單位指派、花名冊資料都算）。
     // 2) 本人：只能改「名冊類」欄位（displayName/rank/phone/emtLevel）跟
-    //    fcmTokens（開關推播通知要用），不能碰 role/unit/email，避免自己
-    //    偷改權限或跨單位。
+    //    fcmTokens（開關推播通知要用）、pushPermission/pushDevice/
+    //    pushSubscribedAt（推播控制台用，裝置自我回報通知權限狀態／裝置
+    //    種類／訂閱時間，只有自己的裝置讀得到這些資訊，不能由他人代填），
+    //    不能碰 role/unit/email，避免自己偷改權限或跨單位。
     // 3) 高勤官（不分單位）／主官管（限自己單位、且改前改後單位不變）：
     //    可以改其他人的「名冊類」欄位（例如幫同單位的人補電話），但一樣
     //    不能碰 role/unit/email——這幾個欄位的異動只有 admin 能做。
@@ -78,9 +80,9 @@ service cloud.firestore {
                     // 方便管理員審核（見 index.html 的 updatePendingProfile）；
                     // 一旦通過審核就不再適用這條，不能自己再改單位逃去別的單位。
                     || (isSignedIn() && request.auth.uid == uid && resource.data.role == 'pending'
-                        && onlyChanged(['unit','displayName','rank','phone','emtLevel','fcmTokens']))
+                        && onlyChanged(['unit','displayName','rank','phone','emtLevel','fcmTokens','pushPermission','pushDevice','pushSubscribedAt']))
                     || (isSignedIn() && request.auth.uid == uid
-                        && onlyChanged(['displayName','rank','phone','emtLevel','fcmTokens']))
+                        && onlyChanged(['displayName','rank','phone','emtLevel','fcmTokens','pushPermission','pushDevice','pushSubscribedAt']))
                     || ((isDutyOfficer() || (isCommander() && sameUnit(resource.data.unit) && sameUnit(request.resource.data.unit)))
                         && onlyChanged(['displayName','rank','phone','emtLevel']));
       // 只能刪除還沒被登入認領過的預建資料（role 'unclaimed'）；已經是
