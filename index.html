@@ -380,14 +380,20 @@
   /* ---- 患者狀況：突發狀況時記錄生命徵象/主訴，任務卡片凸顯提示。
      有患者的急迫性比單純的勤務狀態更高，所以整張卡片的液態變色強制蓋成
      紅色（不管當下勤務狀態本來是哪個顏色），外圍再疊一圈慢速呼吸的紅色
-     光暈，跟一般狀態卡片的光斑區分開來。 ---- */
+     光暈，跟一般狀態卡片的光斑區分開來。額外疊一層從卡片邊緣往外擴散、
+     邊擴散邊淡出的漣漪圈（box-shadow 的擴散半徑從 0 長到 18px、顏色從
+     半透明變全透明），跟呼吸光暈是同一個 box-shadow 屬性裡不同的圖層，
+     不會互相取代；box-shadow 本身不會被 .spatial-card 的 overflow:hidden
+     裁掉（overflow 只裁子元素內容，不裁元素自己的陰影），所以可以放心讓
+     漣漪擴散到卡片外面。 ---- */
   .task-card.has-patient{
     --card-accent: var(--red);
     animation:patientCardGlow 2.4s ease-in-out infinite;
   }
   @keyframes patientCardGlow{
-    0%, 100%{ box-shadow:0 1px 0 0 color-mix(in srgb, #fff 8%, transparent) inset, var(--spatial-depth-shadow), 0 0 0 1px color-mix(in srgb, var(--red) 30%, transparent), 0 12px 30px -14px color-mix(in srgb, var(--red) 45%, transparent); }
-    50%{ box-shadow:0 1px 0 0 color-mix(in srgb, #fff 8%, transparent) inset, var(--spatial-depth-shadow), 0 0 0 1px color-mix(in srgb, var(--red) 55%, transparent), 0 12px 34px -14px color-mix(in srgb, var(--red) 65%, transparent); }
+    0%{ box-shadow:0 1px 0 0 color-mix(in srgb, #fff 8%, transparent) inset, var(--spatial-depth-shadow), 0 0 0 1px color-mix(in srgb, var(--red) 30%, transparent), 0 12px 30px -14px color-mix(in srgb, var(--red) 45%, transparent), 0 0 0 0 color-mix(in srgb, var(--red) 45%, transparent); }
+    50%{ box-shadow:0 1px 0 0 color-mix(in srgb, #fff 8%, transparent) inset, var(--spatial-depth-shadow), 0 0 0 1px color-mix(in srgb, var(--red) 55%, transparent), 0 12px 34px -14px color-mix(in srgb, var(--red) 65%, transparent), 0 0 0 9px color-mix(in srgb, var(--red) 16%, transparent); }
+    100%{ box-shadow:0 1px 0 0 color-mix(in srgb, #fff 8%, transparent) inset, var(--spatial-depth-shadow), 0 0 0 1px color-mix(in srgb, var(--red) 30%, transparent), 0 12px 30px -14px color-mix(in srgb, var(--red) 45%, transparent), 0 0 0 18px color-mix(in srgb, var(--red) 0%, transparent); }
   }
   .patient-badge{
     display:inline-flex; align-items:center; gap:4px; padding:5px 10px; border-radius:999px;
@@ -1273,7 +1279,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-258-erstandby-grid-rotate";
+const BUILD_TAG = "2026-07-10-259-patient-card-ripple";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1727,6 +1733,9 @@ const RELEASE_NOTES = [
     ] },
     { category: "急診待命", items: [
       "急診待命卡片欄位順序調整：值班醫官移到車長原本的位置（右上），車長移到駕駛原本的位置（左下），駕駛移到值班醫官原本的位置（右下）",
+    ] },
+    { category: "任務管理", items: [
+      "有患者記錄的任務卡片，外圍原本的呼吸光暈再疊一圈往外擴散、邊擴散邊淡出的漣漪效果，更容易在清單裡一眼注意到",
     ] },
   ] },
   { date: "2026/07/09", groups: [
