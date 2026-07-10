@@ -57,7 +57,14 @@ service cloud.firestore {
     //    可以改其他人的「名冊類」欄位（例如幫同單位的人補電話），但一樣
     //    不能碰 role/unit/email——這幾個欄位的異動只有 admin 能做。
     match /users/{uid} {
-      allow read: if isStaff() || sameUnit(resource.data.unit);
+      // 本人一定要能讀到自己的文件，而且這個判斷不能經過 isStaff()／
+      // sameUnit()（兩者都會呼叫 myUserDoc() 對自己的 uid 做 get()）：
+      // 使用者第一次登入時，自己的 users/{uid} 文件根本還不存在，
+      // get() 對不存在的文件求值會噴錯，導致整條 || 判斷式失敗、
+      // 回傳 403，新帳號會卡在「登入後初始化失敗」動彈不得。
+      // request.auth.uid == uid 純粹比對路徑跟權杖，不會呼叫 get()，
+      // 排在最前面才能確保這個 short-circuit 一定先被評估到。
+      allow read: if (isSignedIn() && request.auth.uid == uid) || isStaff() || sameUnit(resource.data.unit);
       // 建立分兩種情境：(a) 使用者自己第一次登入，前端自動建立一筆
       // role:'pending'、unit 空白的待審核帳號；(b) 管理員/高勤官/主官管
       // 幫還沒登入過的人預先建立資料，role 一定要是 'unclaimed'，不能藉
