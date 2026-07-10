@@ -1309,7 +1309,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-278-nhi-registry-fuzzy-search";
+const BUILD_TAG = "2026-07-10-279-fix-er-realtime-field-match";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1810,8 +1810,13 @@ function findNhiHospitalMatches(query){
    影響其他既有功能），之後可以照 Cloud Functions 的 log（有記錄第一筆
    原始資料）調整這份清單。
    ========================================================= */
-const ER_ID_KEYS = ["HOSP_ID","HOSP_NO","HOSP_CODE","HospId","HospNo","HospCode","hospId","hospNo","hospCode"];
-const ER_NAME_KEYS = ["HOSP_NAME","HospName","hospName","NAME","name"];
+// 部署後從 Cloud Functions log 實際看到的原始資料確認：健保署這支 API
+// 真正的欄位名稱是 hosP_ID／hosP_NAME 這種不規則大小寫（不是一般常見的
+// HOSP_ID／HOSP_NAME），所以最前面就把它們列進來、放第一順位比對。其餘
+// 猜測的大小寫寫法繼續保留當備援，避免健保署之後調整欄位命名又要重新
+// 排查一次。
+const ER_ID_KEYS = ["hosP_ID","HOSP_ID","HOSP_NO","HOSP_CODE","HospId","HospNo","HospCode","hospId","hospNo","hospCode"];
+const ER_NAME_KEYS = ["hosP_NAME","HOSP_NAME","HospName","hospName","NAME","name"];
 const ER_WAIT_SEE_KEYS = ["waiT_SEE_CNT","WAIT_SEE_CNT","WaiT_SEE_CNT","waitSeeCnt","WaitSeeCnt"];
 const ER_WAIT_GENERAL_KEYS = ["waiT_GENERAL_CNT","WAIT_GENERAL_CNT","WaiT_GENERAL_CNT","waitGeneralCnt","WaitGeneralCnt"];
 const ER_WAIT_ICU_KEYS = ["waiT_ICU_CNT","WAIT_ICU_CNT","WaiT_ICU_CNT","waitIcuCnt","WaitIcuCnt"];
@@ -1877,6 +1882,7 @@ const RELEASE_NOTES = [
       "回報「出勤」的「送醫醫院」下拉選單改成依醫院名稱筆畫排序，不用再從一長串沒有規律的清單裡找",
       "新增健保署急診即時資訊整合：新增/編輯醫院表單補上「健保特約代號」欄位（選填），填了之後「醫院資訊」列表會顯示該院即時的等待看診/等待住院/等待ICU人數，以及119滿床通報的紅色標示；新增「依等待看診人數排序」切換按鈕；資料每15分鐘由後端排程更新一次，目前健保署只公開重度級急救責任醫院的資料",
       "新增/編輯醫院表單新增「查詢健保署清冊資料」功能：內建健保署「全民健康保險特約醫事機構基本資料」清冊（醫學中心/區域醫院/地區醫院），不用打完整官方全名，打部分關鍵字（「臺」「台」不影響查詢）就能查，查到多筆會列出來選；選定後自動套用正確名稱/電話/地址/醫院層級/健保特約代號，清冊上顯示這間機構沒有登記急診相關科別/服務項目時會另外提醒，避免被導航到只有門診沒有急診的機構",
+      "修正健保署急診即時資訊（119滿床/等待人數）填了健保特約代號還是完全比對不到、卡片上什麼都不顯示的問題：實際部署後從後端 log 才看到這支 API 真正回傳的醫院識別欄位是不規則大小寫的 hosP_ID/hosP_NAME（跟原本猜測的 HOSP_ID 對不起來），已修正比對邏輯",
     ] },
     { category: "急診待命", items: [
       "急診待命卡片欄位順序調整：值班醫官移到車長原本的位置（右上），車長移到駕駛原本的位置（左下），駕駛移到值班醫官原本的位置（右下）",
