@@ -77,7 +77,12 @@ async function resolveAllTokens() {
    會白工嘗試送到同一個死掉的 token）
    ========================================================= */
 async function sendPush(tokens, title, body) {
-  if (!tokens.length) return;
+  // 之前這裡完全沒有 info 等級的紀錄，「找不到收件人」「送出成功」「送出
+  // 但每個 token 都失敗」在 Cloud Functions 的 Logs 裡看起來一模一樣（都是
+  // 執行成功、沒有任何 log），沒辦法排查「訂閱了但收不到」是卡在哪一步。
+  // 這裡補上：沒收件人時明確記一筆、送出後記成功/失敗筆數、每個失敗的
+  // token 記下實際的錯誤代碼。
+  if (!tokens.length) { logger.info(`推播「${title}」沒有符合資格的收件人（找不到 fcmTokens），略過`); return; }
   const messaging = getMessaging();
   let resp;
   try {
@@ -91,10 +96,12 @@ async function sendPush(tokens, title, body) {
     logger.error("推播傳送失敗", e);
     return;
   }
+  logger.info(`推播「${title}」送出 ${tokens.length} 筆 token，成功 ${resp.successCount}，失敗 ${resp.failureCount}`);
   const invalidTokens = [];
   resp.responses.forEach((r, i) => {
     if (!r.success) {
       const code = r.error && r.error.code;
+      logger.warn(`推播失敗（token 結尾 …${tokens[i].slice(-8)}）：${code || (r.error && r.error.message) || r.error}`);
       if (code === "messaging/registration-token-not-registered" || code === "messaging/invalid-registration-token") {
         invalidTokens.push(tokens[i]);
       }
