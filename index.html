@@ -166,14 +166,19 @@
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   /* 全站禁止選取文字（比照原生 App 手感，長按/雙點不會跳出選取把手或
      系統選單），表單欄位例外——輸入框裡的文字本來就要能選取/編輯，
-     禁掉會讓使用者連游標定位、全選、複製貼上都做不到。 */
-  *{
-    -webkit-user-select:none; -moz-user-select:none; user-select:none;
-    -webkit-touch-callout:none;
-  }
-  input, textarea, select, [contenteditable]{
-    -webkit-user-select:text; -moz-user-select:text; user-select:text;
-    -webkit-touch-callout:default;
+     禁掉會讓使用者連游標定位、全選、複製貼上都做不到。
+     只鎖 (pointer: coarse)（觸控裝置：手機/平板）——滑鼠操作的電腦
+     （pointer: fine）維持瀏覽器原生選取行為，不然滑鼠使用者連拖曳選字、
+     複製車牌號碼/電話這種常見需求都做不到。 */
+  @media (pointer: coarse){
+    *{
+      -webkit-user-select:none; -moz-user-select:none; user-select:none;
+      -webkit-touch-callout:none;
+    }
+    input, textarea, select, [contenteditable]{
+      -webkit-user-select:text; -moz-user-select:text; user-select:text;
+      -webkit-touch-callout:default;
+    }
   }
   /* App Shell 版面：#app 固定成裝置目前實際可視高度（100dvh，隨網址列／
      工具列收合即時更新，不是收起來後的最大高度），本身 overflow:hidden
@@ -1304,7 +1309,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-271-line-browser-guide";
+const BUILD_TAG = "2026-07-10-272-desktop-text-select";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1778,6 +1783,7 @@ const RELEASE_NOTES = [
       "首頁「今日概況」統計卡片改版：標籤跟色塊圖示改到頂排（標籤左、圖示右），大數字移到最下面靠左，取代原本圖示/數字/標籤整個置中堆疊的排法，數字字級也再放大一階更醒目",
       "首頁與任務頁「勤務」「洽公」清單標題改成雙語大標（例如「SERVICE／勤務」「LIAISON／洽公」），字級放大、中文加粗，跟其他區塊標題的小型全大寫樣式區分開來，兩份清單更容易一眼分辨",
       "上述「勤務」「洽公」雙語大標顏色改成灰色，不用跟卡片標題一樣的黑色，維持「標題」該有的次要視覺份量",
+      "全站禁止選取文字的設定改成只鎖觸控裝置（手機/平板）：用電腦（滑鼠）開啟網頁時，維持瀏覽器原生的文字選取行為，可以正常拖曳選字、複製車牌號碼/電話等資訊",
     ] },
     { category: "醫院資訊", items: [
       "新增醫院表單的「名稱查詢座標」改用醫院名稱查詢（原本是查地址）：地址是選填欄位、常常沒填或格式不一致，醫院名稱幾乎一定會填，也比較容易對到 OpenStreetMap 資料庫裡實際登記的地點",
