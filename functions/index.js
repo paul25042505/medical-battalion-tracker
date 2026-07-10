@@ -214,6 +214,51 @@ exports.onVitalsCreated = onDocumentCreated("vitals/{vitalsId}", async (event) =
   await sendPush(tokens, "患者生命徵象異常", `${t.title || "勤務"}：患者生命徵象出現危急異常，請留意`);
 });
 
+/* =========================================================
+   4) 預先建立人員帳號：管理員可以在「基礎資料管理 → 人員」先幫還沒登入過
+   的成員建好資料（含 email），對方第一次用該 email 登入時，前端會在
+   users/{uid} 建立一筆 role:"pending" 的新帳號（見 index.html 的
+   onAuthStateChanged）。這裡監聽 users 新增，比對 email 找有沒有相符的
+   預建人員資料，有的話直接把單位/階級/電話/EMT證照寫回這個新帳號、
+   角色設成一般成員，不用等管理員手動審核；同時把預建的那筆人員資料
+   換成用 uid 命名的正式版本（跟 syncPersonnelFromUsers 產生的格式一致），
+   避免同一個人的名字在人員名冊/選車長駕駛下拉選單裡出現兩筆。
+
+   一定要用 client 端無法做到的方式（Cloud Function 的後台權限）才能查
+   personnel 集合：一個全新、還沒被指派單位的帳號，依 firestore.rules
+   （sameUnit() 需要先有單位才能讀 personnel），沒有權限自己查有沒有預建
+   資料，只能靠後端用 Admin SDK（不受安全規則限制）代為比對。
+
+   信箱比對前先轉小寫、去頭尾空白，避免大小寫或多打空格造成配對不到；
+   有重複信箱的預建資料只會取第一筆，不特別擋（表單目前也沒做唯一性
+   檢查）。沒有 unit 的預建資料理論上不會發生（新增人員的表單一定要選
+   單位），這裡不另外防呆。 ========================================= */
+exports.onUserCreated = onDocumentCreated("users/{uid}", async (event) => {
+  if (!(await claimEventOnce(event.id))) return;
+  const snap = event.data;
+  if (!snap) return;
+  const uid = event.params.uid;
+  const u = snap.data();
+  const email = u && u.email ? String(u.email).trim().toLowerCase() : "";
+  if (!email) return;
+  const match = await db.collection("personnel").where("email", "==", email).limit(1).get();
+  if (match.empty) return;
+  const doc = match.docs[0];
+  const person = doc.data();
+  const mirrored = {
+    unit: person.unit, name: u.displayName || person.name || "", title: person.title || "",
+    phone: person.phone || "", emtLevel: person.emtLevel || "", active: true, role: "member", email,
+  };
+  const batch = db.batch();
+  batch.set(db.collection("users").doc(uid), {
+    role: "member", unit: person.unit, rank: person.title || "", phone: person.phone || "", emtLevel: person.emtLevel || "",
+  }, { merge: true });
+  batch.set(db.collection("personnel").doc(uid), mirrored);
+  batch.delete(doc.ref);
+  await batch.commit();
+  logger.info(`帳號 ${uid}（${email}）比對到預建人員資料，已自動指派單位 ${person.unit}`);
+});
+
 // 純函式/資料存取邏輯額外匯出一份，方便寫單元測試直接呼叫驗證（不會
 // 影響部署——firebase deploy 只認得用 onDocumentCreated 等 v2 trigger
 // builder 包起來的 exports，這個純物件會被忽略，不會變成多一個雲端函式）。

@@ -1279,7 +1279,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-259-patient-card-ripple";
+const BUILD_TAG = "2026-07-10-260-personnel-prebind-email";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1287,7 +1287,7 @@ const BUILD_TAG = "2026-07-10-259-patient-card-ripple";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "1.15";
+const APP_MAJOR_MINOR = "1.16";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -1736,6 +1736,9 @@ const RELEASE_NOTES = [
     ] },
     { category: "任務管理", items: [
       "有患者記錄的任務卡片，外圍原本的呼吸光暈再疊一圈往外擴散、邊擴散邊淡出的漣漪效果，更容易在清單裡一眼注意到",
+    ] },
+    { category: "帳號管理", items: [
+      "「基礎資料管理 → 人員」新增人員表單補上「信箱（選填）」欄位：填了信箱的人員資料可以先建好單位/階級/電話/EMT證照，等這個人第一次用同一個信箱登入時，系統會自動比對、直接指派好這些資料並核准為一般成員，不用再手動審核；還沒登入的預建資料會在人員名冊列表標示「尚未登入」",
     ] },
   ] },
   { date: "2026/07/09", groups: [
@@ -2517,8 +2520,12 @@ async function updatePendingProfile(unit, displayName, rank, phone, emtLevel){
 }
 
 /* ---- 基礎資料管理：人員／車輛／行車紀錄器（依單位分類，供各下拉選單動態讀取） ---- */
-async function addPersonnel(unit, name, title, phone, emtLevel){
-  await fsAddDoc("personnel", { unit, name, title, phone: phone||"", emtLevel: emtLevel||"", active: true });
+// email（選填）是給「預先建立帳號」用的：填了信箱的人員資料，等那個人第一次
+// 用同一個信箱登入時，後端 Cloud Function（onUserCreated，見 functions/index.js）
+// 會自動比對、把這裡填好的單位/階級/電話/EMT 證照指派給他的新帳號，不用再等
+// 管理員手動審核；比對前先轉小寫、去頭尾空白，避免大小寫或多打空格對不起來。
+async function addPersonnel(unit, name, title, phone, emtLevel, email){
+  await fsAddDoc("personnel", { unit, name, title, phone: phone||"", emtLevel: emtLevel||"", email: email ? email.trim().toLowerCase() : "", active: true });
   showToast("已新增人員"); if (personnelPoll) personnelPoll.refreshNow();
 }
 async function addVehicle(unit, plate, type){
@@ -5873,7 +5880,7 @@ function viewBaseDataPersonnel(){
     <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('personnel', null, '${unit}')">${icon('plus',15)} 新增人員</button>
     ${rows.length ? rows.map(x => `
       <div class="admin-row">
-        <div><div class="name">${esc(x.name)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.title||'—')}${x.emtLevel?' '+emtBadgeHtml(x.emtLevel):''}${x.phone?' · '+esc(x.phone):''}</div></div>
+        <div><div class="name">${esc(x.name)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.title||'—')}${x.emtLevel?' '+emtBadgeHtml(x.emtLevel):''}${x.phone?' · '+esc(x.phone):''}${x.email?' · '+esc(x.email):''}${x.email && !x.role ? ' · <span style="color:var(--amber-text); font-weight:700;">尚未登入</span>' : ''}</div></div>
         <div style="display:flex; gap:6px; flex-wrap:wrap;">
           <button class="icon-btn" onclick="window.__openBaseDataModal('personnel','${x.id}','${unit}')">編輯</button>
           <button class="icon-btn" onclick="window.__toggleBaseData('personnel','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
@@ -5986,7 +5993,9 @@ function viewBaseDataModal(){
           <option value="">請選擇證照等級</option>
           ${EMT_LEVELS.map(l => `<option value="${l}" ${editing?.emtLevel===l?'selected':''}>${l}</option>`).join("")}
         </select>
-      </div>`;
+      </div>
+      <div class="field"><label>信箱（選填，用於預先建立帳號）</label><input name="email" type="email" inputmode="email" value="${esc(editing?.email||'')}" placeholder="例如：example@gmail.com"></div>
+      <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">填了信箱，這個人第一次用同一個 Google 帳號登入時，會直接套用這裡設定的單位/階級/電話/EMT 證照，不用再等管理員審核。</div>`;
   } else if (coll === "vehicles") {
     title = editing ? "編輯車輛" : "新增車輛";
     fields = `
@@ -6685,12 +6694,12 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
   const action = id
-    ? (coll === "personnel" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"", emtLevel: f.get("emtLevel")||"" })
+    ? (coll === "personnel" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"", emtLevel: f.get("emtLevel")||"", email: (f.get("email")||"").trim().toLowerCase() })
        : coll === "vehicles" ? updateBaseData(coll, id, { plate: f.get("plate"), type: f.get("type") })
        : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return updateBaseData(coll, id, { name: f.get("name"), county: f.get("county"), level: f.get("level"), phone: f.get("phone")||"", note: f.get("note")||"", district: f.get("district")||"", address: f.get("address")||"", lat: c ? c.lat : null, lng: c ? c.lng : null }); })()
        : coll === "doctors" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"" })
        : updateBaseData(coll, id, { code: f.get("code") }))
-    : (coll === "personnel" ? addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone"), f.get("emtLevel"))
+    : (coll === "personnel" ? addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone"), f.get("emtLevel"), f.get("email"))
        : coll === "vehicles" ? addVehicle(unit, f.get("plate"), f.get("type"))
        : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return addHospital(f.get("county"), f.get("name"), f.get("level"), f.get("phone"), f.get("note"), f.get("district"), f.get("address"), c ? c.lat : null, c ? c.lng : null); })()
        : coll === "doctors" ? addDoctor(f.get("name"), f.get("title"), f.get("phone"))
