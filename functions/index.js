@@ -384,6 +384,46 @@ exports.migratePersonnelToUsers = onRequest(async (req, res) => {
   }
 });
 
+/* =========================================================
+   8) 健保署急診即時資訊同步（每 15 分鐘）
+   來源：衛福部中央健康保險署「重度級急救責任醫院急診即時訊息」，只涵蓋
+   重度級急救責任醫院（醫院資訊頁的「醫院層級」是我們自己的分類，跟這裡
+   無關），不是每一間醫院都查得到資料。前端用「基礎資料管理→醫院」裡
+   admin 手動填的「健保特約代號」（hospitals/{id}.nhiCode）比對是哪一間。
+
+   改用後端排程呼叫（而不是前端每個使用者的手機各自直接打這支公開
+   API）有兩個理由：一是這個政府端點是否允許瀏覽器端跨網域（CORS）直接
+   呼叫並不確定，用後端呼叫完全不受這個限制；二是不用讓全營每支手機都
+   各自打一次這支公開 API，一次排程呼叫、全部使用者共用同一份快取結果
+   即可。整包存成單一文件（不是一間醫院一個文件），前端一次讀取後自己
+   在記憶體裡比對，不用另外查詢。
+
+   欄位解讀依需求文件給的欄位名稱，但無法在部署前實際打這支 API 驗證
+   真正的欄位名稱大小寫是否完全一致，所以下面把回傳的第一筆資料完整
+   記錄到 log，部署後如果前端比對不到資料，先看這筆 log 裡實際的欄位
+   名稱，再調整前端的 ER_*_KEYS 對照表即可，不需要重新部署這支函式本身。
+   ========================================================= */
+exports.syncErRealtime = onSchedule("every 15 minutes", async () => {
+  try {
+    const res = await fetch("https://info.nhi.gov.tw/api/inae4000/inae4001s01/SQL0002", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ AREA_NO: "", CONT_TYPE: "" }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const records = Array.isArray(data) ? data
+      : Array.isArray(data && data.data) ? data.data
+      : Array.isArray(data && data.records) ? data.records
+      : [];
+    if (records.length) logger.info("健保署急診即時資訊範例（第一筆原始資料，供比對欄位名稱用）", records[0]);
+    await db.doc("erRealtime/latest").set({ records, fetchedAt: new Date(), recordCount: records.length });
+    logger.info(`健保署急診即時資訊同步完成，共 ${records.length} 筆`);
+  } catch (e) {
+    logger.error("健保署急診即時資訊同步失敗", e);
+  }
+});
+
 // 純函式/資料存取邏輯額外匯出一份，方便寫單元測試直接呼叫驗證（不會
 // 影響部署——firebase deploy 只認得用 onDocumentCreated 等 v2 trigger
 // builder 包起來的 exports，這個純物件會被忽略，不會變成多一個雲端函式）。

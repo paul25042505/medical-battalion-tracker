@@ -172,6 +172,14 @@ service cloud.firestore {
       allow create, update, delete: if isStaff() || isCommander();
     }
 
+    // 健保署急診即時資訊快取（見 functions/index.js 的 syncErRealtime，每
+    // 15 分鐘排程呼叫一次），只有這支排程函式（Admin SDK，本來就不受安全
+    // 規則限制）會寫入，一般使用者/前端一律唯讀，不開放任何人直接寫入。
+    match /erRealtime/{id} {
+      allow read: if isActive();
+      allow write: if false;
+    }
+
     // 急診待命：兩個醫務所地點固定，每筆文件只存 currentTaskId 指向目前
     // 綁定的待命勤務（實際車號/車長/駕駛/值班醫官資料都在 tasks 集合裡）。
     // 這個指標是建立待命勤務當下由建立者自動寫入，寫入權限比照建立勤務
