@@ -1309,7 +1309,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-273-reverse-geocode-address";
+const BUILD_TAG = "2026-07-10-274-hospital-tier-field";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1762,6 +1762,7 @@ function fuelOptions(sel){
    並提供鄰近急救責任醫院查詢（等級、電話）。
    ========================================================= */
 const HOSPITAL_LEVELS = ["重度級", "中度級", "一般級"];
+const HOSPITAL_TIERS = ["醫學中心", "區域醫院", "地區醫院", "基層診所"];
 const FEEDBACK_CATEGORIES = [
   { key: "suggestion", label: "建議", icon: "lightbulb" },
   { key: "issue", label: "問題回報", icon: "alert" },
@@ -1769,7 +1770,6 @@ const FEEDBACK_CATEGORIES = [
   { key: "other", label: "其他", icon: "chat" }
 ];
 const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => [c.key, c.label]));
-const HOSPITAL_COUNTIES = ["臺中市", "嘉義市", "嘉義縣"];
 // 「關於系統 → 更新紀錄」的內容來源：每次出貨（bump BUILD_TAG）都要在最上面
 // 補一筆當天的異動項目，讓這頁跟著實際出貨內容走，不是寫死不會更新的文字
 // （這個做法也記在 CLAUDE.md 的出貨檢查清單裡）。items 是條列式短句（不是
@@ -1788,6 +1788,7 @@ const RELEASE_NOTES = [
     { category: "醫院資訊", items: [
       "新增醫院表單的「名稱查詢座標」改用醫院名稱查詢（原本是查地址）：地址是選填欄位、常常沒填或格式不一致，醫院名稱幾乎一定會填，也比較容易對到 OpenStreetMap 資料庫裡實際登記的地點",
       "「重新定位／顯示附近醫院」的「目前定位」補上詳細地址（原本只顯示到縣市+行政區）：定位成功後額外反查 GPS 座標對應的地址並顯示；反查失敗時（逾時、限流等）靜默退回原本的縣市+行政區顯示，不影響醫院排序功能",
+      "新增/編輯醫院表單新增「醫院層級」欄位（醫學中心／區域醫院／地區醫院／基層診所），並移除「縣市」「行政區」欄位；醫院列表跟著改顯示醫院層級，不再顯示縣市/行政區。「顯示附近醫院」排序改成只看醫院是否登記座標算實際距離，不再有「同行政區/同縣市」這個中間層級——建議之後新增醫院時盡量填座標，排序才會準確",
     ] },
     { category: "急診待命", items: [
       "急診待命卡片欄位順序調整：值班醫官移到車長原本的位置（右上），車長移到駕駛原本的位置（左下），駕駛移到值班醫官原本的位置（右下）",
@@ -2573,9 +2574,9 @@ async function addRecorder(unit, code){
   await fsAddDoc("recorders", { unit, code, active: true });
   showToast("已新增行車紀錄器"); if (recordersPoll) recordersPoll.refreshNow();
 }
-async function addHospital(county, name, level, phone, note, district, address, lat, lng){
+async function addHospital(name, tier, level, phone, note, address, lat, lng){
   const coords = (lat != null && lng != null) ? { lat, lng } : {};
-  await fsAddDoc("hospitals", { county, name, level, phone: phone||"", note: note||"", district: district||"", address: address||"", ...coords });
+  await fsAddDoc("hospitals", { name, tier, level, phone: phone||"", note: note||"", address: address||"", ...coords });
   showToast("已新增醫院"); if (hospitalsPoll) hospitalsPoll.refreshNow();
 }
 // 使用者在「座標」欄位貼「緯度,經度」（例如 24.1786,120.6400），這裡負責
@@ -3053,9 +3054,9 @@ async function ensureHospitalsSeeded(){
   hospitalsSeeded = true;
   try {
     const existing = await fsListCollection("hospitals");
-    const have = new Set(existing.map(h => `${h.county}|${h.name}`));
+    const have = new Set(existing.map(h => h.name));
     for (const h of HOSPITAL_SEED) {
-      if (!have.has(`${h.county}|${h.name}`)) await fsAddDoc("hospitals", h);
+      if (!have.has(h.name)) await fsAddDoc("hospitals", h);
     }
     if (hospitalsPoll) await hospitalsPoll.refreshNow();
   } catch (e) { console.error("初始化醫院資料失敗", e); }
@@ -5751,8 +5752,8 @@ function viewFeedbackForm(){
 function viewHospitals(){
   const p = state.profile;
   const canEdit = canManageBaseData(p);
-  // 排序優先度：醫院本身有登記座標時（tier 0）直接算實際距離最準；沒有
-  // 座標才退回用行政區（tier 1）/ 縣市（tier 2）概略比對；都比對不到排最後（tier 3）。
+  // 排序優先度：醫院本身有登記座標時（tier 0）直接算實際距離最準，按距離排序；
+  // 沒登記座標的醫院沒有其他依據可以概略比對，一律排在有距離的後面（tier 1）。
   // tier 0 內部一律用同一個 km 值排序——有算到 OSRM 道路距離（roadDistances）
   // 就用道路距離，抓不到才用 haversine 直線距離頂替，呼叫端不用另外分兩套
   // 排序邏輯。
@@ -5762,12 +5763,10 @@ function viewHospitals(){
       if (roadKm != null) return { tier: 0, km: roadKm, roadKm: true };
       return { tier: 0, km: haversineKm(state.myLat, state.myLng, h.lat, h.lng), roadKm: false };
     }
-    if (state.myDistrict && h.district === state.myDistrict && h.county === state.myCounty) return { tier: 1, km: null };
-    if (state.myCounty && h.county === state.myCounty) return { tier: 2, km: null };
-    return { tier: 3, km: null };
+    return { tier: 1, km: null };
   }
   const rows = state.hospitals.slice().sort((a,b) => {
-    if (state.myCounty || state.myLat != null) {
+    if (state.myLat != null) {
       const ia = matchInfo(a), ib = matchInfo(b);
       if (ia.tier !== ib.tier) return ia.tier - ib.tier;
       if (ia.tier === 0) return ia.km - ib.km;
@@ -5779,24 +5778,22 @@ function viewHospitals(){
       <button class="icon-btn primary" style="width:100%;" onclick="window.__locateNearbyHospitals()" ${state.locatingHospital ? 'disabled' : ''}>
         ${icon('pin',15)} ${state.locatingHospital ? '定位中…' : (state.myCounty ? '重新定位' : '顯示附近醫院')}
       </button>
-      ${state.myCounty ? `<div style="color:var(--muted); font-size:var(--text-xs); margin-top:6px;">目前定位：${state.myAddress ? esc(state.myAddress) : `靠近${state.myDistrict ? esc(state.myCounty)+esc(state.myDistrict) : esc(state.myCounty)}`}，已登記座標的醫院會顯示實際距離並排最前面，其餘${state.myDistrict ? '同行政區優先，其次同縣市' : '同縣市醫院優先'}</div>` : ''}
+      ${state.myCounty ? `<div style="color:var(--muted); font-size:var(--text-xs); margin-top:6px;">目前定位：${state.myAddress ? esc(state.myAddress) : `靠近${state.myDistrict ? esc(state.myCounty)+esc(state.myDistrict) : esc(state.myCounty)}`}，已登記座標的醫院會顯示實際距離並排最前面</div>` : ''}
     </div>`;
   return `
     <div class="section-label">醫院資訊</div>
     ${locateBar}
     ${canEdit ? `<button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('hospitals', null, '')">${icon('plus',15)} 新增醫院</button>` : ""}
     ${rows.length ? rows.map(x => {
-      const info = (state.myCounty || state.myLat != null) ? matchInfo(x) : { tier: 3, km: null };
+      const info = matchInfo(x);
       // 有算到道路距離／退回直線距離，文字上明確標出來（路程/直線），
       // 避免第一線人員誤把直線距離當成實際要開的路程來判斷。
-      const nearBadge = info.tier === 0 ? `<span class="badge dispatch" style="padding:3px 8px;">約 ${info.km.toFixed(1)} 公里${info.roadKm ? '（路程）' : '（直線）'}</span>`
-        : info.tier === 1 ? `<span class="badge dispatch" style="padding:3px 8px;">同行政區</span>`
-        : info.tier === 2 ? `<span class="badge dispatch" style="padding:3px 8px;">同縣市</span>` : '';
+      const nearBadge = info.tier === 0 ? `<span class="badge dispatch" style="padding:3px 8px;">約 ${info.km.toFixed(1)} 公里${info.roadKm ? '（路程）' : '（直線）'}</span>` : '';
       return `
       <div class="admin-row">
         <div>
           <div class="name">${esc(x.name)}${nearBadge ? ' '+nearBadge : ''}</div>
-          <div class="sub">${esc(x.county||'—')}${x.district?esc(x.district):''} · ${esc(x.level||'—')}${x.phone?` · <a href="tel:${esc(x.phone)}" class="phone-link" style="text-decoration:none;">${esc(x.phone)}</a>`:''}</div>
+          <div class="sub">${esc(x.tier||'—')} · ${esc(x.level||'—')}${x.phone?` · <a href="tel:${esc(x.phone)}" class="phone-link" style="text-decoration:none;">${esc(x.phone)}</a>`:''}</div>
           ${x.address ? `<div class="sub">${esc(x.address)}</div>` : ""}
           ${x.note ? `<div class="sub">${esc(x.note)}</div>` : ""}
           <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
@@ -6089,7 +6086,7 @@ function viewBaseDataHospitals(){
     <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('hospitals', null, '')">${icon('plus',15)} 新增醫院</button>
     ${rows.length ? rows.map(x => `
       <div class="admin-row">
-        <div><div class="name">${esc(x.name)}</div><div class="sub">${esc(x.county||'—')} · ${esc(x.level||'—')}${x.phone?' · '+esc(x.phone):''}</div>${x.note?`<div class="sub">${esc(x.note)}</div>`:""}</div>
+        <div><div class="name">${esc(x.name)}</div><div class="sub">${esc(x.tier||'—')} · ${esc(x.level||'—')}${x.phone?' · '+esc(x.phone):''}</div>${x.note?`<div class="sub">${esc(x.note)}</div>`:""}</div>
         <div style="display:flex; gap:6px; flex-wrap:wrap;">
           <button class="icon-btn" onclick="window.__openBaseDataModal('hospitals','${x.id}','')">編輯</button>
           <button class="icon-btn danger" onclick="window.__deleteBaseData('hospitals','${x.id}')">刪除</button>
@@ -6156,20 +6153,19 @@ function viewBaseDataModal(){
     title = editing ? "編輯醫院" : "新增醫院";
     fields = `
       <div class="field"><label>醫院名稱</label><input id="hospitalNameInput" name="name" required value="${esc(editing?.name||'')}"></div>
-      <div class="field"><label>縣市</label>
-        <select name="county" required>
-          <option value="">請選擇縣市</option>
-          ${HOSPITAL_COUNTIES.map(c => `<option value="${c}" ${editing?.county===c?'selected':''}>${c}</option>`).join("")}
-        </select>
-      </div>
-      <div class="field"><label>行政區（選填，用於定位比對）</label><input name="district" value="${esc(editing?.district||'')}" placeholder="例如：西屯區"></div>
       <div class="field"><label>地址（選填，用於一鍵導航）</label><input id="hospitalAddressInput" name="address" value="${esc(editing?.address||'')}" placeholder="例如：臺中市西屯區臺灣大道四段1650號"></div>
       <div class="field"><label>座標（選填，格式：緯度,經度）</label><input id="hospitalCoordsInput" name="coords" value="${(editing && editing.lat != null && editing.lng != null) ? `${editing.lat},${editing.lng}` : ''}" placeholder="例如：24.1786,120.6400"></div>
       <div style="display:flex; gap:8px; margin:-8px 0 8px;">
         <button type="button" class="icon-btn" onclick="window.__fillHospitalCoordsFromGPS()">${icon('pin',14)} <span class="btn-label">抓取目前位置</span></button>
         <button type="button" class="icon-btn" id="geocodeNameBtn" onclick="window.__geocodeHospitalName()">${icon('pin',14)} <span class="btn-label">名稱查詢座標</span></button>
       </div>
-      <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">填了座標，「顯示附近醫院」會直接算你跟這間醫院的實際距離（比行政區/縣市更準）；不填就退回用行政區/縣市概略比對。人在醫院現場可以直接按「抓取目前位置」，或是填好醫院名稱後按「名稱查詢座標」自動換算（查詢由 OpenStreetMap 貢獻者的 Nominatim 服務提供，查不到時請改用抓取目前位置或手動輸入）。</div>
+      <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">填了座標，「顯示附近醫院」會直接算你跟這間醫院的實際距離；不填就不會排進距離排序。人在醫院現場可以直接按「抓取目前位置」，或是填好醫院名稱後按「名稱查詢座標」自動換算（查詢由 OpenStreetMap 貢獻者的 Nominatim 服務提供，查不到時請改用抓取目前位置或手動輸入）。</div>
+      <div class="field"><label>醫院層級</label>
+        <select name="tier" required>
+          <option value="">請選擇層級</option>
+          ${HOSPITAL_TIERS.map(t => `<option value="${t}" ${editing?.tier===t?'selected':''}>${t}</option>`).join("")}
+        </select>
+      </div>
       <div class="field"><label>急救責任等級</label>
         <select name="level" required>
           <option value="">請選擇等級</option>
@@ -6860,13 +6856,13 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
   const action = id
     ? (coll === "personnel" ? updateBaseData(coll, id, { displayName: f.get("name"), rank: f.get("title"), phone: f.get("phone")||"", emtLevel: f.get("emtLevel")||"", email: (f.get("email")||"").trim().toLowerCase() })
        : coll === "vehicles" ? updateBaseData(coll, id, { plate: f.get("plate"), type: f.get("type") })
-       : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return updateBaseData(coll, id, { name: f.get("name"), county: f.get("county"), level: f.get("level"), phone: f.get("phone")||"", note: f.get("note")||"", district: f.get("district")||"", address: f.get("address")||"", lat: c ? c.lat : null, lng: c ? c.lng : null }); })()
+       : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return updateBaseData(coll, id, { name: f.get("name"), tier: f.get("tier"), level: f.get("level"), phone: f.get("phone")||"", note: f.get("note")||"", address: f.get("address")||"", lat: c ? c.lat : null, lng: c ? c.lng : null }); })()
        : coll === "doctors" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"" })
        : coll === "notifications" ? updateBaseData(coll, id, { title: f.get("title"), body: f.get("body") })
        : updateBaseData(coll, id, { code: f.get("code") }))
     : (coll === "personnel" ? addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone"), f.get("emtLevel"), f.get("email"))
        : coll === "vehicles" ? addVehicle(unit, f.get("plate"), f.get("type"))
-       : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return addHospital(f.get("county"), f.get("name"), f.get("level"), f.get("phone"), f.get("note"), f.get("district"), f.get("address"), c ? c.lat : null, c ? c.lng : null); })()
+       : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return addHospital(f.get("name"), f.get("tier"), f.get("level"), f.get("phone"), f.get("note"), f.get("address"), c ? c.lat : null, c ? c.lng : null); })()
        : coll === "doctors" ? addDoctor(f.get("name"), f.get("title"), f.get("phone"))
        : coll === "notifications" ? addNotification(f.get("title"), f.get("body"))
        : addRecorder(unit, f.get("code")));
