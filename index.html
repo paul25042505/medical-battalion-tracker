@@ -308,6 +308,15 @@
   }
   .pending-box{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:24px; max-width:360px; margin-top:22px; box-shadow:var(--shadow-sm);}
   .pending-box p{color:var(--text); font-size:var(--text-sm); line-height:1.7; margin:0;}
+  /* LINE 內建瀏覽器引導：數字圓圈＋箭頭排成一條直的流程，登入頁跟推播
+     設定頁共用（見 lineOpenGuideHtml）。 */
+  .line-guide{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; max-width:360px; width:100%; margin-top:22px; box-shadow:var(--shadow-sm); text-align:left;}
+  .line-guide-title{display:flex; align-items:center; gap:8px; font-weight:700; font-size:var(--text-base); color:var(--red);}
+  .line-guide-desc{color:var(--muted); font-size:var(--text-xs); line-height:1.6; margin:10px 0 18px;}
+  .line-guide-step{display:flex; align-items:center; gap:12px;}
+  .line-guide-step .step-num{width:26px; height:26px; border-radius:50%; background:var(--blue); color:#fff; font-weight:700; font-size:var(--text-xs); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .line-guide-step .step-text{font-size:var(--text-sm); color:var(--text); line-height:1.4;}
+  .line-guide-arrow{color:var(--muted); font-size:14px; padding:2px 0 2px 12px;}
 
   /* ---- cards ---- */
   .section-label{font-family:var(--mono); font-size:var(--text-xs); font-weight:700; color:var(--muted); letter-spacing:0.09em; text-transform:uppercase; margin:var(--space-section) 4px 13px 4px;}
@@ -1295,7 +1304,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-270-fix-pending-unit-403";
+const BUILD_TAG = "2026-07-10-271-line-browser-guide";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1786,6 +1795,7 @@ const RELEASE_NOTES = [
       "「人員與帳號」名冊列表移除 EMT 證照等級徽章顯示，只保留階級/電話/信箱",
       "修正新帳號第一次登入卡在「登入後初始化失敗：[403] Missing or insufficient permissions」的問題：人員名冊與帳號合併時，Firestore 規則漏掉「本人一定要能讀到自己文件」這條，導致全新使用者第一次登入、自己的帳號文件還沒建立時就先被擋下來",
       "修正待審核帳號選單位、填個人資料時「儲存失敗：[403] Missing or insufficient permissions」的問題：同一次規則重寫漏掉「待審核階段可以自己改單位」這條，導致新帳號選了單位、按儲存就被擋下來，卡在待審核畫面出不去",
+      "新增 LINE 內建瀏覽器偵測：從 LINE 對話直接點連結開啟時，登入頁會偵測到並隱藏「使用 Google 帳號登入」按鈕（LINE 內建瀏覽器會讓 Google 登入直接失敗），改用步驟流程圖教學怎麼跳到手機原生瀏覽器、再加入主畫面；推播通知設定頁在 LINE 瀏覽器裡偵測到不支援推播時，也會顯示同一套流程圖取代原本籠統的「iPhone 需要加入主畫面」提示",
     ] },
     { category: "推播通知", items: [
       "新增「通知中心」收件匣：點右上角鈴鐺圖示可以看到歷史通知，依時間新到舊排序成單一列表（不分全部/未讀頁籤）；未讀的通知卡片右上角會有紅點提示，點開該筆就會標記為已讀",
@@ -2703,6 +2713,47 @@ function restoreSavedRoute(){
     const route = JSON.parse(raw);
     if (route && route.name) state.route = route;
   } catch (e) {}
+}
+
+/* =========================================================
+   7a-1) LINE 內建瀏覽器偵測
+   分享連結被人直接在 LINE 對話裡點開，會用 LINE 自己的內建瀏覽器（不是
+   Safari/Chrome）載入，這種 embedded webview 有兩個致命問題：
+   1) Google 登入會直接失敗（Google 明文擋掉所有 embedded webview 的
+      OAuth，跳 disallowed_useragent 錯誤）——所以偵測到是 LINE 就直接不
+      顯示登入按鈕，顯示按了也沒用，不如直接教怎麼跳出去。
+   2) iOS 上 LINE 瀏覽器的選單裡沒有「加入主畫面」這個選項，一定要先
+      「在瀏覽器中開啟」跳到真正的 Safari，才能繼續加入主畫面（推播通知
+      要用）。
+   LINE 的 User-Agent 固定會帶 "Line/版本號"，用這個字串判斷。
+   ========================================================= */
+function isInLineBrowser(){
+  return /\bLine\//i.test(navigator.userAgent);
+}
+// 流程圖用數字圓圈＋箭頭一步一步排下來，不管是登入頁還是推播設定頁
+// 用到都是同一份步驟，抽成共用函式避免兩處各寫一份、之後又對不起來。
+function lineOpenGuideHtml(){
+  const steps = [
+    "點右上角「⋯」或「≡」選單",
+    "選擇「在瀏覽器中開啟」",
+    "（iPhone）在 Safari 點畫面下方的「分享」圖示",
+    "選「加入主畫面」，再點右上角「新增」",
+    "從主畫面的圖示重新打開，才能正常登入、使用推播通知"
+  ];
+  return `
+    <div class="line-guide">
+      <div class="line-guide-title">${icon('alert',18)} 偵測到您正在 LINE 中開啟</div>
+      <div class="line-guide-desc">LINE 內建瀏覽器沒辦法登入，也沒辦法使用推播通知，請照下面步驟改用手機原生瀏覽器開啟：</div>
+      <div class="line-guide-steps">
+        ${steps.map((s, i) => `
+          <div class="line-guide-step">
+            <div class="step-num">${i+1}</div>
+            <div class="step-text">${s}</div>
+          </div>
+          ${i < steps.length - 1 ? `<div class="line-guide-arrow">↓</div>` : ""}
+        `).join("")}
+      </div>
+    </div>`;
 }
 
 /* =========================================================
@@ -3650,16 +3701,18 @@ function quickFillSelect(inputId, options){
    9) 畫面：登入 / 待審核
    ========================================================= */
 function viewLogin(){
+  const inLine = isInLineBrowser();
   return `
   <div class="login-wrap">
     <img class="login-logo" src="icons/icon-192.png" alt="單位徽章">
     <div class="login-mark">MEDTRACK</div>
     <h1 class="login-title">衛生營車輛人員<br>動態管制系統</h1>
     <p class="login-sub">Personnel · Vehicles · Operations</p>
+    ${inLine ? lineOpenGuideHtml() : `
     <button class="btn-google" onclick="window.__login()">
       <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.9 32.3 29.4 35 24 35c-6.1 0-11-4.9-11-11s4.9-11 11-11c2.8 0 5.3 1 7.3 2.7l5.7-5.7C33.6 6.5 29 4.5 24 4.5 13.2 4.5 4.5 13.2 4.5 24S13.2 43.5 24 43.5 43.5 34.8 43.5 24c0-1.2-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 16 19 13 24 13c2.8 0 5.3 1 7.3 2.7l5.7-5.7C33.6 6.5 29 4.5 24 4.5c-7.6 0-14.1 4.3-17.7 10.2z"/><path fill="#4CAF50" d="M24 43.5c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 34.6 26.7 35.5 24 35.5c-5.3 0-9.8-3.6-11.4-8.4l-6.5 5C9.7 39.1 16.3 43.5 24 43.5z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.7 2-2 3.7-3.7 5l6.2 5.2C41 34.8 43.5 30 43.5 24c0-1.2-.1-2.3-.4-3.5z"/></svg>
       使用 Google 帳號登入
-    </button>
+    </button>`}
     <div style="margin-top:24px;color:var(--muted);font-size:var(--text-xs);font-family:var(--mono);">build ${BUILD_TAG}</div>
   </div>`;
 }
@@ -5491,11 +5544,12 @@ function viewPushSettings(){
       ${icon('alert',16)}
       <div>通知權限已被瀏覽器封鎖，請到手機「設定 → 通知」（或 Safari 網站設定）裡找到本網站，手動開啟通知權限後再回來開啟。</div>
     </div>` : ''}
-    ${supported === false ? `
+    ${supported === false ? (isInLineBrowser() ? `
+    <div style="margin-top:14px;">${lineOpenGuideHtml()}</div>` : `
     <div class="weather-tip" style="margin-top:14px;">
       ${icon('alert',16)}
       <div>iPhone 需要先把這個網站「加入主畫面」，並且從主畫面的圖示開啟（不是在 Safari 分頁裡開），推播才能生效。</div>
-    </div>` : ''}
+    </div>`) : ''}
     <div style="color:var(--muted); font-size:var(--text-xs); padding:14px 4px 0 4px;">開啟後，有新任務指派給你、急診待命出勤／狀態變更、患者生命徵象出現危急異常時，就算沒有打開這個網頁也會收到推播通知。</div>
     <div style="color:var(--muted); font-size:var(--text-xs); padding:6px 4px 0 4px;">目前這個帳號共有 ${tokens.length} 筆裝置權杖（同一支手機正常應該只會有 1 筆，如果收到重複推播可以先看這裡有沒有異常）</div>
   `;
