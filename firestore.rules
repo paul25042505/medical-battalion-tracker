@@ -74,6 +74,11 @@ service cloud.firestore {
                     || (request.resource.data.role == 'unclaimed'
                         && (isStaff() || (isCommander() && sameUnit(request.resource.data.unit))));
       allow update: if isAdmin()
+                    // 待審核（pending）階段專用：這個階段可以自己選/改單位，
+                    // 方便管理員審核（見 index.html 的 updatePendingProfile）；
+                    // 一旦通過審核就不再適用這條，不能自己再改單位逃去別的單位。
+                    || (isSignedIn() && request.auth.uid == uid && resource.data.role == 'pending'
+                        && onlyChanged(['unit','displayName','rank','phone','emtLevel','fcmTokens']))
                     || (isSignedIn() && request.auth.uid == uid
                         && onlyChanged(['displayName','rank','phone','emtLevel','fcmTokens']))
                     || ((isDutyOfficer() || (isCommander() && sameUnit(resource.data.unit) && sameUnit(request.resource.data.unit)))
