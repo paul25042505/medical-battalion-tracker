@@ -1279,7 +1279,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-261-merge-personnel-users";
+const BUILD_TAG = "2026-07-10-262-hide-emt-in-people-list";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1740,6 +1740,7 @@ const RELEASE_NOTES = [
       "「基礎資料管理 → 人員」新增人員表單補上「信箱（選填）」欄位：填了信箱的人員資料可以先建好單位/階級/電話/EMT證照，等這個人第一次用同一個信箱登入時，系統會自動比對、直接指派好這些資料並核准為一般成員，不用再手動審核；還沒登入的預建資料會在人員名冊列表標示「尚未登入」",
       "後台管理大整理：原本分開的「基礎資料 → 人員」（花名冊）跟「成員管理」（帳號角色/單位）合併成一份資料、一個畫面「人員與帳號」，同一個人不用再對照兩邊資料；管理後台選單重新分區為「勤務」「人員與帳號」「基礎資料」「系統」四大類，層級更清楚",
       "尚未指派單位的帳號（剛登入還沒選單位、或忘記指派的舊資料）現在會獨立列在「人員與帳號」頁最上方的「待指派單位」，不會因為切換單位頁籤而被漏掉",
+      "「人員與帳號」名冊列表移除 EMT 證照等級徽章顯示，只保留階級/電話/信箱",
     ] },
   ] },
   { date: "2026/07/09", groups: [
@@ -6028,7 +6029,7 @@ function viewAdminUsers(){
     <div class="admin-row">
       <div>
         <div class="name">${esc(x.name)}</div>
-        <div class="sub">${esc(x.title||'—')}${x.emtLevel?' '+emtBadgeHtml(x.emtLevel):''}${x.phone?' · '+esc(x.phone):''}${x.email?' · '+esc(x.email):''}${x.role==='unclaimed' ? ' · <span style="color:var(--amber-text); font-weight:700;">尚未登入</span>' : ''}</div>
+        <div class="sub">${esc(x.title||'—')}${x.phone?' · '+esc(x.phone):''}${x.email?' · '+esc(x.email):''}${x.role==='unclaimed' ? ' · <span style="color:var(--amber-text); font-weight:700;">尚未登入</span>' : ''}</div>
       </div>
       <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
         ${canAssignRole && x.role !== 'unclaimed' ? `
