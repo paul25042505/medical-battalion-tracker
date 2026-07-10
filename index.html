@@ -1373,7 +1373,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-295-unit-picker-no-separator";
+const BUILD_TAG = "2026-07-10-296-keyboard-bugfixes";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1943,6 +1943,8 @@ const RELEASE_NOTES = [
       "上述「勤務」「洽公」雙語大標顏色改成灰色，不用跟卡片標題一樣的黑色，維持「標題」該有的次要視覺份量",
       "全站禁止選取文字的設定改成只鎖觸控裝置（手機/平板）：用電腦（滑鼠）開啟網頁時，維持瀏覽器原生的文字選取行為，可以正常拖曳選字、複製車牌號碼/電話等資訊",
       "修正畫面重繪會把捲動位置彈回最上面的問題（例如醫院資訊頁滑到清單中間、點卡片右上角「⋮」選單，畫面會誤跳回頂端）：只要不是真正換頁，單純畫面狀態變化（開關選單、切換設定等）現在都會保留原本的捲動位置",
+      "修正輸入框跳出手機鍵盤後再把鍵盤關掉，底部導覽列卡在畫面中間、下面留一大塊空白、回不去畫面最下面的問題：改成額外監聽視窗可視高度變化，鍵盤打開/收起都會確實同步版面高度，不用等換頁才會恢復正常",
+      "修正醫院資訊頁搜尋框每打一個注音/拼音符號，輸入法組字跟鍵盤就整個中斷消失、完全打不了字的問題：搜尋框輸入時改成只重繪醫院清單本身，不再整頁重新整理，打字時輸入框不會被打斷",
     ] },
     { category: "醫院資訊", items: [
       "新增醫院表單的「名稱查詢座標」改用醫院名稱查詢（原本是查地址）：地址是選填欄位、常常沒填或格式不一致，醫院名稱幾乎一定會填，也比較容易對到 OpenStreetMap 資料庫裡實際登記的地點",
@@ -6079,7 +6081,13 @@ function viewFeedbackForm(){
 /* =========================================================
    17c) 畫面：醫院資訊（急救責任等級／電話查詢，任何在職帳號皆可查看）
    ========================================================= */
-function viewHospitals(){
+// 醫院卡片清單本體（不含搜尋框/篩選頁籤/重新定位工具列）：搜尋框輸入時
+// 只會呼叫這支函式重繪清單本身（見 window.__setHospitalSearch），不會整頁
+// render()——整頁 render() 會把 <input> 整個節點換掉，輸入到一半的注音／
+// 拼音組字會被打斷、iOS 鍵盤甚至會直接收起來，變成打一個注音符號鍵盤就
+// 消失、完全打不了字。篩選頁籤是按鈕點擊（沒有組字狀態要保護），維持
+// 呼叫端整頁 render() 即可。
+function renderHospitalListBody(){
   const p = state.profile;
   const canEdit = canManageBaseData(p);
   const canAdd = canAddHospital(p);
@@ -6124,35 +6132,7 @@ function viewHospitals(){
     }
     return HOSPITAL_NAME_COLLATOR.compare(a.name||'', b.name||'');
   });
-  const searchBar = `
-    <input type="search" class="picker-search" style="margin-bottom:10px;" placeholder="搜尋醫院名稱或地址" value="${esc(state.hospitalSearchQuery||'')}" oninput="window.__setHospitalSearch(this.value)">
-    <div class="tabs2 scroll" style="margin-bottom:8px;">
-      <div class="tab2 ${!filterTier ? 'active' : ''}" onclick="window.__setHospitalFilterTier('')">全部層級</div>
-      ${HOSPITAL_TIERS.map(t => `<div class="tab2 ${filterTier===t ? 'active' : ''}" onclick="window.__setHospitalFilterTier('${t}')">${t}</div>`).join("")}
-    </div>
-    <div class="tabs2 scroll" style="margin-bottom:10px;">
-      <div class="tab2 ${!filterLevel ? 'active' : ''}" onclick="window.__setHospitalFilterLevel('')">全部等級</div>
-      ${HOSPITAL_LEVELS.map(l => `<div class="tab2 ${filterLevel===l ? 'active' : ''}" onclick="window.__setHospitalFilterLevel('${l}')">${l}</div>`).join("")}
-    </div>`;
-  const locateBar = `
-    <div class="hospital-toolbar">
-      <button type="button" class="hospital-toolbar-locate" onclick="window.__locateNearbyHospitals()" ${state.locatingHospital ? 'disabled' : ''}>
-        ${state.locatingHospital ? '定位中…' : (state.myCounty ? '重新定位' : '顯示附近醫院')}
-      </button>
-      <div class="hospital-seg">
-        <button type="button" class="hospital-seg-btn${state.hospitalSortBySee ? '' : ' active'}" onclick="${state.hospitalSortBySee ? 'window.__toggleHospitalSortBySee()' : ''}">📍 依距離</button>
-        <button type="button" class="hospital-seg-btn${state.hospitalSortBySee ? ' active' : ''}" onclick="${state.hospitalSortBySee ? '' : 'window.__toggleHospitalSortBySee()'}">👥 依人數</button>
-      </div>
-    </div>
-    ${(state.myCounty || state.erRealtime) ? `
-    <div class="hospital-info-card">
-      ${state.myCounty ? `<div class="hospital-info-row">${icon('pin',15)}<span>目前定位：${state.myAddress ? esc(state.myAddress) : `靠近${state.myDistrict ? esc(state.myCounty)+esc(state.myDistrict) : esc(state.myCounty)}`}</span></div>` : ''}
-      ${state.erRealtime ? `<div class="hospital-info-row">${icon('refresh',15)}<span>急診即時資訊更新於 ${new Date(state.erRealtime.fetchedAt).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})}，僅重度級急救責任醫院有資料</span></div>` : ''}
-    </div>` : ''}`;
   return `
-    <div class="section-label">醫院資訊</div>
-    ${searchBar}
-    ${locateBar}
     ${canAdd ? `<button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('hospitals', null, '')">${icon('plus',15)} 新增醫院</button>` : ""}
     ${rows.length ? rows.map(x => {
       const info = matchInfo(x);
@@ -6213,6 +6193,41 @@ function viewHospitals(){
         </div>
       </div>`;
     }).join("") : (state.hospitals.length ? `<div class="empty">找不到符合條件的醫院，請調整搜尋或篩選條件</div>` : `<div class="empty">尚無醫院資料${canAdd ? '，請點上方新增' : ''}</div>`)}
+  `;
+}
+function viewHospitals(){
+  const filterTier = state.hospitalFilterTier || "";
+  const filterLevel = state.hospitalFilterLevel || "";
+  const searchBar = `
+    <input type="search" class="picker-search" style="margin-bottom:10px;" placeholder="搜尋醫院名稱或地址" value="${esc(state.hospitalSearchQuery||'')}" oninput="window.__setHospitalSearch(this.value)">
+    <div class="tabs2 scroll" style="margin-bottom:8px;">
+      <div class="tab2 ${!filterTier ? 'active' : ''}" onclick="window.__setHospitalFilterTier('')">全部層級</div>
+      ${HOSPITAL_TIERS.map(t => `<div class="tab2 ${filterTier===t ? 'active' : ''}" onclick="window.__setHospitalFilterTier('${t}')">${t}</div>`).join("")}
+    </div>
+    <div class="tabs2 scroll" style="margin-bottom:10px;">
+      <div class="tab2 ${!filterLevel ? 'active' : ''}" onclick="window.__setHospitalFilterLevel('')">全部等級</div>
+      ${HOSPITAL_LEVELS.map(l => `<div class="tab2 ${filterLevel===l ? 'active' : ''}" onclick="window.__setHospitalFilterLevel('${l}')">${l}</div>`).join("")}
+    </div>`;
+  const locateBar = `
+    <div class="hospital-toolbar">
+      <button type="button" class="hospital-toolbar-locate" onclick="window.__locateNearbyHospitals()" ${state.locatingHospital ? 'disabled' : ''}>
+        ${state.locatingHospital ? '定位中…' : (state.myCounty ? '重新定位' : '顯示附近醫院')}
+      </button>
+      <div class="hospital-seg">
+        <button type="button" class="hospital-seg-btn${state.hospitalSortBySee ? '' : ' active'}" onclick="${state.hospitalSortBySee ? 'window.__toggleHospitalSortBySee()' : ''}">📍 依距離</button>
+        <button type="button" class="hospital-seg-btn${state.hospitalSortBySee ? ' active' : ''}" onclick="${state.hospitalSortBySee ? '' : 'window.__toggleHospitalSortBySee()'}">👥 依人數</button>
+      </div>
+    </div>
+    ${(state.myCounty || state.erRealtime) ? `
+    <div class="hospital-info-card">
+      ${state.myCounty ? `<div class="hospital-info-row">${icon('pin',15)}<span>目前定位：${state.myAddress ? esc(state.myAddress) : `靠近${state.myDistrict ? esc(state.myCounty)+esc(state.myDistrict) : esc(state.myCounty)}`}</span></div>` : ''}
+      ${state.erRealtime ? `<div class="hospital-info-row">${icon('refresh',15)}<span>急診即時資訊更新於 ${new Date(state.erRealtime.fetchedAt).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})}，僅重度級急救責任醫院有資料</span></div>` : ''}
+    </div>` : ''}`;
+  return `
+    <div class="section-label">醫院資訊</div>
+    ${searchBar}
+    ${locateBar}
+    <div id="hospital-list-body">${renderHospitalListBody()}</div>
   `;
 }
 
@@ -7485,8 +7500,17 @@ window.__toggleHospitalSortBySee = () => {
   render();
 };
 // 醫院資訊頁搜尋框／層級與急救等級篩選頁籤：純前端過濾 state.hospitals，
-// 不用重新整理資料。
-window.__setHospitalSearch = (v) => { state.hospitalSearchQuery = v; render(); };
+// 不用重新整理資料。搜尋框每打一個字就觸發，如果跟其他欄位一樣呼叫整頁
+// render()，<input> 節點會被整個換掉——輸入到一半的注音／拼音組字被打斷，
+// iOS 上甚至會直接把鍵盤收起來，變成打一個注音符號鍵盤就消失、完全打不了
+// 字。改成只重繪醫院清單本身（#hospital-list-body），輸入框節點完全不動，
+// 打字的組字狀態、輸入焦點都不會被打斷；篩選頁籤是按鈕點擊，沒有組字狀態
+// 要保護，維持整頁 render()（也才能同步更新頁籤本身的 active 樣式）。
+window.__setHospitalSearch = (v) => {
+  state.hospitalSearchQuery = v;
+  const el = document.getElementById("hospital-list-body");
+  if (el) el.innerHTML = renderHospitalListBody();
+};
 window.__setHospitalFilterTier = (v) => { state.hospitalFilterTier = v; render(); };
 window.__setHospitalFilterLevel = (v) => { state.hospitalFilterLevel = v; render(); };
 // 醫院資訊頁每張卡片右上角「更多」選單（編輯/刪除）：同時間只會有一張卡片
@@ -7960,6 +7984,24 @@ window.__saveTaskEdit = (ev, taskId) => {
       showToast("閒置超過 8 小時，已自動登出，請重新登入");
     }
   }, 60000);
+})();
+
+// #app 的高度理論上靠 CSS 的 100dvh 就會隨虛擬鍵盤開關即時更新（見 #app
+// 的 CSS 註解），但實機上觀察到 iOS Safari 鍵盤「收起」時偶爾不會確實
+// 觸發重新計算，導致 #app 卡在鍵盤打開時的縮小高度，底部導覽列（原本
+// flex-shrink:0 貼齊 #app 底部）就跟著卡在畫面中間，下面留一大塊空白，
+// 要整頁換頁導覽（重新觸發版面計算）才會恢復。改成額外監聽
+// visualViewport 的 resize／scroll 事件，直接把當下量到的可視高度寫回
+// #app 的 inline style（優先權高於 CSS），鍵盤開跟收都會確實同步一次，
+// 不用依賴 WebKit 自己重新排版。
+(function setupKeyboardViewportFix(){
+  if (!window.visualViewport) return;
+  const app = document.getElementById("app");
+  if (!app) return;
+  const syncAppHeight = () => { app.style.height = window.visualViewport.height + "px"; };
+  window.visualViewport.addEventListener("resize", syncAppHeight);
+  window.visualViewport.addEventListener("scroll", syncAppHeight);
+  syncAppHeight();
 })();
 
 render();
