@@ -159,10 +159,13 @@ service cloud.firestore {
     }
 
     // 醫院資訊（急救責任等級/電話）是全營共用的參考資料，不綁定特定單位；
-    // 任何在職帳號都能查詢，維護權限比照基礎資料管理（admin、高勤官、主官管）。
+    // 任何在職帳號都能查詢。新增一筆會影響所有單位查到的清單，只有 admin
+    // 能新增，避免高勤官/主官管誤增到重複或不精確的醫院資料；既有資料的
+    // 編輯／刪除維持原本比照基礎資料管理（admin、高勤官、主官管）不變。
     match /hospitals/{id} {
       allow read: if isActive();
-      allow create, update, delete: if isStaff() || isCommander();
+      allow create: if isAdmin();
+      allow update, delete: if isStaff() || isCommander();
     }
 
     // 醫官名冊（姓名/電話）供建立勤務的「值班醫官」欄位選用，是全營共用的
