@@ -1287,7 +1287,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-263-notification-inbox";
+const BUILD_TAG = "2026-07-10-264-notification-inbox-adminmsg";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1776,6 +1776,7 @@ const RELEASE_NOTES = [
     { category: "推播通知", items: [
       "新增「通知中心」收件匣：點右上角鈴鐺圖示可以看到歷史通知，依時間新到舊排序成單一列表（不分全部/未讀頁籤）；未讀的通知卡片右上角會有紅點提示，點開該筆就會標記為已讀",
       "通知中心新增「全部標記為已讀」按鈕，一次把目前所有未讀通知清掉",
+      "後台管理「訊息管理」補上跟通知中心一樣的收件匣內容（原本是開發中的空白頁）",
     ] },
   ] },
   { date: "2026/07/09", groups: [
@@ -5293,15 +5294,18 @@ function viewStats(){
 /* =========================================================
    16) 畫面：通知中心（收件匣歷史紀錄，模組 A：基礎版——單一列表，新到舊
    排序，不分「全部/未讀」頁籤；未讀狀態是共用的 isRead 欄位，不分帳號）
+   同一份清單有兩個入口：右上角鈴鐺圖示（所有在職帳號都能看，個人視角）、
+   後台管理「訊息管理」（canManageUsers 專用，見 viewAdminMessages）——
+   兩邊資料一致，只是進入路徑跟外層標題/返回鍵不同，所以抽成共用的
+   renderNotificationsList()，避免同一份卡片/按鈕邏輯維護兩份。
    ========================================================= */
-function viewNotifications(){
+function renderNotificationsList(){
   const list = state.notifications;
   const hasUnread = list.some(n => !n.isRead);
   const markAllBtn = hasUnread
     ? `<button class="icon-btn" style="margin-bottom:12px;" onclick="window.__markAllNotificationsRead()">全部標記為已讀</button>`
     : "";
   return `
-    <div class="section-label">通知中心</div>
     ${markAllBtn}
     ${list.length ? list.map(n => `
       <div class="notif-card" onclick="window.__markNotificationRead('${n.id}')">
@@ -5311,6 +5315,9 @@ function viewNotifications(){
         <div class="notif-time">${fmtTime(n.timestamp ? new Date(n.timestamp).getTime() : null)}</div>
       </div>`).join("") : `<div class="empty">尚無通知</div>`}
   `;
+}
+function viewNotifications(){
+  return `<div class="section-label">通知中心</div>${renderNotificationsList()}`;
 }
 
 /* =========================================================
@@ -6141,10 +6148,11 @@ function viewAdminUsers(){
     ` : `<div class="empty">您尚未被指派單位，請聯繫管理員。</div>`}
   `;
 }
-// 訊息管理、系統設定目前尚未有實際內容，先放開發中的預留頁面，
-// 之後有實際的通知中心／系統層級設定需求時再填入。
+// 訊息管理＝通知中心（收件匣歷史紀錄，模組 A），跟右上角鈴鐺圖示是
+// 同一份資料（見 renderNotificationsList），只是多一層 admin 專用的入口。
+// 系統設定目前尚未有實際內容，先放開發中的預留頁面。
 function viewAdminMessages(){
-  return `<div class="section-label">訊息管理</div><div class="empty">${icon('bell',32)}<div style="margin-top:10px;">通知中心開發中，之後將顯示新勤務／完成／系統公告等通知。</div></div>`;
+  return `<div class="section-label">訊息管理</div>${renderNotificationsList()}`;
 }
 function viewAdminSystemSettings(){
   return `<div class="section-label">系統設定</div><div class="empty">${icon('check',32)}<div style="margin-top:10px;">系統設定開發中，之後將提供系統層級的參數設定。</div></div>`;
