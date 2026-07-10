@@ -1309,7 +1309,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-277-nhi-hospital-registry";
+const BUILD_TAG = "2026-07-10-278-nhi-registry-fuzzy-search";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1783,12 +1783,23 @@ function findNhiHospitalByCode(code){
   const c = String(code).trim();
   return NHI_HOSPITAL_REGISTRY.find(r => r.c === c) || null;
 }
-// 依名稱完全比對（清冊裡的官方名稱字對字完全一致才算，避免「臺」「台」這類
-// 使用者輸入跟官方登記名稱有一兩個字不同時誤套用到別間機構的資料）。
-function findNhiHospitalByName(name){
-  if (!name) return null;
-  const n = String(name).trim();
-  return NHI_HOSPITAL_REGISTRY.find(r => r.n === n) || null;
+// 「臺」「台」是同一個字的正異體，健保署清冊一律用「臺」（官方正式用字），
+// 但一般人輸入時幾乎都習慣打「台」——比對前兩邊都正規化成同一個字，不然
+// 使用者不知道清冊上是用哪個字，打「台大醫院」會查不到「國立臺灣大學醫學
+// 院附設醫院」這種官方全名跟通稱差很多的情況（見下方 findNhiHospitalMatches
+// 的說明）。
+function normalizeHospitalQueryText(s){ return String(s||"").trim().replace(/臺/g, "台"); }
+// 依名稱關鍵字模糊比對（不用打完全一致的官方全名——很多人根本不知道健保
+// 署清冊上登記的是哪個全名，例如通稱「台大醫院」、清冊全名卻是「國立臺灣
+// 大學醫學院附設醫院」），只要清冊名稱包含輸入的關鍵字，或輸入的內容包含
+// 清冊名稱，都算命中；最多回傳 20 筆給使用者自己選，避免關鍵字太籠統時
+// 整份清冊都跳出來。
+function findNhiHospitalMatches(query){
+  const q = normalizeHospitalQueryText(query);
+  if (!q) return [];
+  return NHI_HOSPITAL_REGISTRY
+    .filter(r => { const n = normalizeHospitalQueryText(r.n); return n.includes(q) || q.includes(n); })
+    .slice(0, 20);
 }
 /* =========================================================
    健保署急診即時資訊比對（見 functions/index.js 的 syncErRealtime）。
@@ -1865,7 +1876,7 @@ const RELEASE_NOTES = [
       "新增/編輯醫院表單新增「醫院層級」欄位（醫學中心／區域醫院／地區醫院／基層診所），並移除「縣市」「行政區」欄位；醫院列表跟著改顯示醫院層級，不再顯示縣市/行政區。「顯示附近醫院」排序改成只看醫院是否登記座標算實際距離，不再有「同行政區/同縣市」這個中間層級——建議之後新增醫院時盡量填座標，排序才會準確",
       "回報「出勤」的「送醫醫院」下拉選單改成依醫院名稱筆畫排序，不用再從一長串沒有規律的清單裡找",
       "新增健保署急診即時資訊整合：新增/編輯醫院表單補上「健保特約代號」欄位（選填），填了之後「醫院資訊」列表會顯示該院即時的等待看診/等待住院/等待ICU人數，以及119滿床通報的紅色標示；新增「依等待看診人數排序」切換按鈕；資料每15分鐘由後端排程更新一次，目前健保署只公開重度級急救責任醫院的資料",
-      "新增/編輯醫院表單新增「套用健保署清冊資料」功能：內建健保署「全民健康保險特約醫事機構基本資料」清冊（醫學中心/區域醫院/地區醫院），輸入官方全名（有自動建議可選）後一鍵套用電話/地址/醫院層級/健保特約代號；清冊上顯示這間機構沒有登記急診相關科別/服務項目時會另外提醒，避免被導航到只有門診沒有急診的機構",
+      "新增/編輯醫院表單新增「查詢健保署清冊資料」功能：內建健保署「全民健康保險特約醫事機構基本資料」清冊（醫學中心/區域醫院/地區醫院），不用打完整官方全名，打部分關鍵字（「臺」「台」不影響查詢）就能查，查到多筆會列出來選；選定後自動套用正確名稱/電話/地址/醫院層級/健保特約代號，清冊上顯示這間機構沒有登記急診相關科別/服務項目時會另外提醒，避免被導航到只有門診沒有急診的機構",
     ] },
     { category: "急診待命", items: [
       "急診待命卡片欄位順序調整：值班醫官移到車長原本的位置（右上），車長移到駕駛原本的位置（左下），駕駛移到值班醫官原本的位置（右下）",
@@ -6269,9 +6280,10 @@ function viewBaseDataModal(){
       <div class="field"><label>醫院名稱</label><input id="hospitalNameInput" name="name" list="nhiHospitalNameList" required value="${esc(editing?.name||'')}"></div>
       <datalist id="nhiHospitalNameList">${NHI_HOSPITAL_REGISTRY.map(r => `<option value="${esc(r.n)}">`).join("")}</datalist>
       <div style="display:flex; gap:8px; margin:-8px 0 8px;">
-        <button type="button" class="icon-btn" onclick="window.__applyNhiHospitalData()">${icon('check',14)} <span class="btn-label">套用健保署清冊資料</span></button>
+        <button type="button" class="icon-btn" onclick="window.__searchNhiHospital()">${icon('check',14)} <span class="btn-label">查詢健保署清冊資料</span></button>
       </div>
-      <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">醫院名稱要跟健保署清冊上的官方全名完全一致才能套用（輸入時會有自動建議可選）；套用後會自動填入電話/地址/醫院層級/健保特約代號，清冊上顯示沒有急診相關科別/服務項目的機構會另外提醒。這份清冊只涵蓋醫學中心/區域醫院/地區醫院三個層級，基層診所查不到。</div>
+      <div id="nhiSearchResults"></div>
+      <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">不用打完整的官方全名，打部分關鍵字（例如「台大」「榮總」）就能查，「臺」「台」也不影響查詢；查到不只一筆時會列出來讓你選，選定後自動填入正確名稱/電話/地址/醫院層級/健保特約代號，清冊上顯示沒有急診相關科別/服務項目的機構會另外提醒。這份清冊只涵蓋醫學中心/區域醫院/地區醫院三個層級，基層診所查不到。</div>
       <div class="field"><label>地址（選填，用於一鍵導航）</label><input id="hospitalAddressInput" name="address" value="${esc(editing?.address||'')}" placeholder="例如：臺中市西屯區臺灣大道四段1650號"></div>
       <div class="field"><label>座標（選填，格式：緯度,經度）</label><input id="hospitalCoordsInput" name="coords" value="${(editing && editing.lat != null && editing.lng != null) ? `${editing.lat},${editing.lng}` : ''}" placeholder="例如：24.1786,120.6400"></div>
       <div style="display:flex; gap:8px; margin:-8px 0 8px;">
@@ -7122,34 +7134,67 @@ window.__fillHospitalCoordsFromGPS = () => {
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
   );
 };
-// 新增/編輯醫院表單「套用健保署清冊資料」：從內嵌的 NHI_HOSPITAL_REGISTRY
-// （健保署「全民健康保險特約醫事機構基本資料」清冊，見常數定義處說明）依
-// 醫院名稱完全比對，找到就直接套用電話/地址/醫院層級/健保特約代號，不用
-// 再手動一個個欄位查、打。清冊上這間機構沒有登記急診相關科別/服務項目時，
-// 額外跳提醒（避免被導航到只有門診沒有急診的機構）；名稱對不到時提示改用
-// 輸入框的自動建議（datalist）選一次官方全名，或維持手動填寫。
-window.__applyNhiHospitalData = () => {
+// 新增/編輯醫院表單「查詢健保署清冊資料」：從內嵌的 NHI_HOSPITAL_REGISTRY
+// （健保署「全民健康保險特約醫事機構基本資料」清冊，見常數定義處說明）用
+// 關鍵字模糊比對——很多人不知道清冊上登記的官方全名怎麼寫（通稱「台大
+// 醫院」，清冊全名卻是「國立臺灣大學醫學院附設醫院」），不用打完全一致。
+// 只有唯一一筆命中時直接套用；命中多筆時列出來讓使用者自己點選正確的
+// 那一間（見 window.__pickNhiHospitalRecord），不用另外開一個彈窗，直接
+// 用 DOM 插入結果清單、不觸發整個 app 的 render()，避免使用者已經填好的
+// 其他欄位被清空重畫。
+window.__searchNhiHospital = () => {
+  const nameInput = document.getElementById("hospitalNameInput");
+  const resultsEl = document.getElementById("nhiSearchResults");
+  if (!nameInput || !resultsEl) return;
+  const query = (nameInput.value || "").trim();
+  if (!query) { alert("請先在醫院名稱欄位輸入關鍵字，再查詢健保署清冊資料"); return; }
+  const matches = findNhiHospitalMatches(query);
+  if (!matches.length) {
+    resultsEl.innerHTML = "";
+    alert("健保署清冊裡查不到符合這個關鍵字的機構，請試試其他關鍵字（例如醫院簡稱），或改為手動填寫");
+    return;
+  }
+  if (matches.length === 1) {
+    resultsEl.innerHTML = "";
+    applyNhiHospitalRecord(matches[0]);
+    return;
+  }
+  resultsEl.innerHTML = `
+    <div style="color:var(--muted); font-size:var(--text-xs); margin:8px 0 6px;">查到 ${matches.length} 筆符合的機構，請選擇正確的一間：</div>
+    <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:12px;">
+      ${matches.map(r => `<button type="button" class="icon-btn" style="justify-content:flex-start; text-align:left;" onclick="window.__pickNhiHospitalRecord('${r.c}')">${esc(r.n)}（${esc(r.t)}）</button>`).join("")}
+    </div>`;
+};
+// 候選清單裡點選其中一間：依健保特約代號（清冊裡唯一識別碼）找回完整
+// 資料再套用，避免直接把使用者可控的名稱字串塞進查找邏輯。
+window.__pickNhiHospitalRecord = (code) => {
+  const record = findNhiHospitalByCode(code);
+  const resultsEl = document.getElementById("nhiSearchResults");
+  if (resultsEl) resultsEl.innerHTML = "";
+  if (record) applyNhiHospitalRecord(record);
+};
+// 實際把清冊資料寫進表單欄位：連醫院名稱本身也一併改成清冊上的官方全名
+// （使用者一開始打的可能只是關鍵字/通稱），清冊上沒有登記急診相關科別/
+// 服務項目時額外跳提醒（避免被導航到只有門診沒有急診的機構）。
+function applyNhiHospitalRecord(record){
   const form = document.querySelector(".modal-sheet form");
   const nameInput = document.getElementById("hospitalNameInput");
   if (!form || !nameInput) return;
-  const name = (nameInput.value || "").trim();
-  if (!name) { alert("請先填寫醫院名稱，再套用健保署清冊資料"); return; }
-  const match = findNhiHospitalByName(name);
-  if (!match) { alert("健保署清冊裡沒有跟這個名稱完全一致的機構，請確認輸入框的自動建議清單裡有沒有官方全名可以選，或改為手動填寫"); return; }
   const phoneInput = form.querySelector('[name="phone"]');
   const addressInput = document.getElementById("hospitalAddressInput");
   const tierSelect = form.querySelector('[name="tier"]');
   const nhiCodeInput = form.querySelector('[name="nhiCode"]');
-  if (phoneInput) phoneInput.value = match.p || "";
-  if (addressInput) addressInput.value = match.a || "";
-  if (tierSelect) tierSelect.value = match.t || "";
-  if (nhiCodeInput) nhiCodeInput.value = match.c || "";
-  if (!match.e) {
-    alert(`已套用「${match.n}」的健保署清冊資料，但清冊上這間機構沒有登記急診相關科別/服務項目，請確認是否適合作為送醫醫院`);
+  nameInput.value = record.n;
+  if (phoneInput) phoneInput.value = record.p || "";
+  if (addressInput) addressInput.value = record.a || "";
+  if (tierSelect) tierSelect.value = record.t || "";
+  if (nhiCodeInput) nhiCodeInput.value = record.c || "";
+  if (!record.e) {
+    alert(`已套用「${record.n}」的健保署清冊資料，但清冊上這間機構沒有登記急診相關科別/服務項目，請確認是否適合作為送醫醫院`);
   } else {
-    showToast(`已套用「${match.n}」的健保署清冊資料`);
+    showToast(`已套用「${record.n}」的健保署清冊資料`);
   }
-};
+}
 // 新增/編輯醫院表單「名稱查詢座標」：用 OpenStreetMap 的 Nominatim 地理編碼
 // 服務把醫院名稱反查成座標，免費、不用金鑰。改用醫院名稱而不是地址查詢——
 // 地址欄位是選填、常常沒填或格式不一致，醫院名稱幾乎一定會填，用名稱查詢
