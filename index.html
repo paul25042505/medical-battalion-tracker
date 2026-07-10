@@ -1354,7 +1354,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-285-pending-name-no-prefill";
+const BUILD_TAG = "2026-07-10-286-hospital-search-filter";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1933,6 +1933,9 @@ const RELEASE_NOTES = [
       "醫院資訊頁頂部工具列改版：「重新定位」跟「依距離／依人數」排序改成左右並排，排序切換改成 iOS 風格分段控制項（選中的那格會浮出白色圓角＋淺陰影）；下方的定位/急診更新時間文字改成同一行左右對齊，取代原本各自佔一整行的排法",
       "醫院資訊頁卡片整體再壓扁一點：距離/119滿床標籤加高一些更醒目，等待看診/住院/ICU三欄小卡改矮，卡片內每一行的間距、卡片本身的內距都再收窄，一屏可以看到更多間醫院",
       "「目前定位」「急診即時資訊更新於」改成獨立的圖示＋文字提示卡，取代原本硬分兩欄的排法（反查回來的詳細地址常常很長，兩欄並排時常常一邊擠成三行、一邊只有一行，很不好看）；另外補回「僅重度級急救責任醫院有資料」的提醒文字（先前改版時漏掉了）",
+      "新增醫院只有 admin 能新增：全營共用的醫院清單，新增一筆會影響所有單位查到的結果，避免高勤官/主官管誤增到重複或不精確的醫院資料；既有醫院的編輯／刪除維持原本權限不變",
+      "醫院資訊頁新增搜尋框（比對醫院名稱／地址）跟頂部篩選頁籤（醫院層級／急救責任等級），不用再從一長串清單裡自己找",
+      "醫院資訊頁預設排序改回依醫院名稱筆畫排序（原本是依醫院層級排序），點選「依距離」或「依人數」才會切換成該排序方式",
     ] },
     { category: "急診待命", items: [
       "急診待命卡片欄位順序調整：值班醫官移到車長原本的位置（右上），車長移到駕駛原本的位置（左下），駕駛移到值班醫官原本的位置（右下）",
@@ -2387,6 +2390,9 @@ const state = {
                      // 分鐘排程更新一次），{ records, fetchedAt, recordCount } | null（null 代表還沒讀到）
   hospitalSortBySee: false, // 醫院資訊頁：是否切換成「依等待看診人數排序」（預設仍是距離/等級排序）
   hospitalMenuOpenId: null, // 醫院資訊頁：目前哪一張醫院卡片的「更多」選單（編輯/刪除）是打開的，null 代表都沒開
+  hospitalSearchQuery: "", // 醫院資訊頁：搜尋關鍵字（比對醫院名稱／地址）
+  hospitalFilterTier: "", // 醫院資訊頁：篩選醫院層級（醫學中心/區域醫院/地區醫院/基層診所），空字串代表全部
+  hospitalFilterLevel: "", // 醫院資訊頁：篩選急救責任等級（重度級/中度級/一般級），空字串代表全部
   // 「紀錄」頁自訂日期查詢往回查超過 RECENT_WINDOW_DAYS 時另外抓的舊資料，
   // 累積在這裡跟平常只抓最近期間的 tasks/events/vitals 合併，不然下一次
   // 背景刷新（只抓最近期間）會把這些額外查到的舊資料整個蓋掉。
@@ -2510,6 +2516,10 @@ function canManageUsers(p){ return myRole(p) === "admin"; }
 // 任務管理／基礎資料管理：admin、高勤官（全單位），連級主官管（僅自己單位）皆可進入管理後台
 function canManageTasks(p){ const r = myRole(p); return r === "admin" || r === "duty_officer" || r === "commander"; }
 function canManageBaseData(p){ return canManageTasks(p); }
+// 醫院是全營共用的參考資料，新增一筆會影響所有單位查到的清單，範圍收窄成
+// 只有 admin 可以新增，避免高勤官/主官管誤增到重複或不精確的醫院資料；
+// 既有醫院的編輯／刪除維持 canManageBaseData 不變。
+function canAddHospital(p){ return myRole(p) === "admin"; }
 function canSeeAllTasks(p){ return canSeeAllUnits(p); }
 // 高勤官、主官管對勤務只有查看權限：不可編輯、不可強制結束，僅 admin 可操作。
 function canDeleteTask(p){ return myRole(p) === "admin"; }
@@ -5909,6 +5919,10 @@ function viewFeedbackForm(){
 function viewHospitals(){
   const p = state.profile;
   const canEdit = canManageBaseData(p);
+  const canAdd = canAddHospital(p);
+  const searchQ = (state.hospitalSearchQuery||"").trim();
+  const filterTier = state.hospitalFilterTier || "";
+  const filterLevel = state.hospitalFilterLevel || "";
   // 排序優先度：醫院本身有登記座標時（tier 0）直接算實際距離最準，按距離排序；
   // 沒登記座標的醫院沒有其他依據可以概略比對，一律排在有距離的後面（tier 1）。
   // tier 0 內部一律用同一個 km 值排序——有算到 OSRM 道路距離（roadDistances）
@@ -5922,10 +5936,18 @@ function viewHospitals(){
     }
     return { tier: 1, km: null };
   }
+  const filteredHospitals = state.hospitals.filter(h => {
+    if (filterTier && h.tier !== filterTier) return false;
+    if (filterLevel && h.level !== filterLevel) return false;
+    if (searchQ && !(String(h.name||'').includes(searchQ) || String(h.address||'').includes(searchQ))) return false;
+    return true;
+  });
   // 「依等待看診人數排序」開啟時優先依健保署即時資料排序（沒有資料的
-  // 醫院一律排到後面，用原本的距離/等級排序當次要依據），關閉時維持
-  // 原本邏輯不變。
-  const rows = state.hospitals.slice().sort((a,b) => {
+  // 醫院一律排到後面，用原本的距離排序當次要依據）；沒開啟時，已定位
+  // 就依距離排序（「依距離」）；都沒有的預設狀態改回依醫院名稱筆畫排序，
+  // 不再用醫院層級當預設排序依據——筆畫序才是使用者熟悉、找得到人的預設值，
+  // 醫院層級改成上方篩選頁籤自己選就好。
+  const rows = filteredHospitals.slice().sort((a,b) => {
     if (state.hospitalSortBySee) {
       const sa = erWaitSeeCount(a, state.erRealtime), sb = erWaitSeeCount(b, state.erRealtime);
       if (sa != null && sb != null && sa !== sb) return sa - sb;
@@ -5937,8 +5959,18 @@ function viewHospitals(){
       if (ia.tier !== ib.tier) return ia.tier - ib.tier;
       if (ia.tier === 0) return ia.km - ib.km;
     }
-    return HOSPITAL_LEVELS.indexOf(a.level) - HOSPITAL_LEVELS.indexOf(b.level) || (a.name||'').localeCompare(b.name||'');
+    return HOSPITAL_NAME_COLLATOR.compare(a.name||'', b.name||'');
   });
+  const searchBar = `
+    <input type="search" class="picker-search" style="margin-bottom:10px;" placeholder="搜尋醫院名稱或地址" value="${esc(state.hospitalSearchQuery||'')}" oninput="window.__setHospitalSearch(this.value)">
+    <div class="tabs2 scroll" style="margin-bottom:8px;">
+      <div class="tab2 ${!filterTier ? 'active' : ''}" onclick="window.__setHospitalFilterTier('')">全部層級</div>
+      ${HOSPITAL_TIERS.map(t => `<div class="tab2 ${filterTier===t ? 'active' : ''}" onclick="window.__setHospitalFilterTier('${t}')">${t}</div>`).join("")}
+    </div>
+    <div class="tabs2 scroll" style="margin-bottom:10px;">
+      <div class="tab2 ${!filterLevel ? 'active' : ''}" onclick="window.__setHospitalFilterLevel('')">全部等級</div>
+      ${HOSPITAL_LEVELS.map(l => `<div class="tab2 ${filterLevel===l ? 'active' : ''}" onclick="window.__setHospitalFilterLevel('${l}')">${l}</div>`).join("")}
+    </div>`;
   const locateBar = `
     <div class="hospital-toolbar">
       <button type="button" class="hospital-toolbar-locate" onclick="window.__locateNearbyHospitals()" ${state.locatingHospital ? 'disabled' : ''}>
@@ -5956,8 +5988,9 @@ function viewHospitals(){
     </div>` : ''}`;
   return `
     <div class="section-label">醫院資訊</div>
+    ${searchBar}
     ${locateBar}
-    ${canEdit ? `<button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('hospitals', null, '')">${icon('plus',15)} 新增醫院</button>` : ""}
+    ${canAdd ? `<button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('hospitals', null, '')">${icon('plus',15)} 新增醫院</button>` : ""}
     ${rows.length ? rows.map(x => {
       const info = matchInfo(x);
       // 有算到道路距離／退回直線距離，文字上明確標出來（路程/直線），
@@ -6016,7 +6049,7 @@ function viewHospitals(){
           <a class="hospital-nav-btn apple" href="${appleMapsUrl(hospitalNavQuery(x))}" target="_blank" rel="noopener">🗺️ Apple 導航</a>
         </div>
       </div>`;
-    }).join("") : `<div class="empty">尚無醫院資料${canEdit ? '，請點上方新增' : ''}</div>`}
+    }).join("") : (state.hospitals.length ? `<div class="empty">找不到符合條件的醫院，請調整搜尋或篩選條件</div>` : `<div class="empty">尚無醫院資料${canAdd ? '，請點上方新增' : ''}</div>`)}
   `;
 }
 
@@ -6290,9 +6323,10 @@ function viewBaseDataRecorders(){
 // 醫院、醫官都是全營共用的參考資料，不像人員/車輛/行車紀錄器綁定特定
 // 單位，不需要單位切換頁籤。
 function viewBaseDataHospitals(){
-  const rows = state.hospitals.slice().sort((a,b) => HOSPITAL_LEVELS.indexOf(a.level) - HOSPITAL_LEVELS.indexOf(b.level) || (a.name||'').localeCompare(b.name||''));
+  const canAdd = canAddHospital(state.profile);
+  const rows = state.hospitals.slice().sort((a,b) => HOSPITAL_NAME_COLLATOR.compare(a.name||'', b.name||''));
   const body = `
-    <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('hospitals', null, '')">${icon('plus',15)} 新增醫院</button>
+    ${canAdd ? `<button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('hospitals', null, '')">${icon('plus',15)} 新增醫院</button>` : ""}
     ${rows.length ? rows.map(x => `
       <div class="admin-row">
         <div><div class="name">${esc(x.name)}</div><div class="sub">${esc(x.tier||'—')} · ${esc(x.level||'—')}${x.phone?' · '+esc(x.phone):''}</div>${x.note?`<div class="sub">${esc(x.note)}</div>`:""}</div>
@@ -7191,6 +7225,11 @@ window.__toggleHospitalSortBySee = () => {
   state.hospitalSortBySee = !state.hospitalSortBySee;
   render();
 };
+// 醫院資訊頁搜尋框／層級與急救等級篩選頁籤：純前端過濾 state.hospitals，
+// 不用重新整理資料。
+window.__setHospitalSearch = (v) => { state.hospitalSearchQuery = v; render(); };
+window.__setHospitalFilterTier = (v) => { state.hospitalFilterTier = v; render(); };
+window.__setHospitalFilterLevel = (v) => { state.hospitalFilterLevel = v; render(); };
 // 醫院資訊頁每張卡片右上角「更多」選單（編輯/刪除）：同時間只會有一張卡片
 // 的選單是打開的（state.hospitalMenuOpenId 存單一 id），點同一張卡片的
 // 按鈕再關閉；點選單以外的地方（.hospital-menu-overlay 全螢幕透明遮罩）
