@@ -1542,7 +1542,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-331-mci-entry-move-to-more";
+const BUILD_TAG = "2026-07-11-332-hospital-level-filter-pills";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2216,6 +2216,7 @@ const RELEASE_NOTES = [
       "修正上面這個修正生效後，彈出視窗底部「取消」按鈕跟鍵盤工具列（上下鍵／完成那排）之間留了一塊看起來像沒修好的空白：這塊空白其實是彈出視窗原本保留給 Home 指示條的安全間距，鍵盤打開時那塊區域已經被鍵盤蓋住用不到，改成鍵盤打開時收掉這段留白",
       "鍵盤防遮蔽機制補強：原本只校正畫面上第一個找到的彈出視窗，如果同時疊了兩層彈出視窗（例如某個表單彈窗裡再開一個選人彈窗），第二層不會被修正、鍵盤還是會蓋住；改成同時存在的每一層都各自校正。人員／單位選擇器另外補上「連點兩下觸發鍵不會疊出兩層彈窗節點」的保護",
       "修正彈出視窗表單內容比鍵盤打開後的可視高度還高時（例如大量傷患新增傷患彈窗，欄位較多），姓名等最上面的欄位會被推到畫面最上緣以上、完全捲不到，手動上下滑也碰不到、甚至會誤觸關閉彈窗的問題：彈出視窗自己的最大高度原本用瀏覽器的 dvh 單位計算，這個單位鍵盤打開時不會跟著縮小；改成鍵盤打開時也用量到的可視高度幫彈出視窗的高度封頂，撐不下的內容才會確實交給彈出視窗自己的捲動處理，捲得到也不會誤觸背景關閉",
+      "醫院資訊頁「急救責任等級」篩選改成跟上面「醫院層級」同一套浮動圓角按鈕（原本是收在「更多篩選」裡的下拉選單），兩種篩選介面終於統一，不用切換到下拉選單的操作方式",
     ] },
     { category: "效能／穩定性", items: [
       "程式碼清理：移除幾個先前迭代留下、目前完全沒有被呼叫到的函式與常數（RBAC 的 isActive／canSeeAllTasks、任務類型的 taskTypeLabel／STEP_TYPES），純內部清理，畫面/功能沒有任何改變",
@@ -6958,15 +6959,19 @@ function viewHospitals(){
   const filterTier = state.hospitalFilterTier || "";
   const filterLevel = state.hospitalFilterLevel || "";
   const expanded = state.hospitalFiltersExpanded;
-  // 篩選樣式跟「紀錄」頁統一：常用篩選（層級）用 pill-row 浮動圓角按鈕
-  // 常駐顯示，較少用的篩選（急救責任等級）收在「更多篩選」收合區塊裡，
-  // 用跟紀錄頁一樣的 search-grid + 下拉選單樣式，不用另外再學一套介面。
+  // 篩選樣式：醫院層級（常用，常駐顯示）跟急救責任等級（較少用，收在
+  // 「更多篩選」收合區塊裡）都用同一套 pill-row 浮動圓角按鈕，不要一個
+  // 用按鈕、一個用下拉選單兩種不同介面語言。
   const tierPills = `
     <div class="pill-row">
       <button class="pill ${!filterTier ? 'active' : ''}" onclick="window.__setHospitalFilterTier('')">全部層級</button>
       ${HOSPITAL_TIERS.map(t => `<button class="pill ${filterTier===t ? 'active' : ''}" onclick="window.__setHospitalFilterTier('${t}')">${t}</button>`).join("")}
     </div>`;
-  const levelOptions = `<option value="">全部等級</option>${HOSPITAL_LEVELS.map(l => `<option value="${l}" ${filterLevel===l?'selected':''}>${l}</option>`).join("")}`;
+  const levelPills = `
+    <div class="pill-row">
+      <button class="pill ${!filterLevel ? 'active' : ''}" onclick="window.__setHospitalFilterLevel('')">全部等級</button>
+      ${HOSPITAL_LEVELS.map(l => `<button class="pill ${filterLevel===l ? 'active' : ''}" onclick="window.__setHospitalFilterLevel('${l}')">${l}</button>`).join("")}
+    </div>`;
   const searchBar = `
     <input type="search" class="picker-search" style="margin-bottom:10px;" placeholder="搜尋醫院名稱或地址" value="${esc(state.hospitalSearchQuery||'')}" oninput="window.__setHospitalSearch(this.value)">
     ${tierPills}
@@ -6974,9 +6979,8 @@ function viewHospitals(){
       ${icon('chevronDown',16).replace('<svg ', '<svg class="chev" ')} 更多篩選
     </button>
     ${expanded ? `
-    <div class="search-grid">
-      <div class="field full"><label>急救責任等級</label><select onchange="window.__setHospitalFilterLevel(this.value)">${levelOptions}</select></div>
-    </div>` : ""}`;
+    <div class="section-label" style="margin-top:10px;">急救責任等級</div>
+    ${levelPills}` : ""}`;
   const locateBar = `
     <div class="hospital-toolbar">
       <button type="button" class="hospital-toolbar-locate" onclick="window.__locateNearbyHospitals()" ${state.locatingHospital ? 'disabled' : ''}>
