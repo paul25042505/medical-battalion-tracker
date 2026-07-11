@@ -1542,7 +1542,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-333-hospital-filter-toggle-position";
+const BUILD_TAG = "2026-07-11-334-hospital-level-label-remove";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2218,6 +2218,7 @@ const RELEASE_NOTES = [
       "修正彈出視窗表單內容比鍵盤打開後的可視高度還高時（例如大量傷患新增傷患彈窗，欄位較多），姓名等最上面的欄位會被推到畫面最上緣以上、完全捲不到，手動上下滑也碰不到、甚至會誤觸關閉彈窗的問題：彈出視窗自己的最大高度原本用瀏覽器的 dvh 單位計算，這個單位鍵盤打開時不會跟著縮小；改成鍵盤打開時也用量到的可視高度幫彈出視窗的高度封頂，撐不下的內容才會確實交給彈出視窗自己的捲動處理，捲得到也不會誤觸背景關閉",
       "醫院資訊頁「急救責任等級」篩選改成跟上面「醫院層級」同一套浮動圓角按鈕（原本是收在「更多篩選」裡的下拉選單），兩種篩選介面終於統一，不用切換到下拉選單的操作方式",
       "醫院資訊頁「更多篩選」展開鈕位置調整：改成放在展開內容的下面，不再卡在「醫院層級」跟「急救責任等級」兩排篩選按鈕中間",
+      "移除「急救責任等級」篩選按鈕上面的文字標題，跟上面「醫院層級」按鈕排一樣不另外加標題，兩排篩選按鈕排版更一致",
     ] },
     { category: "效能／穩定性", items: [
       "程式碼清理：移除幾個先前迭代留下、目前完全沒有被呼叫到的函式與常數（RBAC 的 isActive／canSeeAllTasks、任務類型的 taskTypeLabel／STEP_TYPES），純內部清理，畫面/功能沒有任何改變",
@@ -6979,8 +6980,7 @@ function viewHospitals(){
     <input type="search" class="picker-search" style="margin-bottom:10px;" placeholder="搜尋醫院名稱或地址" value="${esc(state.hospitalSearchQuery||'')}" oninput="window.__setHospitalSearch(this.value)">
     ${tierPills}
     ${expanded ? `
-    <div class="section-label" style="margin-top:10px;">急救責任等級</div>
-    ${levelPills}` : ""}
+    <div style="margin-top:10px;">${levelPills}</div>` : ""}
     <button class="filters-toggle ${expanded?'open':''}" onclick="window.__toggleHospitalFiltersExpanded()">
       ${icon('chevronDown',16).replace('<svg ', '<svg class="chev" ')} 更多篩選
     </button>`;
