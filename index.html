@@ -1412,7 +1412,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-310-nav-height-heal";
+const BUILD_TAG = "2026-07-10-311-kb-height-threshold";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2002,6 +2002,7 @@ const RELEASE_NOTES = [
       "修正欄位有時候會被鍵盤蓋住看不到、有時候又正常的不一致問題：改成聚焦後持續盯著欄位位置一小段時間（涵蓋鍵盤動畫、自動填寫快捷列出現的時間），不管可視範圍變化幾次、什麼時候變化，都會確實把欄位拉回鍵盤上方看得到的地方，不用再猜固定的延遲時間",
       "重新加回輸入文字時隱藏底部導覽列的功能；並修正欄位自動捲到可視範圍的校正動作，跟 window 流氓捲動歸零機制在極短時間內互相打架、畫面出現閃動的問題",
       "修正底部導覽列偶爾會卡在畫面中間、下面留一大塊空白，且換了好幾頁都修不回來的問題：根因是手勢下滑收鍵盤、或輸入框還沒失焦就直接點導覽列換頁這兩種情況，都不會觸發原本掛的版面校正機制；改成每次換頁都強制重新校正一次版面高度，不再依賴前一頁鍵盤是用什麼方式關閉的",
+      "找到導覽列卡住問題的真正根因並徹底修正：不是校正時機不對，而是版面校正邏輯本身一律採信量到的可視高度，但這個數字在沒有鍵盤時也可能因為量測時機不穩定而比實際可視範圍小一點，一旦被寫死成版面高度就再也回不來。改成只有量到的高度明顯比整個視窗矮一大截（判定為鍵盤真的開著）才採信這個數字，其餘情況一律讓版面高度交還給系統自動決定，從根本上排除「版面被卡在錯誤矮高度」的可能性",
     ] },
     { category: "醫院資訊", items: [
       "新增醫院表單的「名稱查詢座標」改用醫院名稱查詢（原本是查地址）：地址是選填欄位、常常沒填或格式不一致，醫院名稱幾乎一定會填，也比較容易對到 OpenStreetMap 資料庫裡實際登記的地點",
@@ -8356,18 +8357,35 @@ function resetRogueWindowScroll() {
   document.body.scrollTop = 0;
   document.documentElement.style.scrollBehavior = prevBehavior;
 }
-// 把 #app 的高度同步成目前量到的 visualViewport 高度（鍵盤打開/收起都要
-// 靠這個校正）。獨立成頂層函式（不是關在 setupKeyboardViewportFix() 的
-// IIFE 裡），讓 nav() 換頁時也能直接呼叫——見 nav() 內的說明：iOS 在某些
-// 情況下鍵盤收起不會確實觸發 visualViewport 事件，也不會讓輸入框自然
-// focusout（例如手勢下滑收鍵盤、輸入框沒失焦就直接點底部導覽列換頁），
-// 導致 #app 卡在鍵盤打開時的縮小高度、下面留一大塊空白，且沒有任何事件
-// 會再校正回來，只能等下一次換頁順便修正。
+// 把 #app 的高度同步成目前量到的 visualViewport 高度（鍵盤打開時要靠這個
+// 校正，CSS 的 100dvh 追不上鍵盤即時的高度變化）。獨立成頂層函式（不是
+// 關在 setupKeyboardViewportFix() 的 IIFE 裡），讓 nav() 換頁時也能直接
+// 呼叫。
+//
+// 只有在 visualViewport.height 明顯比 window.innerHeight 矮一截（差距
+// 超過 KEYBOARD_HEIGHT_THRESHOLD，這個值遠小於任何真實鍵盤的高度，但
+// 遠大於安全區域/瀏海/動態島這類量測誤差）時，才判定「鍵盤真的開著」，
+// 才用 JS 蓋掉 CSS 的 100dvh；平常（沒有鍵盤）一律清掉 inline style、
+// 交還給 CSS 的 100dvh 自己決定高度。
+//
+// 這是實機回報「導覽列卡在畫面中間、下面留一塊空白，換頁還是修不好」
+// 這個 bug 反覆出現好幾次之後才抓到的真正根因：之前所有修正都在處理
+// 「什麼時機該重新呼叫 syncAppHeight()」，但從來沒有懷疑過
+// visualViewport.height 這個數字本身可不可信——iOS 在 standalone（加入
+// 主畫面）模式下，頁面剛載入、visualViewport 都還沒穩定的那一瞬間就可能
+// 量到一個比實際可視高度小的數字，如果這時候剛好呼叫到 syncAppHeight()
+// 把這個過小的值寫死成 inline style，之後只要沒有真正的鍵盤事件把它蓋
+// 回去，就會永遠卡住——不管再怎麼調整「該在哪個時機重新呼叫」都沒用，
+// 因為問題出在「呼叫的當下量到的數字本身就不可信」。改成只有明確判定
+// 是鍵盤造成的高度差才採信這個數字，其餘情況一律清掉、讓 CSS 接手，
+// 從根本上排除「JS 把 #app 卡在錯誤矮高度」這個失敗模式。
+const KEYBOARD_HEIGHT_THRESHOLD = 80;
 function syncAppHeight() {
   if (!window.visualViewport) return;
   const app = document.getElementById("app");
   if (!app) return;
-  app.style.height = window.visualViewport.height + "px";
+  const diff = window.innerHeight - window.visualViewport.height;
+  app.style.height = diff > KEYBOARD_HEIGHT_THRESHOLD ? window.visualViewport.height + "px" : "";
 }
 // scrollIntoView() 校正聚焦欄位位置時，理論上只會捲動 <main> 自己（唯一
 // 真正的捲動容器），跟 window/document 的捲動是各自獨立的兩件事；但 iOS
