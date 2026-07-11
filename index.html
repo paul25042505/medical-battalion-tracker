@@ -1550,7 +1550,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-337-mci-modal-bottomnav-clip-fix";
+const BUILD_TAG = "2026-07-11-338-mci-vehicle-unit-grouping";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2302,6 +2302,7 @@ const RELEASE_NOTES = [
       "事件詳情頁拆成三個分頁，對應現場三種角色：「檢傷官」負責上面這套 START 問答建立案件；「治療官」是傷患集中區動態列表，可修改主訴、對黃色傷患執行「二次檢傷」一鍵升級為紅色；「後送官」直接看到預先配對好車輛/醫院的傷患字卡，只要點「離開現場」「抵達醫院」（填里程與備註）追蹤兩節點後送生命週期",
       "新增事件時或在事件卡片／詳情頁點「編輯」，可設定本次事件實際出勤的車輛與收治的醫院範圍（模擬演練的資源池概念），檢傷官建立案件時車輛/醫院下拉選單只會顯示這次設定的範圍；留空則不限制，沿用全部車輛/醫院名冊",
       "修正「抵達醫院」「編輯傷患」「新增/編輯事件」三個彈出視窗的「取消」按鈕在部分裝置上會被畫面最下方的分頁列擋住點不到的問題",
+      "新增/編輯事件的「本次事件出勤車輛」改成依單位分組顯示、組內依後台車輛管理的排序（車種→車號），一長串車號更容易找到自己單位的車；勾選不受分組限制，仍可跨連隊選車支援",
     ] },
   ] },
   { date: "2026/07/10", groups: [
@@ -5499,7 +5500,14 @@ function viewMciCreateModal(){
   if (!m) return "";
   const editing = m.id ? state.mciEvents.find(e => e.id === m.id) : null;
   const p = state.profile;
-  const vehicleOptions = state.vehicles.filter(v=>v.active!==false).map(v=>v.plate);
+  const vehiclePool = state.vehicles.filter(v=>v.active!==false);
+  // 車輛依單位分組顯示（組內照後台車輛管理同一套排序：車種→車號），方便
+  // 在一長串車號裡快速找到自己單位的車；checkbox 仍共用同一個 name，勾選
+  // 不受分組限制，可以跨連隊挑車支援。
+  const vehicleGroupsHtml = UNITS.map(u => {
+    const list = sortVehicles(vehiclePool.filter(v => v.unit === u.code)).map(v => v.plate);
+    return list.length ? `<div class="picker-group"><div class="picker-group-label">${esc(u.label)}</div>${chipGroup('vehicles', list, editing?.vehicles||[], true)}</div>` : "";
+  }).join("");
   const hospitalOptions = state.hospitals.slice().sort((a,b)=>HOSPITAL_NAME_COLLATOR.compare(a.name||'',b.name||'')).map(h=>h.name);
   return `
   <div class="modal-overlay" onclick="if(event.target===this) window.__closeMciCreateModal()">
@@ -5515,8 +5523,8 @@ function viewMciCreateModal(){
           </select>
         </div>
         <div class="field">
-          <label>本次事件出勤車輛（選填，不選代表開放全部車輛）</label>
-          ${vehicleOptions.length ? chipGroup('vehicles', vehicleOptions, editing?.vehicles||[], true) : `<div class="empty" style="padding:14px 0;">尚未建立車輛名冊</div>`}
+          <label>本次事件出勤車輛（選填，不選代表開放全部車輛；依單位分組，可跨連隊選擇）</label>
+          ${vehiclePool.length ? vehicleGroupsHtml : `<div class="empty" style="padding:14px 0;">尚未建立車輛名冊</div>`}
         </div>
         <div class="field">
           <label>本次事件收治醫院（選填，不選代表開放全部醫院）</label>
