@@ -1484,7 +1484,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-320-broadcast-copy-fix";
+const BUILD_TAG = "2026-07-11-321-personal-push-log";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1492,7 +1492,7 @@ const BUILD_TAG = "2026-07-11-320-broadcast-copy-fix";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.6";
+const APP_MAJOR_MINOR = "2.7";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -1650,6 +1650,33 @@ async function fsQuerySince(collectionId, field, sinceDate, limit){
     structuredQuery: {
       from: [{ collectionId }],
       where: { fieldFilter: { field: { fieldPath: field }, op: "GREATER_THAN_OR_EQUAL", value: { timestampValue: sinceDate.toISOString() } } },
+      limit: limit || 300
+    }
+  };
+  const res = await fetch(`${FIRESTORE_BASE}:runQuery`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    let msg = res.statusText;
+    try { const j = await res.json(); msg = (Array.isArray(j)?j[0]:j).error?.message || msg; } catch(e){}
+    const err = new Error(msg); err.code = res.status;
+    throw err;
+  }
+  const data = await res.json();
+  return (data||[]).filter(d => d.document).map(d => ({ id: d.document.name.split("/").pop(), ...fromFsFields(d.document.fields) }));
+}
+// 依單一欄位做「等於」查詢，目前只給 pushLog（系統推播個人紀錄）用：
+// firestore.rules 只允許 request.auth.uid == resource.data.uid 才能讀到那筆
+// 文件，plain list（fsListCollection 整批抓）在有其他人的文件混在同一個
+// 集合時會被規則整批擋掉，一定要用查詢限定 uid 才讀得到「只有自己的」那些。
+async function fsQueryEquals(collectionId, field, value, limit){
+  const idToken = await auth.currentUser.getIdToken();
+  const body = {
+    structuredQuery: {
+      from: [{ collectionId }],
+      where: { fieldFilter: { field: { fieldPath: field }, op: "EQUAL", value: { stringValue: value } } },
       limit: limit || 300
     }
   };
@@ -2069,6 +2096,10 @@ const RELEASE_NOTES = [
       "緊急動員廣播會依醫務所自動分流收件人（成功北醫務所→營部／第一連＋admin／高勤官，精北醫務所→第二連＋admin／高勤官），送出後彈窗列出實際成功發送的人員名單，不是只顯示「已送出」就結束",
       "緊急動員廣播滑動條改成依「目前這班待命勤務」判斷觸發權限，不是看角色：只有這班指派的車長／駕駛／值班醫官本人才看得到、才能觸發，即使是 admin／高勤官，只要不在這班名單上也看不到；後端也同步驗證，不是只靠前端隱藏",
       "修正緊急動員廣播推播內容：移除內文開頭跟標題重複的「【🚨 醫務所緊急狀況通報】」字樣，「留守幹部」改回「留職主官」",
+    ] },
+    { category: "推播通知", items: [
+      "新增「系統實際推播過的內容」個人紀錄：任務指派、進度回報、生命徵象異常、待命車換班提醒、緊急動員廣播等每一次真的推播出去的內容，現在都會各自留一份給收件人自己在通知中心（鈴鐺）回頭查看，不用擔心手機當下沒收到就再也看不到內容；效期 30 天，到期自動清除",
+      "通知中心（鈴鐺）現在會同時顯示「全體公告」與「只有自己收得到的系統推播紀錄」，依時間排序成單一清單；後台「訊息管理」維持只管理公告本身，不會顯示每個人各自的推播紀錄",
     ] },
     { category: "效能／穩定性", items: [
       "程式碼清理：移除幾個先前迭代留下、目前完全沒有被呼叫到的函式與常數（RBAC 的 isActive／canSeeAllTasks、任務類型的 taskTypeLabel／STEP_TYPES），純內部清理，畫面/功能沒有任何改變",
@@ -2557,7 +2588,8 @@ const state = {
   hospitals: [], vitals: [], // 醫院資訊（急救責任等級/電話）、患者生命徵象/主訴紀錄
   doctors: [], // 醫官名冊（姓名/電話），供建立勤務的「值班醫官」欄位選用
   erStandby: [], // 急診待命：每個地點目前綁定的待命勤務指標（currentTaskId）
-  notifications: [], // 通知中心（收件匣歷史紀錄），依 timestamp 新到舊排序
+  notifications: [], // 通知中心（收件匣歷史紀錄，公告，全體共用），依 timestamp 新到舊排序
+  pushLog: [], // 系統實際推播過的個人化紀錄（任務/事件/生命徵象異常/緊急動員等），只查得到自己的份，跟 notifications（全體公告）分開存放
   route: { name: "home" },
   reportDraft: null, // { taskId, type }
   eventEditId: null, // 正在編輯哪一筆已回報事件（時間/里程填錯時修正用）
@@ -2619,6 +2651,7 @@ let tasksPoll = null, eventsPoll = null, profilePoll = null;
 let personnelPoll = null, vehiclesPoll = null, recordersPoll = null;
 let hospitalsPoll = null, vitalsPoll = null, erStandbyPoll = null, doctorsPoll = null;
 let notificationsPoll = null;
+let pushLogPoll = null;
 let erRealtimePoll = null;
 // 只有資料真的變動時才重繪畫面，避免每次背景輪詢都整頁重畫造成畫面閃爍/捲動位置跳動。
 const lastJson = {};
@@ -2983,20 +3016,42 @@ async function submitFeedback(category, message){
 }
 // 通知中心：點一筆就把那筆標成已讀。等 Firestore 寫入成功才更新畫面上的
 // 紅點，不用等下一次 notificationsPoll 重抓才消失；寫入失敗就不更新，紅點
-// 留著，避免「看起來已讀但其實沒寫進去」的靜默失敗。
-async function markNotificationRead(id){
-  const n = state.notifications.find(x => x.id === id);
+// 留著，避免「看起來已讀但其實沒寫進去」的靜默失敗。coll 用來區分這筆是
+// 全體共用的公告（notifications）還是只有自己看得到的系統推播個人紀錄
+// （pushLog，見 mergedPersonalNotifications），兩份資料各自存在不同集合。
+async function markNotificationRead(id, coll){
+  coll = coll === "pushLog" ? "pushLog" : "notifications";
+  const list = coll === "pushLog" ? state.pushLog : state.notifications;
+  const n = list.find(x => x.id === id);
   if (!n || n.isRead) return;
-  await fsSetDoc(`notifications/${id}`, { isRead: true });
+  await fsSetDoc(`${coll}/${id}`, { isRead: true });
   n.isRead = true; safeRender();
 }
 // 全部標記為已讀：只送目前真的還沒讀的那幾筆，一次用 fsBatchUpdate 送出，
-// 避免未讀清單很長時要逐筆各打一次 PATCH。
-async function markAllNotificationsRead(){
-  const unread = state.notifications.filter(n => !n.isRead);
-  if (!unread.length) return;
-  await fsBatchUpdate(unread.map(n => ({ path: `notifications/${n.id}`, fields: { isRead: true } })));
-  unread.forEach(n => n.isRead = true); safeRender();
+// 避免未讀清單很長時要逐筆各打一次 PATCH。includePushLog 是為了讓「訊息
+// 管理」（admin 只看公告）跟個人「通知中心」（看公告＋自己的推播紀錄）
+// 的「全部標記為已讀」各自只影響畫面上真的有顯示出來的那些項目。
+async function markAllNotificationsRead(includePushLog){
+  const unreadNotif = state.notifications.filter(n => !n.isRead);
+  const unreadPushLog = includePushLog ? state.pushLog.filter(n => !n.isRead) : [];
+  const updates = [
+    ...unreadNotif.map(n => ({ path: `notifications/${n.id}`, fields: { isRead: true } })),
+    ...unreadPushLog.map(n => ({ path: `pushLog/${n.id}`, fields: { isRead: true } })),
+  ];
+  if (!updates.length) return;
+  await fsBatchUpdate(updates);
+  unreadNotif.forEach(n => n.isRead = true);
+  unreadPushLog.forEach(n => n.isRead = true);
+  safeRender();
+}
+// 個人通知中心（鈴鐺）看到的是「全體公告」＋「只有自己收得到的系統推播
+// 個人紀錄」合併後依時間排序的單一清單；「訊息管理」admin CRUD 頁只管理
+// 公告本身，不會顯示這份合併清單（見 renderNotificationsList 的 editable
+// 參數）。
+function mergedPersonalNotifications(){
+  const a = state.notifications.map(n => ({ ...n, _coll: "notifications" }));
+  const b = state.pushLog.map(n => ({ ...n, _coll: "pushLog" }));
+  return [...a, ...b].sort((x, y) => new Date(y.timestamp||0) - new Date(x.timestamp||0));
 }
 // 新增公告：只有「訊息管理」（admin）有這個入口，一般成員的通知中心
 // 看不到新增/編輯/刪除的按鈕。isRead 一律從 false 開始，讓所有人看到
@@ -3521,15 +3576,22 @@ function startDataListeners(){
     state.notifications = docs;
     if (changed) safeRender();
   });
+  pushLogPoll = poll(async () => {
+    const docs = await fsQueryEquals("pushLog", "uid", state.user.uid);
+    docs.sort((a,b) => new Date(b.timestamp||0) - new Date(a.timestamp||0));
+    const changed = changedSince("pushLog", docs);
+    state.pushLog = docs;
+    if (changed) safeRender();
+  });
   ensureUnitsSeeded();
   ensureHospitalsSeeded();
 }
 function cleanupListeners(){
-  [tasksPoll, eventsPoll, profilePoll, personnelPoll, vehiclesPoll, recordersPoll, hospitalsPoll, vitalsPoll, erStandbyPoll, doctorsPoll, notificationsPoll].forEach(p => p && p.stop());
+  [tasksPoll, eventsPoll, profilePoll, personnelPoll, vehiclesPoll, recordersPoll, hospitalsPoll, vitalsPoll, erStandbyPoll, doctorsPoll, notificationsPoll, pushLogPoll].forEach(p => p && p.stop());
   for (const k in lastJson) delete lastJson[k];
-  tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = hospitalsPoll = vitalsPoll = erStandbyPoll = doctorsPoll = notificationsPoll = erRealtimePoll = null;
+  tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = hospitalsPoll = vitalsPoll = erStandbyPoll = doctorsPoll = notificationsPoll = pushLogPoll = erRealtimePoll = null;
   state.tasks = []; state.events = []; state.personnel = []; state.vehicles = []; state.recorders = [];
-  state.hospitals = []; state.vitals = []; state.erStandby = []; state.doctors = []; state.notifications = [];
+  state.hospitals = []; state.vitals = []; state.erStandby = []; state.doctors = []; state.notifications = []; state.pushLog = [];
   state.deepTasks = []; state.deepEvents = []; state.deepVitals = []; state.recordsDeepQuery = null;
   state.previewActive = false; state.realRoleUnit = null;
 }
@@ -4189,7 +4251,7 @@ const ROUTE_REFRESH = {
   baseDataHospitals: ['hospitals'],
   baseDataDoctors: ['doctors'],
   adminUsers: ['personnel'],
-  notifications: ['notifications'],
+  notifications: ['notifications', 'pushLog'],
 };
 // App Shell 改成 <main> 自己捲動（見 #app 的 CSS 註解）以後，window 本身
 // 不會再捲動，換頁／換頁籤要回頂端得改成重設 main 的 scrollTop。
@@ -4203,7 +4265,7 @@ function nav(route){
   // 輪詢；每次導覽過去都清掉快取強制重抓一次，才看得到剛送出的意見回饋。
   if (route.name === "adminFeedback") state._feedbackCache = null;
   render(); scrollContentToTop();
-  const polls = { tasks: tasksPoll, events: eventsPoll, personnel: personnelPoll, vehicles: vehiclesPoll, recorders: recordersPoll, hospitals: hospitalsPoll, vitals: vitalsPoll, erStandby: erStandbyPoll, doctors: doctorsPoll, notifications: notificationsPoll, erRealtime: erRealtimePoll };
+  const polls = { tasks: tasksPoll, events: eventsPoll, personnel: personnelPoll, vehicles: vehiclesPoll, recorders: recordersPoll, hospitals: hospitalsPoll, vitals: vitalsPoll, erStandby: erStandbyPoll, doctors: doctorsPoll, notifications: notificationsPoll, pushLog: pushLogPoll, erRealtime: erRealtimePoll };
   (ROUTE_REFRESH[route.name] || []).forEach(key => { if (polls[key]) polls[key].refreshNow(); });
   // 保險機制：換頁時強制重新校正一次 #app 高度／window 捲動值，不依賴
   // 前一頁鍵盤關閉時是否有確實觸發 visualViewport 事件或輸入框 focusout
@@ -5991,28 +6053,33 @@ function viewStats(){
 }
 
 /* =========================================================
-   16) 畫面：通知中心（收件匣歷史紀錄，模組 A：基礎版——單一列表，新到舊
-   排序，不分「全部/未讀」頁籤；未讀狀態是共用的 isRead 欄位，不分帳號）
-   同一份清單有兩個入口：右上角鈴鐺圖示（所有在職帳號都能看，個人視角，
-   唯讀）、後台管理「訊息管理」（canManageUsers 專用，見
-   viewAdminMessages，多了新增/編輯/刪除公告）——兩邊看到的通知內容一致，
-   只是「訊息管理」多一層管理操作，所以抽成共用的 renderNotificationsList()，
-   用 editable 參數決定要不要顯示新增/編輯/刪除，避免同一份卡片邏輯維護兩份。
+   16) 畫面：通知中心（收件匣歷史紀錄）
+   同一份卡片樣式有兩個入口，但看到的資料不完全一樣：
+   - 右上角鈴鐺圖示（所有在職帳號都能看，個人視角，唯讀）：全體公告
+     （notifications）＋只有自己收得到的系統推播個人紀錄（pushLog，見
+     mergedPersonalNotifications）合併排序，讓使用者能回頭查「系統到底
+     推播過什麼給我」，效期一樣是 30 天。
+   - 後台管理「訊息管理」（canManageUsers 專用，見 viewAdminMessages，
+     多了新增/編輯/刪除公告）：只管理公告本身（notifications），不會混
+     進每個人各自的系統推播紀錄——那是系統自動產生的個人化資料，不是
+     admin 可以編輯的公告內容。
+   兩邊共用同一套卡片 HTML，用 editable 參數決定資料來源跟要不要顯示
+   新增/編輯/刪除，避免同一份卡片邏輯維護兩份。
    ========================================================= */
 function renderNotificationsList(editable){
-  const list = state.notifications;
+  const list = editable ? state.notifications : mergedPersonalNotifications();
   const hasUnread = list.some(n => !n.isRead);
   const addBtn = editable
     ? `<button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('notifications', null, '')">${icon('plus',15)} 新增公告</button>`
     : "";
   const markAllBtn = hasUnread
-    ? `<button class="icon-btn" style="margin-bottom:12px;" onclick="window.__markAllNotificationsRead()">全部標記為已讀</button>`
+    ? `<button class="icon-btn" style="margin-bottom:12px;" onclick="window.__markAllNotificationsRead(${!editable})">全部標記為已讀</button>`
     : "";
   return `
     ${addBtn}
     ${markAllBtn}
     ${list.length ? list.map(n => `
-      <div class="notif-card spatial-card ${!n.isRead ? 'unread' : ''}" onclick="window.__markNotificationRead('${n.id}')">
+      <div class="notif-card spatial-card ${!n.isRead ? 'unread' : ''}" onclick="window.__markNotificationRead('${n.id}','${n._coll||'notifications'}')">
         <div class="notif-card-head">
           <span class="notif-icon">${icon('bell',18)}</span>
           <div class="notif-head-text">
@@ -7943,8 +8010,8 @@ function baseDataErr(err){ showToast(`操作失敗：[${err.code||'?'}] ${err.me
 window.__toggleBaseData = (coll, id, active) => toggleBaseDataActive(coll, id, active).catch(baseDataErr);
 window.__deleteBaseData = (coll, id) => { if (confirm("確定刪除此筆資料？此動作無法復原。")) deleteBaseData(coll, id).catch(baseDataErr); };
 window.__openBaseDataModal = (coll, id, unit) => { state.baseDataModal = { coll, id: id||null, unit }; render(); };
-window.__markNotificationRead = (id) => markNotificationRead(id).catch(baseDataErr);
-window.__markAllNotificationsRead = () => markAllNotificationsRead().catch(baseDataErr);
+window.__markNotificationRead = (id, coll) => markNotificationRead(id, coll).catch(baseDataErr);
+window.__markAllNotificationsRead = (includePushLog) => markAllNotificationsRead(includePushLog).catch(baseDataErr);
 window.__closeBaseDataModal = () => { state.baseDataModal = null; render(); };
 window.__submitBaseDataModal = (ev, coll, unit, id) => {
   ev.preventDefault();

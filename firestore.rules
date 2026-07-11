@@ -212,5 +212,17 @@ service cloud.firestore {
       allow create, delete: if isAdmin();
       allow update: if isAdmin() || (isActive() && onlyChanged(['isRead']));
     }
+
+    // 系統實際推播過的內容，個人化紀錄（見 functions/index.js 的
+    // writePushLog）：只有這則通知指定的那個人（uid 等於自己）能讀到、
+    // 能標記已讀，跟 notifications（全體共用的公告板）不一樣，不能套用
+    // 同一條「isActive() 就能讀」的規則，否則等於誰都能看到別人收到的
+    // 任務/生命徵象異常等推播內容。只有後端 Cloud Function（Admin SDK，
+    // 不受這份規則限制）會寫入/刪除，前端不開放直接新增或刪除。
+    match /pushLog/{id} {
+      allow read: if isActive() && request.auth.uid == resource.data.uid;
+      allow update: if isActive() && request.auth.uid == resource.data.uid && onlyChanged(['isRead']);
+      allow create, delete: if false;
+    }
   }
 }
