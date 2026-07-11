@@ -1463,7 +1463,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-316-push-catalog-admin";
+const BUILD_TAG = "2026-07-11-317-dead-code-cleanup";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1769,9 +1769,6 @@ const LIAISON_EVENT_TYPES = [
   { type: "RETURNING",     label: "返營", icon: "returnArrow", statusKey: "completed",  hint: "返回營區，洽公完成" }
 ];
 function eventTypesFor(t){ return (t && t.type === "liaison") ? LIAISON_EVENT_TYPES : EVENT_TYPES; }
-// 勤務進度 Stepper 固定步驟（依 eventTypesFor(t) 順序），抵達現場／離開現場
-// 若同一趟勤務重複多次，Stepper 一律以「最新一筆事件」決定目前走到第幾步。
-const STEP_TYPES = EVENT_TYPES.map(e => e.type);
 const STATUS_LABEL = {
   pending:   "待命中",
   dispatch:  "出勤中",
@@ -1807,7 +1804,6 @@ const TASK_TYPES = [
   { key: "duty",    label: "勤務" },
   { key: "liaison", label: "洽公" }
 ];
-function taskTypeLabel(t){ return t && t.type === "liaison" ? "洽公" : "勤務"; }
 
 /* =========================================================
    2d) 氣象預報（中央氣象署 CWA 開放資料平臺，依單位對應縣市）
@@ -2045,6 +2041,11 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/07/11", groups: [
+    { category: "效能／穩定性", items: [
+      "程式碼清理：移除幾個先前迭代留下、目前完全沒有被呼叫到的函式與常數（RBAC 的 isActive／canSeeAllTasks、任務類型的 taskTypeLabel／STEP_TYPES），純內部清理，畫面/功能沒有任何改變",
+    ] },
+  ] },
   { date: "2026/07/10", groups: [
     { category: "介面優化", items: [
       "首頁「今日概況」統計卡片改版：標籤跟色塊圖示改到頂排（標籤左、圖示右），大數字移到最下面靠左，取代原本圖示/數字/標籤整個置中堆疊的排法，數字字級也再放大一階更醒目",
@@ -2688,7 +2689,6 @@ function durationLabel(ms){
 function normalizeRole(role){ return role === "company_commander" ? "commander" : role; }
 function myRole(p){ return p ? normalizeRole(p.role) : ""; }
 function myUnit(p){ return (p && p.unit) || ""; }
-function isActive(p){ const r = myRole(p); return p && r !== "pending" && r !== "disabled"; }
 function canSeeAllUnits(p){ const r = myRole(p); return r === "admin" || r === "duty_officer"; }
 function canManageUsers(p){ return myRole(p) === "admin"; }
 // 任務管理／基礎資料管理：admin、高勤官（全單位），連級主官管（僅自己單位）皆可進入管理後台
@@ -2698,7 +2698,6 @@ function canManageBaseData(p){ return canManageTasks(p); }
 // 只有 admin 可以新增，避免高勤官/主官管誤增到重複或不精確的醫院資料；
 // 既有醫院的編輯／刪除維持 canManageBaseData 不變。
 function canAddHospital(p){ return myRole(p) === "admin"; }
-function canSeeAllTasks(p){ return canSeeAllUnits(p); }
 // 高勤官、主官管對勤務只有查看權限：不可編輯、不可強制結束，僅 admin 可操作。
 function canDeleteTask(p){ return myRole(p) === "admin"; }
 function canForceEndTask(p){ return myRole(p) === "admin"; }
