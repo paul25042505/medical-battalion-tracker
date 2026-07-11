@@ -1412,7 +1412,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-311-kb-height-threshold";
+const BUILD_TAG = "2026-07-10-312-hospfilter-style";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2019,6 +2019,7 @@ const RELEASE_NOTES = [
       "新增醫院只有 admin 能新增：全營共用的醫院清單，新增一筆會影響所有單位查到的結果，避免高勤官/主官管誤增到重複或不精確的醫院資料；既有醫院的編輯／刪除維持原本權限不變",
       "醫院資訊頁新增搜尋框（比對醫院名稱／地址）跟頂部篩選頁籤（醫院層級／急救責任等級），不用再從一長串清單裡自己找",
       "醫院資訊頁預設排序改回依醫院名稱筆畫排序（原本是依醫院層級排序），點選「依距離」或「依人數」才會切換成該排序方式",
+      "醫院資訊頁的篩選改成跟「紀錄」頁一樣的樣式：常用的醫院層級篩選改成浮動圓角按鈕（點選即套用），較少用的急救責任等級篩選收在「更多篩選」收合區塊裡的下拉選單，不用再各自學一套介面",
     ] },
     { category: "急診待命", items: [
       "急診待命卡片欄位順序調整：值班醫官移到車長原本的位置（右上），車長移到駕駛原本的位置（左下），駕駛移到值班醫官原本的位置（右下）",
@@ -2465,6 +2466,7 @@ const state = {
   eventEditId: null, // 正在編輯哪一筆已回報事件（時間/里程填錯時修正用）
   recordsFilter: { period: "today", unit: "", vehicle: "", title: "", location: "", status: "", person: "", customDateFrom: "", customDateTo: "" },
   recordsFiltersExpanded: false,
+  hospitalFiltersExpanded: false, // 醫院資訊頁「更多篩選」是否展開（急救責任等級），跟紀錄頁同一套收合樣式
   recordsApplied: null, // 查詢後的篩選條件快照；null 代表尚未按下查詢
   tasksTab: "all",
   tasksMainTab: "duty", // 任務頁最上面的子選單：duty（勤務，預設）／weather（天氣）／records（紀錄）
@@ -6395,16 +6397,26 @@ function renderHospitalListBody(){
 function viewHospitals(){
   const filterTier = state.hospitalFilterTier || "";
   const filterLevel = state.hospitalFilterLevel || "";
+  const expanded = state.hospitalFiltersExpanded;
+  // 篩選樣式跟「紀錄」頁統一：常用篩選（層級）用 pill-row 浮動圓角按鈕
+  // 常駐顯示，較少用的篩選（急救責任等級）收在「更多篩選」收合區塊裡，
+  // 用跟紀錄頁一樣的 search-grid + 下拉選單樣式，不用另外再學一套介面。
+  const tierPills = `
+    <div class="pill-row">
+      <button class="pill ${!filterTier ? 'active' : ''}" onclick="window.__setHospitalFilterTier('')">全部層級</button>
+      ${HOSPITAL_TIERS.map(t => `<button class="pill ${filterTier===t ? 'active' : ''}" onclick="window.__setHospitalFilterTier('${t}')">${t}</button>`).join("")}
+    </div>`;
+  const levelOptions = `<option value="">全部等級</option>${HOSPITAL_LEVELS.map(l => `<option value="${l}" ${filterLevel===l?'selected':''}>${l}</option>`).join("")}`;
   const searchBar = `
     <input type="search" class="picker-search" style="margin-bottom:10px;" placeholder="搜尋醫院名稱或地址" value="${esc(state.hospitalSearchQuery||'')}" oninput="window.__setHospitalSearch(this.value)">
-    <div class="tabs2 scroll" style="margin-bottom:8px;">
-      <div class="tab2 ${!filterTier ? 'active' : ''}" onclick="window.__setHospitalFilterTier('')">全部層級</div>
-      ${HOSPITAL_TIERS.map(t => `<div class="tab2 ${filterTier===t ? 'active' : ''}" onclick="window.__setHospitalFilterTier('${t}')">${t}</div>`).join("")}
-    </div>
-    <div class="tabs2 scroll" style="margin-bottom:10px;">
-      <div class="tab2 ${!filterLevel ? 'active' : ''}" onclick="window.__setHospitalFilterLevel('')">全部等級</div>
-      ${HOSPITAL_LEVELS.map(l => `<div class="tab2 ${filterLevel===l ? 'active' : ''}" onclick="window.__setHospitalFilterLevel('${l}')">${l}</div>`).join("")}
-    </div>`;
+    ${tierPills}
+    <button class="filters-toggle ${expanded?'open':''}" onclick="window.__toggleHospitalFiltersExpanded()">
+      ${icon('chevronDown',16).replace('<svg ', '<svg class="chev" ')} 更多篩選
+    </button>
+    ${expanded ? `
+    <div class="search-grid">
+      <div class="field full"><label>急救責任等級</label><select onchange="window.__setHospitalFilterLevel(this.value)">${levelOptions}</select></div>
+    </div>` : ""}`;
   const locateBar = `
     <div class="hospital-toolbar">
       <button type="button" class="hospital-toolbar-locate" onclick="window.__locateNearbyHospitals()" ${state.locatingHospital ? 'disabled' : ''}>
@@ -8056,6 +8068,7 @@ window.__submitFeedbackForm = (ev) => {
 };
 window.__setRecordsFilter = (key, value) => { state.recordsFilter[key] = value; render(); };
 window.__toggleRecordsFilters = () => { state.recordsFiltersExpanded = !state.recordsFiltersExpanded; render(); };
+window.__toggleHospitalFiltersExpanded = () => { state.hospitalFiltersExpanded = !state.hospitalFiltersExpanded; render(); };
 window.__toggleTyphoonExpanded = () => { state.typhoonExpanded = !state.typhoonExpanded; render(); };
 window.__runRecordsQuery = () => { state.recordsApplied = { ...state.recordsFilter }; state.recordsDeepQuery = null; render(); };
 window.__clearRecordsQuery = () => {
