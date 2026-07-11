@@ -1431,6 +1431,7 @@
   .modal-sheet{
     background:var(--panel); width:100%; max-width:520px; border-radius:22px 22px 0 0;
     padding:14px 20px calc(20px + env(safe-area-inset-bottom)) 20px; max-height:88vh; overflow-y:auto;
+    overscroll-behavior:contain;
     box-shadow:0 -12px 40px rgba(0,0,0,0.2); animation:modalSlideUp 0.24s cubic-bezier(.22,1,.36,1);
   }
   .modal-handle{width:36px; height:5px; border-radius:3px; background:var(--border-strong); margin:0 auto 16px auto;}
@@ -1484,7 +1485,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-321-personal-push-log";
+const BUILD_TAG = "2026-07-11-322-modal-keyboard-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2100,6 +2101,9 @@ const RELEASE_NOTES = [
     { category: "推播通知", items: [
       "新增「系統實際推播過的內容」個人紀錄：任務指派、進度回報、生命徵象異常、待命車換班提醒、緊急動員廣播等每一次真的推播出去的內容，現在都會各自留一份給收件人自己在通知中心（鈴鐺）回頭查看，不用擔心手機當下沒收到就再也看不到內容；效期 30 天，到期自動清除",
       "通知中心（鈴鐺）現在會同時顯示「全體公告」與「只有自己收得到的系統推播紀錄」，依時間排序成單一清單；後台「訊息管理」維持只管理公告本身，不會顯示每個人各自的推播紀錄",
+    ] },
+    { category: "介面優化", items: [
+      "修正回報表單（出勤/抵達現場/離開現場/返營等）彈出視窗被手機鍵盤蓋住下半部欄位（里程、備註、確認送出按鈕）、完全捲不到看不到的問題：彈出視窗是獨立於 #app 版面之外的固定定位元素，鍵盤打開時 CSS 原本算的可視高度沒有把鍵盤佔用的空間扣掉；改成鍵盤打開時比照全站既有的鍵盤修正機制，直接用量到的可視高度校正彈出視窗自己的最大高度，捲動範圍才會跟畫面實際看得到的地方對齊",
     ] },
     { category: "效能／穩定性", items: [
       "程式碼清理：移除幾個先前迭代留下、目前完全沒有被呼叫到的函式與常數（RBAC 的 isActive／canSeeAllTasks、任務類型的 taskTypeLabel／STEP_TYPES），純內部清理，畫面/功能沒有任何改變",
@@ -8739,7 +8743,20 @@ function syncAppHeight() {
   const app = document.getElementById("app");
   if (!app) return;
   const diff = window.innerHeight - window.visualViewport.height;
-  app.style.height = diff > KEYBOARD_HEIGHT_THRESHOLD ? window.visualViewport.height + "px" : "";
+  const keyboardOpen = diff > KEYBOARD_HEIGHT_THRESHOLD;
+  app.style.height = keyboardOpen ? window.visualViewport.height + "px" : "";
+  // .modal-overlay／.modal-sheet（回報表單等彈出視窗）是 position:fixed，
+  // 定位基準是瀏覽器整個版面視窗（layout viewport），不是 #app，鍵盤打開
+  // 時不會跟著 #app 一起變矮：CSS 的 max-height:88vh 算的還是鍵盤打開
+  // 「之前」那個比較高的視窗尺寸，導致視窗下半部（例如里程/備註欄位、
+  // 送出按鈕）雖然在 DOM 裡也設了 overflow-y:auto，卻捲不上來、直接被
+  // 鍵盤蓋住看不到——因為彈出視窗自己認定的「可視高度」本身就沒把鍵盤
+  // 算進去。比照 #app 的做法：鍵盤打開時同樣用量到的 visualViewport.height
+  // 直接蓋掉彈出視窗的 max-height，讓它精準對齊「鍵盤上方那一段」，
+  // overflow-y:auto 才有真正對得上畫面的高度可以捲；鍵盤收起後清掉
+  // inline style，交還給 CSS 原本的 88vh/80vh。
+  const sheet = document.querySelector(".modal-sheet");
+  if (sheet) sheet.style.maxHeight = keyboardOpen ? (window.visualViewport.height - 24) + "px" : "";
 }
 // scrollIntoView() 校正聚焦欄位位置時，理論上只會捲動 <main> 自己（唯一
 // 真正的捲動容器），跟 window/document 的捲動是各自獨立的兩件事；但 iOS
