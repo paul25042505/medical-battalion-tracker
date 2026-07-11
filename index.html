@@ -1501,7 +1501,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-324-modal-overlay-dvh-fix";
+const BUILD_TAG = "2026-07-11-325-modal-kb-debug-overlay";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2122,6 +2122,7 @@ const RELEASE_NOTES = [
       "修正回報表單（出勤/抵達現場/離開現場/返營等）彈出視窗被手機鍵盤蓋住下半部欄位（里程、備註、確認送出按鈕）、完全捲不到看不到的問題：彈出視窗是獨立於 #app 版面之外的固定定位元素，鍵盤打開時 CSS 原本算的可視高度沒有把鍵盤佔用的空間扣掉；改成鍵盤打開時比照全站既有的鍵盤修正機制，直接用量到的可視高度校正彈出視窗自己的最大高度，捲動範圍才會跟畫面實際看得到的地方對齊",
       "上一版鍵盤修正機制實機測試會讓彈出視窗整個變空白（跟原本負責把聚焦欄位捲到可視範圍中間的機制互相干擾），已整個回退：改成讓彈出視窗的最大高度直接交給瀏覽器原生的 dvh 單位處理，不用 JS 隨鍵盤開關即時改寫，避免跟其他鍵盤相關的畫面校正邏輯搶著同一時間點動作",
       "改回 dvh 後實機測試發現欄位還是被鍵盤蓋住：真正原因不是彈出視窗本身的高度算錯，是最外層的半透明背景容器（position:fixed）的定位基準本身沒有跟著鍵盤收縮，導致貼齊底部的彈出視窗仍然貼在「鍵盤打開前」的畫面最底部；改成跟 #app 同一種寫法（用明確的 dvh 高度取代 inset:0），外層容器鍵盤打開時才會真的跟著變矮，彈出視窗才會確實貼到鍵盤正上方",
+      "上面這個 dvh 修正實機測試後畫面跟修正前一模一樣，沒有任何改善——連續三次針對這個問題的假設都猜錯，暫時在畫面右上角加一塊紅底診斷小面板（顯示 #app／彈出視窗實際量到的高度數字），純粹是為了拿到真實數據才能抓到正確根因，不是正式功能，確認修好之後就會整個移除",
     ] },
     { category: "效能／穩定性", items: [
       "程式碼清理：移除幾個先前迭代留下、目前完全沒有被呼叫到的函式與常數（RBAC 的 isActive／canSeeAllTasks、任務類型的 taskTypeLabel／STEP_TYPES），純內部清理，畫面/功能沒有任何改變",
@@ -8848,6 +8849,42 @@ window.addEventListener("scroll", () => {
       window.dispatchEvent(new Event("resize"));
     }, 120);
   }, true);
+})();
+
+// 暫時的鍵盤/彈出視窗診斷面板：前面連續三次針對「彈出視窗被鍵盤蓋住」的
+// CSS/JS 修正，實機測試都沒有改善（甚至一度更糟），純粹用猜的已經猜不出
+// 真正原因了。這裡直接把關鍵數字即時印在畫面右上角，下次實機重現問題時
+// 附上這個畫面的截圖，才能照實際數字而不是假設去抓根因；確認修好之後這
+// 段診斷面板要整個移除，不是正式功能。
+(function setupKeyboardDebugOverlay(){
+  const box = document.createElement("div");
+  box.style.cssText = "position:fixed; top:4px; right:4px; z-index:9999; background:rgba(255,0,0,0.85); color:#fff; font-size:10px; font-family:monospace; padding:4px 6px; border-radius:6px; line-height:1.4; max-width:260px; pointer-events:none; white-space:pre;";
+  document.body.appendChild(box);
+  function rectStr(el){
+    if (!el) return "（不存在）";
+    const r = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    return `top=${r.top.toFixed(0)} bottom=${r.bottom.toFixed(0)} h=${r.height.toFixed(0)} | css height=${cs.height} maxH=${cs.maxHeight} pos=${cs.position}`;
+  }
+  function update(){
+    const app = document.getElementById("app");
+    const overlay = document.querySelector(".modal-overlay");
+    const sheet = document.querySelector(".modal-sheet");
+    const vv = window.visualViewport;
+    const active = document.activeElement;
+    box.textContent =
+      `innerH=${window.innerHeight} vvH=${vv?vv.height.toFixed(0):'—'} vvOffTop=${vv?vv.offsetTop.toFixed(0):'—'}\n` +
+      `#app: ${rectStr(app)}\n` +
+      `.modal-overlay: ${rectStr(overlay)}\n` +
+      `.modal-sheet: ${rectStr(sheet)}\n` +
+      `focus=${active ? active.tagName+'#'+(active.id||'') : '無'}`;
+  }
+  update();
+  setInterval(update, 300);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", update);
+    window.visualViewport.addEventListener("scroll", update);
+  }
 })();
 
 render();
