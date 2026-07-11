@@ -1430,7 +1430,18 @@
   }
   .modal-sheet{
     background:var(--panel); width:100%; max-width:520px; border-radius:22px 22px 0 0;
-    padding:14px 20px calc(20px + env(safe-area-inset-bottom)) 20px; max-height:88vh; overflow-y:auto;
+    padding:14px 20px calc(20px + env(safe-area-inset-bottom)) 20px;
+    /* max-height 故意先寫一般的 vh 當退路，dvh 才是真正生效的值（瀏覽器
+       不支援 dvh 時會直接忽略那一行，退回上面的 vh）。用 dvh 而不是用 JS
+       量 visualViewport 手動蓋掉高度：dvh 是瀏覽器原生持續追蹤可視視窗
+       （含鍵盤佔用的空間）算出來的值，鍵盤打開/收起當下就會自動反應，
+       不用自己寫程式碼判斷「現在是不是鍵盤造成的」；之前改成用 JS 在
+       syncAppHeight() 裡即時蓋掉 max-height，反而跟同一個函式裡另一個
+       負責把目前聚焦欄位捲到可視範圍中間的 positionLoop／scrollIntoView
+       在同一個畫面更新時機互相干擾（max-height 剛變、scrollIntoView 拿
+       舊的高度去算目標捲動位置），實機測試出現彈出視窗整個變成空白、
+       確認送出等欄位完全看不到的更嚴重問題，已經整個回退。 */
+    max-height:88vh; max-height:88dvh; overflow-y:auto;
     overscroll-behavior:contain;
     box-shadow:0 -12px 40px rgba(0,0,0,0.2); animation:modalSlideUp 0.24s cubic-bezier(.22,1,.36,1);
   }
@@ -1440,7 +1451,7 @@
   @keyframes modalSlideUp{from{transform:translateY(28px); opacity:0;} to{transform:translateY(0); opacity:1;}}
   @media (min-width:560px){
     .modal-overlay{align-items:center;}
-    .modal-sheet{border-radius:var(--radius-lg); max-height:80vh;}
+    .modal-sheet{border-radius:var(--radius-lg); max-height:80vh; max-height:80dvh;}
   }
 
   /* ---- 人員選擇器（車長／駕駛，跨單位＋搜尋） ---- */
@@ -1485,7 +1496,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-322-modal-keyboard-fix";
+const BUILD_TAG = "2026-07-11-323-modal-keyboard-fix-revert";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2104,6 +2115,7 @@ const RELEASE_NOTES = [
     ] },
     { category: "介面優化", items: [
       "修正回報表單（出勤/抵達現場/離開現場/返營等）彈出視窗被手機鍵盤蓋住下半部欄位（里程、備註、確認送出按鈕）、完全捲不到看不到的問題：彈出視窗是獨立於 #app 版面之外的固定定位元素，鍵盤打開時 CSS 原本算的可視高度沒有把鍵盤佔用的空間扣掉；改成鍵盤打開時比照全站既有的鍵盤修正機制，直接用量到的可視高度校正彈出視窗自己的最大高度，捲動範圍才會跟畫面實際看得到的地方對齊",
+      "上一版鍵盤修正機制實機測試會讓彈出視窗整個變空白（跟原本負責把聚焦欄位捲到可視範圍中間的機制互相干擾），已整個回退：改成讓彈出視窗的最大高度直接交給瀏覽器原生的 dvh 單位處理，不用 JS 隨鍵盤開關即時改寫，避免跟其他鍵盤相關的畫面校正邏輯搶著同一時間點動作",
     ] },
     { category: "效能／穩定性", items: [
       "程式碼清理：移除幾個先前迭代留下、目前完全沒有被呼叫到的函式與常數（RBAC 的 isActive／canSeeAllTasks、任務類型的 taskTypeLabel／STEP_TYPES），純內部清理，畫面/功能沒有任何改變",
@@ -8743,20 +8755,7 @@ function syncAppHeight() {
   const app = document.getElementById("app");
   if (!app) return;
   const diff = window.innerHeight - window.visualViewport.height;
-  const keyboardOpen = diff > KEYBOARD_HEIGHT_THRESHOLD;
-  app.style.height = keyboardOpen ? window.visualViewport.height + "px" : "";
-  // .modal-overlay／.modal-sheet（回報表單等彈出視窗）是 position:fixed，
-  // 定位基準是瀏覽器整個版面視窗（layout viewport），不是 #app，鍵盤打開
-  // 時不會跟著 #app 一起變矮：CSS 的 max-height:88vh 算的還是鍵盤打開
-  // 「之前」那個比較高的視窗尺寸，導致視窗下半部（例如里程/備註欄位、
-  // 送出按鈕）雖然在 DOM 裡也設了 overflow-y:auto，卻捲不上來、直接被
-  // 鍵盤蓋住看不到——因為彈出視窗自己認定的「可視高度」本身就沒把鍵盤
-  // 算進去。比照 #app 的做法：鍵盤打開時同樣用量到的 visualViewport.height
-  // 直接蓋掉彈出視窗的 max-height，讓它精準對齊「鍵盤上方那一段」，
-  // overflow-y:auto 才有真正對得上畫面的高度可以捲；鍵盤收起後清掉
-  // inline style，交還給 CSS 原本的 88vh/80vh。
-  const sheet = document.querySelector(".modal-sheet");
-  if (sheet) sheet.style.maxHeight = keyboardOpen ? (window.visualViewport.height - 24) + "px" : "";
+  app.style.height = diff > KEYBOARD_HEIGHT_THRESHOLD ? window.visualViewport.height + "px" : "";
 }
 // scrollIntoView() 校正聚焦欄位位置時，理論上只會捲動 <main> 自己（唯一
 // 真正的捲動容器），跟 window/document 的捲動是各自獨立的兩件事；但 iOS
