@@ -505,7 +505,65 @@ exports.sendTestPush = onRequest({ cors: true }, async (req, res) => {
   }
 });
 
+/* =========================================================
+   11) 急診待命：一鍵緊急動員廣播
+   卡片上「右滑發送」滑動條滑到底時呼叫。依醫務所地點自動篩選收件人——
+   跟前端 index.html 的 ER_STANDBY_LOCATIONS 是同一份地點清單，這裡另外
+   維護一份「這個地點要通知誰」對照表，因為這條規則只有這支函式在用，
+   不屬於前端 ER_STANDBY_LOCATIONS 本身的資料：
+   - 成功北醫務所：營部（hq）／第一連（co1），加上不分單位的 admin／高勤官。
+   - 精北醫務所：第二連（co2），加上不分單位的 admin／高勤官。
+   限 admin／高勤官／主官管才能觸發（跟前端 canManageTasks() 同一套權限
+   分界）：一般成員能查看待命狀態，但動員令是指揮權責，不開放一般成員
+   觸發，避免任何看得到這張卡片的人都能發送真的推播把大家叫出來。
+   ========================================================= */
+const EMERGENCY_BROADCAST_TARGETS = {
+  chenggongbei: { label: "成功北醫務所", units: ["hq", "co1"] },
+  jingbei: { label: "精北醫務所", units: ["co2"] },
+};
+async function resolveEmergencyBroadcastRecipients(units) {
+  const snap = await db.collection("users").get();
+  const recipients = [];
+  snap.forEach((doc) => {
+    const u = doc.data();
+    const role = normalizeRole(u.role);
+    const isBroad = role === "admin" || role === "duty_officer";
+    const isUnitMatch = units.includes(u.unit) && role !== "pending" && role !== "disabled" && role !== "unclaimed";
+    if (!isBroad && !isUnitMatch) return;
+    const tokens = Array.isArray(u.fcmTokens) ? u.fcmTokens : [];
+    if (!tokens.length) return;
+    recipients.push({ name: u.displayName || u.email || "未命名人員", tokens });
+  });
+  return recipients;
+}
+exports.sendEmergencyBroadcast = onRequest({ cors: true }, async (req, res) => {
+  try {
+    const authHeader = req.get("Authorization") || "";
+    const m = /^Bearer (.+)$/.exec(authHeader);
+    if (!m) { res.status(401).json({ ok: false, reason: "missing bearer token" }); return; }
+    const decoded = await getAuth().verifyIdToken(m[1]);
+    const callerDoc = await db.collection("users").doc(decoded.uid).get();
+    const callerRole = callerDoc.exists ? normalizeRole(callerDoc.data().role) : "";
+    if (!["admin", "duty_officer", "commander"].includes(callerRole)) {
+      res.status(403).json({ ok: false, reason: "insufficient permission" });
+      return;
+    }
+    const locationKey = (req.body && req.body.locationKey) || "";
+    const target = EMERGENCY_BROADCAST_TARGETS[locationKey];
+    if (!target) { res.status(400).json({ ok: false, reason: "unknown location" }); return; }
+    const recipients = await resolveEmergencyBroadcastRecipients(target.units);
+    const timeStr = new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false });
+    const body = `【🚨 醫務所緊急狀況通報】${target.label} 目前有急診案件，請留守幹部與相關人員立即前往現地了解情況並回報。發送時間：${timeStr}`;
+    const tokens = recipients.flatMap((r) => r.tokens);
+    await sendPush(tokens, "🚨 醫務所緊急狀況通報", body);
+    res.status(200).json({ ok: true, message: body, recipients: recipients.map((r) => r.name) });
+  } catch (e) {
+    logger.error("緊急動員廣播失敗", e);
+    res.status(500).json({ ok: false, reason: String(e && e.message || e) });
+  }
+});
+
 // 純函式/資料存取邏輯額外匯出一份，方便寫單元測試直接呼叫驗證（不會
 // 影響部署——firebase deploy 只認得用 onDocumentCreated 等 v2 trigger
 // builder 包起來的 exports，這個純物件會被忽略，不會變成多一個雲端函式）。
-exports._internal = { normalizeRole, resolveRecipientTokens, resolveAllTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce, standbyShiftCutoff };
+exports._internal = { normalizeRole, resolveRecipientTokens, resolveAllTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce, standbyShiftCutoff, resolveEmergencyBroadcastRecipients };
