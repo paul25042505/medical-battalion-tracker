@@ -3,19 +3,27 @@
 
    四個 Firestore onCreate 觸發點（不監聽 update，「時間地點更新」實際上
    是指每一筆任務進度回報，本身就是新增一筆 events 文件，不是修改 tasks
-   文件本身；公告編輯也一樣不重新推播，只有新增才推），外加一個排程：
+   文件本身；公告編輯也一樣不重新推播，只有新增才推），外加兩個排程：
    1) tasks 新增 → 通知「新增勤務」（涵蓋一般勤務／待命車／洽公，待命車
       續約時 renewStandbyTask() 也會建立新的 tasks 文件，一樣會觸發）
    2) events 新增 → 通知任務進度回報（出勤/抵達現場/離開現場/返營/抵達
       營區，或洽公對應的出發/抵達/離開/返營）
    3) vitals 新增 → 若生命徵象任一項落在「danger」等級，通知生命徵象異常
    4) notifications 新增 → 訊息管理發布的公告，推播給所有在職帳號
-   5) 排程（每天一次）→ 公告效期一到就自動刪除（cleanupExpiredNotifications）
+   5) 排程（每天一次）→ 公告／推播個人紀錄效期一到就自動刪除
+      （cleanupExpiredNotifications）
+   6) 排程（每天一次，08:10）→ 待命車超過每日 08:00 換班還沒續約提醒
+      （checkStaleErStandby）
 
-   收件人規則：前三個觸發（任務/事件/生命徵象）依單位隔離，跟前端 RBAC
-   一致——高勤官／admin 收全單位的通知，主官管／一般成員只收自己單位的；
-   公告是全體公告，沒有單位隔離，不分單位推給所有在職帳號（見
-   resolveAllTokens）。
+   收件人規則：前三個觸發＋待命車換班提醒依單位隔離，跟前端 RBAC 一致——
+   高勤官／admin 收全單位的通知，主官管／一般成員只收自己單位的；公告是
+   全體公告，沒有單位隔離，不分單位推給所有在職帳號（見 resolveAllTokens）。
+
+   個人通知中心（鈴鐺）紀錄：除了公告本身（notifications 集合，全體共用）
+   之外，上面每一次「實際推播給誰」都會額外在 pushLog 集合幫每個收件人
+   各寫一筆個人化紀錄（見 writePushLog／notifyRecipients），讓使用者事後
+   能在自己的通知中心回頭查看系統實際推播過的內容，效期 30 天，跟公告
+   共用同一支 cleanupExpiredNotifications 排程清除。
    ========================================================= */
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
@@ -40,26 +48,29 @@ setGlobalOptions({ maxInstances: 10 });
 function normalizeRole(role) { return role === "company_commander" ? "commander" : role; }
 
 /* =========================================================
-   共用：依角色/單位規則找出這個單位的任務該通知誰的 fcmTokens
+   共用：依角色/單位規則找出這個單位的任務該通知誰。回傳完整的收件人
+   清單 {uid, tokens}——tokens 可能是空陣列（代表這個人還沒設定推播裝置），
+   刻意不在這裡就篩掉沒有 token 的人：實際送推播（sendPush）只會用到有
+   token 的那些，但個人通知中心的紀錄（pushLog）要涵蓋「應該收到這則通知
+   的所有人」，不管他當下有沒有裝置能收到即時推播，之後開啟本系統還是
+   看得到這則通知，不會因為推播沒送達就永遠看不到內容。
    ========================================================= */
-async function resolveRecipientTokens(taskUnit) {
+async function resolveRecipients(taskUnit) {
   const snap = await db.collection("users").get();
-  const tokens = new Set();
+  const recipients = [];
   snap.forEach((doc) => {
     const u = doc.data();
-    if (!Array.isArray(u.fcmTokens) || !u.fcmTokens.length) return;
     const role = normalizeRole(u.role);
     const isBroad = role === "admin" || role === "duty_officer";
     const isUnitScoped = (role === "commander" || role === "member") && u.unit === taskUnit;
-    if (isBroad || isUnitScoped) {
-      u.fcmTokens.forEach((t) => tokens.add(t));
-    }
+    if (!isBroad && !isUnitScoped) return;
+    recipients.push({ uid: doc.id, tokens: Array.isArray(u.fcmTokens) ? u.fcmTokens : [] });
   });
-  return [...tokens];
+  return recipients;
 }
 // 公告沒有單位隔離，是全體公告，找所有在職帳號（admin/高勤官/主官管/
 // 一般成員）的 fcmTokens，不分單位；pending/disabled/unclaimed 這幾種
-// 非在職狀態不算，跟 resolveRecipientTokens 的隱含排除邏輯一致。
+// 非在職狀態不算，跟 resolveRecipients 的隱含排除邏輯一致。
 async function resolveAllTokens() {
   const snap = await db.collection("users").get();
   const tokens = new Set();
@@ -131,6 +142,33 @@ async function removeInvalidTokens(invalidTokens) {
 }
 
 /* =========================================================
+   系統實際推播過的內容，每個收件人都能在自己的「通知中心」（鈴鐺）回頭
+   查看，效期 30 天（跟公告的 NOTIFICATION_TTL_DAYS 用同一個天數，一起由
+   cleanupExpiredNotifications 排程清除）。獨立存在 pushLog 集合（不是
+   寫進公告用的 notifications 集合）：公告是全體共用、不分帳號的公告板，
+   pushLog 是「這則訊息實際上是推播給我的」個人化紀錄，firestore.rules
+   只允許 uid 等於自己的人讀到，兩者資料語意不同，不能混在一起。
+   ========================================================= */
+const PUSHLOG_TTL_DAYS = 30;
+async function writePushLog(uids, title, body) {
+  if (!uids.length) return;
+  const expiresAt = new Date(Date.now() + PUSHLOG_TTL_DAYS * 24 * 60 * 60 * 1000);
+  const timestamp = new Date();
+  const batch = db.batch();
+  uids.forEach((uid) => {
+    batch.set(db.collection("pushLog").doc(), { uid, title, body, isRead: false, timestamp, expiresAt });
+  });
+  await batch.commit();
+}
+// 送推播＋順便幫每個收件人在自己的通知中心留一筆紀錄，兩件事綁在一起做，
+// 避免每個觸發點都要各自記得呼叫兩次。
+async function notifyRecipients(recipients, title, body) {
+  const tokens = recipients.flatMap((r) => r.tokens);
+  await sendPush(tokens, title, body);
+  await writePushLog(recipients.map((r) => r.uid), title, body);
+}
+
+/* =========================================================
    Eventarc/Pub-Sub 底層是「至少送達一次」，同一個事件在函式冷啟動、處理
    稍微慢一點等情況下可能被重複投遞，導致同一次新增/回報被推播兩三次。
    用 event.id（同一個底層事件重複投遞時這個 id 是同一組）搭配 Firestore
@@ -156,11 +194,11 @@ exports.onTaskCreated = onDocumentCreated("tasks/{taskId}", async (event) => {
   if (!snap) return;
   const t = snap.data();
   if (!t || !t.unit) return;
-  const tokens = await resolveRecipientTokens(t.unit);
+  const recipients = await resolveRecipients(t.unit);
   const typeLabel = t.type === "liaison" ? "洽公" : (t.erStandbyKey ? "待命車" : "勤務");
   const title = `新增${typeLabel}`;
   const body = [t.title, t.location].filter(Boolean).join("：") || `已建立新的${typeLabel}`;
-  await sendPush(tokens, title, body);
+  await notifyRecipients(recipients, title, body);
 });
 
 /* =========================================================
@@ -182,11 +220,11 @@ exports.onEventCreated = onDocumentCreated("events/{eventId}", async (event) => 
   const taskSnap = await db.doc(`tasks/${e.taskId}`).get();
   if (!taskSnap.exists) return;
   const t = taskSnap.data();
-  const tokens = await resolveRecipientTokens(t.unit);
+  const recipients = await resolveRecipients(t.unit);
   const label = EVENT_LABELS[e.type] || e.type;
   const title = `${t.title || "勤務"} - ${label}`;
   const body = [t.vehicle, e.location || e.hospital].filter(Boolean).join(" @ ") || t.location || "";
-  await sendPush(tokens, title, body);
+  await notifyRecipients(recipients, title, body);
 });
 
 /* =========================================================
@@ -239,8 +277,8 @@ exports.onVitalsCreated = onDocumentCreated("vitals/{vitalsId}", async (event) =
   const taskSnap = await db.doc(`tasks/${v.taskId}`).get();
   if (!taskSnap.exists) return;
   const t = taskSnap.data();
-  const tokens = await resolveRecipientTokens(t.unit);
-  await sendPush(tokens, "患者生命徵象異常", `${t.title || "勤務"}：患者生命徵象出現危急異常，請留意`);
+  const recipients = await resolveRecipients(t.unit);
+  await notifyRecipients(recipients, "患者生命徵象異常", `${t.title || "勤務"}：患者生命徵象出現危急異常，請留意`);
 });
 
 /* =========================================================
@@ -259,19 +297,22 @@ exports.onNotificationCreated = onDocumentCreated("notifications/{id}", async (e
 });
 
 /* =========================================================
-   5) 公告效期到期自動刪除：index.html 新增公告時會帶一個 expiresAt
-   （建立當下起算一個月，見 NOTIFICATION_TTL_DAYS），這裡排程每天跑一次
-   把過期的公告刪掉，不是前端隱藏而已。舊資料（合併/上線前建立、沒有
-   expiresAt 欄位的公告）不會被這個查詢篩到，不會被誤刪，會一直留著；
-   之後要清也可以手動在 Firestore 主控台刪除。
+   5) 效期到期自動刪除：公告（index.html 新增公告時帶一個 expiresAt，
+   建立當下起算一個月，見 NOTIFICATION_TTL_DAYS）跟系統推播個人紀錄
+   （pushLog，見 writePushLog，效期 30 天）都用同一支排程每天清一次，
+   不是前端隱藏而已。舊資料（合併/上線前建立、沒有 expiresAt 欄位的
+   公告）不會被這個查詢篩到，不會被誤刪，會一直留著；之後要清也可以
+   手動在 Firestore 主控台刪除。
    ========================================================= */
 exports.cleanupExpiredNotifications = onSchedule("every 24 hours", async () => {
-  const snap = await db.collection("notifications").where("expiresAt", "<=", new Date()).get();
-  if (snap.empty) return;
-  const batch = db.batch();
-  snap.forEach((doc) => batch.delete(doc.ref));
-  await batch.commit();
-  logger.info(`清除 ${snap.size} 則過期公告`);
+  for (const collectionId of ["notifications", "pushLog"]) {
+    const snap = await db.collection(collectionId).where("expiresAt", "<=", new Date()).get();
+    if (snap.empty) continue;
+    const batch = db.batch();
+    snap.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+    logger.info(`清除 ${snap.size} 筆過期的 ${collectionId}`);
+  }
 });
 
 /* =========================================================
@@ -460,8 +501,8 @@ exports.checkStaleErStandby = onSchedule({ schedule: "10 8 * * *", timeZone: "As
     const createdAtMs = t.createdAt && t.createdAt.toMillis ? t.createdAt.toMillis() : new Date(t.createdAt || 0).getTime();
     if (createdAtMs >= cutoffMs) continue;
     const locLabel = (ER_STANDBY_LOCATIONS.find((x) => x.key === doc.id) || {}).label || doc.id;
-    const tokens = await resolveRecipientTokens(t.unit);
-    await sendPush(tokens, "待命車尚未換班", `${locLabel}（${t.vehicle || "—"}）尚未於今日 08:00 後更新，請確認車長/駕駛是否需要換班`);
+    const recipients = await resolveRecipients(t.unit);
+    await notifyRecipients(recipients, "待命車尚未換班", `${locLabel}（${t.vehicle || "—"}）尚未於今日 08:00 後更新，請確認車長/駕駛是否需要換班`);
   }
 });
 
@@ -497,7 +538,9 @@ exports.sendTestPush = onRequest({ cors: true }, async (req, res) => {
     const tokens = target.fcmTokens || [];
     if (!tokens.length) { res.status(200).json({ ok: false, reason: "no-token" }); return; }
     const callerName = callerDoc.data().displayName || callerDoc.data().email || "管理員";
-    await sendPush(tokens, "測試推播", `這是 ${callerName} 從推播控制台發送的測試訊號，收到代表這支裝置的推播設定正常`);
+    const body = `這是 ${callerName} 從推播控制台發送的測試訊號，收到代表這支裝置的推播設定正常`;
+    await sendPush(tokens, "測試推播", body);
+    await writePushLog([targetUid], "測試推播", body);
     res.status(200).json({ ok: true, tokenCount: tokens.length });
   } catch (e) {
     logger.error("測試推播失敗", e);
@@ -540,8 +583,7 @@ async function resolveEmergencyBroadcastRecipients(units) {
     const isUnitMatch = units.includes(u.unit) && role !== "pending" && role !== "disabled" && role !== "unclaimed";
     if (!isBroad && !isUnitMatch) return;
     const tokens = Array.isArray(u.fcmTokens) ? u.fcmTokens : [];
-    if (!tokens.length) return;
-    recipients.push({ name: u.displayName || u.email || "未命名人員", tokens });
+    recipients.push({ uid: doc.id, name: u.displayName || u.email || "未命名人員", tokens });
   });
   return recipients;
 }
@@ -566,10 +608,16 @@ exports.sendEmergencyBroadcast = onRequest({ cors: true }, async (req, res) => {
     }
     const recipients = await resolveEmergencyBroadcastRecipients(target.units);
     const timeStr = new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false });
+    const title = "🚨 醫務所緊急狀況通報";
     const body = `${target.label} 目前有急診案件，請留職主官與相關人員立即前往現地了解情況並回報。發送時間：${timeStr}`;
-    const tokens = recipients.flatMap((r) => r.tokens);
-    await sendPush(tokens, "🚨 醫務所緊急狀況通報", body);
-    res.status(200).json({ ok: true, message: body, recipients: recipients.map((r) => r.name) });
+    // 確認彈窗要列的「已成功發送的人員名單」只算真的有裝置 token 的人
+    // （跟原本行為一致）；但通知中心的個人紀錄（pushLog）涵蓋整個對應
+    // 單位的所有人，不管當下有沒有裝置能收到即時推播，之後打開系統還是
+    // 看得到這則通知。
+    const pushable = recipients.filter((r) => r.tokens.length);
+    await sendPush(pushable.flatMap((r) => r.tokens), title, body);
+    await writePushLog(recipients.map((r) => r.uid), title, body);
+    res.status(200).json({ ok: true, message: body, recipients: pushable.map((r) => r.name) });
   } catch (e) {
     logger.error("緊急動員廣播失敗", e);
     res.status(500).json({ ok: false, reason: String(e && e.message || e) });
@@ -579,4 +627,4 @@ exports.sendEmergencyBroadcast = onRequest({ cors: true }, async (req, res) => {
 // 純函式/資料存取邏輯額外匯出一份，方便寫單元測試直接呼叫驗證（不會
 // 影響部署——firebase deploy 只認得用 onDocumentCreated 等 v2 trigger
 // builder 包起來的 exports，這個純物件會被忽略，不會變成多一個雲端函式）。
-exports._internal = { normalizeRole, resolveRecipientTokens, resolveAllTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce, standbyShiftCutoff, resolveEmergencyBroadcastRecipients, isCurrentDutyMember };
+exports._internal = { normalizeRole, resolveRecipients, resolveAllTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce, standbyShiftCutoff, resolveEmergencyBroadcastRecipients, isCurrentDutyMember, writePushLog, notifyRecipients };
