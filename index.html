@@ -1501,7 +1501,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-325-modal-kb-debug-overlay";
+const BUILD_TAG = "2026-07-11-326-modal-overlay-keyboard-jsfix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2123,6 +2123,7 @@ const RELEASE_NOTES = [
       "上一版鍵盤修正機制實機測試會讓彈出視窗整個變空白（跟原本負責把聚焦欄位捲到可視範圍中間的機制互相干擾），已整個回退：改成讓彈出視窗的最大高度直接交給瀏覽器原生的 dvh 單位處理，不用 JS 隨鍵盤開關即時改寫，避免跟其他鍵盤相關的畫面校正邏輯搶著同一時間點動作",
       "改回 dvh 後實機測試發現欄位還是被鍵盤蓋住：真正原因不是彈出視窗本身的高度算錯，是最外層的半透明背景容器（position:fixed）的定位基準本身沒有跟著鍵盤收縮，導致貼齊底部的彈出視窗仍然貼在「鍵盤打開前」的畫面最底部；改成跟 #app 同一種寫法（用明確的 dvh 高度取代 inset:0），外層容器鍵盤打開時才會真的跟著變矮，彈出視窗才會確實貼到鍵盤正上方",
       "上面這個 dvh 修正實機測試後畫面跟修正前一模一樣，沒有任何改善——連續三次針對這個問題的假設都猜錯，暫時在畫面右上角加一塊紅底診斷小面板（顯示 #app／彈出視窗實際量到的高度數字），純粹是為了拿到真實數據才能抓到正確根因，不是正式功能，確認修好之後就會整個移除",
+      "根據診斷面板量到的真實數字，找到根本原因：彈出視窗最外層的半透明背景容器在這支裝置上鍵盤打開時完全不會靠 CSS 的 dvh 縮小（跟 #app 不一樣，#app 是靠既有的 JS 校正機制才縮小，不是靠 dvh 本身），導致貼齊容器底部的彈出視窗持續停在鍵盤上緣以下；改成跟 #app 用同一套 JS 機制，鍵盤打開時直接校正外層容器的高度，彈出視窗才會真的貼到鍵盤正上方；已移除暫時的診斷面板",
     ] },
     { category: "效能／穩定性", items: [
       "程式碼清理：移除幾個先前迭代留下、目前完全沒有被呼叫到的函式與常數（RBAC 的 isActive／canSeeAllTasks、任務類型的 taskTypeLabel／STEP_TYPES），純內部清理，畫面/功能沒有任何改變",
@@ -8757,12 +8758,29 @@ function resetRogueWindowScroll() {
 // 是鍵盤造成的高度差才採信這個數字，其餘情況一律清掉、讓 CSS 接手，
 // 從根本上排除「JS 把 #app 卡在錯誤矮高度」這個失敗模式。
 const KEYBOARD_HEIGHT_THRESHOLD = 80;
+// 底下 .modal-overlay 的高度校正跟 #app 是同一個原因、同一套解法：實機
+// 診斷過（畫面右上角debug面板量到的數字）證實 .modal-overlay 這個
+// position:fixed 元素的 height:100dvh，鍵盤打開時完全沒有跟著縮小
+// （量到的高度還是跟 window.innerHeight 一樣，跟 #app 靠這個函式才真的
+// 縮小成 visualViewport.height 形成對比）——這個裝置上的 dvh 對
+// position:fixed 元素並不會隨鍵盤反應，不管是用 inset:0 還是明確寫
+// height:100dvh 都一樣（連續三次純 CSS 修正在真機上都沒有效果的原因）。
+// .modal-sheet 用 align-items:flex-end 貼齊 .modal-overlay 的底部，
+// overlay 沒縮小，貼齊的 sheet 底部就會停在鍵盤上緣以下、看不到的地方。
+// 只能比照 #app 的做法用 JS 強制蓋掉高度。這裡刻意只改 overlay 的高度、
+// 不去動 .modal-sheet 自己的 max-height——先前那版直接用 JS 蓋掉
+// .modal-sheet 的 max-height，會讓貼齊底部的 sheet 頂部往下掉，
+// 內容整個被推到可視範圍外（畫面整片空白），因為底端仍然貼著（當時）
+// 沒有縮小的 overlay 下緣。
 function syncAppHeight() {
   if (!window.visualViewport) return;
   const app = document.getElementById("app");
   if (!app) return;
   const diff = window.innerHeight - window.visualViewport.height;
-  app.style.height = diff > KEYBOARD_HEIGHT_THRESHOLD ? window.visualViewport.height + "px" : "";
+  const keyboardOpen = diff > KEYBOARD_HEIGHT_THRESHOLD;
+  app.style.height = keyboardOpen ? window.visualViewport.height + "px" : "";
+  const overlay = document.querySelector(".modal-overlay");
+  if (overlay) overlay.style.height = keyboardOpen ? window.visualViewport.height + "px" : "";
 }
 // scrollIntoView() 校正聚焦欄位位置時，理論上只會捲動 <main> 自己（唯一
 // 真正的捲動容器），跟 window/document 的捲動是各自獨立的兩件事；但 iOS
@@ -8849,42 +8867,6 @@ window.addEventListener("scroll", () => {
       window.dispatchEvent(new Event("resize"));
     }, 120);
   }, true);
-})();
-
-// 暫時的鍵盤/彈出視窗診斷面板：前面連續三次針對「彈出視窗被鍵盤蓋住」的
-// CSS/JS 修正，實機測試都沒有改善（甚至一度更糟），純粹用猜的已經猜不出
-// 真正原因了。這裡直接把關鍵數字即時印在畫面右上角，下次實機重現問題時
-// 附上這個畫面的截圖，才能照實際數字而不是假設去抓根因；確認修好之後這
-// 段診斷面板要整個移除，不是正式功能。
-(function setupKeyboardDebugOverlay(){
-  const box = document.createElement("div");
-  box.style.cssText = "position:fixed; top:4px; right:4px; z-index:9999; background:rgba(255,0,0,0.85); color:#fff; font-size:10px; font-family:monospace; padding:4px 6px; border-radius:6px; line-height:1.4; max-width:260px; pointer-events:none; white-space:pre;";
-  document.body.appendChild(box);
-  function rectStr(el){
-    if (!el) return "（不存在）";
-    const r = el.getBoundingClientRect();
-    const cs = getComputedStyle(el);
-    return `top=${r.top.toFixed(0)} bottom=${r.bottom.toFixed(0)} h=${r.height.toFixed(0)} | css height=${cs.height} maxH=${cs.maxHeight} pos=${cs.position}`;
-  }
-  function update(){
-    const app = document.getElementById("app");
-    const overlay = document.querySelector(".modal-overlay");
-    const sheet = document.querySelector(".modal-sheet");
-    const vv = window.visualViewport;
-    const active = document.activeElement;
-    box.textContent =
-      `innerH=${window.innerHeight} vvH=${vv?vv.height.toFixed(0):'—'} vvOffTop=${vv?vv.offsetTop.toFixed(0):'—'}\n` +
-      `#app: ${rectStr(app)}\n` +
-      `.modal-overlay: ${rectStr(overlay)}\n` +
-      `.modal-sheet: ${rectStr(sheet)}\n` +
-      `focus=${active ? active.tagName+'#'+(active.id||'') : '無'}`;
-  }
-  update();
-  setInterval(update, 300);
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", update);
-    window.visualViewport.addEventListener("scroll", update);
-  }
 })();
 
 render();
