@@ -363,22 +363,66 @@
   .push-gatekeeper-title{display:flex; align-items:center; gap:8px; font-weight:700; font-size:var(--text-lg); color:var(--red); padding-right:30px;}
   .push-gatekeeper-desc{color:var(--muted); font-size:var(--text-sm); line-height:1.6; margin-top:10px;}
 
-  /* ---- 推播控制台：【後台】儀表板 ---- */
-  .push-metrics-row{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;}
+  /* ---- 推播控制台：【後台】儀表板（Apple 極簡風格改版） ---- */
+  /* 數據戰情：總註冊人數／目前總訂閱率單一橫列 50/50，狀態分流的統計數字
+     併進「全部狀態」下拉選單的選項文字裡（見 viewPushConsole），不再另外
+     佔一整排的圓點標籤，把垂直空間讓給下面的篩選列跟名冊卡片。 */
+  .push-metrics-row{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;}
   .push-metric-card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 16px; box-shadow:var(--shadow-xs);}
-  .push-metric-breakdown{grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:8px;}
   .push-metric-label{font-size:var(--text-xs); color:var(--muted);}
-  .push-metric-value{font-size:28px; font-weight:700; color:var(--text); font-family:var(--mono); margin-top:2px;}
+  .push-metric-value{font-size:26px; font-weight:700; color:var(--text); font-family:var(--mono); margin-top:2px;}
   .push-metric-sub{font-size:var(--text-xs); color:var(--muted); margin-top:2px;}
-  .push-status-pill{display:inline-flex; align-items:center; gap:4px; font-size:var(--text-xs); font-weight:600; padding:6px 10px; border-radius:999px; background:var(--panel-2); color:var(--text);}
-  .push-filter-row{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:14px;}
+
+  /* 篩選列：第一列（搜尋姓名）滿版，第二列（單位／狀態）水平平分 50/50。
+     輸入框/下拉選單統一改用柔和的淺灰底、12px 圓角，focus 時邊框轉科技藍
+     並加淡藍色外發光；下拉選單清掉瀏覽器原生三角，換成用 mask 畫出來的
+     灰色 chevron（用 mask 而不是 background-image 內嵌 SVG，才能吃到
+     var(--muted) 隨深色模式變色，而不是寫死一個固定顏色）。 */
+  .push-filter-row{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px;}
   .push-filter-row .picker-search{grid-column:1 / -1; margin-bottom:0;}
-  @media (max-width:420px){ .push-filter-row{grid-template-columns:1fr;} }
-  .push-console-row{align-items:center;}
-  .push-console-name{flex:1 1 140px; min-width:0;}
-  .push-console-cell{font-size:var(--text-xs); white-space:nowrap;}
-  .push-console-device{color:var(--muted); font-family:var(--mono);}
-  .push-console-date{color:var(--muted); font-family:var(--mono);}
+  .push-filter-row .picker-search,
+  .push-select-wrap select{
+    background:var(--panel-2); border:1px solid transparent; color:var(--text);
+    border-radius:12px; padding:12px 14px; font-size:var(--text-sm); font-family:var(--sans);
+    width:100%; transition:border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  }
+  .push-filter-row .picker-search:focus,
+  .push-select-wrap select:focus{
+    outline:none; background:var(--panel); border-color:var(--blue);
+    box-shadow:0 0 0 3px color-mix(in srgb, var(--blue) 16%, transparent);
+  }
+  .push-select-wrap{position:relative;}
+  .push-select-wrap select{
+    appearance:none; -webkit-appearance:none; padding-right:34px; cursor:pointer;
+  }
+  .push-select-wrap::after{
+    content:""; position:absolute; right:13px; top:50%; width:13px; height:13px;
+    transform:translateY(-50%); pointer-events:none; background:var(--muted);
+    -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat center / contain;
+    mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat center / contain;
+  }
+
+  /* 人員名冊卡片：左上身份／右上狀態膠囊／左下裝置+時間／右下測試推播，
+     四個角落各司其職，取代原本一整排擠在一起、靠「—」佔位的舊排法。 */
+  .push-card{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:16px; margin-bottom:10px; box-shadow:var(--shadow-xs);}
+  .push-card-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
+  .push-card-name{font-size:var(--text-base); font-weight:600; color:var(--text); word-break:break-word;}
+  .push-card-unit{font-size:var(--text-xs); color:var(--muted); margin-top:2px;}
+  .push-card-pills{display:flex; gap:6px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end;}
+  .push-pill{display:inline-flex; align-items:center; height:22px; padding:0 9px; border-radius:999px; font-size:11px; font-weight:600; white-space:nowrap;}
+  .push-pill.ok{background:color-mix(in srgb, var(--green) 14%, transparent); color:var(--green-text);}
+  .push-pill.warn{background:color-mix(in srgb, var(--amber) 14%, transparent); color:var(--amber-text);}
+  .push-pill.bad{background:color-mix(in srgb, var(--red) 12%, transparent); color:var(--red);}
+  .push-pill.muted{background:var(--panel-2); color:var(--muted);}
+  .push-card-bottom{display:flex; justify-content:space-between; align-items:center; margin-top:12px; gap:10px;}
+  .push-card-meta{font-size:11px; color:var(--muted); font-family:var(--mono); word-break:break-word;}
+  .push-test-btn{
+    flex-shrink:0; background:color-mix(in srgb, var(--blue) 12%, transparent); color:var(--blue);
+    font-weight:600; font-size:var(--text-xs); padding:8px 14px; border-radius:999px;
+    transition:transform 0.12s ease;
+  }
+  .push-test-btn:active{transform:scale(0.97);}
+  .push-test-btn:disabled{opacity:0.4;}
 
   /* ---- cards ---- */
   .section-label{font-family:var(--mono); font-size:var(--text-xs); font-weight:700; color:var(--muted); letter-spacing:0.09em; text-transform:uppercase; margin:var(--space-section) 4px 13px 4px;}
@@ -1412,7 +1456,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-313-remove-clinic-tier";
+const BUILD_TAG = "2026-07-10-314-push-console-redesign";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2050,6 +2094,7 @@ const RELEASE_NOTES = [
       "新增推播雙重安檢守門員：登入後若偵測到尚未「加入主畫面」，會全螢幕提示並附步驟教學；已加入主畫面但通知權限尚未開啟/已被封鎖，也會分別提示「立刻開通」或封鎖後的手動開啟步驟。畫面可以關閉先繼續使用，但只要還沒完成加入主畫面＋開啟通知，下次開啟本系統都會再次提示",
       "新增管理後台「推播控制台」：顯示全體人員的通知覆蓋率（總註冊人數、訂閱率、已允許/尚未開啟/已封鎖/尚未回報人數），並提供依姓名/單位/狀態篩選的訂閱名冊，可查看每個人的裝置種類、訂閱時間、後端 Token 是否有效，並可對單一人員送出測試推播",
       "「測試推播」按鈕改成真的呼叫後端送出一則推播給指定人員（新增 Cloud Function sendTestPush，限 admin 呼叫），不再只是畫面上的提示訊息；沒有有效裝置 token 的人員會顯示發送失敗原因",
+      "推播控制台版面重新設計，把篩選跟數據卡片壓縮更緊湊：總註冊人數／訂閱率合併成單一橫列並排的輕量小卡，原本獨立一整排的狀態統計改併進「全部狀態」下拉選單的選項文字裡；搜尋框跟單位/狀態下拉選單改用柔和圓角、自訂灰色下拉箭頭、聚焦時邊框發出淡藍色光暈；名冊卡片改成姓名/單位職級在左上、通知權限與裝置 Token 狀態膠囊在右上、裝置與訂閱時間在左下、「測試推播」按鈕在右下的排版，騰出更多空間給名冊本身",
     ] },
     { category: "天氣資訊", items: [
       "Header 鈴鐺左邊新增「天氣危險係數」徽章：資料來源改用 Open-Meteo（跟站內其他天氣資訊用的中央氣象署開放資料是不同來源），台中地區依烏日區天氣、嘉義地區依大林鎮天氣，計算方式是溫度＋（相對濕度×0.1）；34.9 以下藍燈、35～39.9 黃燈、40 以上紅燈，點一下直接跳到「任務→天氣」頁",
@@ -6957,6 +7002,12 @@ function viewAdminFeedback(){
 const PUSH_PERMISSION_LABEL = {
   granted: "🟢 已允許", default: "🟡 尚未開啟", denied: "🔴 已封鎖", unknown: "⚪ 尚未回報", unsupported: "⚪ 不支援裝置"
 };
+// 軟膠囊配色：granted/token 有效＝綠、default＝黃、denied/token 失效＝紅、
+// unknown（尚未回報）／不支援＝灰階，跟全站既有的 .badge 淡底深字配色
+// 慣例一致（color-mix 出 12~14% 的淡底 + 該色系文字）。
+const PUSH_PERMISSION_PILL_CLASS = {
+  granted: "ok", default: "warn", denied: "bad", unknown: "muted", unsupported: "muted"
+};
 // 尚未登入的預建人員資料（role==='unclaimed'）沒有自己的裝置可以回報通知
 // 權限，排進來只會全部顯示「尚未回報」，對通訊覆蓋率的判讀沒有意義，
 // 一律排除在推播控制台的統計/名冊之外。
@@ -6988,17 +7039,29 @@ function renderPushConsoleBody(){
   if (!rows.length) return `<div class="empty">沒有符合篩選條件的人員</div>`;
   return rows.map(x => {
     const tokenValid = x.fcmTokens && x.fcmTokens.length > 0;
+    const permClass = PUSH_PERMISSION_PILL_CLASS[x.pushPermission] || "muted";
+    // 裝置種類／訂閱時間都沒有回報過時，這個區塊直接留白，不要放「—」
+    // 這種佔位符號——尚未回報本來就沒有東西可以顯示，硬塞一個符號進去
+    // 反而顯得突兀。
+    const metaParts = [];
+    if (x.pushDevice) metaParts.push(esc(x.pushDevice));
+    if (x.pushSubscribedAt) metaParts.push(fmtTime(new Date(x.pushSubscribedAt).getTime()));
     return `
-    <div class="admin-row push-console-row">
-      <div class="push-console-name">
-        <div class="name">${esc(x.name)}</div>
-        <div class="sub">${esc(unitLabel(x.unit))}${x.title ? ' · '+esc(x.title) : ''}</div>
+    <div class="push-card">
+      <div class="push-card-top">
+        <div>
+          <div class="push-card-name">${esc(x.name)}</div>
+          <div class="push-card-unit">${esc(unitLabel(x.unit))}${x.title ? ' · '+esc(x.title) : ''}</div>
+        </div>
+        <div class="push-card-pills">
+          <span class="push-pill ${permClass}">${PUSH_PERMISSION_LABEL[x.pushPermission] || PUSH_PERMISSION_LABEL.unknown}</span>
+          <span class="push-pill ${tokenValid ? 'ok' : 'bad'}">${tokenValid ? '🟢 有效' : '❌ 已過期失效'}</span>
+        </div>
       </div>
-      <div class="push-console-cell">${PUSH_PERMISSION_LABEL[x.pushPermission] || PUSH_PERMISSION_LABEL.unknown}</div>
-      <div class="push-console-cell">${tokenValid ? '🟢 有效' : '❌ 已過期失效'}</div>
-      <div class="push-console-cell push-console-device">${esc(x.pushDevice || '—')}</div>
-      <div class="push-console-cell push-console-date">${x.pushSubscribedAt ? fmtTime(new Date(x.pushSubscribedAt).getTime()) : '—'}</div>
-      <button class="icon-btn" ${tokenValid ? '' : 'disabled'} onclick="window.__testPushToUser('${x.id}', this)">測試推播</button>
+      <div class="push-card-bottom">
+        <div class="push-card-meta">${metaParts.join(' · ')}</div>
+        <button class="push-test-btn" ${tokenValid ? '' : 'disabled'} onclick="window.__testPushToUser('${x.id}', this)">測試推播</button>
+      </div>
     </div>`;
   }).join("");
 }
@@ -7017,26 +7080,24 @@ function viewPushConsole(){
         <div class="push-metric-value">${m.rate}%</div>
         <div class="push-metric-sub">${m.granted} / ${m.total} 人已允許</div>
       </div>
-      <div class="push-metric-card push-metric-breakdown">
-        <span class="push-status-pill granted">🟢 已允許 ${m.granted}</span>
-        <span class="push-status-pill default">🟡 尚未開啟 ${m.dflt}</span>
-        <span class="push-status-pill denied">🔴 已封鎖 ${m.denied}</span>
-        ${m.unknown ? `<span class="push-status-pill unknown">⚪ 尚未回報 ${m.unknown}</span>` : ''}
-      </div>
     </div>
     <div class="push-filter-row">
       <input type="search" class="picker-search" placeholder="搜尋姓名" value="${esc(f.keyword)}" oninput="window.__setPushConsoleFilter('keyword', this.value)">
-      <select onchange="window.__setPushConsoleFilter('unit', this.value)">
-        <option value="">全部單位</option>
-        ${UNITS.map(u => `<option value="${u.code}" ${f.unit===u.code?'selected':''}>${u.label}</option>`).join("")}
-      </select>
-      <select onchange="window.__setPushConsoleFilter('status', this.value)">
-        <option value="">全部狀態</option>
-        <option value="granted" ${f.status==='granted'?'selected':''}>🟢 已允許</option>
-        <option value="default" ${f.status==='default'?'selected':''}>🟡 尚未開啟</option>
-        <option value="denied" ${f.status==='denied'?'selected':''}>🔴 已封鎖</option>
-        <option value="unknown" ${f.status==='unknown'?'selected':''}>⚪ 尚未回報</option>
-      </select>
+      <div class="push-select-wrap">
+        <select onchange="window.__setPushConsoleFilter('unit', this.value)">
+          <option value="">全部單位</option>
+          ${UNITS.map(u => `<option value="${u.code}" ${f.unit===u.code?'selected':''}>${u.label}</option>`).join("")}
+        </select>
+      </div>
+      <div class="push-select-wrap">
+        <select onchange="window.__setPushConsoleFilter('status', this.value)">
+          <option value="">全部狀態</option>
+          <option value="granted" ${f.status==='granted'?'selected':''}>🟢 已允許 (${m.granted})</option>
+          <option value="default" ${f.status==='default'?'selected':''}>🟡 尚未開啟 (${m.dflt})</option>
+          <option value="denied" ${f.status==='denied'?'selected':''}>🔴 已封鎖 (${m.denied})</option>
+          <option value="unknown" ${f.status==='unknown'?'selected':''}>⚪ 尚未回報 (${m.unknown})</option>
+        </select>
+      </div>
     </div>
     <div id="push-console-body">${renderPushConsoleBody()}</div>
   `;
