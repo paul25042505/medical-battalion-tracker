@@ -566,7 +566,7 @@ exports.sendEmergencyBroadcast = onRequest({ cors: true }, async (req, res) => {
     }
     const recipients = await resolveEmergencyBroadcastRecipients(target.units);
     const timeStr = new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false });
-    const body = `【🚨 醫務所緊急狀況通報】${target.label} 目前有急診案件，請留守幹部與相關人員立即前往現地了解情況並回報。發送時間：${timeStr}`;
+    const body = `${target.label} 目前有急診案件，請留職主官與相關人員立即前往現地了解情況並回報。發送時間：${timeStr}`;
     const tokens = recipients.flatMap((r) => r.tokens);
     await sendPush(tokens, "🚨 醫務所緊急狀況通報", body);
     res.status(200).json({ ok: true, message: body, recipients: recipients.map((r) => r.name) });
