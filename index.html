@@ -1555,7 +1555,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-339-mci-dispatch-officer-assigns";
+const BUILD_TAG = "2026-07-11-340-mci-tabs-to-top";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2313,6 +2313,7 @@ const RELEASE_NOTES = [
       "事件詳情頁改成先看到「傷患統計」再看到「人員配置」，符合先看整體傷患狀況、再看現場分工的閱讀順序",
       "檢傷官分頁在開始 START 問答前，就先以大字顯示這次傷患即將產生的流水編號（例如 MCI-04），方便一邊看螢幕一邊把號碼手寫填到實體傷患票卡上",
       "車輛/醫院指派職責從檢傷官移交給後送官：檢傷官只做 START 判定與填寫主訴，傷患上傳後狀態預設為「待命」；治療官分頁只看得到還在「待命」的傷患；後送官在傷患字卡上指派車輛/醫院，指派完成才會出現「離開現場」「抵達醫院」的動作，該傷患也才會離開治療官的待命清單",
+      "檢傷官／治療官／後送官分頁切換鈕移到事件詳情頁最上面（跟任務頁「勤務/天氣/紀錄」主分頁同一套排版慣例），不用先滑過傷患統計跟人員配置才看得到、切得到",
     ] },
   ] },
   { date: "2026/07/10", groups: [
@@ -5576,6 +5577,7 @@ function viewMciEvent(eventId){
     : viewMciTriageTab(eventId);
   return `
     <div class="back-row">${backBtn({name:'mciList'})}</div>
+    ${tabBar}
     <div class="mci-event-header">
       <div class="mci-event-header-top">
         <div class="mci-event-header-title">${icon('alert',20)} ${esc(ev.title||'大量傷患事件')}</div>
@@ -5607,7 +5609,6 @@ function viewMciEvent(eventId){
         </div>`).join("")}
     </div>
 
-    ${tabBar}
     ${tabBody}
   `;
 }
