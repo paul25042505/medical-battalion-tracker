@@ -424,6 +424,13 @@
   .push-test-btn:active{transform:scale(0.97);}
   .push-test-btn:disabled{opacity:0.4;}
 
+  /* ---- 訊息管理：系統推播內容一覽（純參考清單，見 PUSH_NOTIFICATION_CATALOG） ---- */
+  .push-catalog-item{background:var(--panel-2); border-radius:var(--radius-md); padding:12px 14px; margin-bottom:8px;}
+  .push-catalog-trigger{font-size:var(--text-xs); font-weight:600; color:var(--muted);}
+  .push-catalog-title{font-size:var(--text-sm); font-weight:700; color:var(--text); margin-top:3px;}
+  .push-catalog-body{font-size:var(--text-xs); color:var(--muted); margin-top:2px;}
+  .push-catalog-audience{font-size:11px; color:var(--blue); font-family:var(--mono); margin-top:5px;}
+
   /* ---- cards ---- */
   .section-label{font-family:var(--mono); font-size:var(--text-xs); font-weight:700; color:var(--muted); letter-spacing:0.09em; text-transform:uppercase; margin:var(--space-section) 4px 13px 4px;}
   .section-label.tight{margin-top:6px;}
@@ -1456,7 +1463,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-315-standby-stale-push";
+const BUILD_TAG = "2026-07-10-316-push-catalog-admin";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1709,6 +1716,19 @@ function recentCutoffDate(){ return new Date(Date.now() - RECENT_WINDOW_DAYS*24*
 // 自動刪除，不是前端隱藏而已。
 const NOTIFICATION_TTL_DAYS = 30;
 function isoDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+
+// 純參考用途的靜態清單，給「訊息管理」頁的 admin 快速查閱系統目前有哪些
+// 推播觸發點，不是真的資料（不會寫入 Firestore、也不會觸發任何推播）。
+// 實際推播邏輯都在 functions/index.js，這裡新增/調整推播內容時記得同步
+// 更新這份清單，不然會跟後端實際行為對不上。
+const PUSH_NOTIFICATION_CATALOG = [
+  { trigger: "新增勤務／待命車／洽公", title: "新增{勤務／待命車／洽公}", body: "任務標題：地點", audience: "該單位＋admin／高勤官" },
+  { trigger: "任務進度回報（出勤／抵達現場／離開現場／返營／抵達營區）", title: "{任務標題} - {進度}", body: "車號 @ 地點或送醫醫院", audience: "該單位＋admin／高勤官" },
+  { trigger: "患者生命徵象落在危急等級", title: "患者生命徵象異常", body: "{任務標題}：患者生命徵象出現危急異常，請留意", audience: "該單位＋admin／高勤官" },
+  { trigger: "訊息管理新增公告", title: "公告：{公告標題}", body: "公告內文", audience: "全營在職帳號（不分單位）" },
+  { trigger: "推播控制台手動測試推播", title: "測試推播", body: "這是 {管理員} 從推播控制台發送的測試訊號，收到代表這支裝置的推播設定正常", audience: "指定的單一使用者" },
+  { trigger: "每天 08:10 排程檢查待命車換班", title: "待命車尚未換班", body: "{地點}（{車號}）尚未於今日 08:00 後更新，請確認車長/駕駛是否需要換班", audience: "該單位＋admin／高勤官" },
+];
 
 // 不再定時自動輪詢（使用者反應一直背景更新很干擾）。改成只在建立時抓一次，
 // 之後只有畫面切換／使用者做出寫入動作時才會呼叫 refreshNow() 手動刷新一次，
@@ -2088,6 +2108,7 @@ const RELEASE_NOTES = [
       "新增「通知中心」收件匣：點右上角鈴鐺圖示可以看到歷史通知，依時間新到舊排序成單一列表（不分全部/未讀頁籤）；未讀的通知卡片右上角會有紅點提示，點開該筆就會標記為已讀",
       "通知中心新增「全部標記為已讀」按鈕，一次把目前所有未讀通知清掉",
       "後台管理「訊息管理」補上跟通知中心一樣的收件匣內容（原本是開發中的空白頁）",
+      "「訊息管理」新增「系統推播內容一覽」收合區塊：列出系統目前所有推播的觸發時機、標題/內容範本、收件人範圍，方便 admin 自己對照，不用回頭翻程式碼",
       "「訊息管理」新增公告管理功能：admin 可以新增公告、編輯既有公告的標題/內容、刪除公告；一般成員的通知中心維持唯讀，只能看跟標記已讀",
       "發布公告時新增推播：admin 在「訊息管理」新增公告會推播給所有在職帳號（不分單位），跟任務/生命徵象異常推播共用同一套後端機制；編輯、刪除公告不會重新推播",
       "通知卡片改版：套用跟任務／急診待命卡片同一套「空間感」卡片樣式，未讀通知會有淺藍發光背景＋圖示，已讀退回中性灰階，不用只靠一顆小紅點分辨有沒有看過",
@@ -2514,6 +2535,7 @@ const state = {
   recordsFilter: { period: "today", unit: "", vehicle: "", title: "", location: "", status: "", person: "", customDateFrom: "", customDateTo: "" },
   recordsFiltersExpanded: false,
   hospitalFiltersExpanded: false, // 醫院資訊頁「更多篩選」是否展開（急救責任等級），跟紀錄頁同一套收合樣式
+  pushCatalogExpanded: false, // 訊息管理頁「系統推播內容一覽」參考清單是否展開
   recordsApplied: null, // 查詢後的篩選條件快照；null 代表尚未按下查詢
   tasksTab: "all",
   tasksMainTab: "duty", // 任務頁最上面的子選單：duty（勤務，預設）／weather（天氣）／records（紀錄）
@@ -6950,8 +6972,29 @@ function viewAdminUsers(){
 // 訊息管理＝通知中心（收件匣歷史紀錄）的 admin 管理入口，看到的通知
 // 內容跟右上角鈴鐺圖示是同一份資料（見 renderNotificationsList），差別
 // 是這裡多了新增/編輯/刪除公告的操作，一般成員的通知中心只能看、標記已讀。
+// 「系統推播內容一覽」是給 admin 對照系統目前所有推播觸發點的靜態參考
+// 清單（PUSH_NOTIFICATION_CATALOG），純顯示、不寫入 Firestore、不觸發
+// 任何推播，跟下面的公告收件匣（renderNotificationsList）是兩回事——公告
+// 是「送出去的通知」，這份清單是「系統本身有哪些會自動推播的情境」。
+// 預設收起來，跟醫院資訊頁「更多篩選」同一套收合樣式，避免不需要對照
+// 的人一打開訊息管理就先看到一長串技術細節。
+function pushCatalogSection(){
+  const expanded = state.pushCatalogExpanded;
+  return `
+    <button class="filters-toggle ${expanded?'open':''}" onclick="window.__togglePushCatalogExpanded()">
+      ${icon('chevronDown',16).replace('<svg ', '<svg class="chev" ')} 系統推播內容一覽
+    </button>
+    ${expanded ? PUSH_NOTIFICATION_CATALOG.map(p => `
+      <div class="push-catalog-item">
+        <div class="push-catalog-trigger">${esc(p.trigger)}</div>
+        <div class="push-catalog-title">${esc(p.title)}</div>
+        <div class="push-catalog-body">${esc(p.body)}</div>
+        <div class="push-catalog-audience">收件人：${esc(p.audience)}</div>
+      </div>`).join("") : ""}
+  `;
+}
 function viewAdminMessages(){
-  return `<div class="section-label">訊息管理</div>${renderNotificationsList(true)}`;
+  return `<div class="section-label">訊息管理</div>${pushCatalogSection()}${renderNotificationsList(true)}`;
 }
 function viewAdminSystemSettings(){
   return `<div class="section-label">系統設定</div><div class="empty">${icon('check',32)}<div style="margin-top:10px;">系統設定開發中，之後將提供系統層級的參數設定。</div></div>`;
@@ -8133,6 +8176,7 @@ window.__setRecordsFilter = (key, value) => { state.recordsFilter[key] = value; 
 window.__toggleRecordsFilters = () => { state.recordsFiltersExpanded = !state.recordsFiltersExpanded; render(); };
 window.__toggleHospitalFiltersExpanded = () => { state.hospitalFiltersExpanded = !state.hospitalFiltersExpanded; render(); };
 window.__toggleTyphoonExpanded = () => { state.typhoonExpanded = !state.typhoonExpanded; render(); };
+window.__togglePushCatalogExpanded = () => { state.pushCatalogExpanded = !state.pushCatalogExpanded; render(); };
 window.__runRecordsQuery = () => { state.recordsApplied = { ...state.recordsFilter }; state.recordsDeepQuery = null; render(); };
 window.__clearRecordsQuery = () => {
   state.recordsFilter = { period: "today", unit: "", vehicle: "", title: "", location: "", status: "", person: "", customDateFrom: "", customDateTo: "" };
