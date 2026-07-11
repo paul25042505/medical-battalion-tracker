@@ -1412,7 +1412,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-10-312-hospfilter-style";
+const BUILD_TAG = "2026-07-10-313-remove-clinic-tier";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1875,7 +1875,7 @@ function fuelOptions(sel){
    並提供鄰近急救責任醫院查詢（等級、電話）。
    ========================================================= */
 const HOSPITAL_LEVELS = ["重度級", "中度級", "一般級"];
-const HOSPITAL_TIERS = ["醫學中心", "區域醫院", "地區醫院", "基層診所"];
+const HOSPITAL_TIERS = ["醫學中心", "區域醫院", "地區醫院"];
 // 醫院名稱筆畫排序（Intl.Collator 的 zh-u-co-stroke collation，Chrome/Safari
 // 內建 ICU 都支援），比預設的 localeCompare（拼音/Unicode 碼點排序）更符合
 // 中文使用者對「醫院名冊」的排序直覺。
@@ -2020,6 +2020,7 @@ const RELEASE_NOTES = [
       "醫院資訊頁新增搜尋框（比對醫院名稱／地址）跟頂部篩選頁籤（醫院層級／急救責任等級），不用再從一長串清單裡自己找",
       "醫院資訊頁預設排序改回依醫院名稱筆畫排序（原本是依醫院層級排序），點選「依距離」或「依人數」才會切換成該排序方式",
       "醫院資訊頁的篩選改成跟「紀錄」頁一樣的樣式：常用的醫院層級篩選改成浮動圓角按鈕（點選即套用），較少用的急救責任等級篩選收在「更多篩選」收合區塊裡的下拉選單，不用再各自學一套介面",
+      "新增/編輯醫院表單、醫院層級篩選移除「基層診所」選項，只保留醫學中心/區域醫院/地區醫院三個層級",
     ] },
     { category: "急診待命", items: [
       "急診待命卡片欄位順序調整：值班醫官移到車長原本的位置（右上），車長移到駕駛原本的位置（左下），駕駛移到值班醫官原本的位置（右下）",
@@ -2498,7 +2499,7 @@ const state = {
   hospitalSortBySee: false, // 醫院資訊頁：是否切換成「依等待看診人數排序」（預設仍是距離/等級排序）
   hospitalMenuOpenId: null, // 醫院資訊頁：目前哪一張醫院卡片的「更多」選單（編輯/刪除）是打開的，null 代表都沒開
   hospitalSearchQuery: "", // 醫院資訊頁：搜尋關鍵字（比對醫院名稱／地址）
-  hospitalFilterTier: "", // 醫院資訊頁：篩選醫院層級（醫學中心/區域醫院/地區醫院/基層診所），空字串代表全部
+  hospitalFilterTier: "", // 醫院資訊頁：篩選醫院層級（醫學中心/區域醫院/地區醫院），空字串代表全部
   hospitalFilterLevel: "", // 醫院資訊頁：篩選急救責任等級（重度級/中度級/一般級），空字串代表全部
   // 「紀錄」頁自訂日期查詢往回查超過 RECENT_WINDOW_DAYS 時另外抓的舊資料，
   // 累積在這裡跟平常只抓最近期間的 tasks/events/vitals 合併，不然下一次
@@ -6789,7 +6790,7 @@ function viewBaseDataModal(){
         <button type="button" class="icon-btn" onclick="window.__searchNhiHospital()">${icon('check',14)} <span class="btn-label">查詢健保署清冊資料</span></button>
       </div>
       <div id="nhiSearchResults"></div>
-      <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">不用打完整的官方全名，打部分關鍵字（例如「台大」「榮總」）就能查，「臺」「台」也不影響查詢；查到不只一筆時會列出來讓你選，選定後自動填入正確名稱/電話/地址/醫院層級/健保特約代號，清冊上顯示沒有急診相關科別/服務項目的機構會另外提醒。這份清冊只涵蓋醫學中心/區域醫院/地區醫院三個層級，基層診所查不到。</div>
+      <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">不用打完整的官方全名，打部分關鍵字（例如「台大」「榮總」）就能查，「臺」「台」也不影響查詢；查到不只一筆時會列出來讓你選，選定後自動填入正確名稱/電話/地址/醫院層級/健保特約代號，清冊上顯示沒有急診相關科別/服務項目的機構會另外提醒。</div>
       <div class="field"><label>地址（選填，用於一鍵導航）</label><input id="hospitalAddressInput" name="address" value="${esc(editing?.address||'')}" placeholder="例如：臺中市西屯區臺灣大道四段1650號"></div>
       <div class="field"><label>座標（選填，格式：緯度,經度）</label><input id="hospitalCoordsInput" name="coords" value="${(editing && editing.lat != null && editing.lng != null) ? `${editing.lat},${editing.lng}` : ''}" placeholder="例如：24.1786,120.6400"></div>
       <div style="display:flex; gap:8px; margin:-8px 0 8px;">
