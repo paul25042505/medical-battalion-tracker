@@ -1450,6 +1450,12 @@
     overscroll-behavior:contain;
     box-shadow:0 -12px 40px rgba(0,0,0,0.2); animation:modalSlideUp 0.24s cubic-bezier(.22,1,.36,1);
   }
+  /* 鍵盤打開時，下面這塊 env(safe-area-inset-bottom) 保留的 Home
+     指示條安全間距其實用不到——鍵盤本身已經蓋住那塊區域了，保留這段
+     留白只會在按鈕跟鍵盤工具列（上下鍵／完成）之間留一塊看起來像
+     沒修好的多餘空白。keyboardOpen 時由 syncAppHeight() 加上這個
+     class，把底部留白收回成一般間距。 */
+  .modal-sheet.kb-open{ padding-bottom:14px; }
   .modal-handle{width:36px; height:5px; border-radius:3px; background:var(--border-strong); margin:0 auto 16px auto;}
   .modal-title{font-size:var(--text-lg); font-weight:700; margin-bottom:16px;}
   @keyframes modalFade{from{opacity:0;} to{opacity:1;}}
@@ -1501,7 +1507,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-326-modal-overlay-keyboard-jsfix";
+const BUILD_TAG = "2026-07-11-327-modal-sheet-kb-safearea-gap";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2124,6 +2130,7 @@ const RELEASE_NOTES = [
       "改回 dvh 後實機測試發現欄位還是被鍵盤蓋住：真正原因不是彈出視窗本身的高度算錯，是最外層的半透明背景容器（position:fixed）的定位基準本身沒有跟著鍵盤收縮，導致貼齊底部的彈出視窗仍然貼在「鍵盤打開前」的畫面最底部；改成跟 #app 同一種寫法（用明確的 dvh 高度取代 inset:0），外層容器鍵盤打開時才會真的跟著變矮，彈出視窗才會確實貼到鍵盤正上方",
       "上面這個 dvh 修正實機測試後畫面跟修正前一模一樣，沒有任何改善——連續三次針對這個問題的假設都猜錯，暫時在畫面右上角加一塊紅底診斷小面板（顯示 #app／彈出視窗實際量到的高度數字），純粹是為了拿到真實數據才能抓到正確根因，不是正式功能，確認修好之後就會整個移除",
       "根據診斷面板量到的真實數字，找到根本原因：彈出視窗最外層的半透明背景容器在這支裝置上鍵盤打開時完全不會靠 CSS 的 dvh 縮小（跟 #app 不一樣，#app 是靠既有的 JS 校正機制才縮小，不是靠 dvh 本身），導致貼齊容器底部的彈出視窗持續停在鍵盤上緣以下；改成跟 #app 用同一套 JS 機制，鍵盤打開時直接校正外層容器的高度，彈出視窗才會真的貼到鍵盤正上方；已移除暫時的診斷面板",
+      "修正上面這個修正生效後，彈出視窗底部「取消」按鈕跟鍵盤工具列（上下鍵／完成那排）之間留了一塊看起來像沒修好的空白：這塊空白其實是彈出視窗原本保留給 Home 指示條的安全間距，鍵盤打開時那塊區域已經被鍵盤蓋住用不到，改成鍵盤打開時收掉這段留白",
     ] },
     { category: "效能／穩定性", items: [
       "程式碼清理：移除幾個先前迭代留下、目前完全沒有被呼叫到的函式與常數（RBAC 的 isActive／canSeeAllTasks、任務類型的 taskTypeLabel／STEP_TYPES），純內部清理，畫面/功能沒有任何改變",
@@ -8781,6 +8788,8 @@ function syncAppHeight() {
   app.style.height = keyboardOpen ? window.visualViewport.height + "px" : "";
   const overlay = document.querySelector(".modal-overlay");
   if (overlay) overlay.style.height = keyboardOpen ? window.visualViewport.height + "px" : "";
+  const sheet = document.querySelector(".modal-sheet");
+  if (sheet) sheet.classList.toggle("kb-open", keyboardOpen);
 }
 // scrollIntoView() 校正聚焦欄位位置時，理論上只會捲動 <main> 自己（唯一
 // 真正的捲動容器），跟 window/document 的捲動是各自獨立的兩件事；但 iOS
