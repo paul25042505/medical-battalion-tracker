@@ -425,7 +425,48 @@ exports.syncErRealtime = onSchedule("every 15 minutes", async () => {
 });
 
 /* =========================================================
-   9) 推播控制台：管理員手動測試推播
+   9) 待命車超過每日 08:00 換班還沒續約提醒（排程，每天一次）
+   跟前端 isStandbyStale()/standbyShiftCutoff()（index.html）同一套邏輯：
+   erStandby/{key} 只存一個 currentTaskId 指標，指向目前綁定的任務——不管
+   是還沒出勤的「待命勤務」還是正在出勤中的任務，只要完成（COMPLETED）
+   就會由 renewStandbyTask() 自動建立新任務並更新這個指標，createdAt 會
+   變成當下時間。所以「createdAt 早於今天最近一次 08:00」就代表這個
+   待命點從昨天（甚至更早）到現在都沒有經過 renewStandbyTask()，也就是
+   車長/駕駛換班時沒有回報，需要提醒確認。
+
+   ER_STANDBY_LOCATIONS 是前端 index.html 的常數，這裡沒有共用模組可以
+   直接 import，手動維護一份對照——之後前端新增/調整待命地點時記得同步
+   改這裡。
+   ========================================================= */
+const ER_STANDBY_LOCATIONS = [
+  { key: "chenggongbei", label: "成功北醫務所" },
+  { key: "jingbei", label: "精北醫務所" },
+];
+function standbyShiftCutoff(now) {
+  const cutoff = new Date(now);
+  cutoff.setHours(8, 0, 0, 0);
+  if (now < cutoff) cutoff.setDate(cutoff.getDate() - 1);
+  return cutoff;
+}
+exports.checkStaleErStandby = onSchedule({ schedule: "10 8 * * *", timeZone: "Asia/Taipei" }, async () => {
+  const cutoffMs = standbyShiftCutoff(new Date()).getTime();
+  const snap = await db.collection("erStandby").get();
+  for (const doc of snap.docs) {
+    const rec = doc.data();
+    if (!rec || !rec.currentTaskId) continue;
+    const taskSnap = await db.doc(`tasks/${rec.currentTaskId}`).get();
+    if (!taskSnap.exists) continue;
+    const t = taskSnap.data();
+    const createdAtMs = t.createdAt && t.createdAt.toMillis ? t.createdAt.toMillis() : new Date(t.createdAt || 0).getTime();
+    if (createdAtMs >= cutoffMs) continue;
+    const locLabel = (ER_STANDBY_LOCATIONS.find((x) => x.key === doc.id) || {}).label || doc.id;
+    const tokens = await resolveRecipientTokens(t.unit);
+    await sendPush(tokens, "待命車尚未換班", `${locLabel}（${t.vehicle || "—"}）尚未於今日 08:00 後更新，請確認車長/駕駛是否需要換班`);
+  }
+});
+
+/* =========================================================
+   10) 推播控制台：管理員手動測試推播
    前端「推播控制台」名冊每一列的「測試推播」按鈕呼叫這支函式，直接對
    指定的單一使用者送一則真的推播（跟 sendPush() 共用同一套發送/清除
    失效 token 邏輯），方便管理員現場確認某個人到底收不收得到通知，不用
@@ -467,4 +508,4 @@ exports.sendTestPush = onRequest({ cors: true }, async (req, res) => {
 // 純函式/資料存取邏輯額外匯出一份，方便寫單元測試直接呼叫驗證（不會
 // 影響部署——firebase deploy 只認得用 onDocumentCreated 等 v2 trigger
 // builder 包起來的 exports，這個純物件會被忽略，不會變成多一個雲端函式）。
-exports._internal = { normalizeRole, resolveRecipientTokens, resolveAllTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce };
+exports._internal = { normalizeRole, resolveRecipientTokens, resolveAllTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce, standbyShiftCutoff };
