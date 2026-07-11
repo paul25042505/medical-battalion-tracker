@@ -1555,7 +1555,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-340-mci-tabs-to-top";
+const BUILD_TAG = "2026-07-11-341-mci-home-subtab";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2314,6 +2314,7 @@ const RELEASE_NOTES = [
       "檢傷官分頁在開始 START 問答前，就先以大字顯示這次傷患即將產生的流水編號（例如 MCI-04），方便一邊看螢幕一邊把號碼手寫填到實體傷患票卡上",
       "車輛/醫院指派職責從檢傷官移交給後送官：檢傷官只做 START 判定與填寫主訴，傷患上傳後狀態預設為「待命」；治療官分頁只看得到還在「待命」的傷患；後送官在傷患字卡上指派車輛/醫院，指派完成才會出現「離開現場」「抵達醫院」的動作，該傷患也才會離開治療官的待命清單",
       "檢傷官／治療官／後送官分頁切換鈕移到事件詳情頁最上面（跟任務頁「勤務/天氣/紀錄」主分頁同一套排版慣例），不用先滑過傷患統計跟人員配置才看得到、切得到",
+      "事件詳情頁新增「首頁」分頁：事件標題/狀態/編輯車輛醫院/結束事件、傷患統計、人員配置都收進這個獨立分頁；檢傷官分頁只留下一號傷患編號跟 START 檢傷問答，切分頁不用重複看到一樣的事件概況",
     ] },
   ] },
   { date: "2026/07/10", groups: [
@@ -2858,7 +2859,7 @@ const state = {
   pushConsoleFilter: { keyword: "", unit: "", status: "" }, // 【後台】推播控制台的篩選條件
   mciEvents: [], mciPatients: [], // 大量傷患事件／傷患名冊
   mciEventModal: null, // 大量傷患事件頁：新增/編輯事件彈窗，{ id } | null（id 為 null 代表新增）
-  mciEventTab: "triage", // 事件詳情頁目前分頁：triage（檢傷官）／ccp（治療官）／evac（後送官）
+  mciEventTab: "home", // 事件詳情頁目前分頁：home（首頁）／triage（檢傷官）／ccp（治療官）／evac（後送官）
   mciTriageStep: "ambulate", // 檢傷官 START 決策問答目前在哪一關；"form" 代表已判定完顏色，進入後送資訊表單
   mciTriageColor: null, // 檢傷官這次判定出的顏色，"form" 步驟要用
   mciTriageRedSubcat: null, // 紅色傷患再評估的 ABCD 子分類
@@ -5554,6 +5555,7 @@ function viewMciCreateModal(){
 // 負責傷患集中區的追蹤與二次檢傷、後送官負責車輛出發/抵達的生命週期。
 // 全程匿名化：傷患不記錄姓名，唯一身分是流水號（MCI-01, MCI-02...）。
 const MCI_EVENT_TABS = [
+  { key:"home",   label:"首頁", iconName:"home" },
   { key:"triage", label:"檢傷官", iconName:"alert" },
   { key:"ccp",    label:"治療官", iconName:"heartbeat" },
   { key:"evac",   label:"後送官", iconName:"depart" }
@@ -5561,9 +5563,7 @@ const MCI_EVENT_TABS = [
 function viewMciEvent(eventId){
   const ev = state.mciEvents.find(e => e.id === eventId);
   if (!ev) return `<div class="back-row">${backBtn({name:'mciList'})}</div><div class="empty">找不到這筆事件</div>`;
-  const stats = mciEventStats(eventId);
-  const roles = ev.roles || {};
-  const eventTab = state.mciEventTab || "triage";
+  const eventTab = state.mciEventTab || "home";
   const tabBar = `
     <div class="icon-subtabs">
       ${MCI_EVENT_TABS.map(tb => `
@@ -5572,12 +5572,24 @@ function viewMciEvent(eventId){
           <span class="label">${tb.label}</span>
         </button>`).join("")}
     </div>`;
-  const tabBody = eventTab === "ccp" ? viewMciCcpTab(eventId)
+  const tabBody = eventTab === "triage" ? viewMciTriageTab(eventId)
+    : eventTab === "ccp" ? viewMciCcpTab(eventId)
     : eventTab === "evac" ? viewMciEvacTab(eventId)
-    : viewMciTriageTab(eventId);
+    : viewMciHomeTab(eventId);
   return `
     <div class="back-row">${backBtn({name:'mciList'})}</div>
     ${tabBar}
+    ${tabBody}
+  `;
+}
+// 首頁分頁：事件本身的概況（標題/狀態/編輯/結束事件、傷患統計、人員配置）。
+// 檢傷官分頁只留下一號傷患編號跟 START 檢傷問答，這些事件層級的資訊挪到
+// 這個獨立分頁，不用每次切分頁都先看到一樣的東西。
+function viewMciHomeTab(eventId){
+  const ev = state.mciEvents.find(e => e.id === eventId);
+  const stats = mciEventStats(eventId);
+  const roles = ev.roles || {};
+  return `
     <div class="mci-event-header">
       <div class="mci-event-header-top">
         <div class="mci-event-header-title">${icon('alert',20)} ${esc(ev.title||'大量傷患事件')}</div>
@@ -5608,8 +5620,6 @@ function viewMciEvent(eventId){
           <input value="${esc(roles[r.key]||'')}" placeholder="選填，可填多人" onchange="window.__updateMciRole('${ev.id}','${r.key}',this.value)">
         </div>`).join("")}
     </div>
-
-    ${tabBody}
   `;
 }
 // 檢傷分類 ABCD 子項改用自己的 chip 樣式（顏色點各自不同、需要 fullLabel
