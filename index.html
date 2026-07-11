@@ -1543,7 +1543,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-329-kb-overlay-hardening";
+const BUILD_TAG = "2026-07-11-330-modal-sheet-maxheight-kbfix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2216,6 +2216,7 @@ const RELEASE_NOTES = [
       "根據診斷面板量到的真實數字，找到根本原因：彈出視窗最外層的半透明背景容器在這支裝置上鍵盤打開時完全不會靠 CSS 的 dvh 縮小（跟 #app 不一樣，#app 是靠既有的 JS 校正機制才縮小，不是靠 dvh 本身），導致貼齊容器底部的彈出視窗持續停在鍵盤上緣以下；改成跟 #app 用同一套 JS 機制，鍵盤打開時直接校正外層容器的高度，彈出視窗才會真的貼到鍵盤正上方；已移除暫時的診斷面板",
       "修正上面這個修正生效後，彈出視窗底部「取消」按鈕跟鍵盤工具列（上下鍵／完成那排）之間留了一塊看起來像沒修好的空白：這塊空白其實是彈出視窗原本保留給 Home 指示條的安全間距，鍵盤打開時那塊區域已經被鍵盤蓋住用不到，改成鍵盤打開時收掉這段留白",
       "鍵盤防遮蔽機制補強：原本只校正畫面上第一個找到的彈出視窗，如果同時疊了兩層彈出視窗（例如某個表單彈窗裡再開一個選人彈窗），第二層不會被修正、鍵盤還是會蓋住；改成同時存在的每一層都各自校正。人員／單位選擇器另外補上「連點兩下觸發鍵不會疊出兩層彈窗節點」的保護",
+      "修正彈出視窗表單內容比鍵盤打開後的可視高度還高時（例如大量傷患新增傷患彈窗，欄位較多），姓名等最上面的欄位會被推到畫面最上緣以上、完全捲不到，手動上下滑也碰不到、甚至會誤觸關閉彈窗的問題：彈出視窗自己的最大高度原本用瀏覽器的 dvh 單位計算，這個單位鍵盤打開時不會跟著縮小；改成鍵盤打開時也用量到的可視高度幫彈出視窗的高度封頂，撐不下的內容才會確實交給彈出視窗自己的捲動處理，捲得到也不會誤觸背景關閉",
     ] },
     { category: "效能／穩定性", items: [
       "程式碼清理：移除幾個先前迭代留下、目前完全沒有被呼叫到的函式與常數（RBAC 的 isActive／canSeeAllTasks、任務類型的 taskTypeLabel／STEP_TYPES），純內部清理，畫面/功能沒有任何改變",
@@ -9183,11 +9184,26 @@ const KEYBOARD_HEIGHT_THRESHOLD = 80;
 // height:100dvh 都一樣（連續三次純 CSS 修正在真機上都沒有效果的原因）。
 // .modal-sheet 用 align-items:flex-end 貼齊 .modal-overlay 的底部，
 // overlay 沒縮小，貼齊的 sheet 底部就會停在鍵盤上緣以下、看不到的地方。
-// 只能比照 #app 的做法用 JS 強制蓋掉高度。這裡刻意只改 overlay 的高度、
-// 不去動 .modal-sheet 自己的 max-height——先前那版直接用 JS 蓋掉
-// .modal-sheet 的 max-height，會讓貼齊底部的 sheet 頂部往下掉，
-// 內容整個被推到可視範圍外（畫面整片空白），因為底端仍然貼著（當時）
-// 沒有縮小的 overlay 下緣。
+// 只能比照 #app 的做法用 JS 強制蓋掉高度。
+//
+// 這裡一度刻意只改 overlay 的高度、不去動 .modal-sheet 自己的
+// max-height——先前那版（overlay 還沒修正時）直接用 JS 蓋掉 .modal-sheet
+// 的 max-height，會讓貼齊底部的 sheet 頂部往下掉，內容整個被推到可視
+// 範圍外（畫面整片空白），因為底端仍然貼著（當時）沒有縮小的 overlay
+// 下緣。但只修正 overlay 高度、放著 sheet 的 max-height 不管，又會出現
+// 另一個問題：sheet 自己的 max-height 是 88vh/88dvh，這個 CSS 單位在這支
+// 裝置上鍵盤打開時並不會跟著縮小（跟本檔案其他地方反覆驗證過的結論一
+// 致），如果表單內容（例如大量傷患新增傷患彈窗，姓名／檢傷分類／主訴／
+// 車輛／醫院一大排欄位）本身就比鍵盤打開後的可視高度還高，sheet 會照著
+// 這個「量錯」的 max-height 撐開、貼齊（已經正確縮小的）overlay 底部，
+// 撐出來的高度超過 overlay 本身，sheet 的頂部就會被推到 y=0（可視範圍
+// 最上緣）以上、跑到看不見也捲不到的地方——因為 sheet 內容本身還沒撐滿
+// max-height，overflow-y:auto 判定「沒有真的溢出」，不會提供內部捲動，
+// 使用者怎麼滑都碰不到那塊被推到畫面外的內容，只能摸到 sheet 底部那段剛
+// 好還在可視範圍內的欄位。修正方式：keyboard 打開時同時把 sheet 的
+// max-height 也校正成不超過 overlay 的高度（用量到的 visualViewport
+// 高度，扣掉一點點邊界的視覺留白），sheet 就不會再比 overlay 高，撐不下
+// 的內容改由 sheet 自己的 overflow-y:auto 提供內部捲動，才捲得到。
 function syncAppHeight() {
   if (!window.visualViewport) return;
   const app = document.getElementById("app");
@@ -9206,6 +9222,7 @@ function syncAppHeight() {
   });
   document.querySelectorAll(".modal-sheet").forEach(sheet => {
     sheet.classList.toggle("kb-open", keyboardOpen);
+    sheet.style.maxHeight = keyboardOpen ? Math.max(window.visualViewport.height - 24, 120) + "px" : "";
   });
 }
 // scrollIntoView() 校正聚焦欄位位置時，理論上只會捲動 <main> 自己（唯一
