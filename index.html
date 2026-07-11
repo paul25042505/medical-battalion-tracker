@@ -1550,7 +1550,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-335-mci-start-triage-anonymized-roles";
+const BUILD_TAG = "2026-07-11-336-mci-event-resource-pool";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2300,6 +2300,7 @@ const RELEASE_NOTES = [
       "檢傷分類改成「START 檢傷法」決策問答（行動力→呼吸→灌流→意識），全程巨大按鈕點選、免打字免動腦，系統依回答自動判定紅/黃/綠/黑；判定為紅色會再追加問一次 ABCD（依序評估呼吸道／呼吸／循環／神經學，第一個出問題的地方評到那裡就停），決定送醫優先順序",
       "建立傷患案件時，車輛與送醫醫院改成建立當下就必選（不再是選填），檢傷完成、填完主訴後直接確認上傳，一次到位不用之後再回頭補派車輛醫院",
       "事件詳情頁拆成三個分頁，對應現場三種角色：「檢傷官」負責上面這套 START 問答建立案件；「治療官」是傷患集中區動態列表，可修改主訴、對黃色傷患執行「二次檢傷」一鍵升級為紅色；「後送官」直接看到預先配對好車輛/醫院的傷患字卡，只要點「離開現場」「抵達醫院」（填里程與備註）追蹤兩節點後送生命週期",
+      "新增事件時或在事件卡片／詳情頁點「編輯」，可設定本次事件實際出勤的車輛與收治的醫院範圍（模擬演練的資源池概念），檢傷官建立案件時車輛/醫院下拉選單只會顯示這次設定的範圍；留空則不限制，沿用全部車輛/醫院名冊",
     ] },
   ] },
   { date: "2026/07/10", groups: [
@@ -2843,7 +2844,7 @@ const state = {
   gatekeeperDismissed: false, // 【前台】推播守門員被使用者按 X 關掉——只在本次開啟期間生效，重新整理/下次開啟又會恢復判斷
   pushConsoleFilter: { keyword: "", unit: "", status: "" }, // 【後台】推播控制台的篩選條件
   mciEvents: [], mciPatients: [], // 大量傷患事件／傷患名冊
-  mciCreateModalOpen: false, // 大量傷患事件頁：新增事件彈窗是否開啟
+  mciEventModal: null, // 大量傷患事件頁：新增/編輯事件彈窗，{ id } | null（id 為 null 代表新增）
   mciEventTab: "triage", // 事件詳情頁目前分頁：triage（檢傷官）／ccp（治療官）／evac（後送官）
   mciTriageStep: "ambulate", // 檢傷官 START 決策問答目前在哪一關；"form" 代表已判定完顏色，進入後送資訊表單
   mciTriageColor: null, // 檢傷官這次判定出的顏色，"form" 步驟要用
@@ -3296,15 +3297,24 @@ async function updateBaseData(coll, id, fields){
   refreshBaseDataPoll(coll);
 }
 /* ---- 大量傷患事件（MCI）：事件本身＋傷患名冊 ---- */
-async function createMciEvent(title, unit){
+// vehicles/hospitals：這次演習模擬「派了哪幾台救護車、指定哪幾家收治
+// 醫院」的資源池，開事件當下設定（或事後用編輯功能調整），檢傷官建立
+// 案件時車輛/醫院下拉選單只會列出這裡設定的範圍；留空代表不限制，沿用
+// 全部車輛/醫院名冊（相容還沒設定過資源池的舊事件）。
+async function createMciEvent(data){
   const p = state.profile;
   const doc = await fsAddDoc("mciEvents", {
-    title: (title||"").trim() || "大量傷患事件", unit: unit||"", status: "active",
+    title: (data.title||"").trim() || "大量傷患事件", unit: data.unit||"", status: "active",
+    vehicles: data.vehicles||[], hospitals: data.hospitals||[],
     roles: { commander:"", triageOfficer:"", transportOfficer:"", treatmentOfficer:"", logisticsOfficer:"", recorder:"" },
     createdBy: state.user.uid, createdByName: p.displayName||p.email||"", createdAt: new Date()
   });
   showToast("已開啟事件"); if (mciEventsPoll) await mciEventsPoll.refreshNow();
   return doc;
+}
+async function updateMciEvent(id, data){
+  await fsSetDoc(`mciEvents/${id}`, data);
+  showToast("已更新事件設定"); if (mciEventsPoll) await mciEventsPoll.refreshNow();
 }
 async function setMciEventStatus(id, status){
   await fsSetDoc(`mciEvents/${id}`, { status });
@@ -5453,7 +5463,10 @@ function mciEventCard(ev){
   <div class="mci-event-card spatial-card" style="--card-accent:${ev.status==='closed'?'var(--gray)':'var(--red)'};" onclick="window.__nav({name:'mciEvent', id:'${ev.id}'})">
     <div class="mci-event-card-top">
       <div class="mci-event-card-title">${icon('alert',18)} ${esc(ev.title||'大量傷患事件')}</div>
-      <span class="badge ${ev.status==='closed'?'muted':'danger'}">${ev.status==='closed'?'已結束':'進行中'}</span>
+      <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+        <button class="icon-btn" onclick="event.stopPropagation(); window.__openMciCreateModal('${ev.id}')">編輯</button>
+        <span class="badge ${ev.status==='closed'?'muted':'danger'}">${ev.status==='closed'?'已結束':'進行中'}</span>
+      </div>
     </div>
     <div class="mci-event-card-meta">${ev.unit?unitLabel(ev.unit)+'・':''}${fmtTime(new Date(ev.createdAt||0).getTime())}・共 ${stats.total} 名傷患</div>
     <div class="mci-event-card-counts">
@@ -5478,23 +5491,38 @@ function viewMciList(){
     ${viewMciCreateModal()}
   `;
 }
+// 新增／編輯共用同一個彈窗（跟基礎資料管理的新增/編輯彈窗同一套慣例）：
+// vehicles/hospitals 是這次演習模擬「派了哪幾台救護車、指定收治哪幾家
+// 醫院」的資源池，留空代表不限制（檢傷官表單沿用全部車輛/醫院名冊）。
 function viewMciCreateModal(){
-  if (!state.mciCreateModalOpen) return "";
+  const m = state.mciEventModal;
+  if (!m) return "";
+  const editing = m.id ? state.mciEvents.find(e => e.id === m.id) : null;
   const p = state.profile;
+  const vehicleOptions = state.vehicles.filter(v=>v.active!==false).map(v=>v.plate);
+  const hospitalOptions = state.hospitals.slice().sort((a,b)=>HOSPITAL_NAME_COLLATOR.compare(a.name||'',b.name||'')).map(h=>h.name);
   return `
   <div class="modal-overlay" onclick="if(event.target===this) window.__closeMciCreateModal()">
     <div class="modal-sheet">
       <div class="modal-handle"></div>
-      <div class="modal-title">${icon('alert',19)} 新增大量傷患事件</div>
-      <form onsubmit="window.__submitMciCreateModal(event)">
-        <div class="field"><label>事件名稱</label><input name="title" placeholder="例如：成功嶺集合場中暑事件" required></div>
+      <div class="modal-title">${icon('alert',19)} ${editing?'編輯大量傷患事件':'新增大量傷患事件'}</div>
+      <form onsubmit="window.__submitMciCreateModal(event,'${m.id||''}')">
+        <div class="field"><label>事件名稱</label><input name="title" value="${esc(editing?.title||'')}" placeholder="例如：成功嶺集合場中暑事件" required></div>
         <div class="field"><label>單位（選填）</label>
           <select name="unit">
             <option value="">未指定</option>
-            ${UNITS.map(u => `<option value="${u.code}" ${myUnit(p)===u.code?'selected':''}>${u.label}</option>`).join("")}
+            ${UNITS.map(u => `<option value="${u.code}" ${(editing?editing.unit===u.code:myUnit(p)===u.code)?'selected':''}>${u.label}</option>`).join("")}
           </select>
         </div>
-        <button class="btn-primary" type="submit">開啟事件</button>
+        <div class="field">
+          <label>本次事件出勤車輛（選填，不選代表開放全部車輛）</label>
+          ${vehicleOptions.length ? chipGroup('vehicles', vehicleOptions, editing?.vehicles||[], true) : `<div class="empty" style="padding:14px 0;">尚未建立車輛名冊</div>`}
+        </div>
+        <div class="field">
+          <label>本次事件收治醫院（選填，不選代表開放全部醫院）</label>
+          ${hospitalOptions.length ? chipGroup('hospitals', hospitalOptions, editing?.hospitals||[], true) : `<div class="empty" style="padding:14px 0;">尚未建立醫院名冊</div>`}
+        </div>
+        <button class="btn-primary" type="submit">${editing?'儲存':'開啟事件'}</button>
         <button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__closeMciCreateModal()">取消</button>
       </form>
     </div>
@@ -5535,8 +5563,12 @@ function viewMciEvent(eventId){
         <span class="badge ${ev.status==='closed'?'muted':'danger'}">${ev.status==='closed'?'已結束':'進行中'}</span>
       </div>
       <div class="mci-event-card-meta">${ev.unit?unitLabel(ev.unit)+'・':''}${ev.createdByName?esc(ev.createdByName)+' 開啟・':''}${fmtTime(new Date(ev.createdAt||0).getTime())}</div>
-      <button class="icon-btn" style="margin-top:10px;" onclick="window.__toggleMciEventStatus('${ev.id}','${ev.status}')">${ev.status==='closed'?'重新開啟事件':'結束事件'}</button>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="icon-btn" onclick="window.__openMciCreateModal('${ev.id}')">編輯車輛／醫院</button>
+        <button class="icon-btn" onclick="window.__toggleMciEventStatus('${ev.id}','${ev.status}')">${ev.status==='closed'?'重新開啟事件':'結束事件'}</button>
+      </div>
     </div>
+    ${viewMciCreateModal()}
 
     <div class="section-label">人員配置</div>
     <div class="mci-roles-card">
@@ -5601,6 +5633,13 @@ function viewMciTriageTab(eventId){
 function viewMciTriageForm(eventId){
   const info = mciTriageInfo(state.mciTriageColor);
   const outSet = dispatchedVehiclePlates();
+  const ev = state.mciEvents.find(e => e.id === eventId);
+  const vehiclePool = ev && ev.vehicles && ev.vehicles.length
+    ? state.vehicles.filter(v => v.active!==false && ev.vehicles.includes(v.plate))
+    : state.vehicles.filter(v=>v.active!==false);
+  const hospitalPool = ev && ev.hospitals && ev.hospitals.length
+    ? state.hospitals.filter(h => ev.hospitals.includes(h.name))
+    : state.hospitals.slice();
   return `
     <div class="mci-start-card">
       <div class="mci-start-result">
@@ -5612,13 +5651,13 @@ function viewMciTriageForm(eventId){
         <div class="field"><label>選取本次出勤車輛</label>
           <select name="vehicle" required>
             <option value="">請選擇車輛</option>
-            ${state.vehicles.filter(v=>v.active!==false).map(v => `<option value="${esc(v.plate)}">${esc(vehicleOptionLabel(v.plate,outSet))}</option>`).join("")}
+            ${vehiclePool.map(v => `<option value="${esc(v.plate)}">${esc(vehicleOptionLabel(v.plate,outSet))}</option>`).join("")}
           </select>
         </div>
         <div class="field"><label>選取後送目標醫院</label>
           <select name="hospital" required>
             <option value="">請選擇醫院</option>
-            ${state.hospitals.slice().sort((a,b)=>HOSPITAL_NAME_COLLATOR.compare(a.name||'',b.name||'')).map(h => `<option value="${esc(h.name)}">${esc(h.name)}${h.tier?'・'+esc(h.tier):''}</option>`).join("")}
+            ${hospitalPool.sort((a,b)=>HOSPITAL_NAME_COLLATOR.compare(a.name||'',b.name||'')).map(h => `<option value="${esc(h.name)}">${esc(h.name)}${h.tier?'・'+esc(h.tier):''}</option>`).join("")}
           </select>
         </div>
         <button class="btn-primary" type="submit">確認上傳</button>
@@ -8613,14 +8652,16 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
        : addRecorder(unit, f.get("code")));
   action.then(() => { state.baseDataModal = null; render(); }).catch(baseDataErr);
 };
-window.__openMciCreateModal = () => { state.mciCreateModalOpen = true; render(); };
-window.__closeMciCreateModal = () => { state.mciCreateModalOpen = false; render(); };
-window.__submitMciCreateModal = (ev) => {
+window.__openMciCreateModal = (id) => { state.mciEventModal = { id: id || null }; render(); };
+window.__closeMciCreateModal = () => { state.mciEventModal = null; render(); };
+window.__submitMciCreateModal = (ev, id) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
-  createMciEvent(f.get("title"), f.get("unit")).then(doc => {
-    state.mciCreateModalOpen = false;
-    nav({ name:"mciEvent", id: doc.id });
+  const data = { title: f.get("title"), unit: f.get("unit")||"", vehicles: f.getAll("vehicles"), hospitals: f.getAll("hospitals") };
+  const action = id ? updateMciEvent(id, data) : createMciEvent(data);
+  action.then(doc => {
+    state.mciEventModal = null;
+    if (!id) nav({ name:"mciEvent", id: doc.id }); else render();
   }).catch(baseDataErr);
 };
 window.__toggleMciEventStatus = (id, curStatus) => {
