@@ -1423,24 +1423,29 @@
   @keyframes spin{to{transform:rotate(360deg);}}
 
   /* ---- modal（後台編輯用彈窗） ---- */
+  /* .modal-overlay 本來用 inset:0（position:fixed 元素常見寫法），但
+     position:fixed 元素的 inset:0 是相對「fixed 定位的 containing
+     block」（大致等於瀏覽器版面視窗）算出來的，這個 containing block
+     在 iOS Safari 鍵盤打開時不一定會跟著縮小——跟 #app 用 height:100dvh
+     （一般文件流裡的區塊元素，dvh 這個單位本來就是為了這種情境設計的）
+     是兩條不同的路徑，即使兩邊都寫 dvh，實際反不反應鍵盤高度變化並不
+     保證一致。改成跟 #app 完全一樣的寫法——不用 inset，改成明確的
+     top/left/right + height:100vh/100dvh——讓 .modal-overlay 這個外層
+     容器本身在鍵盤打開時真的跟著變矮，裡面用 align-items:flex-end 貼齊
+     容器底部的 .modal-sheet 才會跟著往上貼到鍵盤正上方，而不是貼在一個
+     鍵盤打開時仍然維持原本高度、只是「视觉上被鍵盤蓋住下半部」的容器
+     底部。這是實機測試出現彈出視窗欄位持續被鍵盤蓋住、只縮小
+     .modal-sheet 自己的 max-height 沒有用之後，才抓到的真正根因：問題
+     不是視窗「不夠矮」，是整個外層容器的定位基準本身就沒有跟著鍵盤收縮。 */
   .modal-overlay{
-    position:fixed; inset:0; background:rgba(10,10,14,0.44); backdrop-filter:blur(1.5px);
+    position:fixed; top:0; left:0; right:0; height:100vh; height:100dvh;
+    background:rgba(10,10,14,0.44); backdrop-filter:blur(1.5px);
     display:flex; align-items:flex-end; justify-content:center; z-index:60;
     animation:modalFade 0.18s ease;
   }
   .modal-sheet{
     background:var(--panel); width:100%; max-width:520px; border-radius:22px 22px 0 0;
     padding:14px 20px calc(20px + env(safe-area-inset-bottom)) 20px;
-    /* max-height 故意先寫一般的 vh 當退路，dvh 才是真正生效的值（瀏覽器
-       不支援 dvh 時會直接忽略那一行，退回上面的 vh）。用 dvh 而不是用 JS
-       量 visualViewport 手動蓋掉高度：dvh 是瀏覽器原生持續追蹤可視視窗
-       （含鍵盤佔用的空間）算出來的值，鍵盤打開/收起當下就會自動反應，
-       不用自己寫程式碼判斷「現在是不是鍵盤造成的」；之前改成用 JS 在
-       syncAppHeight() 裡即時蓋掉 max-height，反而跟同一個函式裡另一個
-       負責把目前聚焦欄位捲到可視範圍中間的 positionLoop／scrollIntoView
-       在同一個畫面更新時機互相干擾（max-height 剛變、scrollIntoView 拿
-       舊的高度去算目標捲動位置），實機測試出現彈出視窗整個變成空白、
-       確認送出等欄位完全看不到的更嚴重問題，已經整個回退。 */
     max-height:88vh; max-height:88dvh; overflow-y:auto;
     overscroll-behavior:contain;
     box-shadow:0 -12px 40px rgba(0,0,0,0.2); animation:modalSlideUp 0.24s cubic-bezier(.22,1,.36,1);
@@ -1496,7 +1501,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-323-modal-keyboard-fix-revert";
+const BUILD_TAG = "2026-07-11-324-modal-overlay-dvh-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2116,6 +2121,7 @@ const RELEASE_NOTES = [
     { category: "介面優化", items: [
       "修正回報表單（出勤/抵達現場/離開現場/返營等）彈出視窗被手機鍵盤蓋住下半部欄位（里程、備註、確認送出按鈕）、完全捲不到看不到的問題：彈出視窗是獨立於 #app 版面之外的固定定位元素，鍵盤打開時 CSS 原本算的可視高度沒有把鍵盤佔用的空間扣掉；改成鍵盤打開時比照全站既有的鍵盤修正機制，直接用量到的可視高度校正彈出視窗自己的最大高度，捲動範圍才會跟畫面實際看得到的地方對齊",
       "上一版鍵盤修正機制實機測試會讓彈出視窗整個變空白（跟原本負責把聚焦欄位捲到可視範圍中間的機制互相干擾），已整個回退：改成讓彈出視窗的最大高度直接交給瀏覽器原生的 dvh 單位處理，不用 JS 隨鍵盤開關即時改寫，避免跟其他鍵盤相關的畫面校正邏輯搶著同一時間點動作",
+      "改回 dvh 後實機測試發現欄位還是被鍵盤蓋住：真正原因不是彈出視窗本身的高度算錯，是最外層的半透明背景容器（position:fixed）的定位基準本身沒有跟著鍵盤收縮，導致貼齊底部的彈出視窗仍然貼在「鍵盤打開前」的畫面最底部；改成跟 #app 同一種寫法（用明確的 dvh 高度取代 inset:0），外層容器鍵盤打開時才會真的跟著變矮，彈出視窗才會確實貼到鍵盤正上方",
     ] },
     { category: "效能／穩定性", items: [
       "程式碼清理：移除幾個先前迭代留下、目前完全沒有被呼叫到的函式與常數（RBAC 的 isActive／canSeeAllTasks、任務類型的 taskTypeLabel／STEP_TYPES），純內部清理，畫面/功能沒有任何改變",
