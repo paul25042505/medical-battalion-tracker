@@ -1555,7 +1555,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-341-mci-home-subtab";
+const BUILD_TAG = "2026-07-11-342-mci-home-patient-roster";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2315,6 +2315,7 @@ const RELEASE_NOTES = [
       "車輛/醫院指派職責從檢傷官移交給後送官：檢傷官只做 START 判定與填寫主訴，傷患上傳後狀態預設為「待命」；治療官分頁只看得到還在「待命」的傷患；後送官在傷患字卡上指派車輛/醫院，指派完成才會出現「離開現場」「抵達醫院」的動作，該傷患也才會離開治療官的待命清單",
       "檢傷官／治療官／後送官分頁切換鈕移到事件詳情頁最上面（跟任務頁「勤務/天氣/紀錄」主分頁同一套排版慣例），不用先滑過傷患統計跟人員配置才看得到、切得到",
       "事件詳情頁新增「首頁」分頁：事件標題/狀態/編輯車輛醫院/結束事件、傷患統計、人員配置都收進這個獨立分頁；檢傷官分頁只留下一號傷患編號跟 START 檢傷問答，切分頁不用重複看到一樣的事件概況",
+      "首頁分頁新增完整「傷患名冊」：不分角色、不管每位傷患目前在生命週期哪個節點，都看得到檢傷分類、主訴、車輛/醫院配對、離開現場/抵達醫院時間與里程備註，一次掌握全部傷患現況",
     ] },
   ] },
   { date: "2026/07/10", groups: [
@@ -5582,13 +5583,15 @@ function viewMciEvent(eventId){
     ${tabBody}
   `;
 }
-// 首頁分頁：事件本身的概況（標題/狀態/編輯/結束事件、傷患統計、人員配置）。
-// 檢傷官分頁只留下一號傷患編號跟 START 檢傷問答，這些事件層級的資訊挪到
-// 這個獨立分頁，不用每次切分頁都先看到一樣的東西。
+// 首頁分頁：事件本身的概況（標題/狀態/編輯/結束事件、傷患統計、人員配置、
+// 完整傷患名冊）。檢傷官分頁只留下一號傷患編號跟 START 檢傷問答，這些
+// 事件層級的資訊挪到這個獨立分頁，不用每次切分頁都先看到一樣的東西。
 function viewMciHomeTab(eventId){
   const ev = state.mciEvents.find(e => e.id === eventId);
   const stats = mciEventStats(eventId);
   const roles = ev.roles || {};
+  const patients = state.mciPatients.filter(p => p.eventId === eventId)
+    .sort((a,b) => mciPatientSortRank(a) - mciPatientSortRank(b) || (a.seq||0) - (b.seq||0));
   return `
     <div class="mci-event-header">
       <div class="mci-event-header-top">
@@ -5620,7 +5623,31 @@ function viewMciHomeTab(eventId){
           <input value="${esc(roles[r.key]||'')}" placeholder="選填，可填多人" onchange="window.__updateMciRole('${ev.id}','${r.key}',this.value)">
         </div>`).join("")}
     </div>
+
+    <div class="section-label">傷患名冊（共 ${patients.length} 人）</div>
+    ${patients.length ? patients.map(mciHomePatientCard).join("") : `<div class="empty">目前沒有傷患</div>`}
   `;
+}
+// 首頁的傷患名冊是純唯讀總覽，不分角色、不管目前處於哪個生命週期節點都
+// 看得到完整資料（檢傷分類、主訴、車輛/醫院配對、離開現場/抵達醫院時間
+// 與里程備註）——這點跟治療官/後送官分頁刻意「只顯示跟這個角色有關的
+// 那一段狀態」不同，那兩個分頁是工作清單，這裡是總覽，兩者不衝突。沒有
+// 任何操作按鈕，要編輯/指派/推進生命週期還是要去對應角色的分頁做。
+function mciHomePatientCard(p){
+  const info = p.triageColor ? mciTriageInfo(p.triageColor) : null;
+  const badgeLabel = p.triageColor === "red" ? `紅${p.redSubcat||''}` : (info ? info.label : '未分類');
+  return `
+  <div class="mci-patient-card spatial-card" style="--card-accent:${info?info.color:'var(--gray)'};">
+    <div class="mci-patient-top">
+      <span class="mci-triage-badge" style="--c:${info?info.color:'#8E8E93'}">${badgeLabel}</span>
+      <span class="mci-patient-seq">MCI-${String(p.seq||0).padStart(2,'0')}</span>
+      <span class="mci-patient-status">${mciPatientStatus(p)}</span>
+    </div>
+    ${p.complaint ? `<div class="mci-patient-complaint">${esc(p.complaint)}</div>` : ""}
+    ${p.vehicle && p.hospital ? `<div class="mci-evac-chain"><span>${esc(p.vehicle)}</span><span class="mci-evac-arrow">→</span><span>${esc(p.hospital)}</span></div>` : ""}
+    ${p.departedAt ? `<div class="mci-evac-time">離開現場：${fmtTime(new Date(p.departedAt).getTime())}</div>` : ""}
+    ${p.arrivedAt ? `<div class="mci-evac-time">抵達醫院：${fmtTime(new Date(p.arrivedAt).getTime())}${p.mileage?'・里程 '+esc(String(p.mileage))+' 公里':''}${p.notes?'・'+esc(p.notes):''}</div>` : ""}
+  </div>`;
 }
 // 檢傷分類 ABCD 子項改用自己的 chip 樣式（顏色點各自不同、需要 fullLabel
 // 這種跟 value 不一樣的顯示文字），不套用全站共用的 chipGroup()（那支只
