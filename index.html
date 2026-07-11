@@ -1555,7 +1555,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-342-mci-home-patient-roster";
+const BUILD_TAG = "2026-07-11-343-page-field-kb-padding";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2294,6 +2294,7 @@ const RELEASE_NOTES = [
       "醫院資訊頁「急救責任等級」篩選改成跟上面「醫院層級」同一套浮動圓角按鈕（原本是收在「更多篩選」裡的下拉選單），兩種篩選介面終於統一，不用切換到下拉選單的操作方式",
       "醫院資訊頁「更多篩選」展開鈕位置調整：改成放在展開內容的下面，不再卡在「醫院層級」跟「急救責任等級」兩排篩選按鈕中間",
       "移除「急救責任等級」篩選按鈕上面的文字標題，跟上面「醫院層級」按鈕排一樣不另外加標題，兩排篩選按鈕排版更一致",
+      "修正一般頁面（非彈出視窗）裡的輸入欄位聚焦時，鍵盤打開的瞬間欄位會先被帶到畫面最上緣、再慢慢滑回正確位置的跳動問題（例如大量傷患檢傷官分頁的主訴欄位）：先前的鍵盤修正機制只有幫彈出視窗表單留出鍵盤高度的緩衝空間，直接寫在頁面內容裡的欄位沒有這層照顧，捲動修正沒有足夠空間可以捲，改成鍵盤打開時頁面內容底部也比照留出跟鍵盤等高的空間",
     ] },
     { category: "效能／穩定性", items: [
       "程式碼清理：移除幾個先前迭代留下、目前完全沒有被呼叫到的函式與常數（RBAC 的 isActive／canSeeAllTasks、任務類型的 taskTypeLabel／STEP_TYPES），純內部清理，畫面/功能沒有任何改變",
@@ -9603,6 +9604,19 @@ function syncAppHeight() {
   document.querySelectorAll(".modal-sheet").forEach(sheet => {
     sheet.classList.toggle("kb-open", keyboardOpen);
     sheet.style.maxHeight = keyboardOpen ? Math.max(window.visualViewport.height - 24, 120) + "px" : "";
+  });
+  // 彈窗表單（.modal-sheet）鍵盤打開時已經有上面這段校正撐出足夠空間；
+  // 但一般頁面裡直接寫在頁面內容中的欄位（例如大量傷患檢傷官分頁的主訴
+  // 輸入框）完全沒有這層照顧——main 底下可捲動的內容區塊到底就是頁面
+  // 最後一段內容，沒有多留鍵盤高度的緩衝，聚焦欄位如果離內容底部很近，
+  // scrollIntoView() 能捲動的空間不夠，會先被瀏覽器自己的原生捲動行為
+  // （在鍵盤還沒開始收縮可視高度前，用還沒校正過的舊尺寸去抓「該捲到哪」
+  // 這個時間差）帶去畫面最上緣，再被下面 positionLoop() 每一影格重新
+  // 计算、跟著鍵盤展開動畫逐格修正回正確位置，兩段疊在一起就是「先跳到
+  // 最上面、再慢慢滑下來」這個現象。補上跟鍵盤等高的底部留白，讓可捲動
+  // 內容有地方讓欄位真的捲到置中，减少這個時間差造成的兩段式跳動。
+  document.querySelectorAll(".main-content").forEach(mc => {
+    mc.style.paddingBottom = keyboardOpen ? `calc(24px + ${diff}px)` : "";
   });
 }
 // scrollIntoView() 校正聚焦欄位位置時，理論上只會捲動 <main> 自己（唯一
