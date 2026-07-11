@@ -1499,7 +1499,6 @@
      選中的膠囊也要跟著換成對應顏色，不能維持全站預設的藍色，避免「選了
      紅色分類，文字卻是藍色膠囊」這種顏色對不起來的觀感。 */
   .mci-triage-chip:has(input:checked) span{background:var(--c); border-color:var(--c); color:#fff;}
-  .mci-home-banner{display:flex; align-items:center; gap:10px; background:color-mix(in srgb, var(--red) 12%, transparent); border:1px solid color-mix(in srgb, var(--red) 30%, transparent); color:var(--red); font-weight:700; font-size:var(--text-sm); border-radius:var(--radius-md); padding:13px 16px; margin-bottom:16px; cursor:pointer;}
 
   /* ---- 人員選擇器（車長／駕駛，跨單位＋搜尋） ---- */
   .picker-field{
@@ -1543,7 +1542,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-330-modal-sheet-maxheight-kbfix";
+const BUILD_TAG = "2026-07-11-331-mci-entry-move-to-more";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2222,11 +2221,10 @@ const RELEASE_NOTES = [
       "程式碼清理：移除幾個先前迭代留下、目前完全沒有被呼叫到的函式與常數（RBAC 的 isActive／canSeeAllTasks、任務類型的 taskTypeLabel／STEP_TYPES），純內部清理，畫面/功能沒有任何改變",
     ] },
     { category: "大量傷患事件", items: [
-      "新增「大量傷患事件」模組（任務頁「大量傷患」子選單）：開事件後可建立傷患名冊，每位傷患各自標記檢傷分類（紅／黃／綠／黑），紅色再依 ABCD 順序（依序評估呼吸道／呼吸／循環／神經學，第一個出問題的地方評到那裡就停）判斷送醫優先順序，一眼看出這波傷患裡誰最緊急",
+      "新增「大量傷患事件」模組（更多頁「大量傷患事件」）：開事件後可建立傷患名冊，每位傷患各自標記檢傷分類（紅／黃／綠／黑），紅色再依 ABCD 順序（依序評估呼吸道／呼吸／循環／神經學，第一個出問題的地方評到那裡就停）判斷送醫優先順序，一眼看出這波傷患裡誰最緊急",
       "每位傷患可個別指派車輛與送醫醫院（從既有車輛/醫院名冊選取），並標記「已送達」；事件詳情頁上方會即時統計紅（含ABCD細項）／黃／綠／黑／待檢傷／已送達各幾人",
       "事件可設定「人員配置」（現場指揮官／檢傷官／後送官／治療官／資源後勤官／紀錄官），純顯示用方便對照現場分工，不影響操作權限",
       "這是模擬演練用的系統，不是真實傷患個資，所有功能刻意不分角色、不分單位——任何在職帳號都能開事件、指派車輛醫院、標記檢傷分類，方便現場多人同時分頭處理不同傷患",
-      "有進行中的大量傷患事件時，首頁會出現醒目的紅色橫幅直接連過去，不用特地跑到任務頁才找得到",
     ] },
   ] },
   { date: "2026/07/10", groups: [
@@ -4415,12 +4413,15 @@ function advanceToastQueue(){
 // 真的會顯示/選用最新名冊的頁面才重抓；不在清單裡的路由（關於系統子頁、
 // 意見回饋、角色預覽、個人資料等）完全不重抓，沿用登入時的初始資料就好。
 const ROUTE_REFRESH = {
-  home: ['tasks','events','vitals','mciEvents'],
+  home: ['tasks','events','vitals'],
   // 任務頁現在把「紀錄」子選單也併進來（見 TASKS_MAIN_TABS），紀錄的查詢
   // 結果跟篩選下拉選單要用到的集合（vitals/personnel/vehicles）一併列在
-  // 這裡，不能只列勤務清單本身用到的 tasks/events；大量傷患子選單另外
-  // 用到 mciEvents/mciPatients、指派傷患車輛醫院要用到 vehicles/hospitals。
-  tasks: ['tasks','events','vitals','personnel','vehicles','hospitals','mciEvents','mciPatients'],
+  // 這裡，不能只列勤務清單本身用到的 tasks/events。
+  tasks: ['tasks','events','vitals','personnel','vehicles'],
+  // 大量傷患事件從「更多」頁進入（獨立入口，不掛在任務頁底下），列表頁
+  // 只需要 mciEvents/mciPatients（算統計數字），事件詳情頁另外要指派傷患
+  // 車輛/醫院，多列 vehicles/hospitals。
+  mciList: ['mciEvents','mciPatients'],
   mciEvent: ['mciEvents','mciPatients','vehicles','hospitals'],
   task: ['tasks','events','vitals'],
   vitals: ['tasks','events','vitals'],
@@ -5225,16 +5226,7 @@ function viewHome(){
   const outCampCount = dutyActive.filter(t => deriveStatus(t.id) !== "pending" && taskScope(t) === "營外").length;
   const liaisonPeopleCount = new Set(liaisonActive.flatMap(t => Array.isArray(t.personnel) ? t.personnel : [])).size;
 
-  // 大量傷患事件進行中時，首頁直接放一條醒目的紅色橫幅連過去，不用特地
-  // 跑到任務頁才找得到——這種事件通常很緊急，不該藏在子選單裡才看得到。
-  const activeMciEvents = state.mciEvents.filter(e => e.status !== "closed");
-  const mciBanner = activeMciEvents.length ? `
-    <div class="mci-home-banner" onclick="${activeMciEvents.length===1 ? `window.__nav({name:'mciEvent', id:'${activeMciEvents[0].id}'})` : `window.__gotoMciList()`}">
-      ${icon('alert',18)} 目前有 ${activeMciEvents.length} 件大量傷患事件進行中，點此查看
-    </div>` : "";
-
   return `
-    ${mciBanner}
     <div class="home-date">${fmtDate(today)}</div>
     <div class="section-label">今日概況</div>
     <div class="stat-grid stat-grid-2">
@@ -5284,8 +5276,7 @@ function tabStatuses(tb){ return tb.statuses || [tb.key]; }
 const TASKS_MAIN_TABS = [
   { key:"duty", label:"勤務", iconName:"tasks" },
   { key:"weather", label:"天氣", iconName:"cloud" },
-  { key:"records", label:"紀錄", iconName:"records" },
-  { key:"mci", label:"大量傷患", iconName:"alert" }
+  { key:"records", label:"紀錄", iconName:"records" }
 ];
 function viewTasks(){
   const p = state.profile;
@@ -5320,13 +5311,6 @@ function viewTasks(){
     return `
       ${mainTabs}
       ${viewRecords()}
-    `;
-  }
-
-  if (state.tasksMainTab === "mci") {
-    return `
-      ${mainTabs}
-      ${viewMciList()}
     `;
   }
 
@@ -5406,6 +5390,8 @@ function viewMciList(){
     return new Date(b.createdAt||0) - new Date(a.createdAt||0);
   });
   return `
+    <div class="back-row">${backBtn({name:'profile'})}</div>
+    <div class="section-label">大量傷患事件</div>
     <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openMciCreateModal()">${icon('plus',15)} 新增大量傷患事件</button>
     ${events.length ? events.map(mciEventCard).join("") : `<div class="empty">目前沒有大量傷患事件</div>`}
     ${viewMciCreateModal()}
@@ -5435,13 +5421,13 @@ function viewMciCreateModal(){
 }
 function viewMciEvent(eventId){
   const ev = state.mciEvents.find(e => e.id === eventId);
-  if (!ev) return `<div class="back-row">${backBtn({name:'tasks'})}</div><div class="empty">找不到這筆事件</div>`;
+  if (!ev) return `<div class="back-row">${backBtn({name:'mciList'})}</div><div class="empty">找不到這筆事件</div>`;
   const patients = state.mciPatients.filter(p => p.eventId === eventId)
     .sort((a,b) => mciPatientSortRank(a) - mciPatientSortRank(b) || (a.seq||0) - (b.seq||0));
   const stats = mciEventStats(eventId);
   const roles = ev.roles || {};
   return `
-    <div class="back-row">${backBtn({name:'tasks'})}</div>
+    <div class="back-row">${backBtn({name:'mciList'})}</div>
     <div class="mci-event-header">
       <div class="mci-event-header-top">
         <div class="mci-event-header-title">${icon('alert',20)} ${esc(ev.title||'大量傷患事件')}</div>
@@ -6555,6 +6541,7 @@ function viewProfile(){
   const userRows = [
     settingsRow({icon:'user', bg:'#E8F1FF', fg:'#0056C7', title:'個人資料', onclick:"window.__editProfile()"}),
     settingsRow({icon:'user', bg:'#E9F9EF', fg:'#177A34', title:'成員列表', subtitle:'各單位人員姓名/階級/電話/證照', onclick:"window.__nav({name:'memberList'})"}),
+    settingsRow({icon:'alert', bg:'#FFEAEA', fg:'#C7233B', title:'大量傷患事件', subtitle:'開事件、傷患檢傷分類與車輛/醫院指派', onclick:"window.__nav({name:'mciList'})"}),
     settingsRow({icon:'sun', bg:'#F2E9FE', fg:'#6B23C7', title:'螢幕顯示', subtitle:THEME_MODE_LABEL[state.themeMode], onclick:"window.__nav({name:'displayAppearance'})"}),
     settingsRow({icon:'bell', bg:'#FFEAEA', fg:'#C7233B', title:'推播通知', subtitle:pushStatusLabel(), onclick:"window.__nav({name:'pushSettings'})"}),
     settingsRow({icon:'chat', bg:'#E9F9EF', fg:'#177A34', title:'意見回饋', onclick:"window.__nav({name:'feedback'})"}),
@@ -7722,6 +7709,7 @@ const ROUTE_VIEWS = {
   adminSettings: viewAdminSettingsPage,
   adminFeedback: viewAdminFeedbackPage,
   pushConsole: viewPushConsolePage,
+  mciList: viewMciList,
   mciEvent: () => viewMciEvent(state.route.id)
 };
 const NAV_ITEMS = [
@@ -8432,7 +8420,6 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
        : addRecorder(unit, f.get("code")));
   action.then(() => { state.baseDataModal = null; render(); }).catch(baseDataErr);
 };
-window.__gotoMciList = () => { state.tasksMainTab = "mci"; nav({ name:"tasks" }); };
 window.__openMciCreateModal = () => { state.mciCreateModalOpen = true; render(); };
 window.__closeMciCreateModal = () => { state.mciCreateModalOpen = false; render(); };
 window.__submitMciCreateModal = (ev) => {
