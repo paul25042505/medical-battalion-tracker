@@ -1587,7 +1587,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-12-352-mci-apple-minimal";
+const BUILD_TAG = "2026-07-12-353-mci-admin-only";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2319,6 +2319,7 @@ const RELEASE_NOTES = [
       "檢傷官分頁新增「快速選色」卡片：已經目視判斷得出顏色的傷患，不用照 START 問答一步步點過去，可以直接點選紅／黃／綠／黑跳過問答（選紅色一樣會再問一次 ABCD 子分類，跟走完整套問答判定紅色的後續流程一致）",
       "首頁分頁改版：統計/人員配置/傷患名冊三個區塊標題改成「現況戰情統計」「現場編組指派」「動態追蹤名冊」，統計卡片加上顏色/狀態對應的表情符號，功能不變（編輯車輛/醫院、結束事件、6個角色欄位、傷患名冊都照舊）",
       "整個模組視覺改版（蘋果極簡風＋戰術高清晰）：卡片拿掉生硬外框、改用大留白＋更輕柔的陰影，圓角統一放大；檢傷分類與後送狀態改用藥丸狀 badge；現場編組指派的輸入框改成 iOS 設定風格，文字靠右對齊、只有編輯中才亮起淺灰底色；只調整這個模組的樣式，不影響其他頁面",
+      "大量傷患演練模組目前只開放管理員使用：更多頁的入口在其他角色眼中顯示灰階、點不進去；就算直接導覽過去或直接呼叫後端 API 也會被擋下（Firestore 規則同步收緊）",
     ] },
   ] },
   { date: "2026/07/11", groups: [
@@ -5558,7 +5559,10 @@ function mciEventCard(ev){
     </div>
   </div>`;
 }
+// 目前只開放 admin 使用（建構中）：更多頁的入口本身已經灰階擋掉點擊，
+// 這裡再擋一次直接導覽（例如透過 window.__nav 手動呼叫），雙重防護。
 function viewMciList(){
+  if (myRole(state.profile) !== 'admin') return `<div class="back-row">${backBtn({name:'profile'})}</div><div class="empty">此功能目前僅開放管理員使用</div>`;
   const events = state.mciEvents.slice().sort((a,b) => {
     const sa = a.status==='closed' ? 1 : 0, sb = b.status==='closed' ? 1 : 0;
     if (sa !== sb) return sa - sb;
@@ -5628,6 +5632,7 @@ const MCI_EVENT_TABS = [
   { key:"vehicle", label:"車輛視角", iconName:"returnArrow" }
 ];
 function viewMciEvent(eventId){
+  if (myRole(state.profile) !== 'admin') return `<div class="back-row">${backBtn({name:'profile'})}</div><div class="empty">此功能目前僅開放管理員使用</div>`;
   const ev = state.mciEvents.find(e => e.id === eventId);
   if (!ev) return `<div class="back-row">${backBtn({name:'mciList'})}</div><div class="empty">找不到這筆事件</div>`;
   const eventTab = state.mciEventTab || "home";
@@ -6971,7 +6976,17 @@ function viewNotifications(){
    框架裡的 SettingsItem／SettingsSection component，這裡用純字串
    組裝實作，符合本專案單檔 vanilla JS 的寫法）
    ========================================================= */
-function settingsRow({icon:iconName, bg, fg, title, subtitle, onclick}){
+// disabled：功能還沒開放給這位使用者時（目前只有大量傷患演練模組限
+// admin），整列變灰階、拿掉點擊跟箭頭，看起來像「建構中」按不下去，
+// 不是單純隱藏整列——讓其他角色知道這個功能存在，只是還沒開放。
+function settingsRow({icon:iconName, bg, fg, title, subtitle, onclick, disabled}){
+  if (disabled) {
+    return `
+      <div class="service-row" style="cursor:default; opacity:0.45;">
+        <span class="icon-wrap" style="background:var(--panel-2); color:var(--muted);">${icon(iconName,18)}</span>
+        <div class="txt"><div class="t1">${title}</div>${subtitle?`<div class="t2">${subtitle}</div>`:''}</div>
+      </div>`;
+  }
   return `
     <div class="service-row" onclick="${onclick}">
       <span class="icon-wrap" style="background:${bg}; color:${fg};">${icon(iconName,18)}</span>
@@ -7021,7 +7036,7 @@ function viewProfile(){
   const userRows = [
     settingsRow({icon:'user', bg:'#E8F1FF', fg:'#0056C7', title:'個人資料', onclick:"window.__editProfile()"}),
     settingsRow({icon:'user', bg:'#E9F9EF', fg:'#177A34', title:'成員列表', subtitle:'各單位人員姓名/階級/電話/證照', onclick:"window.__nav({name:'memberList'})"}),
-    settingsRow({icon:'alert', bg:'#FFEAEA', fg:'#C7233B', title:'大量傷患演練模組（建構中）', subtitle:'開事件、傷患檢傷分類與車輛/醫院指派', onclick:"window.__nav({name:'mciList'})"}),
+    settingsRow({icon:'alert', bg:'#FFEAEA', fg:'#C7233B', title:'大量傷患演練模組（建構中）', subtitle:'開事件、傷患檢傷分類與車輛/醫院指派', onclick:"window.__nav({name:'mciList'})", disabled: myRole(p) !== 'admin'}),
     settingsRow({icon:'sun', bg:'#F2E9FE', fg:'#6B23C7', title:'螢幕顯示', subtitle:THEME_MODE_LABEL[state.themeMode], onclick:"window.__nav({name:'displayAppearance'})"}),
     settingsRow({icon:'bell', bg:'#FFEAEA', fg:'#C7233B', title:'推播通知', subtitle:pushStatusLabel(), onclick:"window.__nav({name:'pushSettings'})"}),
     settingsRow({icon:'chat', bg:'#E9F9EF', fg:'#177A34', title:'意見回饋', onclick:"window.__nav({name:'feedback'})"}),
