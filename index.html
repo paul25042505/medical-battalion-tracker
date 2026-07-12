@@ -1560,7 +1560,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-12-348-mci-vehicle-view-edit";
+const BUILD_TAG = "2026-07-12-349-mci-delete-event";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2288,6 +2288,7 @@ const RELEASE_NOTES = [
       "抵達醫院回報不用再填里程",
       "後送官分頁的傷患卡片新增資料校正入口：已指派車輛/醫院的傷患可以重新開啟指派彈窗修改車輛或醫院、已抵達醫院的可以編輯備註內容，另外新增「刪除此傷患」按鈕；離開現場/抵達醫院的時間點本身確認過後不能逆轉，只能校正車輛、醫院、備註這類資料",
       "新增「車輛視角」分頁：救護車車長可以直接看到自己車輛目前的任務狀態（運送中／已抵達等待選擇返回地點／返回中／待命中可再派遣），送達醫院後可選擇返回後管站或返回現地，抵達後管站或現地再各自回報一次；後送官指派車輛時，還沒回報返回抵達的車輛（正在執行任務中）不會出現在可選清單，避免同一台車被重複指派",
+      "大量傷患事件列表的事件卡片新增「刪除」按鈕，刪除事件時底下的傷患紀錄會一併清除，不會留下孤兒資料",
     ] },
   ] },
   { date: "2026/07/11", groups: [
@@ -3359,6 +3360,16 @@ async function setMciEventStatus(id, status){
   await fsSetDoc(`mciEvents/${id}`, { status });
   showToast(status === "closed" ? "已結束事件" : "已重新開啟事件");
   if (mciEventsPoll) mciEventsPoll.refreshNow();
+}
+// 刪除事件時一併清掉底下的傷患紀錄，避免刪除後留下永遠沒有畫面看得到、
+// 也刪不掉的孤兒傷患資料（這個模組是反覆演練用，事件建了又刪很常見）。
+async function deleteMciEvent(id){
+  const patientIds = state.mciPatients.filter(p => p.eventId === id).map(p => p.id);
+  await Promise.all(patientIds.map(pid => fsDeleteDoc(`mciPatients/${pid}`)));
+  await fsDeleteDoc(`mciEvents/${id}`);
+  showToast("已刪除大量傷患事件");
+  if (mciEventsPoll) mciEventsPoll.refreshNow();
+  if (mciPatientsPoll) mciPatientsPoll.refreshNow();
 }
 async function updateMciEventRoles(id, roles){
   await fsSetDoc(`mciEvents/${id}`, { roles });
@@ -5504,6 +5515,7 @@ function mciEventCard(ev){
       <div class="mci-event-card-title">${icon('alert',18)} ${esc(ev.title||'大量傷患事件')}</div>
       <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
         <button class="icon-btn" onclick="event.stopPropagation(); window.__openMciCreateModal('${ev.id}')">編輯</button>
+        <button class="icon-btn danger" onclick="event.stopPropagation(); window.__deleteMciEvent('${ev.id}')">${icon('close',14)} 刪除</button>
         <span class="badge ${ev.status==='closed'?'muted':'danger'}">${ev.status==='closed'?'已結束':'進行中'}</span>
       </div>
     </div>
@@ -8872,6 +8884,10 @@ window.__submitMciCreateModal = (ev, id) => {
     state.mciEventModal = null;
     if (!id) nav({ name:"mciEvent", id: doc.id }); else render();
   }).catch(baseDataErr);
+};
+window.__deleteMciEvent = (id) => {
+  if (!confirm("確定刪除此大量傷患事件？底下所有傷患紀錄也會一併刪除，此動作無法復原。")) return;
+  deleteMciEvent(id).catch(baseDataErr);
 };
 window.__toggleMciEventStatus = (id, curStatus) => {
   const next = curStatus === "closed" ? "active" : "closed";
