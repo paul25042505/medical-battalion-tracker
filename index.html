@@ -1558,6 +1558,12 @@
     font-size:var(--text-sm); color:var(--text); line-height:1.7;
   }
   .tutorial-callout svg{flex-shrink:0; margin-top:2px; color:var(--amber-text);}
+  .tutorial-table-wrap{margin:16px 0; overflow-x:auto; -webkit-overflow-scrolling:touch;}
+  .tutorial-table-title{font-size:var(--text-sm); font-weight:700; color:var(--text); margin-bottom:8px;}
+  .tutorial-table{width:100%; border-collapse:collapse; font-size:var(--text-sm); background:var(--panel-2); border-radius:12px; overflow:hidden;}
+  .tutorial-table th, .tutorial-table td{padding:9px 12px; text-align:left; white-space:nowrap;}
+  .tutorial-table th{background:color-mix(in srgb, var(--blue) 12%, transparent); color:var(--blue); font-weight:700; font-size:var(--text-xs);}
+  .tutorial-table tbody tr:not(:last-child) td{border-bottom:1px solid var(--border);}
 
   /* ---- 人員選擇器（車長／駕駛，跨單位＋搜尋） ---- */
   .picker-field{
@@ -2213,7 +2219,28 @@ const TUTORIAL_ARTICLES = {
       { type:"image", src:"tutorials/img/opa-npa-sizing.svg", caption:"OPA／NPA 尺寸測量方式與適用情境" },
       { type:"callout", text:"重點提醒：疑似顱底骨折或嚴重顏面創傷的患者，禁止使用鼻咽通氣道，避免經鼻道誤入顱腔造成二次傷害。" },
       { type:"h3", text:"3. 聲門上呼吸道：I-gel／喉罩（LMA）" },
-      { type:"p", text:"I-gel 是免充氣的凝膠套囊設計，置入相對簡單快速；LMA（喉罩）套囊需要另外充氣。兩者置入方式類似：頭頸維持中線位置，管身沿著硬顎方向盲插，感覺到明顯阻力代表已到達正確深度，LMA 需要依廠商建議量充氣，再接上甦醒球或呼吸器。" },
+      { type:"p", text:"I-gel 是免充氣的凝膠套囊設計，置入相對簡單快速；LMA（喉罩）套囊需要另外充氣。兩者都是依患者體重挑選對應號數，號數選錯會導致密合度不佳、通氣漏氣或置入困難，使用前務必核對體重對應表。" },
+      { type:"table", title:"I-gel 號數對應體重", headers:["號數","適用體重","適用族群"], rows:[
+        ["1","<5 kg","新生兒"],
+        ["1.5","5-12 kg","嬰兒"],
+        ["2","10-25 kg","幼兒"],
+        ["2.5","25-35 kg","兒童"],
+        ["3","30-60 kg","小型成人"],
+        ["4","50-90 kg","中型成人"],
+        ["5",">90 kg","大型成人"]
+      ] },
+      { type:"table", title:"LMA（喉罩）號數對應體重", headers:["號數","適用體重","適用族群"], rows:[
+        ["1","<5 kg","新生兒"],
+        ["1.5","5-10 kg","嬰兒"],
+        ["2","10-20 kg","幼兒"],
+        ["2.5","20-30 kg","兒童"],
+        ["3","30-50 kg","小型成人"],
+        ["4","50-70 kg","中型成人"],
+        ["5","70-100 kg","大型成人"],
+        ["6",">100 kg","超大型成人"]
+      ] },
+      { type:"callout", text:"重點提醒：I-gel 與 LMA 的號數雖然相同，但對應體重範圍不一樣，不能拿 I-gel 的號數直接套用在 LMA 上，選用前要看清楚是哪一種產品的對照表。" },
+      { type:"p", text:"置入方式：頭頸維持中線位置，管身沿著硬顎方向盲插，感覺到明顯阻力代表已到達正確深度，LMA 需要依廠商建議量充氣，再接上甦醒球或呼吸器。" },
       { type:"image", src:"tutorials/img/igel-lma-placement.svg", caption:"聲門上呼吸道置入方向與置入後確認重點" },
       { type:"callout", text:"重點提醒：置入完成後一定要確認雙側呼吸音對稱、胸廓起伏對稱，並留意上腹部有沒有異常充氣聲音，避免誤置入食道造成通氣無效。" }
     ]
@@ -2500,6 +2527,7 @@ const RELEASE_NOTES = [
       "新增「教學園地（建構中）」：更多頁底下的救護技術教學文章，圖文並茂解說。分成評估與生命徵象、呼吸道與心肺復甦、心臟監測與心電圖、創傷處置、內科與環境急症、儀器與裝備操作、大量傷患與檢傷分類 7 大分類，每篇文章都是段落文字搭配示意圖交錯呈現，重點步驟加上重點提醒框",
       "教學園地目前只開放管理員使用，跟大量傷患演練模組同一套收斂方式：其他角色在更多頁看到的入口顯示灰階、點不進去，直接導覽過去也會被擋下",
       "呼吸道與心肺復甦分類新增第二篇教學：「口咽／鼻咽通氣道與 I-gel／LMA 使用教學」，涵蓋 OPA/NPA 的適應症、尺寸測量方式與置入方法，以及聲門上呼吸道（I-gel/LMA）的置入步驟與置入後確認重點",
+      "教學文章新增表格區塊：I-gel／LMA 號數對應體重表，兩種產品的號數雖然相同但適用體重範圍不一樣，分開列出避免混用",
     ] },
   ] },
   { date: "2026/07/11", groups: [
@@ -7474,6 +7502,14 @@ function renderTutorialBody(blocks){
         ${b.caption ? `<div class="tutorial-image-caption">${esc(b.caption)}</div>` : ""}
       </div>`;
     if (b.type === "callout") return `<div class="tutorial-callout">${icon('alert',16)}<span>${esc(b.text)}</span></div>`;
+    if (b.type === "table") return `
+      <div class="tutorial-table-wrap">
+        ${b.title ? `<div class="tutorial-table-title">${esc(b.title)}</div>` : ""}
+        <table class="tutorial-table">
+          <thead><tr>${b.headers.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead>
+          <tbody>${b.rows.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody>
+        </table>
+      </div>`;
     return "";
   }).join("");
 }
