@@ -1607,7 +1607,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-12-354-tutorial-hub";
+const BUILD_TAG = "2026-07-12-355-push-copy-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2528,6 +2528,9 @@ const RELEASE_NOTES = [
       "教學園地目前只開放管理員使用，跟大量傷患演練模組同一套收斂方式：其他角色在更多頁看到的入口顯示灰階、點不進去，直接導覽過去也會被擋下",
       "呼吸道與心肺復甦分類新增第二篇教學：「口咽／鼻咽通氣道與 I-gel／LMA 使用教學」，涵蓋 OPA/NPA 的適應症、尺寸測量方式與置入方法，以及聲門上呼吸道（I-gel/LMA）的置入步驟與置入後確認重點",
       "教學文章新增表格區塊：I-gel／LMA 號數對應體重表，兩種產品的號數雖然相同但適用體重範圍不一樣，分開列出避免混用",
+    ] },
+    { category: "推播通知", items: [
+      "推播守門員提示文字修正：「以確保能接收緊急任務調派」改成「以確保能即時收到訊息通知」，用詞更準確（不是只有任務調派才會推播）",
     ] },
   ] },
   { date: "2026/07/11", groups: [
@@ -3926,7 +3929,7 @@ function pushGatekeeperContent(gate){
       : ["打開手機/電腦「設定」", "找到瀏覽器的「網站設定 → 通知」", "找到本系統網址，改為「允許」", "回到本系統，重新整理頁面"];
     return `
       <div class="push-gatekeeper-title">${icon('alert',20)} 通知權限已被封鎖</div>
-      <div class="push-gatekeeper-desc">請務必開啟本系統的即時通知權限，以確保能接收緊急任務調派。系統偵測到通知已被手動封鎖，請依下列步驟手動開啟：</div>
+      <div class="push-gatekeeper-desc">請務必開啟本系統的即時通知權限，以確保能即時收到訊息通知。系統偵測到通知已被手動封鎖，請依下列步驟手動開啟：</div>
       <div class="line-guide-steps" style="margin-top:14px;">
         ${steps.map((s,i) => `
           <div class="line-guide-step"><div class="step-num">${i+1}</div><div class="step-text">${s}</div></div>
@@ -3936,7 +3939,7 @@ function pushGatekeeperContent(gate){
   // notifDefault
   return `
     <div class="push-gatekeeper-title">${icon('bell',20)} 請開啟推播通知</div>
-    <div class="push-gatekeeper-desc">請開啟本系統的即時通知權限，以確保能接收緊急任務調派。</div>
+    <div class="push-gatekeeper-desc">請開啟本系統的即時通知權限，以確保能即時收到訊息通知。</div>
     <button class="btn-primary" style="margin-top:18px; width:100%;" ${state.pushEnabling?'disabled':''} onclick="window.__enablePushFromGatekeeper()">${state.pushEnabling ? '開通中…' : '立刻開通通知'}</button>`;
 }
 // 守門員彈窗掛在 document.body 底下、獨立於 #app 之外（跟 toast 節點同一個
