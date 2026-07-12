@@ -670,6 +670,13 @@
     font-size:var(--text-sm); font-weight:600; color:var(--blue);
     background:color-mix(in srgb, var(--blue) 8%, transparent); border:1px solid color-mix(in srgb, var(--blue) 14%, transparent);
   }
+  /* 患者狀況「複製回報文字」彈窗的預覽區塊：等寬字體、保留換行，
+     一眼就能核對格式跟實際要複製出去的文字一致。 */
+  .vitals-report-preview{
+    background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-md);
+    padding:14px; margin:14px 0; font-family:var(--mono); font-size:var(--text-xs); line-height:1.7;
+    white-space:pre-wrap; word-break:break-word; color:var(--text);
+  }
 
   /* ---- home ---- */
   .home-date{font-size:var(--text-sm); color:var(--muted); font-weight:600; font-family:var(--mono); margin-bottom:16px;}
@@ -1607,7 +1614,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-12-355-push-copy-fix";
+const BUILD_TAG = "2026-07-12-356-vitals-report-copy";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1615,7 +1622,7 @@ const BUILD_TAG = "2026-07-12-355-push-copy-fix";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.10";
+const APP_MAJOR_MINOR = "2.11";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -2531,6 +2538,10 @@ const RELEASE_NOTES = [
     ] },
     { category: "推播通知", items: [
       "推播守門員提示文字修正：「以確保能接收緊急任務調派」改成「以確保能即時收到訊息通知」，用詞更準確（不是只有任務調派才會推播）",
+    ] },
+    { category: "患者紀錄", items: [
+      "新增「醫官初步診斷」欄位（選填），紀錄醫官對患者狀況的初步研判",
+      "患者紀錄新增「複製回報文字」按鈕：依患者的主訴、醫官診斷、生命徵象、目前處置、隨隊幹部（沿用既有的對職幹部欄位）自動組成一段可直接貼到 LINE 群組的事件回報文字，生命徵象會自動判斷「數據正常／數據異常」；報告對象（預設「連長」）可在複製前自行修改，按下複製即寫入剪貼簿",
     ] },
   ] },
   { date: "2026/07/11", groups: [
@@ -6467,7 +6478,10 @@ function viewVitalsPage(taskId, id, adding){
         <div class="vitals-entry ${i===0?'stage-initial':'stage-followup'}">
           <div class="vitals-entry-head">
             <span class="vitals-entry-time"><span class="vitals-stage-tag${i===0?'':' alt'}">${i===0?'初評':'二評'}</span>${fmtTime(v.ts)} · ${nameWithRank(v.userName, v.unit)}</span>
-            ${canDoReport ? `<button class="tl-edit-btn" type="button" onclick="window.__editVitals('${taskId}','${v.id}')">編輯</button>` : ""}
+            <span style="display:flex; gap:8px; flex-shrink:0;">
+              <button class="tl-edit-btn" type="button" onclick="window.__openVitalsReport('${v.id}')">複製回報文字</button>
+              ${canDoReport ? `<button class="tl-edit-btn" type="button" onclick="window.__editVitals('${taskId}','${v.id}')">編輯</button>` : ""}
+            </span>
           </div>
           ${v.patientName || v.patientUnit || v.patientRank || v.patientGender ? `
           <div class="vitals-patient-line">
@@ -6489,6 +6503,7 @@ function viewVitalsPage(taskId, id, adding){
           ${vitalsQaPanelHtml(v)}
           ${vitalsCoreGridHtml(v)}
           ${vitalsSecondaryGridHtml(v)}
+          ${v.diagnosis ? `<div class="detail-item"><span class="lbl">醫官初步診斷</span><span class="val">${esc(v.diagnosis)}</span></div>` : ""}
           ${v.treatments&&v.treatments.length ? `
           <div class="vitals-treatment-block">
             <span class="lbl">處置項目</span>
@@ -6623,7 +6638,8 @@ function viewVitalsPage(taskId, id, adding){
         <div class="field"><label>血糖值 mg/dL（選填）</label><input id="vf-glucose" type="text" inputmode="numeric" value="${esc(editingVitals?.glucose||'')}"></div>
       </div>
       <div class="form-section">
-        <div class="form-section-title">${isInitialEntry ? `<span class="step-num">7</span>` : ""}處置項目</div>
+        <div class="form-section-title">${isInitialEntry ? `<span class="step-num">7</span>` : ""}醫官診斷與處置</div>
+        <div class="field"><label>醫官初步診斷（選填）</label><input id="vf-diagnosis" value="${esc(editingVitals?.diagnosis||'')}" placeholder="例如：熱暈眩"></div>
         <div class="field">${chipGroup('vf-treatments', TREATMENT_OPTIONS, editingVitals?.treatments||[], true, [{values:['其他'], wrapId:'treatment-other-wrap'}])}</div>
         <div id="treatment-other-wrap" style="display:${treatmentOtherChecked?'block':'none'};">
           <div class="field" style="margin-top:10px; margin-bottom:0;"><label>其他處置說明（選填）</label><input id="vf-treatment-other-detail" value="${esc(editingVitals?.treatmentOtherDetail||'')}" placeholder="請說明"></div>
@@ -6641,6 +6657,102 @@ function viewVitalsPage(taskId, id, adding){
     ${historyHtml}
     ${formHtml}
   `;
+}
+// 患者狀況「複製回報文字」：依既有欄位（單位/階級/姓名/病史/主訴/生命
+// 徵象/醫官初步診斷/處置/對職幹部）自動組出一段可以直接貼到 LINE 群組的
+// 回報文字，收文對象（連長／營長...）現場才決定，不存進患者紀錄本身，
+// 每次複製前用彈窗讓使用者自己填、預設「連長」。
+function vitalsNumOk(val, min, max){
+  if (val === "" || val == null) return null;
+  const n = Number(val);
+  if (isNaN(n)) return null;
+  return n >= min && n <= max;
+}
+function vitalsNormalFlag(v){
+  const checks = [
+    vitalsNumOk(v.spo2, 95, 100),
+    vitalsNumOk(v.hr, 60, 100),
+    vitalsNumOk(v.temp, 36, 37.5)
+  ];
+  if (v.bp) {
+    const [sys, dia] = v.bp.split("/").map(s => Number(s));
+    if (!isNaN(sys)) checks.push(sys >= 90 && sys <= 140);
+    if (!isNaN(dia)) checks.push(dia >= 60 && dia <= 90);
+  }
+  const known = checks.filter(c => c !== null);
+  if (!known.length) return "";
+  return known.every(Boolean) ? "數據正常" : "數據異常";
+}
+function buildVitalsReportText(v, greeting){
+  const d = new Date(v.ts || Date.now());
+  const dateStr = `${d.getMonth()+1}/${d.getDate()}`;
+  const timeStr = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  const patientLine = [v.patientUnit, `${v.patientRank||''}${v.patientName||''}`].filter(Boolean).join(" ");
+  const historyText = (v.pastHistory && v.pastHistory.length)
+    ? (v.pastHistory.length===1 && v.pastHistory[0]==="無" ? "無病史" : v.pastHistory.join("、")+"病史")
+    : "";
+  const flag = vitalsNormalFlag(v);
+  const treatmentsText = (v.treatments||[]).join("、");
+  const liaisonLine = `${v.liaisonRank||''}${v.liaisonName||''}`;
+
+  const vitalsParts = [];
+  if (v.consciousness) vitalsParts.push(`意識${v.consciousness}`);
+  if (v.spo2) vitalsParts.push(`血氧 ${v.spo2}%`);
+  if (v.hr) vitalsParts.push(`脈搏 ${v.hr}`);
+  if (v.bp) vitalsParts.push(`血壓 ${v.bp}`);
+  if (v.temp) vitalsParts.push(`體溫 ${v.temp}℃`);
+
+  const lines = [];
+  lines.push(`報告${greeting || '連長'}：`);
+  lines.push(`今日(${dateStr}) ${timeStr} 事件回報：`);
+  lines.push(`🔹 對象：${patientLine}${historyText?` (${historyText})`:''}`);
+  lines.push(`🔹 狀況：${v.complaint||''}${v.diagnosis?`，醫官研判為【${v.diagnosis}】`:''}`);
+  if (vitalsParts.length) lines.push(`🔹 生命徵象：${vitalsParts.join('｜')}${flag?` (${flag})`:''}`);
+  if (treatmentsText) lines.push(`🔹 目前處置：${treatmentsText}，目前持續留觀生命徵象。`);
+  if (liaisonLine) lines.push(`隨隊幹部：${liaisonLine}${v.liaisonPhone?` (${v.liaisonPhone})`:''}`);
+  return lines.join("\n");
+}
+window.__openVitalsReport = (id) => { state.vitalsReportId = id; state.vitalsReportGreeting = "連長"; render(); };
+window.__closeVitalsReport = () => { state.vitalsReportId = null; render(); };
+// 直接改 DOM 更新預覽文字，不呼叫 render()——重新整頁渲染會讓輸入框
+// 重新建立、打字打到一半游標跳位／輸入法選字中斷，跟全站其他即時預覽
+// 型輸入框（例如生命徵象表單的欄位連動）同一套做法。
+window.__updateVitalsReportGreeting = (val) => {
+  state.vitalsReportGreeting = val;
+  const v = state.vitals.find(x => x.id === state.vitalsReportId);
+  const previewEl = document.querySelector('.vitals-report-preview');
+  if (v && previewEl) previewEl.textContent = buildVitalsReportText(v, val);
+};
+window.__copyVitalsReportText = async () => {
+  const v = state.vitals.find(x => x.id === state.vitalsReportId);
+  if (!v) return;
+  const text = buildVitalsReportText(v, state.vitalsReportGreeting);
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast("已複製回報文字");
+  } catch (e) {
+    showToast("複製失敗：" + (e.message || e));
+  }
+  state.vitalsReportId = null; render();
+};
+function viewVitalsReportModal(){
+  const id = state.vitalsReportId;
+  if (!id) return "";
+  const v = state.vitals.find(x => x.id === id);
+  if (!v) return "";
+  const greeting = state.vitalsReportGreeting || "連長";
+  const preview = buildVitalsReportText(v, greeting);
+  return `
+  <div class="modal-overlay" onclick="if(event.target===this) window.__closeVitalsReport()">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-title">${icon('share',19)} 複製回報文字</div>
+      <div class="field"><label>報告對象</label><input id="vr-greeting" value="${esc(greeting)}" oninput="window.__updateVitalsReportGreeting(this.value)" placeholder="例如：連長"></div>
+      <div class="vitals-report-preview">${esc(preview)}</div>
+      <button class="btn-primary" type="button" onclick="window.__copyVitalsReportText()">${icon('share',16)} 複製到剪貼簿</button>
+      <button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__closeVitalsReport()">取消</button>
+    </div>
+  </div>`;
 }
 
 /* =========================================================
@@ -8590,6 +8702,7 @@ function render(){
     ${viewMciCcpEditModal()}
     ${viewMciAssignModal()}
     ${viewMciArriveModal()}
+    ${viewVitalsReportModal()}
   `;
   if (prevScrollTop > 0) {
     const newMain = document.querySelector("main");
@@ -9136,6 +9249,7 @@ window.__submitVitals = (taskId, id) => {
     complaint: get("vf-complaint"), bp: (bpSys || bpDia) ? `${bpSys}/${bpDia}` : "", hr: get("vf-hr"), rr: get("vf-rr"),
     spo2: get("vf-spo2"), temp: get("vf-temp"), gcs: get("vf-gcs"), glucose: get("vf-glucose"),
     consciousness: checkedValues("vf-consciousness")[0] || "",
+    diagnosis: get("vf-diagnosis"),
     treatments: checkedValues("vf-treatments"),
     treatmentOtherDetail: get("vf-treatment-other-detail"),
     note: get("vf-note")
