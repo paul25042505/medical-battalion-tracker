@@ -1555,7 +1555,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-343-page-field-kb-padding";
+const BUILD_TAG = "2026-07-11-344-kb-field-smooth-scroll-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2295,6 +2295,7 @@ const RELEASE_NOTES = [
       "醫院資訊頁「更多篩選」展開鈕位置調整：改成放在展開內容的下面，不再卡在「醫院層級」跟「急救責任等級」兩排篩選按鈕中間",
       "移除「急救責任等級」篩選按鈕上面的文字標題，跟上面「醫院層級」按鈕排一樣不另外加標題，兩排篩選按鈕排版更一致",
       "修正一般頁面（非彈出視窗）裡的輸入欄位聚焦時，鍵盤打開的瞬間欄位會先被帶到畫面最上緣、再慢慢滑回正確位置的跳動問題（例如大量傷患檢傷官分頁的主訴欄位）：先前的鍵盤修正機制只有幫彈出視窗表單留出鍵盤高度的緩衝空間，直接寫在頁面內容裡的欄位沒有這層照顧，捲動修正沒有足夠空間可以捲，改成鍵盤打開時頁面內容底部也比照留出跟鍵盤等高的空間",
+      "上面這個修正實機測試後沒有改善，找到真正原因：畫面全域設定捲動要用平滑動畫（給頁面內錨點導覽用），欄位捲動修正機制把欄位捲回可視範圍時，這段捲動也被平滑動畫接管，才會看起來像「先跳到最上面、再慢慢滑下來」——前段捲動瞬間到位、後段殘餘的捲動卻用動畫慢慢補完。修正方式：欄位捲動修正的當下暫時關閉平滑捲動、校正完再還原，跟系統另一處處理鍵盤彈出瞬間畫面跑版的機制同一套做法",
     ] },
     { category: "效能／穩定性", items: [
       "程式碼清理：移除幾個先前迭代留下、目前完全沒有被呼叫到的函式與常數（RBAC 的 isActive／canSeeAllTasks、任務類型的 taskTypeLabel／STEP_TYPES），純內部清理，畫面/功能沒有任何改變",
@@ -9665,7 +9666,19 @@ window.addEventListener("scroll", () => {
     const margin = 12;
     if (rect.top < margin || rect.bottom > visibleHeight - margin) {
       suppressScrollLockUntil = performance.now() + 60;
+      // <html> 全域設了 scroll-behavior:smooth（見 resetRogueWindowScroll()
+      // 的說明，給一般頁面內錨點導覽用）。scrollIntoView() 為了把欄位捲進
+      // 可視範圍，可能連帶捲動到 document/html 這層（不只是 main 自己），
+      // 這層一旦捲動就會被全域的 smooth 設定接管、跑出平滑動畫——這正是
+      // 「鍵盤打開後欄位先跳到最上面、再慢慢滑回正確位置」的真正成因：
+      // 前面 main 自己瞬間跳到「大致正確」的位置，document/html 那段殘餘
+      // 校正卻用平滑動畫慢慢補完，兩段疊在一起就是先跳、再滑。跟
+      // resetRogueWindowScroll() 同一套做法：呼叫前先暫時關掉
+      // scroll-behavior，校正完再還原，讓這裡的捲動全部瞬間完成。
+      const prevBehavior = document.documentElement.style.scrollBehavior;
+      document.documentElement.style.scrollBehavior = "auto";
       activeField.scrollIntoView({ block: "center", behavior: "auto" });
+      document.documentElement.style.scrollBehavior = prevBehavior;
     }
     if (performance.now() < deadline) {
       rafId = requestAnimationFrame(() => positionLoop(deadline));
