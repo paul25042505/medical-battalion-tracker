@@ -1627,7 +1627,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-12-361-task-title-template";
+const BUILD_TAG = "2026-07-12-362-task-title-template-admin";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2064,9 +2064,9 @@ function taskScope(t){ return t && t.scope === "營內" ? "營內" : "營外"; }
 // 「（彈藥庫）射擊救護待命」），選了範本後把「OO」反白選取起來（沿用
 // 站內既有「OO」當填空佔位符的慣例，例如回報彈窗地點欄位的
 // placeholder="加油站、OO超商"），使用者接下來打字會直接蓋掉「OO」、
-// 不會動到括號跟後面的任務性質文字，也不會漏填地點。想新增其他常用
-// 範本，請走「意見回饋」提出，不要自己改這個常數。
-const TASK_TITLE_TEMPLATES = ["（OO）射擊救護待命"];
+// 不會動到括號跟後面的任務性質文字，也不會漏填地點。範本清單改成存在
+// Firestore（state.taskTitleTemplates，見「基礎資料管理 → 任務名稱範本」），
+// 管理員可以自行新增/編輯/刪除，不用再改程式碼、等出貨。
 // 急診待命：兩個醫務所地點固定，每個地點一筆文件（doc id = key），只存
 // currentTaskId 指向目前綁定的待命勤務（見 viewErStandby() 說明），
 // 不再另外存急診醫官/車長/駕駛文字——那些資料直接來自綁定的 tasks 文件。
@@ -2584,7 +2584,8 @@ const RELEASE_NOTES = [
     ] },
     { category: "任務管理", items: [
       "建立勤務頁「營內／營外」改成跟上面「任務類型」同樣大小的切換鈕，佔滿整行、更清楚好點，預設改成「營內」",
-      "建立勤務頁「任務名稱」新增快速選擇範本（勤務類型才有，洽公沒有）：很多任務名稱是固定格式「（地點）任務性質」（例如「（彈藥庫）射擊救護待命」），選了範本後輸入框會帶入範本文字，並自動把佔位符「OO」反白選取，接下來打字直接蓋掉「OO」就好，不會漏打地點；想新增其他常用範本請走「意見回饋」提出",
+      "建立勤務頁「任務名稱」新增快速選擇範本（勤務類型才有，洽公沒有）：很多任務名稱是固定格式「（地點）任務性質」（例如「（彈藥庫）射擊救護待命」），選了範本後輸入框會帶入範本文字，並自動把佔位符「OO」反白選取，接下來打字直接蓋掉「OO」就好，不會漏打地點",
+      "任務名稱快速選擇範本改成存在後台：新增「基礎資料管理 → 任務名稱範本」頁面，管理員可以自行新增/編輯/刪除範本，不用再等改程式碼、出新版才能加",
     ] },
     { category: "醫院資訊", items: [
       "新增／編輯醫院表單新增「標記為常用醫院」選項：軍中固定後送的那幾間醫院標記後，「醫院資訊」預設排序（沒開依距離／依人數時）跟回報「出勤」的送醫醫院下拉選單都會排在最前面（下拉選單另外分成「常用醫院」「其他醫院」兩組），不用每次都在一長串名冊裡找；醫院卡片上也會顯示「⭐ 常用」標籤",
@@ -3126,6 +3127,7 @@ const state = {
   personnel: [], vehicles: [], recorders: [],
   hospitals: [], vitals: [], // 醫院資訊（急救責任等級/電話）、患者生命徵象/主訴紀錄
   doctors: [], // 醫官名冊（姓名/電話），供建立勤務的「值班醫官」欄位選用
+  taskTitleTemplates: [], // 建立勤務頁「任務名稱」快速選擇範本，全營共用
   erStandby: [], // 急診待命：每個地點目前綁定的待命勤務指標（currentTaskId）
   notifications: [], // 通知中心（收件匣歷史紀錄，公告，全體共用），依 timestamp 新到舊排序
   pushLog: [], // 系統實際推播過的個人化紀錄（任務/事件/生命徵象異常/緊急動員等），只查得到自己的份，跟 notifications（全體公告）分開存放
@@ -3198,7 +3200,7 @@ const state = {
 applyThemeMode(state.themeMode); // 在第一次 render() 之前就套用，避免畫面先閃一次錯的模式再跳回正確的
 let tasksPoll = null, eventsPoll = null, profilePoll = null;
 let personnelPoll = null, vehiclesPoll = null, recordersPoll = null;
-let hospitalsPoll = null, vitalsPoll = null, erStandbyPoll = null, doctorsPoll = null;
+let hospitalsPoll = null, vitalsPoll = null, erStandbyPoll = null, doctorsPoll = null, taskTitleTemplatesPoll = null;
 let notificationsPoll = null;
 let pushLogPoll = null;
 let erRealtimePoll = null;
@@ -3554,6 +3556,10 @@ async function addDoctor(name, title, phone){
   await fsAddDoc("doctors", { name, title: title||"", phone: phone||"", active: true });
   showToast("已新增醫官"); if (doctorsPoll) doctorsPoll.refreshNow();
 }
+async function addTaskTitleTemplate(text){
+  await fsAddDoc("taskTitleTemplates", { text });
+  showToast("已新增範本"); if (taskTitleTemplatesPoll) taskTitleTemplatesPoll.refreshNow();
+}
 // 意見回饋：任何在職帳號都能送出，一律具名（顯示送出者姓名），只有
 // admin 能在管理後台「意見回饋」頁籤檢視，不提供列表輪詢（很少人會
 // 用到，開啟該頁籤時現抓一次就好，見下方 state._feedbackCache）。
@@ -3619,6 +3625,7 @@ function refreshBaseDataPoll(coll){
   if (coll === "recorders" && recordersPoll) recordersPoll.refreshNow();
   if (coll === "hospitals" && hospitalsPoll) hospitalsPoll.refreshNow();
   if (coll === "doctors" && doctorsPoll) doctorsPoll.refreshNow();
+  if (coll === "taskTitleTemplates" && taskTitleTemplatesPoll) taskTitleTemplatesPoll.refreshNow();
   if (coll === "notifications" && notificationsPoll) notificationsPoll.refreshNow();
 }
 // coll 是畫面上用的內部識別字串（沿用「personnel」這個名字，跟建立勤務下拉
@@ -4182,6 +4189,12 @@ function startDataListeners(){
     state.doctors = docs;
     if (changed) safeRender();
   });
+  taskTitleTemplatesPoll = poll(async () => {
+    const docs = await fsListCollection("taskTitleTemplates");
+    const changed = changedSince("taskTitleTemplates", docs);
+    state.taskTitleTemplates = docs;
+    if (changed) safeRender();
+  });
   notificationsPoll = poll(async () => {
     const docs = await fsListCollection("notifications");
     docs.sort((a,b) => new Date(b.timestamp||0) - new Date(a.timestamp||0));
@@ -4211,13 +4224,14 @@ function startDataListeners(){
   });
   ensureUnitsSeeded();
   ensureHospitalsSeeded();
+  ensureTaskTitleTemplatesSeeded();
 }
 function cleanupListeners(){
-  [tasksPoll, eventsPoll, profilePoll, personnelPoll, vehiclesPoll, recordersPoll, hospitalsPoll, vitalsPoll, erStandbyPoll, doctorsPoll, notificationsPoll, pushLogPoll, mciEventsPoll, mciPatientsPoll].forEach(p => p && p.stop());
+  [tasksPoll, eventsPoll, profilePoll, personnelPoll, vehiclesPoll, recordersPoll, hospitalsPoll, vitalsPoll, erStandbyPoll, doctorsPoll, taskTitleTemplatesPoll, notificationsPoll, pushLogPoll, mciEventsPoll, mciPatientsPoll].forEach(p => p && p.stop());
   for (const k in lastJson) delete lastJson[k];
-  tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = hospitalsPoll = vitalsPoll = erStandbyPoll = doctorsPoll = notificationsPoll = pushLogPoll = erRealtimePoll = mciEventsPoll = mciPatientsPoll = null;
+  tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = hospitalsPoll = vitalsPoll = erStandbyPoll = doctorsPoll = taskTitleTemplatesPoll = notificationsPoll = pushLogPoll = erRealtimePoll = mciEventsPoll = mciPatientsPoll = null;
   state.tasks = []; state.events = []; state.personnel = []; state.vehicles = []; state.recorders = [];
-  state.hospitals = []; state.vitals = []; state.erStandby = []; state.doctors = []; state.notifications = []; state.pushLog = [];
+  state.hospitals = []; state.vitals = []; state.erStandby = []; state.doctors = []; state.taskTitleTemplates = []; state.notifications = []; state.pushLog = [];
   state.mciEvents = []; state.mciPatients = [];
   state.deepTasks = []; state.deepEvents = []; state.deepVitals = []; state.recordsDeepQuery = null;
   state.previewActive = false; state.realRoleUnit = null;
@@ -4253,6 +4267,22 @@ async function ensureHospitalsSeeded(){
     }
     if (hospitalsPoll) await hospitalsPoll.refreshNow();
   } catch (e) { console.error("初始化醫院資料失敗", e); }
+}
+// 首次啟用時自動補進「任務名稱」快速選擇範本的預設清單；之後管理員可以
+// 在「基礎資料管理 → 任務名稱範本」自行新增/編輯/刪除，不用再改程式碼。
+const TASK_TITLE_TEMPLATE_SEED = ["（OO）射擊救護待命"];
+let taskTitleTemplatesSeeded = false;
+async function ensureTaskTitleTemplatesSeeded(){
+  if (taskTitleTemplatesSeeded) return;
+  taskTitleTemplatesSeeded = true;
+  try {
+    const existing = await fsListCollection("taskTitleTemplates");
+    const have = new Set(existing.map(t => t.text));
+    for (const text of TASK_TITLE_TEMPLATE_SEED) {
+      if (!have.has(text)) await fsAddDoc("taskTitleTemplates", { text });
+    }
+    if (taskTitleTemplatesPoll) await taskTitleTemplatesPoll.refreshNow();
+  } catch (e) { console.error("初始化任務名稱範本失敗", e); }
 }
 
 // 醫院有登記自己的經緯度時，直接算跟 GPS 定位的實際距離最準；沒登記
@@ -4869,7 +4899,7 @@ const ROUTE_REFRESH = {
   task: ['tasks','events','vitals'],
   vitals: ['tasks','events','vitals'],
   editTask: ['tasks','events','personnel','vehicles','recorders','doctors'],
-  createTask: ['personnel','vehicles','recorders','doctors'],
+  createTask: ['personnel','vehicles','recorders','doctors','taskTitleTemplates'],
   stats: ['tasks','events'],
   hospitals: ['hospitals','erRealtime'],
   erStandby: ['erStandby','tasks','events'],
@@ -4882,6 +4912,7 @@ const ROUTE_REFRESH = {
   baseDataRecorders: ['recorders'],
   baseDataHospitals: ['hospitals'],
   baseDataDoctors: ['doctors'],
+  baseDataTaskTitleTemplates: ['taskTitleTemplates'],
   adminUsers: ['personnel'],
   notifications: ['notifications', 'pushLog'],
 };
@@ -4897,7 +4928,7 @@ function nav(route){
   // 輪詢；每次導覽過去都清掉快取強制重抓一次，才看得到剛送出的意見回饋。
   if (route.name === "adminFeedback") state._feedbackCache = null;
   render(); scrollContentToTop();
-  const polls = { tasks: tasksPoll, events: eventsPoll, personnel: personnelPoll, vehicles: vehiclesPoll, recorders: recordersPoll, hospitals: hospitalsPoll, vitals: vitalsPoll, erStandby: erStandbyPoll, doctors: doctorsPoll, notifications: notificationsPoll, pushLog: pushLogPoll, erRealtime: erRealtimePoll, mciEvents: mciEventsPoll, mciPatients: mciPatientsPoll };
+  const polls = { tasks: tasksPoll, events: eventsPoll, personnel: personnelPoll, vehicles: vehiclesPoll, recorders: recordersPoll, hospitals: hospitalsPoll, vitals: vitalsPoll, erStandby: erStandbyPoll, doctors: doctorsPoll, taskTitleTemplates: taskTitleTemplatesPoll, notifications: notificationsPoll, pushLog: pushLogPoll, erRealtime: erRealtimePoll, mciEvents: mciEventsPoll, mciPatients: mciPatientsPoll };
   (ROUTE_REFRESH[route.name] || []).forEach(key => { if (polls[key]) polls[key].refreshNow(); });
   // 保險機制：換頁時強制重新校正一次 #app 高度／window 捲動值，不依賴
   // 前一頁鍵盤關閉時是否有確實觸發 visualViewport 事件或輸入框 focusout
@@ -4989,8 +5020,8 @@ function quickFillSelect(inputId, options){
     ${options.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("")}
   </select>`;
 }
-// 任務名稱快速選擇：見 TASK_TITLE_TEMPLATES 說明，跟 quickFillSelect() 不同的
-// 地方是選了之後不是附加文字，是整個蓋掉輸入框內容並把「OO」反白選取。
+// 任務名稱快速選擇：見 state.taskTitleTemplates 說明，跟 quickFillSelect()
+// 不同的地方是選了之後不是附加文字，是整個蓋掉輸入框內容並把「OO」反白選取。
 function taskTitleTemplateSelect(inputId, templates){
   return `<select class="quick-fill-select" onchange='window.__applyTaskTitleTemplate("${inputId}", this)'>
     <option value="">快速選擇範本</option>
@@ -6353,7 +6384,7 @@ function viewCreateTask(){
             ${UNITS.map(u => `<option value="${u.code}" ${unit===u.code?'selected':''}>${u.label}</option>`).join("")}
           </select>
         </div>` : `<div class="field"><label>單位</label><input value="${unitLabel(unit)}" disabled></div>`}
-      <div class="field"><div class="field-label-row"><label>任務名稱 *</label>${isLiaison ? '' : taskTitleTemplateSelect('tf-title', TASK_TITLE_TEMPLATES)}</div><input id="tf-title" name="title" required placeholder="${isLiaison?'例如：軍公民任務現勘':'例如：OHCA 患者搶救'}"></div>
+      <div class="field"><div class="field-label-row"><label>任務名稱 *</label>${(!isLiaison && state.taskTitleTemplates.length) ? taskTitleTemplateSelect('tf-title', state.taskTitleTemplates.map(t => t.text)) : ''}</div><input id="tf-title" name="title" required placeholder="${isLiaison?'例如：軍公民任務現勘':'例如：OHCA 患者搶救'}"></div>
       ${isStandbyDispatch ? `
       <div class="field"><label>醫務所</label>
         <input value="${esc(state.route.presetLocation)}" disabled>
@@ -8103,6 +8134,11 @@ function viewBaseDataDoctorsPage(){
   if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
   return viewBaseDataDoctors();
 }
+function viewBaseDataTaskTitleTemplatesPage(){
+  const p = state.profile;
+  if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
+  return viewBaseDataTaskTitleTemplates();
+}
 function viewAdminUsersPage(){
   const p = state.profile;
   if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
@@ -8189,6 +8225,7 @@ function viewBaseDataHub(){
   const sharedRows = [
     settingsRow({icon:'hospital', bg:'#E9F9EF', fg:'#177A34', title:'醫院', subtitle:'急救責任等級／電話，全營共用', onclick:"window.__nav({name:'baseDataHospitals'})"}),
     settingsRow({icon:'heartbeat', bg:'#FFEAEA', fg:'#C7233B', title:'醫官', subtitle:'值班醫官名冊，全營共用', onclick:"window.__nav({name:'baseDataDoctors'})"}),
+    settingsRow({icon:'tasks', bg:'#EAF1FF', fg:'#0052E0', title:'任務名稱範本', subtitle:'建立勤務頁「任務名稱」快速選擇，全營共用', onclick:"window.__nav({name:'baseDataTaskTitleTemplates'})"}),
   ];
   return `
     ${settingsSection('單位資料', unitRows)}
@@ -8273,6 +8310,20 @@ function viewBaseDataDoctors(){
       </div>`).join("") : `<div class="empty">尚無醫官資料</div>`}`;
   return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">醫官</div>${body}`;
 }
+function viewBaseDataTaskTitleTemplates(){
+  const rows = state.taskTitleTemplates.slice().sort((a,b) => HOSPITAL_NAME_COLLATOR.compare(a.text||'', b.text||''));
+  const body = `
+    <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('taskTitleTemplates', null, '')">${icon('plus',15)} 新增範本</button>
+    ${rows.length ? rows.map(x => `
+      <div class="admin-row">
+        <div><div class="name">${esc(x.text)}</div></div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="icon-btn" onclick="window.__openBaseDataModal('taskTitleTemplates','${x.id}','')">編輯</button>
+          <button class="icon-btn danger" onclick="window.__deleteBaseData('taskTitleTemplates','${x.id}')">刪除</button>
+        </div>
+      </div>`).join("") : `<div class="empty">尚無範本，建立勤務頁的「任務名稱」欄位不會顯示快速選擇</div>`}`;
+  return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">任務名稱範本</div>${body}`;
+}
 
 /* =========================================================
    18c) 畫面：基礎資料新增／編輯彈窗
@@ -8281,7 +8332,7 @@ function viewBaseDataModal(){
   const m = state.baseDataModal;
   if (!m) return "";
   const { coll, id, unit } = m;
-  const pool = coll === "personnel" ? state.personnel : coll === "vehicles" ? state.vehicles : coll === "hospitals" ? state.hospitals : coll === "doctors" ? state.doctors : coll === "notifications" ? state.notifications : state.recorders;
+  const pool = coll === "personnel" ? state.personnel : coll === "vehicles" ? state.vehicles : coll === "hospitals" ? state.hospitals : coll === "doctors" ? state.doctors : coll === "notifications" ? state.notifications : coll === "taskTitleTemplates" ? state.taskTitleTemplates : state.recorders;
   const editing = id ? pool.find(x => x.id === id) : null;
   let title, fields;
   if (coll === "personnel") {
@@ -8364,6 +8415,11 @@ function viewBaseDataModal(){
     fields = `
       <div class="field"><label>標題</label><input name="title" required value="${esc(editing?.title||'')}"></div>
       <div class="field"><label>內容</label><textarea name="body" required rows="4">${esc(editing?.body||'')}</textarea></div>`;
+  } else if (coll === "taskTitleTemplates") {
+    title = editing ? "編輯任務名稱範本" : "新增任務名稱範本";
+    fields = `
+      <div class="field"><label>範本文字</label><input name="text" required value="${esc(editing?.text||'')}" placeholder="例如：（OO）射擊救護待命"></div>
+      <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">很多任務名稱是固定格式「（地點）任務性質」，用「OO」當地點的佔位符（沿用站內既有的填空慣例）；建立勤務頁選了這個範本後，「OO」會自動反白選取，接下來打字直接蓋掉「OO」就好。不含「OO」的範本會直接整段帶入，游標停在最後面。</div>`;
   } else {
     title = editing ? "編輯行車紀錄器" : "新增行車紀錄器";
     fields = `<div class="field"><label>編號</label><input name="code" required value="${esc(editing?.code||'')}"></div>`;
@@ -8674,6 +8730,7 @@ const ROUTE_VIEWS = {
   baseDataRecorders: viewBaseDataRecordersPage,
   baseDataHospitals: viewBaseDataHospitalsPage,
   baseDataDoctors: viewBaseDataDoctorsPage,
+  baseDataTaskTitleTemplates: viewBaseDataTaskTitleTemplatesPage,
   adminUsers: viewAdminUsersPage,
   adminMessages: viewAdminMessagesPage,
   adminSettings: viewAdminSettingsPage,
@@ -9002,8 +9059,8 @@ window.__applyQuickFillSelect = (inputId, selectEl) => {
   if (!parts.includes(value)) parts.push(value);
   el.value = parts.join("、");
 };
-// 任務名稱範本快選：見 TASK_TITLE_TEMPLATES 說明，套用範本後把「OO」反白
-// 選取，使用者接下來打字直接蓋掉「OO」就好，不用自己找到那個字刪掉重打。
+// 任務名稱範本快選：見 state.taskTitleTemplates 說明，套用範本後把「OO」
+// 反白選取，使用者接下來打字直接蓋掉「OO」就好，不用自己找到那個字刪掉重打。
 window.__applyTaskTitleTemplate = (inputId, selectEl) => {
   const template = selectEl.value;
   selectEl.value = "";
@@ -9412,12 +9469,14 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
        : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return updateBaseData(coll, id, { name: f.get("name"), tier: f.get("tier"), level: f.get("level"), phone: f.get("phone")||"", note: f.get("note")||"", address: f.get("address")||"", nhiCode: f.get("nhiCode")||"", frequent: f.get("frequent")==="on", lat: c ? c.lat : null, lng: c ? c.lng : null }); })()
        : coll === "doctors" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"" })
        : coll === "notifications" ? updateBaseData(coll, id, { title: f.get("title"), body: f.get("body") })
+       : coll === "taskTitleTemplates" ? updateBaseData(coll, id, { text: f.get("text") })
        : updateBaseData(coll, id, { code: f.get("code") }))
     : (coll === "personnel" ? addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone"), f.get("emtLevel"), f.get("email"))
        : coll === "vehicles" ? addVehicle(unit, f.get("plate"), f.get("type"))
        : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return addHospital(f.get("name"), f.get("tier"), f.get("level"), f.get("phone"), f.get("note"), f.get("address"), f.get("nhiCode"), c ? c.lat : null, c ? c.lng : null, f.get("frequent")==="on"); })()
        : coll === "doctors" ? addDoctor(f.get("name"), f.get("title"), f.get("phone"))
        : coll === "notifications" ? addNotification(f.get("title"), f.get("body"))
+       : coll === "taskTitleTemplates" ? addTaskTitleTemplate(f.get("text"))
        : addRecorder(unit, f.get("code")));
   action.then(() => { state.baseDataModal = null; render(); }).catch(baseDataErr);
 };
