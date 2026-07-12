@@ -1174,6 +1174,14 @@
   }
   .chip-option:active span{transform:scale(0.93);}
   .chip-option:has(input:checked) span{background:var(--blue); border-color:var(--blue); color:#fff;}
+  /* 建立勤務的營內／營外：比照上面任務類型的 seg-toggle 樣式放大、佔滿整行，
+     不要跟其他小顆 chip 一樣不明顯——這欄會影響車輛動態統計，要讓人一眼看到。 */
+  .chip-select.scope-toggle{flex-wrap:nowrap;}
+  .chip-select.scope-toggle .chip-option{flex:1;}
+  .chip-select.scope-toggle .chip-option span{
+    display:flex; align-items:center; justify-content:center; width:100%; box-sizing:border-box;
+    padding:12px; border-radius:var(--radius-sm); font-size:var(--text-base); font-weight:700;
+  }
   /* 主訴等自由輸入框的標籤列，右側放快捷選字下拉選單，選了之後塞進輸入框。 */
   .field-label-row{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:var(--space-label-gap);}
   .field-label-row label{margin-bottom:0;}
@@ -1614,7 +1622,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-12-356-vitals-report-copy";
+const BUILD_TAG = "2026-07-12-357-vitals-diagnosis-chips";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2542,6 +2550,12 @@ const RELEASE_NOTES = [
     { category: "患者紀錄", items: [
       "新增「醫官初步診斷」欄位（選填），紀錄醫官對患者狀況的初步研判",
       "患者紀錄新增「複製回報文字」按鈕：依患者的主訴、醫官診斷、生命徵象、目前處置、隨隊幹部（沿用既有的對職幹部欄位）自動組成一段可直接貼到 LINE 群組的事件回報文字，生命徵象會自動判斷「數據正常／數據異常」；報告對象（預設「連長」）可在複製前自行修改，按下複製即寫入剪貼簿",
+      "「醫官初步診斷」自由輸入框改成跟其他欄位一樣的常見項目 chips（熱暈眩、熱衰竭、熱中暑、低血糖、暈厥等），選不到的情況可選「其他」自行輸入，這個區塊獨立成一個小節「醫官初步判定」",
+      "處置項目重新排序：「保暖」「心理支持」「觀察生命徵象」這三個幾乎每筆都會用到的基本處置移到最前面，並新增「靜脈注射（IV）」選項；處置也獨立回一個小節「處置」",
+      "「複製回報文字」按鈕改放到處置項目下面，跟「編輯」分開（編輯留在最上面），閱讀順序更順",
+    ] },
+    { category: "任務管理", items: [
+      "建立勤務頁「營內／營外」改成跟上面「任務類型」同樣大小的切換鈕，佔滿整行、更清楚好點，預設改成「營內」",
     ] },
   ] },
   { date: "2026/07/11", groups: [
@@ -3028,8 +3042,11 @@ function vitalsQaPanelHtml(v){
 }
 const PAST_HISTORY_OPTIONS = ["糖尿病", "高血壓", "心臟疾病", "中風", "氣喘", "慢性阻塞性肺病", "肝臟疾病", "腎臟疾病", "癌症", "癲癇", "精神疾病", "其他", "不清楚", "無"];
 const ALLERGY_OPTIONS = ["藥物", "食物", "其他", "不清楚", "無"];
-// 處置項目涵蓋創傷與非創傷常見處置，不只是外傷包紮固定這類。
-const TREATMENT_OPTIONS = ["暢通呼吸道", "抽吸", "使用甦醒球（BVM）", "給氧", "使用AED", "CPR", "頸圈固定", "清洗傷口", "止血、包紮", "止血帶", "骨折固定", "姿勢擺位／半坐臥", "血糖處置（給予口服糖分）", "協助服藥", "保暖", "觀察生命徵象", "心理支持", "其他"];
+// 醫官初步判定：常見的非創傷症狀類別，選不到再用「其他」自行輸入。
+const DIAGNOSIS_OPTIONS = ["熱暈眩", "熱衰竭", "熱中暑", "低血糖", "暈厥", "過度換氣", "腸胃不適", "扭傷／拉傷", "感冒／上呼吸道感染", "其他"];
+// 處置項目涵蓋創傷與非創傷常見處置，不只是外傷包紮固定這類；保暖／心理
+// 支持／觀察生命徵象是幾乎每筆紀錄都會用到的基本處置，排在最前面。
+const TREATMENT_OPTIONS = ["保暖", "心理支持", "觀察生命徵象", "暢通呼吸道", "抽吸", "使用甦醒球（BVM）", "給氧", "使用AED", "CPR", "頸圈固定", "清洗傷口", "止血、包紮", "止血帶", "骨折固定", "姿勢擺位／半坐臥", "血糖處置（給予口服糖分）", "靜脈注射（IV）", "協助服藥", "其他"];
 const GENDER_OPTIONS = ["男", "女"];
 // 現場狀況：比照救護紀錄表分成非創傷／創傷兩大類，各自有一組常見情況勾選，
 // 只在初評問一次（跟過去病史/過敏史一樣，複測不用每次重填）。
@@ -4916,10 +4933,10 @@ function backBtn(route){
 // triggers（選填）：[{ values:[...], wrapId }]，勾選到指定選項時，只切換對應
 // detail 輸入框容器的顯示/隱藏（呼叫 window.__syncDetailVisibility），不觸發
 // 整頁 render()，避免使用者已經填到一半的其他欄位被清空重繪掉。
-function chipGroup(name, options, selected, multi, triggers){
+function chipGroup(name, options, selected, multi, triggers, extraClass){
   const type = multi ? "checkbox" : "radio";
   const sel = multi ? (selected||[]) : null;
-  return `<div class="chip-select">${options.map(o => {
+  return `<div class="chip-select${extraClass?` ${extraClass}`:''}">${options.map(o => {
     const trig = triggers && triggers.find(tr => tr.values.includes(o));
     const onchange = trig ? ` onchange='window.__syncDetailVisibility("${trig.wrapId}","${name}",${JSON.stringify(trig.values)})'` : "";
     return `
@@ -6286,7 +6303,7 @@ function viewCreateTask(){
     </div>`}
     ${!isLiaison && !isStandbyDispatch ? `
     <div class="field"><label>營內／營外 *</label>
-      ${chipGroup('scope', TASK_SCOPE_OPTIONS, '營外', false)}
+      ${chipGroup('scope', TASK_SCOPE_OPTIONS, '營內', false, null, 'scope-toggle')}
     </div>` : ""}
     <form onsubmit="window.__createTask(event, '${unit}', '${taskType}')">
       ${isStandbyDispatch ? `<input type="hidden" name="scope" value="營外">` : ""}
@@ -6468,6 +6485,9 @@ function viewVitalsPage(taskId, id, adding){
   const allergyDrugFoodChecked = (editingVitals?.allergyHistory||[]).some(v=>['藥物','食物'].includes(v));
   const allergyOtherChecked = (editingVitals?.allergyHistory||[]).includes('其他');
   const treatmentOtherChecked = (editingVitals?.treatments||[]).includes('其他');
+  const diagnosisVal = editingVitals?.diagnosis || '';
+  const diagnosisIsOther = !!diagnosisVal && !DIAGNOSIS_OPTIONS.includes(diagnosisVal);
+  const diagnosisSelected = diagnosisIsOther ? '其他' : diagnosisVal;
   const sceneType = editingVitals?.sceneType || '';
   const sceneNonTraumaOtherChecked = sceneType === '非創傷' && (editingVitals?.sceneFindings||[]).includes('其他');
   const sceneTraumaOtherChecked = sceneType === '創傷' && (editingVitals?.sceneFindings||[]).includes('其他');
@@ -6478,10 +6498,7 @@ function viewVitalsPage(taskId, id, adding){
         <div class="vitals-entry ${i===0?'stage-initial':'stage-followup'}">
           <div class="vitals-entry-head">
             <span class="vitals-entry-time"><span class="vitals-stage-tag${i===0?'':' alt'}">${i===0?'初評':'二評'}</span>${fmtTime(v.ts)} · ${nameWithRank(v.userName, v.unit)}</span>
-            <span style="display:flex; gap:8px; flex-shrink:0;">
-              <button class="tl-edit-btn" type="button" onclick="window.__openVitalsReport('${v.id}')">複製回報文字</button>
-              ${canDoReport ? `<button class="tl-edit-btn" type="button" onclick="window.__editVitals('${taskId}','${v.id}')">編輯</button>` : ""}
-            </span>
+            ${canDoReport ? `<button class="tl-edit-btn" type="button" onclick="window.__editVitals('${taskId}','${v.id}')">編輯</button>` : ""}
           </div>
           ${v.patientName || v.patientUnit || v.patientRank || v.patientGender ? `
           <div class="vitals-patient-line">
@@ -6510,6 +6527,7 @@ function viewVitalsPage(taskId, id, adding){
             <div class="treatment-pills">${v.treatments.map(x=>`<span class="treatment-pill">${esc(x)}</span>`).join("")}</div>
           </div>` : ""}
           ${v.treatmentOtherDetail ? `<div class="detail-item"><span class="lbl">其他處置</span><span class="val">${esc(v.treatmentOtherDetail)}</span></div>` : ""}
+          <button class="tl-edit-btn" type="button" style="margin-top:10px;" onclick="window.__openVitalsReport('${v.id}')">${icon('share',14)} 複製回報文字</button>
           ${v.note ? `<div class="step-note">${esc(v.note)}</div>` : ""}
           </div>
         </div>`).join("")}
@@ -6638,8 +6656,14 @@ function viewVitalsPage(taskId, id, adding){
         <div class="field"><label>血糖值 mg/dL（選填）</label><input id="vf-glucose" type="text" inputmode="numeric" value="${esc(editingVitals?.glucose||'')}"></div>
       </div>
       <div class="form-section">
-        <div class="form-section-title">${isInitialEntry ? `<span class="step-num">7</span>` : ""}醫官診斷與處置</div>
-        <div class="field"><label>醫官初步診斷（選填）</label><input id="vf-diagnosis" value="${esc(editingVitals?.diagnosis||'')}" placeholder="例如：熱暈眩"></div>
+        <div class="form-section-title">${isInitialEntry ? `<span class="step-num">7</span>` : ""}醫官初步判定</div>
+        <div class="field">${chipGroup('vf-diagnosis', DIAGNOSIS_OPTIONS, diagnosisSelected, false, [{values:['其他'], wrapId:'diagnosis-other-wrap'}])}</div>
+        <div id="diagnosis-other-wrap" style="display:${diagnosisIsOther?'block':'none'};">
+          <div class="field" style="margin-top:10px; margin-bottom:0;"><label>其他判定說明（選填）</label><input id="vf-diagnosis-other" value="${esc(diagnosisIsOther?diagnosisVal:'')}" placeholder="請說明"></div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">${isInitialEntry ? `<span class="step-num">8</span>` : ""}處置</div>
         <div class="field">${chipGroup('vf-treatments', TREATMENT_OPTIONS, editingVitals?.treatments||[], true, [{values:['其他'], wrapId:'treatment-other-wrap'}])}</div>
         <div id="treatment-other-wrap" style="display:${treatmentOtherChecked?'block':'none'};">
           <div class="field" style="margin-top:10px; margin-bottom:0;"><label>其他處置說明（選填）</label><input id="vf-treatment-other-detail" value="${esc(editingVitals?.treatmentOtherDetail||'')}" placeholder="請說明"></div>
@@ -9249,7 +9273,7 @@ window.__submitVitals = (taskId, id) => {
     complaint: get("vf-complaint"), bp: (bpSys || bpDia) ? `${bpSys}/${bpDia}` : "", hr: get("vf-hr"), rr: get("vf-rr"),
     spo2: get("vf-spo2"), temp: get("vf-temp"), gcs: get("vf-gcs"), glucose: get("vf-glucose"),
     consciousness: checkedValues("vf-consciousness")[0] || "",
-    diagnosis: get("vf-diagnosis"),
+    diagnosis: (() => { const sel = checkedValues("vf-diagnosis")[0] || ""; return sel === "其他" ? get("vf-diagnosis-other") : sel; })(),
     treatments: checkedValues("vf-treatments"),
     treatmentOtherDetail: get("vf-treatment-other-detail"),
     note: get("vf-note")
