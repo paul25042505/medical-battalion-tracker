@@ -1627,7 +1627,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-12-360-frequent-hospital";
+const BUILD_TAG = "2026-07-12-361-task-title-template";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2060,6 +2060,13 @@ function vehicleUnitLabel(plate){
 // 欄位時，預設當作營外（多數勤務本來就是出營區執行）。
 const TASK_SCOPE_OPTIONS = ["營內","營外"];
 function taskScope(t){ return t && t.scope === "營內" ? "營內" : "營外"; }
+// 任務名稱快速選擇：很多任務名稱是固定格式「（地點）任務性質」（例如
+// 「（彈藥庫）射擊救護待命」），選了範本後把「OO」反白選取起來（沿用
+// 站內既有「OO」當填空佔位符的慣例，例如回報彈窗地點欄位的
+// placeholder="加油站、OO超商"），使用者接下來打字會直接蓋掉「OO」、
+// 不會動到括號跟後面的任務性質文字，也不會漏填地點。想新增其他常用
+// 範本，請走「意見回饋」提出，不要自己改這個常數。
+const TASK_TITLE_TEMPLATES = ["（OO）射擊救護待命"];
 // 急診待命：兩個醫務所地點固定，每個地點一筆文件（doc id = key），只存
 // currentTaskId 指向目前綁定的待命勤務（見 viewErStandby() 說明），
 // 不再另外存急診醫官/車長/駕駛文字——那些資料直接來自綁定的 tasks 文件。
@@ -2577,6 +2584,7 @@ const RELEASE_NOTES = [
     ] },
     { category: "任務管理", items: [
       "建立勤務頁「營內／營外」改成跟上面「任務類型」同樣大小的切換鈕，佔滿整行、更清楚好點，預設改成「營內」",
+      "建立勤務頁「任務名稱」新增快速選擇範本（勤務類型才有，洽公沒有）：很多任務名稱是固定格式「（地點）任務性質」（例如「（彈藥庫）射擊救護待命」），選了範本後輸入框會帶入範本文字，並自動把佔位符「OO」反白選取，接下來打字直接蓋掉「OO」就好，不會漏打地點；想新增其他常用範本請走「意見回饋」提出",
     ] },
     { category: "醫院資訊", items: [
       "新增／編輯醫院表單新增「標記為常用醫院」選項：軍中固定後送的那幾間醫院標記後，「醫院資訊」預設排序（沒開依距離／依人數時）跟回報「出勤」的送醫醫院下拉選單都會排在最前面（下拉選單另外分成「常用醫院」「其他醫院」兩組），不用每次都在一長串名冊裡找；醫院卡片上也會顯示「⭐ 常用」標籤",
@@ -4981,6 +4989,14 @@ function quickFillSelect(inputId, options){
     ${options.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("")}
   </select>`;
 }
+// 任務名稱快速選擇：見 TASK_TITLE_TEMPLATES 說明，跟 quickFillSelect() 不同的
+// 地方是選了之後不是附加文字，是整個蓋掉輸入框內容並把「OO」反白選取。
+function taskTitleTemplateSelect(inputId, templates){
+  return `<select class="quick-fill-select" onchange='window.__applyTaskTitleTemplate("${inputId}", this)'>
+    <option value="">快速選擇範本</option>
+    ${templates.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("")}
+  </select>`;
+}
 /* =========================================================
    9) 畫面：登入 / 待審核
    ========================================================= */
@@ -6337,7 +6353,7 @@ function viewCreateTask(){
             ${UNITS.map(u => `<option value="${u.code}" ${unit===u.code?'selected':''}>${u.label}</option>`).join("")}
           </select>
         </div>` : `<div class="field"><label>單位</label><input value="${unitLabel(unit)}" disabled></div>`}
-      <div class="field"><label>任務名稱 *</label><input name="title" required placeholder="${isLiaison?'例如：軍公民任務現勘':'例如：OHCA 患者搶救'}"></div>
+      <div class="field"><div class="field-label-row"><label>任務名稱 *</label>${isLiaison ? '' : taskTitleTemplateSelect('tf-title', TASK_TITLE_TEMPLATES)}</div><input id="tf-title" name="title" required placeholder="${isLiaison?'例如：軍公民任務現勘':'例如：OHCA 患者搶救'}"></div>
       ${isStandbyDispatch ? `
       <div class="field"><label>醫務所</label>
         <input value="${esc(state.route.presetLocation)}" disabled>
@@ -8985,6 +9001,20 @@ window.__applyQuickFillSelect = (inputId, selectEl) => {
   const parts = el.value.split("、").map(s => s.trim()).filter(Boolean);
   if (!parts.includes(value)) parts.push(value);
   el.value = parts.join("、");
+};
+// 任務名稱範本快選：見 TASK_TITLE_TEMPLATES 說明，套用範本後把「OO」反白
+// 選取，使用者接下來打字直接蓋掉「OO」就好，不用自己找到那個字刪掉重打。
+window.__applyTaskTitleTemplate = (inputId, selectEl) => {
+  const template = selectEl.value;
+  selectEl.value = "";
+  if (!template) return;
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.value = template;
+  el.focus();
+  const idx = template.indexOf("OO");
+  if (idx >= 0) el.setSelectionRange(idx, idx + 2);
+  else el.setSelectionRange(template.length, template.length);
 };
 /* =========================================================
    患者／對職幹部「單位」選擇器：欄位本身還是一般自由輸入框（成員可以
