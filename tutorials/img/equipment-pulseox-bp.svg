@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 300" font-family="'PingFang TC','Microsoft JhengHei',sans-serif">
+  <rect width="600" height="300" fill="#F8F9FC"/>
+  <text x="300" y="34" text-anchor="middle" font-size="18" font-weight="700" fill="#15161B">血氧機與血壓計操作</text>
+
+  <!-- pulse ox -->
+  <g transform="translate(60,60)">
+    <rect width="220" height="180" rx="16" fill="#E9F9EF"/>
+    <rect x="70" y="55" width="80" height="45" rx="12" fill="#177A34" opacity="0.85"/>
+    <ellipse cx="110" cy="120" rx="26" ry="34" fill="#F3F4F7" stroke="#177A34" stroke-width="3"/>
+    <text x="110" y="150" text-anchor="middle" font-size="13" font-weight="700" fill="#15161B">指尖式血氧機</text>
+    <text x="110" y="168" text-anchor="middle" font-size="11" fill="#8A8D98">夾在食指或中指指尖</text>
+    <text x="110" y="184" text-anchor="middle" font-size="11" fill="#8A8D98">避開指甲油/過冷肢體</text>
+  </g>
+
+  <!-- BP cuff -->
+  <g transform="translate(320,60)">
+    <rect width="220" height="180" rx="16" fill="#F2E9FE"/>
+    <rect x="70" y="60" width="80" height="90" rx="16" fill="#6B23C7" opacity="0.2" stroke="#6B23C7" stroke-width="3"/>
+    <circle cx="110" cy="60" r="14" fill="#6B23C7"/>
+    <text x="110" y="170" text-anchor="middle" font-size="13" font-weight="700" fill="#15161B">血壓計聽診法</text>
+    <text x="110" y="188" text-anchor="middle" font-size="11" fill="#8A8D98">壓脈帶下緣距肘窩2-3公分</text>
+    <text x="110" y="204" text-anchor="middle" font-size="11" fill="#8A8D98">聽診器置於肱動脈上</text>
+  </g>
+</svg>

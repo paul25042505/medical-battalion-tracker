@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 380" font-family="'PingFang TC','Microsoft JhengHei',sans-serif">
+  <rect width="600" height="380" fill="#F8F9FC"/>
+  <text x="300" y="34" text-anchor="middle" font-size="18" font-weight="700" fill="#15161B">格拉斯哥昏迷指數 GCS（E+V+M）</text>
+
+  <!-- E -->
+  <g transform="translate(30,55)">
+    <rect width="170" height="290" rx="14" fill="#E8F1FF"/>
+    <text x="85" y="32" text-anchor="middle" font-size="15" font-weight="800" fill="#0056C7">E 睜眼反應</text>
+    <text x="16" y="66" font-size="13" fill="#15161B">4　自發睜眼</text>
+    <text x="16" y="96" font-size="13" fill="#15161B">3　呼叫睜眼</text>
+    <text x="16" y="126" font-size="13" fill="#15161B">2　疼痛刺激睜眼</text>
+    <text x="16" y="156" font-size="13" fill="#15161B">1　無反應</text>
+  </g>
+
+  <!-- V -->
+  <g transform="translate(215,55)">
+    <rect width="170" height="290" rx="14" fill="#FFEAEA"/>
+    <text x="85" y="32" text-anchor="middle" font-size="15" font-weight="800" fill="#C7233B">V 語言反應</text>
+    <text x="16" y="66" font-size="13" fill="#15161B">5　說話有條理</text>
+    <text x="16" y="96" font-size="13" fill="#15161B">4　可對答但混亂</text>
+    <text x="16" y="126" font-size="13" fill="#15161B">3　答非所問</text>
+    <text x="16" y="156" font-size="13" fill="#15161B">2　只能發出聲音</text>
+    <text x="16" y="186" font-size="13" fill="#15161B">1　無反應</text>
+  </g>
+
+  <!-- M -->
+  <g transform="translate(400,55)">
+    <rect width="170" height="290" rx="14" fill="#F2E9FE"/>
+    <text x="85" y="32" text-anchor="middle" font-size="15" font-weight="800" fill="#6B23C7">M 運動反應</text>
+    <text x="16" y="60" font-size="12.5" fill="#15161B">6　可依指令動作</text>
+    <text x="16" y="86" font-size="12.5" fill="#15161B">5　對疼痛能定位</text>
+    <text x="16" y="112" font-size="12.5" fill="#15161B">4　對疼痛會躲避</text>
+    <text x="16" y="138" font-size="12.5" fill="#15161B">3　異常屈曲</text>
+    <text x="16" y="164" font-size="12.5" fill="#15161B">2　異常伸直</text>
+    <text x="16" y="190" font-size="12.5" fill="#15161B">1　無反應</text>
+  </g>
+
+  <text x="300" y="360" text-anchor="middle" font-size="13" fill="#8A8D98">滿分 15 分（E4V5M6），8 分以下屬於重度昏迷</text>
+</svg>

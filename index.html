@@ -1545,6 +1545,20 @@
   .mci-quickcolor-btn{flex:1; min-height:52px; border-radius:16px; border:none; background:color-mix(in srgb, var(--c) 14%, transparent); color:var(--c); font-size:var(--text-lg); font-weight:800; transition:transform 0.12s ease, opacity 0.12s ease;}
   .mci-quickcolor-btn:active{transform:scale(0.95); opacity:0.85;}
 
+  /* ---- 教學園地：文章內文區塊（沿用 .detail-head 當外層卡片，這裡只
+     定義 h3／圖片／圖說／重點提醒框這幾個內文才有的元件）---- */
+  .tutorial-h3{font-size:var(--text-base); font-weight:800; margin:20px 0 8px 0;}
+  .tutorial-h3:first-child{margin-top:0;}
+  .tutorial-image-block{margin:16px 0;}
+  .tutorial-image{width:100%; border-radius:16px; display:block; box-shadow:var(--mci-shadow);}
+  .tutorial-image-caption{font-size:var(--text-xs); color:var(--muted); text-align:center; margin-top:8px;}
+  .tutorial-callout{
+    display:flex; gap:10px; align-items:flex-start; margin:16px 0; padding:12px 14px; border-radius:10px;
+    background:color-mix(in srgb, var(--amber) 12%, transparent); border-left:4px solid var(--amber);
+    font-size:var(--text-sm); color:var(--text); line-height:1.7;
+  }
+  .tutorial-callout svg{flex-shrink:0; margin-top:2px; color:var(--amber-text);}
+
   /* ---- 人員選擇器（車長／駕駛，跨單位＋搜尋） ---- */
   .picker-field{
     display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%;
@@ -1587,7 +1601,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-12-353-mci-admin-only";
+const BUILD_TAG = "2026-07-12-354-tutorial-hub";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1595,7 +1609,7 @@ const BUILD_TAG = "2026-07-12-353-mci-admin-only";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.9";
+const APP_MAJOR_MINOR = "2.10";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -2121,6 +2135,150 @@ const MCI_ROLES = [
   { key:"logisticsOfficer",  label:"資源／後勤官" },
   { key:"recorder",          label:"紀錄官" }
 ];
+/* =========================================================
+   教學園地：救護技術教學文章（圖文解說），目前限 admin 使用（見
+   settingsRow 的 disabled 判斷／viewTutorialCategories 等函式）。
+   內容純靜態寫在程式碼裡（沒有後台可以編輯，跟 RELEASE_NOTES 同一種
+   維護方式），圖片是 repo 裡的靜態檔案（tutorials/img/），透過 Firebase
+   Hosting 直接連到，不用另外接 Firebase Storage。分類是固定的 7 類，
+   之後新增教學只需要往對應分類的陣列裡加一筆，不用改分類本身。
+   ========================================================= */
+const TUTORIAL_CATEGORIES = [
+  { key:"vitals",    label:"評估與生命徵象",     iconName:"heartbeat", bg:"#E8F1FF", fg:"#0056C7" },
+  { key:"airway",    label:"呼吸道與心肺復甦",   iconName:"lungs",     bg:"#FFEAEA", fg:"#C7233B" },
+  { key:"ecg",       label:"心臟監測與心電圖",   iconName:"chart",     bg:"#F2E9FE", fg:"#6B23C7" },
+  { key:"trauma",    label:"創傷處置",           iconName:"alert",     bg:"#FFF2E0", fg:"#B45F00" },
+  { key:"medical",   label:"內科與環境急症",     iconName:"sun",       bg:"#E9F9EF", fg:"#177A34" },
+  { key:"equipment", label:"儀器與裝備操作",     iconName:"wrench",    bg:"#E8F1FF", fg:"#0056C7" },
+  { key:"mci",       label:"大量傷患與檢傷分類", iconName:"alert",     bg:"#FFEAEA", fg:"#C7233B" }
+];
+// 文章內文用區塊陣列描述：h3（子標題）／p（段落）／image（示意圖，src是
+// tutorials/img/ 底下的靜態檔案路徑，caption選填）／callout（重點提醒，
+// 左側色條樣式）。圖片目前都是示意圖佔位，之後有正式的照片/圖表可以
+// 直接換掉 src，不用動排版邏輯。
+const TUTORIAL_ARTICLES = {
+  vitals: [{
+    id: "vitals-basic",
+    title: "基本生命徵象判定",
+    summary: "呼吸、脈搏、血壓、體溫、SpO2 的測量方式與正常範圍，是傷患評估最基本的第一步。",
+    body: [
+      { type:"p", text:"生命徵象（Vital Signs）是評估傷患狀況最基本、也最容易在現場快速取得的客觀資訊，通常包含呼吸、脈搏、血壓、體溫、血氧濃度五項，搭配意識程度評估，構成初步評估的核心。" },
+      { type:"image", src:"tutorials/img/vitals-overview.svg", caption:"五大生命徵象測量項目與正常參考值" },
+      { type:"h3", text:"1. 呼吸（Respiration Rate）" },
+      { type:"p", text:"觀察胸廓起伏，計算 30 秒次數再乘以 2，同時留意呼吸型態是否規律、有無使用呼吸輔助肌、有無異常呼吸音。成人正常範圍約 12-20 次/分，低於 8 次或高於 30 次都屬於危急徵象。" },
+      { type:"h3", text:"2. 脈搏（Pulse）" },
+      { type:"p", text:"優先於橈動脈觸診，摸不到才改摸頸動脈；計算 30 秒次數再乘以 2，同時記錄脈搏強弱與規律性。成人正常範圍約 60-100 次/分。" },
+      { type:"h3", text:"3. 血壓（Blood Pressure）" },
+      { type:"p", text:"使用壓脈帶搭配聽診器測量收縮壓與舒張壓，壓脈帶寬度須包覆上臂約 2/3、下緣距肘窩 2-3 公分。成人正常參考值約為 120/80 mmHg，收縮壓低於 90 mmHg 需高度警覺休克可能。" },
+      { type:"h3", text:"4. 體溫（Temperature）" },
+      { type:"p", text:"現場常用耳溫槍或額溫槍快速測量，正常範圍約 36-37.5°C。體溫過高需考慮熱急症，體溫過低（低於 35°C）則要注意失溫與凝血功能異常。" },
+      { type:"h3", text:"5. 血氧濃度（SpO2）" },
+      { type:"p", text:"以脈搏血氧儀夾在指尖測量，正常值應在 95% 以上。低血氧合併呼吸窘迫、意識改變時，屬於需要立即處置的危急徵象。" },
+      { type:"callout", text:"重點提醒：單一次測量只是一個時間點的數字，生命徵象要重複測量、比較變化趨勢，才能真正判斷傷患是在惡化還是穩定。" },
+      { type:"h3", text:"意識程度評估（GCS）" },
+      { type:"p", text:"格拉斯哥昏迷指數（GCS）以睜眼反應（E）、語言反應（V）、運動反應（M）三項評分加總，滿分 15 分，用來量化描述意識狀態，方便交班與追蹤變化。" },
+      { type:"image", src:"tutorials/img/gcs-scale.svg", caption:"GCS 三項評分標準（E＋V＋M）" },
+      { type:"callout", text:"重點提醒：GCS 8 分以下通常代表傷患已無法自行保護呼吸道，須優先處理呼吸道並準備後送。" }
+    ]
+  }],
+  airway: [{
+    id: "cpr-aed",
+    title: "成人 CPR 與 AED 操作流程",
+    summary: "檢查反應到胸部按壓、人工呼吸、AED電擊，完整的成人心肺復甦流程與貼片位置。",
+    body: [
+      { type:"p", text:"心肺復甦術（CPR）搭配自動體外電擊去顫器（AED），是搶救心跳停止患者最關鍵的現場處置，每延遲一分鐘才開始壓胸，存活率就會明顯下降。" },
+      { type:"h3", text:"1. 檢查反應與呼吸" },
+      { type:"p", text:"輕拍雙肩並大聲呼叫，同時觀察胸廓起伏 5-10 秒。如果沒有反應、沒有呼吸或只有喘息式呼吸（agonal breathing），視為心跳停止，立即啟動下一步。" },
+      { type:"h3", text:"2. 求救與準備" },
+      { type:"p", text:"大聲呼救、請人啟動緊急救護系統並取得 AED，自己不要離開患者身邊，馬上開始胸部按壓，不用等其他人到齊。" },
+      { type:"h3", text:"3. 胸部按壓與人工呼吸" },
+      { type:"p", text:"雙手掌根交疊，置於胸骨中下段（兩乳頭連線中點），手臂打直、垂直向下按壓，深度 5-6 公分、速率每分鐘 100-120 次，每次按壓後讓胸廓完全回彈。每 30 次按壓給予 2 次人工呼吸，持續循環直到 AED 到達或患者恢復反應。" },
+      { type:"image", src:"tutorials/img/cpr-cycle.svg", caption:"30 次胸部按壓：2 次人工呼吸的循環比例" },
+      { type:"callout", text:"重點提醒：按壓中斷時間要盡量壓到最短（例如換手、分析心律時），持續、有效、少中斷的按壓才是提高存活率的關鍵。" },
+      { type:"h3", text:"4. AED 操作步驟" },
+      { type:"p", text:"打開 AED 電源後跟著語音指示：擦乾患者胸口、貼上兩片電擊貼片、待機器分析心律。分析與電擊當下所有人員都要離開患者身體，避免不必要的觸電或干擾判讀。電擊完成後立即恢復胸部按壓，不用先摸脈搏確認。" },
+      { type:"image", src:"tutorials/img/aed-pad-placement.svg", caption:"AED 貼片標準放置位置：右鎖骨下方與左側腋中線" },
+      { type:"callout", text:"重點提醒：電擊前務必確認『全部人員已離開患者』，包含自己的雙手，避免電擊時被波及。" }
+    ]
+  }],
+  ecg: [{
+    id: "ecg-basic",
+    title: "心電圖機操作與導程貼片位置",
+    summary: "12 導程電極貼片標準位置與操作步驟，以及 P-QRS-T 基本波形判讀入門。",
+    body: [
+      { type:"p", text:"心電圖（ECG/EKG）記錄心臟電氣活動的變化，是判斷心律不整、心肌缺血等心臟疾病最直接的工具之一，正確的貼片位置是取得可信賴波形的第一步。" },
+      { type:"h3", text:"12 導程電極配置" },
+      { type:"p", text:"四肢導程（RA／LA／RL／LL）分別貼在左右鎖骨下方與左右下腹或下肢；胸前導程 V1-V6 則依序貼在胸骨兩側肋間與腋前線、腋中線，精確位置請參考下圖。" },
+      { type:"image", src:"tutorials/img/ecg-electrode-placement.svg", caption:"12 導程電極貼片標準位置" },
+      { type:"h3", text:"操作步驟" },
+      { type:"p", text:"貼片前先用酒精棉片清潔皮膚、去除毛髮與汗水以確保訊號品質，貼上電極片後連接導線，機器開機後選擇正確的紀錄模式，請患者放鬆、暫時不要說話與移動，再列印或儲存波形。" },
+      { type:"h3", text:"基本波形判讀入門" },
+      { type:"p", text:"一個完整的心跳週期會呈現 P 波、QRS 複合波與 T 波：P 波代表心房去極化，QRS 複合波代表心室去極化，T 波代表心室再極化。判讀時先看整體節律是否規則、心跳速率是否正常，再逐一檢視每個波形的形態。" },
+      { type:"image", src:"tutorials/img/ecg-waveform.svg", caption:"正常竇性心律的 P-QRS-T 波形" },
+      { type:"callout", text:"重點提醒：心電圖判讀需要搭配臨床症狀一起評估，機器本身有時候也會誤判（例如貼片鬆脫造成的假性心律不整），不能只看數字或波形就下結論。" }
+    ]
+  }],
+  trauma: [{
+    id: "hemorrhage-control",
+    title: "大出血止血技術",
+    summary: "直接加壓止血與止血帶的使用時機、方法，以及基本傷口包紮原則。",
+    body: [
+      { type:"p", text:"大出血是現場最容易在短時間內致命的創傷情況之一，止血的優先順序與速度，往往比其他處置都更關鍵。" },
+      { type:"h3", text:"1. 直接加壓止血" },
+      { type:"p", text:"用紗布或乾淨敷料直接覆蓋傷口，用掌根穩定、持續施力加壓，中途不要頻繁掀開查看，血液會先在敷料上凝結，過度掀開反而會破壞已形成的血栓。如果敷料被血浸濕，直接在上面再疊加一層，不要移除原本的敷料。" },
+      { type:"h3", text:"2. 止血帶使用時機" },
+      { type:"p", text:"當直接加壓無法止血、或肢體出現大量出血危及生命時，才使用止血帶。止血帶應綁在傷口近心端 5-7 公分處，直接綁在皮膚上（不要隔著寬鬆衣物），拉緊至遠端脈搏消失、出血完全停止為止，並清楚紀錄綁紮時間。" },
+      { type:"image", src:"tutorials/img/hemorrhage-control.svg", caption:"直接加壓止血與止血帶使用位置" },
+      { type:"callout", text:"重點提醒：止血帶一旦綁上就不要中途鬆開查看，鬆開可能讓已經控制住的出血再度惡化；後送時務必把綁紮時間交班給後續接手的醫療人員。" },
+      { type:"h3", text:"3. 傷口包紮" },
+      { type:"p", text:"止血完成後用繃帶固定敷料，包紮力道要能維持加壓效果但不能過緊阻斷血流，包紮後應定時檢查遠端肢體的顏色、溫度與脈搏，確認血液循環正常。" }
+    ]
+  }],
+  medical: [{
+    id: "heat-illness",
+    title: "熱急症（中暑／熱衰竭）辨識與現場處置",
+    summary: "熱痙攣、熱衰竭、中暑的分辨方式，以及現場降溫與後送判斷原則。",
+    body: [
+      { type:"p", text:"野外操課、行軍等高溫環境下的訓練，熱急症是最常見也最容易被輕忽的內科急症，依嚴重程度可分為熱痙攣、熱衰竭、中暑三個層級。" },
+      { type:"h3", text:"熱痙攣（Heat Cramps）" },
+      { type:"p", text:"大量流汗後電解質流失，造成肌肉不自主抽筋，意識通常清楚。處置以休息、補充含電解質的水分、緩慢伸展抽筋肌肉為主。" },
+      { type:"h3", text:"熱衰竭（Heat Exhaustion）" },
+      { type:"p", text:"合併大量流汗、皮膚濕冷蒼白、頭暈、噁心、疲倦，體溫通常升高但意識仍清楚。應立即移至陰涼處平躺休息、鬆開衣物、給予降溫並補充水分，密切觀察是否惡化為中暑。" },
+      { type:"h3", text:"中暑（Heat Stroke）" },
+      { type:"p", text:"體溫調節機制失效，核心體溫可能超過 40°C，皮膚可能轉為乾熱、出現意識改變（躁動、昏迷）、抽搐等神經學症狀，屬於熱急症中最危急的型態，死亡率高，需要立即積極降溫並後送。" },
+      { type:"image", src:"tutorials/img/heat-illness-cooling.svg", caption:"現場降溫三要點：移至陰涼處、大量降溫、監測意識與體溫" },
+      { type:"callout", text:"重點提醒：只要出現意識改變，不管體溫高低，都要當作中暑等級的危急個案處理，優先降溫並立即後送，不要等體溫計數字確認再行動。" }
+    ]
+  }],
+  equipment: [{
+    id: "pulseox-bp-equipment",
+    title: "血氧機與血壓計操作教學",
+    summary: "脈搏血氧儀夾取方式與血壓計聽診測量法的實際操作步驟。",
+    body: [
+      { type:"p", text:"正確操作測量儀器，是取得可靠生命徵象數據的前提，儀器本身再精準，操作方式錯誤還是會得到失真的讀數。" },
+      { type:"h3", text:"脈搏血氧儀（Pulse Oximeter）" },
+      { type:"p", text:"夾在食指或中指指尖，避開指甲油、灰指甲或過冷、末梢循環不良的肢體（會影響訊號讀取）。夾上後等待數秒讓讀數穩定，同時觀察波形是否規律，波形不規律或訊號微弱時讀數不可靠，應更換測量部位。" },
+      { type:"h3", text:"血壓計聽診測量法" },
+      { type:"p", text:"壓脈帶下緣距肘窩 2-3 公分，寬度包覆上臂約三分之二，聽診器膜面貼於肱動脈上，打氣至橈動脈脈搏消失後再多加壓 20-30 mmHg，緩慢洩壓的同時聆聽柯氏音（Korotkoff sounds），第一個聲音出現時為收縮壓，聲音完全消失時為舒張壓。" },
+      { type:"image", src:"tutorials/img/equipment-pulseox-bp.svg", caption:"指尖式血氧機與血壓計聽診法操作重點" },
+      { type:"callout", text:"重點提醒：測量前確認電池電量與儀器歸零，環境太吵雜聽不清楚柯氏音時，可以改用觸診法先抓收縮壓概略數值，再找安靜處補做完整測量。" }
+    ]
+  }],
+  mci: [{
+    id: "start-triage",
+    title: "START 檢傷分類法簡介",
+    summary: "行動力、呼吸、灌流、意識四道決策關卡，快速將大量傷患分類為紅黃綠黑。",
+    body: [
+      { type:"p", text:"START（Simple Triage And Rapid Treatment）是大量傷患事件現場最常用的快速檢傷分類法，目標是在極短時間內（每位傷患約 30 秒內）完成分類，讓有限的救護資源優先送到最危急的傷患身上。" },
+      { type:"h3", text:"檢傷決策流程" },
+      { type:"p", text:"依序評估行動力（能否自行走動）、呼吸（有無呼吸、呼吸速率）、灌流（橈動脈脈搏或微血管回充）、意識（能否配合簡單指令）四道關卡，第一個出現異常的地方就決定傷患的檢傷顏色，不用等所有項目都評估完。" },
+      { type:"image", src:"tutorials/img/start-triage-flowchart.svg", caption:"START 檢傷分類決策流程" },
+      { type:"h3", text:"紅黃綠黑代表意義" },
+      { type:"p", text:"紅色（立即）：呼吸/循環/意識任一項異常，需要立即處置與優先後送。黃色（延遲）：能配合指令但無法自行走動，可延後處置。綠色（輕微）：能自行走動，屬於輕傷。黑色：暢通呼吸道後仍無呼吸，判定為死亡或無法救治。" },
+      { type:"callout", text:"重點提醒：判定為紅色的傷患，實務上還會再追加評估 A（呼吸道）／B（呼吸）／C（循環）／D（神經學）子分類，找出第一個出問題的地方，方便治療官掌握優先處置重點。這套邏輯跟本系統「大量傷患演練模組」的檢傷官流程完全一致，可以直接在系統裡實際操作練習。" }
+    ]
+  }]
+};
 // 檢傷官建立案件用的 START 檢傷法決策流程（行動力→呼吸→灌流→意識），
 // 免打字、免動腦，全程大按鈕點選；每個步驟的選項用 go 表示下一步走去
 // 哪裡（{step:"下一步key"}）或直接判定顏色（{color:"..."}）。呼吸這一關
@@ -2320,6 +2478,10 @@ const RELEASE_NOTES = [
       "首頁分頁改版：統計/人員配置/傷患名冊三個區塊標題改成「現況戰情統計」「現場編組指派」「動態追蹤名冊」，統計卡片加上顏色/狀態對應的表情符號，功能不變（編輯車輛/醫院、結束事件、6個角色欄位、傷患名冊都照舊）",
       "整個模組視覺改版（蘋果極簡風＋戰術高清晰）：卡片拿掉生硬外框、改用大留白＋更輕柔的陰影，圓角統一放大；檢傷分類與後送狀態改用藥丸狀 badge；現場編組指派的輸入框改成 iOS 設定風格，文字靠右對齊、只有編輯中才亮起淺灰底色；只調整這個模組的樣式，不影響其他頁面",
       "大量傷患演練模組目前只開放管理員使用：更多頁的入口在其他角色眼中顯示灰階、點不進去；就算直接導覽過去或直接呼叫後端 API 也會被擋下（Firestore 規則同步收緊）",
+    ] },
+    { category: "教學園地", items: [
+      "新增「教學園地（建構中）」：更多頁底下的救護技術教學文章，圖文並茂解說。分成評估與生命徵象、呼吸道與心肺復甦、心臟監測與心電圖、創傷處置、內科與環境急症、儀器與裝備操作、大量傷患與檢傷分類 7 大分類，每篇文章都是段落文字搭配示意圖交錯呈現，重點步驟加上重點提醒框",
+      "教學園地目前只開放管理員使用，跟大量傷患演練模組同一套收斂方式：其他角色在更多頁看到的入口顯示灰階、點不進去，直接導覽過去也會被擋下",
     ] },
   ] },
   { date: "2026/07/11", groups: [
@@ -4673,7 +4835,9 @@ const ICON_PATHS = {
   sparkle: `<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/>`,
   chat: `<path d="M4 5h16v11H8l-4 4V5Z"/>`,
   share: `<path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>`,
-  close: `<path d="M6 6l12 12M18 6 6 18"/>`
+  close: `<path d="M6 6l12 12M18 6 6 18"/>`,
+  lungs: `<path d="M12 3v7"/><path d="M12 10c-1.5-2-4-2.5-5.5-1S4 13 5 16.5c.6 2 1.8 3 3 3 1 0 1.5-.8 1.5-2v-6"/><path d="M12 10c1.5-2 4-2.5 5.5-1S20 13 19 16.5c-.6 2-1.8 3-3 3-1 0-1.5-.8-1.5-2v-6"/>`,
+  wrench: `<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.8 2.8-2-2 2.8-2.8Z"/>`
 };
 function icon(name, size){
   size = size || 20;
@@ -7037,6 +7201,7 @@ function viewProfile(){
     settingsRow({icon:'user', bg:'#E8F1FF', fg:'#0056C7', title:'個人資料', onclick:"window.__editProfile()"}),
     settingsRow({icon:'user', bg:'#E9F9EF', fg:'#177A34', title:'成員列表', subtitle:'各單位人員姓名/階級/電話/證照', onclick:"window.__nav({name:'memberList'})"}),
     settingsRow({icon:'alert', bg:'#FFEAEA', fg:'#C7233B', title:'大量傷患演練模組（建構中）', subtitle:'開事件、傷患檢傷分類與車輛/醫院指派', onclick:"window.__nav({name:'mciList'})", disabled: myRole(p) !== 'admin'}),
+    settingsRow({icon:'records', bg:'#F2E9FE', fg:'#6B23C7', title:'教學園地（建構中）', subtitle:'救護技術教學文章，圖文解說', onclick:"window.__nav({name:'tutorials'})", disabled: myRole(p) !== 'admin'}),
     settingsRow({icon:'sun', bg:'#F2E9FE', fg:'#6B23C7', title:'螢幕顯示', subtitle:THEME_MODE_LABEL[state.themeMode], onclick:"window.__nav({name:'displayAppearance'})"}),
     settingsRow({icon:'bell', bg:'#FFEAEA', fg:'#C7233B', title:'推播通知', subtitle:pushStatusLabel(), onclick:"window.__nav({name:'pushSettings'})"}),
     settingsRow({icon:'chat', bg:'#E9F9EF', fg:'#177A34', title:'意見回饋', onclick:"window.__nav({name:'feedback'})"}),
@@ -7246,6 +7411,64 @@ function viewAbout(){
     <div class="about-copyright">
       Copyright © 2026 MEDTRACK. All Rights Reserved.<br><br>
       本系統為衛生營內部勤務管理使用，未經授權不得擅自複製、散布、修改或提供予第三方。所有系統內容、介面設計及相關資料均受著作權及相關法律保護。
+    </div>
+  `;
+}
+/* =========================================================
+   教學園地：分類列表 → 分類內文章列表 → 文章內頁（圖文教學）。
+   目前限 admin 使用（跟大量傷患演練模組同一套「還在建構中」的收斂
+   方式）：更多頁入口本身就已經灰階擋掉，這裡三個畫面各自也擋一次，
+   避免有人直接呼叫 window.__nav 硬導覽過去繞過去。
+   ========================================================= */
+function viewTutorialCategories(){
+  if (myRole(state.profile) !== 'admin') return `<div class="back-row">${backBtn({name:'profile'})}</div><div class="empty">此功能目前僅開放管理員使用</div>`;
+  return `
+    <div class="back-row">${backBtn({name:'profile'})}</div>
+    <div class="section-label">教學園地</div>
+    <div class="settings-group">
+      ${TUTORIAL_CATEGORIES.map(c => {
+        const count = (TUTORIAL_ARTICLES[c.key]||[]).length;
+        return settingsRow({icon:c.iconName, bg:c.bg, fg:c.fg, title:c.label, subtitle:`共 ${count} 篇教學`, onclick:`window.__nav({name:'tutorialCategory', key:'${c.key}'})`});
+      }).join("")}
+    </div>
+  `;
+}
+function viewTutorialCategory(key){
+  if (myRole(state.profile) !== 'admin') return `<div class="back-row">${backBtn({name:'profile'})}</div><div class="empty">此功能目前僅開放管理員使用</div>`;
+  const cat = TUTORIAL_CATEGORIES.find(c => c.key === key);
+  if (!cat) return `<div class="back-row">${backBtn({name:'tutorials'})}</div><div class="empty">找不到這個分類</div>`;
+  const articles = TUTORIAL_ARTICLES[key] || [];
+  return `
+    <div class="back-row">${backBtn({name:'tutorials'})}</div>
+    <div class="section-label">${esc(cat.label)}</div>
+    ${articles.length ? `<div class="settings-group">${articles.map(a => settingsRow({icon:cat.iconName, bg:cat.bg, fg:cat.fg, title:a.title, subtitle:a.summary, onclick:`window.__nav({name:'tutorialArticle', key:'${key}', id:'${a.id}'})`})).join("")}</div>` : `<div class="empty">這個分類還沒有教學文章</div>`}
+  `;
+}
+// 文章內文的區塊渲染：h3／p／image／callout 四種類型，圖片跟重點提醒框
+// 樣式見上面 CSS 的 .tutorial-* 系列。
+function renderTutorialBody(blocks){
+  return blocks.map(b => {
+    if (b.type === "h3") return `<div class="tutorial-h3">${esc(b.text)}</div>`;
+    if (b.type === "p") return `<p>${esc(b.text)}</p>`;
+    if (b.type === "image") return `
+      <div class="tutorial-image-block">
+        <img src="${esc(b.src)}" alt="${esc(b.caption||'')}" class="tutorial-image" loading="lazy">
+        ${b.caption ? `<div class="tutorial-image-caption">${esc(b.caption)}</div>` : ""}
+      </div>`;
+    if (b.type === "callout") return `<div class="tutorial-callout">${icon('alert',16)}<span>${esc(b.text)}</span></div>`;
+    return "";
+  }).join("");
+}
+function viewTutorialArticle(key, id){
+  if (myRole(state.profile) !== 'admin') return `<div class="back-row">${backBtn({name:'profile'})}</div><div class="empty">此功能目前僅開放管理員使用</div>`;
+  const cat = TUTORIAL_CATEGORIES.find(c => c.key === key);
+  const article = cat ? (TUTORIAL_ARTICLES[key]||[]).find(a => a.id === id) : null;
+  if (!cat || !article) return `<div class="back-row">${backBtn({name:'tutorials'})}</div><div class="empty">找不到這篇教學</div>`;
+  return `
+    <div class="back-row">${backBtn({name:'tutorialCategory', key})}</div>
+    <div class="section-label">${esc(article.title)}</div>
+    <div class="detail-head" style="text-align:left; font-size:var(--text-sm); line-height:1.8; color:var(--text);">
+      ${renderTutorialBody(article.body)}
     </div>
   `;
 }
@@ -8209,7 +8432,10 @@ const ROUTE_VIEWS = {
   adminFeedback: viewAdminFeedbackPage,
   pushConsole: viewPushConsolePage,
   mciList: viewMciList,
-  mciEvent: () => viewMciEvent(state.route.id)
+  mciEvent: () => viewMciEvent(state.route.id),
+  tutorials: viewTutorialCategories,
+  tutorialCategory: () => viewTutorialCategory(state.route.key),
+  tutorialArticle: () => viewTutorialArticle(state.route.key, state.route.id)
 };
 const NAV_ITEMS = [
   { name:"home", iconName:"home", label:"首頁", accent:"#007AFF" },

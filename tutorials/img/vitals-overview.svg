@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 340" font-family="'PingFang TC','Microsoft JhengHei',sans-serif">
+  <rect width="600" height="340" fill="#F8F9FC"/>
+  <text x="300" y="34" text-anchor="middle" font-size="18" font-weight="700" fill="#15161B">五大生命徵象測量項目</text>
+
+  <!-- row1 -->
+  <g transform="translate(50,60)">
+    <rect width="140" height="110" rx="16" fill="#E8F1FF"/>
+    <path d="M70 38v16M50 66c7-10 16-13 20-5s13 5 20-5" stroke="#0056C7" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+    <text x="70" y="130" text-anchor="middle" font-size="14" font-weight="700" fill="#15161B">呼吸 RR</text>
+    <text x="70" y="148" text-anchor="middle" font-size="12" fill="#8A8D98">12-20 次/分</text>
+  </g>
+  <g transform="translate(230,60)">
+    <rect width="140" height="110" rx="16" fill="#FFEAEA"/>
+    <path d="M38 66h16l8-20 14 40 10-28 8 8h26" stroke="#C7233B" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="70" y="130" text-anchor="middle" font-size="14" font-weight="700" fill="#15161B">脈搏 HR</text>
+    <text x="70" y="148" text-anchor="middle" font-size="12" fill="#8A8D98">60-100 次/分</text>
+  </g>
+  <g transform="translate(410,60)">
+    <rect width="140" height="110" rx="16" fill="#F2E9FE"/>
+    <rect x="40" y="38" width="60" height="34" rx="6" fill="none" stroke="#6B23C7" stroke-width="3.5"/>
+    <path d="M70 72v16" stroke="#6B23C7" stroke-width="3.5"/>
+    <circle cx="70" cy="55" r="5" fill="#6B23C7"/>
+    <text x="70" y="130" text-anchor="middle" font-size="14" font-weight="700" fill="#15161B">血壓 BP</text>
+    <text x="70" y="148" text-anchor="middle" font-size="12" fill="#8A8D98">120/80 mmHg</text>
+  </g>
+
+  <!-- row2 -->
+  <g transform="translate(140,200)">
+    <rect width="140" height="110" rx="16" fill="#FFF2E0"/>
+    <rect x="65" y="30" width="10" height="40" rx="5" fill="none" stroke="#B45F00" stroke-width="3.5"/>
+    <circle cx="70" cy="78" r="12" fill="none" stroke="#B45F00" stroke-width="3.5"/>
+    <text x="70" y="130" text-anchor="middle" font-size="14" font-weight="700" fill="#15161B">體溫 Temp</text>
+    <text x="70" y="148" text-anchor="middle" font-size="12" fill="#8A8D98">36-37.5°C</text>
+  </g>
+  <g transform="translate(320,200)">
+    <rect width="140" height="110" rx="16" fill="#E9F9EF"/>
+    <path d="M70 32c-16 16-24 28-24 40a24 24 0 0 0 48 0c0-12-8-24-24-40Z" fill="none" stroke="#177A34" stroke-width="3.5"/>
+    <text x="70" y="130" text-anchor="middle" font-size="14" font-weight="700" fill="#15161B">血氧 SpO2</text>
+    <text x="70" y="148" text-anchor="middle" font-size="12" fill="#8A8D98">95-100%</text>
+  </g>
+</svg>
