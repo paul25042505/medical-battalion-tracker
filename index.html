@@ -1555,7 +1555,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-345-mci-treatment-complete-gate";
+const BUILD_TAG = "2026-07-11-346-mci-ccp-modal-button-relayout";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2323,6 +2323,7 @@ const RELEASE_NOTES = [
       "事件詳情頁新增「首頁」分頁：事件標題/狀態/編輯車輛醫院/結束事件、傷患統計、人員配置都收進這個獨立分頁；檢傷官分頁只留下一號傷患編號跟 START 檢傷問答，切分頁不用重複看到一樣的事件概況",
       "首頁分頁新增完整「傷患名冊」：不分角色、不管每位傷患目前在生命週期哪個節點，都看得到檢傷分類、主訴、車輛/醫院配對、離開現場/抵達醫院時間與里程備註，一次掌握全部傷患現況",
       "治療官編輯彈窗新增「處置完成」按鈕（跟「刪除此傷患」排同一列）：點過之後這位傷患才會從治療官的待命清單移到後送官分頁，後送官才看得到、才能指派車輛/醫院——治療中的傷患不會被後送官提早看到、提早安排後送",
+      "治療官編輯彈窗重新排版：移除主訴獨立的「儲存」按鈕，改成主訴編輯會跟著「處置完成」一起存檔；「刪除此傷患」跟「處置完成」改用原本儲存按鈕的大按鈕格式並排同一列，「刪除此傷患」顏色改成紅色",
     ] },
   ] },
   { date: "2026/07/10", groups: [
@@ -5757,10 +5758,7 @@ function viewMciCcpEditModal(){
       <div class="mci-start-result" style="margin-bottom:14px;">
         <span class="mci-triage-badge" style="--c:${info?info.color:'#8E8E93'}">${p.triageColor==='red'?'紅'+(p.redSubcat||''):(info?info.label:'未分類')}</span>
       </div>
-      <form onsubmit="window.__submitMciCcpEdit(event,'${p.id}')">
-        <div class="field"><label>主訴／受傷部位</label><input name="complaint" value="${esc(p.complaint||'')}" placeholder="例如：右大腿開放性骨折"></div>
-        <button class="btn-primary" type="submit">儲存</button>
-      </form>
+      <div class="field"><label>主訴／受傷部位</label><input name="complaint" value="${esc(p.complaint||'')}" placeholder="例如：右大腿開放性骨折"></div>
       ${p.triageColor === "yellow" ? (retriage ? `
         <form onsubmit="window.__confirmMciRetriage(event,'${p.id}')" style="margin-top:18px; padding-top:18px; border-top:1px solid var(--border);">
           <div class="section-label">二次檢傷：升級為紅色，第一個出問題的地方？</div>
@@ -5772,8 +5770,8 @@ function viewMciCcpEditModal(){
         <button type="button" class="icon-btn danger" style="width:100%; margin-top:18px;" onclick="window.__startMciRetriage()">${icon('alert',15)} 傷情惡化，二次檢傷升級為紅色</button>
       `) : ""}
       <div style="display:flex; gap:8px; margin-top:12px;">
-        <button type="button" class="icon-btn danger" style="flex:1;" onclick="window.__deleteMciPatientFromCcp('${p.id}')">刪除此傷患</button>
-        <button type="button" class="icon-btn primary" style="flex:1;" onclick="window.__completeMciTreatment('${p.id}')">處置完成</button>
+        <button type="button" class="btn-primary" style="flex:1; background:var(--red); border-color:var(--red); box-shadow:none;" onclick="window.__deleteMciPatientFromCcp('${p.id}')">刪除此傷患</button>
+        <button type="button" class="btn-primary" style="flex:1;" onclick="window.__completeMciTreatment('${p.id}')">處置完成</button>
       </div>
       <button type="button" class="btn-ghost" style="width:100%;margin-top:10px;" onclick="window.__closeMciCcpEdit()">關閉</button>
     </div>
@@ -8822,14 +8820,11 @@ window.__submitMciTriageForm = (ev, eventId) => {
   };
   addMciPatient(eventId, data).then(() => { window.__mciStartRestart(); }).catch(baseDataErr);
 };
-// 治療官：傷患集中區編輯（主訴）＋二次檢傷（僅黃→紅）。
+// 治療官：傷患集中區編輯（主訴）＋二次檢傷（僅黃→紅）。主訴沒有獨立的
+// 儲存按鈕，輸入框裡的內容會在點「處置完成」時一併存檔（見
+// __completeMciTreatment）。
 window.__openMciCcpEdit = (id) => { state.mciCcpEditId = id; state.mciRetriageActive = false; render(); };
 window.__closeMciCcpEdit = () => { state.mciCcpEditId = null; state.mciRetriageActive = false; render(); };
-window.__submitMciCcpEdit = (ev, id) => {
-  ev.preventDefault();
-  const f = new FormData(ev.target);
-  updateMciPatient(id, { complaint: f.get("complaint") || "" }).then(() => { state.mciCcpEditId = null; render(); }).catch(baseDataErr);
-};
 window.__startMciRetriage = () => { state.mciRetriageActive = true; render(); };
 window.__cancelMciRetriage = () => { state.mciRetriageActive = false; render(); };
 window.__confirmMciRetriage = (ev, id) => {
