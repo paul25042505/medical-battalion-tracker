@@ -1294,7 +1294,12 @@
     margin:-16px -16px 20px -16px; padding:22px 16px 10px 16px;
     background:color-mix(in srgb, var(--bg) 82%, transparent);
     backdrop-filter:blur(16px) saturate(180%); -webkit-backdrop-filter:blur(16px) saturate(180%);
+    /* 大量傷患事件詳情頁有 5 個分頁（首頁/檢傷官/治療官/後送官/車輛視角），
+       比原本設計的 3～4 個多，窄螢幕上固定寬度的圖示排滿可能會超出可視
+       範圍；加上水平捲動當安全網，不影響原本 3～4 個剛好塞得下的頁面。 */
+    overflow-x:auto; scrollbar-width:none;
   }
+  .icon-subtabs::-webkit-scrollbar{display:none;}
   .icon-subtab{
     display:flex; flex-direction:column; align-items:center; gap:8px; flex-shrink:0;
     background:none; border:none; font-family:var(--sans); color:var(--muted);
@@ -1555,7 +1560,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-12-347-mci-pulltorefresh-treating-label";
+const BUILD_TAG = "2026-07-12-348-mci-vehicle-view-edit";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2279,6 +2284,10 @@ const RELEASE_NOTES = [
     { category: "大量傷患事件", items: [
       "修正檢傷官／治療官／後送官分頁下拉沒辦法重新整理的問題：這幾個分頁案件不多時內容很短、main 完全捲不動，先前的判斷式要求頁面真的可以捲動才允許觸發下拉手勢，內容不足一螢幕的分頁因此永遠沒辦法下拉重新整理；改成只要求手勢起點在頂端（捲不動的頁面本來就恆成立），內容再短也可以下拉重新整理",
       "治療官分頁的傷患狀態文字「待命」改成「治療中」，跟「處置完成」後的「待後送」意思更好區分",
+      "更多頁「大量傷患事件」改名為「大量傷患演練模組（建構中）」",
+      "抵達醫院回報不用再填里程",
+      "後送官分頁的傷患卡片新增資料校正入口：已指派車輛/醫院的傷患可以重新開啟指派彈窗修改車輛或醫院、已抵達醫院的可以編輯備註內容，另外新增「刪除此傷患」按鈕；離開現場/抵達醫院的時間點本身確認過後不能逆轉，只能校正車輛、醫院、備註這類資料",
+      "新增「車輛視角」分頁：救護車車長可以直接看到自己車輛目前的任務狀態（運送中／已抵達等待選擇返回地點／返回中／待命中可再派遣），送達醫院後可選擇返回後管站或返回現地，抵達後管站或現地再各自回報一次；後送官指派車輛時，還沒回報返回抵達的車輛（正在執行任務中）不會出現在可選清單，避免同一台車被重複指派",
     ] },
   ] },
   { date: "2026/07/11", groups: [
@@ -5570,10 +5579,11 @@ function viewMciCreateModal(){
 // 負責傷患集中區的追蹤與二次檢傷、後送官負責車輛出發/抵達的生命週期。
 // 全程匿名化：傷患不記錄姓名，唯一身分是流水號（MCI-01, MCI-02...）。
 const MCI_EVENT_TABS = [
-  { key:"home",   label:"首頁", iconName:"home" },
-  { key:"triage", label:"檢傷官", iconName:"alert" },
-  { key:"ccp",    label:"治療官", iconName:"heartbeat" },
-  { key:"evac",   label:"後送官", iconName:"depart" }
+  { key:"home",    label:"首頁", iconName:"home" },
+  { key:"triage",  label:"檢傷官", iconName:"alert" },
+  { key:"ccp",     label:"治療官", iconName:"heartbeat" },
+  { key:"evac",    label:"後送官", iconName:"depart" },
+  { key:"vehicle", label:"車輛視角", iconName:"returnArrow" }
 ];
 function viewMciEvent(eventId){
   const ev = state.mciEvents.find(e => e.id === eventId);
@@ -5590,6 +5600,7 @@ function viewMciEvent(eventId){
   const tabBody = eventTab === "triage" ? viewMciTriageTab(eventId)
     : eventTab === "ccp" ? viewMciCcpTab(eventId)
     : eventTab === "evac" ? viewMciEvacTab(eventId)
+    : eventTab === "vehicle" ? viewMciVehicleTab(eventId)
     : viewMciHomeTab(eventId);
   return `
     <div class="back-row">${backBtn({name:'mciList'})}</div>
@@ -5660,7 +5671,7 @@ function mciHomePatientCard(p){
     ${p.complaint ? `<div class="mci-patient-complaint">${esc(p.complaint)}</div>` : ""}
     ${p.vehicle && p.hospital ? `<div class="mci-evac-chain"><span>${esc(p.vehicle)}</span><span class="mci-evac-arrow">→</span><span>${esc(p.hospital)}</span></div>` : ""}
     ${p.departedAt ? `<div class="mci-evac-time">離開現場：${fmtTime(new Date(p.departedAt).getTime())}</div>` : ""}
-    ${p.arrivedAt ? `<div class="mci-evac-time">抵達醫院：${fmtTime(new Date(p.arrivedAt).getTime())}${p.mileage?'・里程 '+esc(String(p.mileage))+' 公里':''}${p.notes?'・'+esc(p.notes):''}</div>` : ""}
+    ${p.arrivedAt ? `<div class="mci-evac-time">抵達醫院：${fmtTime(new Date(p.arrivedAt).getTime())}${p.notes?'・'+esc(p.notes):''}</div>` : ""}
   </div>`;
 }
 // 檢傷分類 ABCD 子項改用自己的 chip 樣式（顏色點各自不同、需要 fullLabel
@@ -5784,6 +5795,21 @@ function viewMciCcpEditModal(){
   </div>`;
 }
 
+// 車輛忙碌判斷：同一台車在同一個事件裡可能載過不只一位傷患（送到醫院
+// 後折返，再載下一位），「目前」可不可以再派看的是這台車「最近一次」
+// （seq 最大）的指派紀錄有沒有完成返回（returnArrivedAt）；已經返回代表
+// 這趟任務結束，車輛回到待命狀態，可以再指派新的傷患。excludeId 用來
+// 排除「正在編輯中的這筆傷患自己」，不然編輯已指派傷患的車輛時，會把
+// 自己現有的車也當成「被別人占用」濾掉，選單裡看不到原本選的那台車。
+function mciVehicleLatestAssignment(eventId, plate, excludeId){
+  return state.mciPatients
+    .filter(p => p.eventId === eventId && p.vehicle === plate && p.id !== excludeId)
+    .sort((a,b) => (b.seq||0) - (a.seq||0))[0] || null;
+}
+function mciVehicleIsBusy(eventId, plate, excludeId){
+  const latest = mciVehicleLatestAssignment(eventId, plate, excludeId);
+  return !!latest && !latest.returnArrivedAt;
+}
 /* ---- 後送官視角：雙節點後送生命週期（離開現場／抵達醫院） ---- */
 // 治療官還沒點「處置完成」（狀態仍是「治療中」）的傷患不會出現在這裡：
 // 後送官只處理已經處置完成的傷患，不會提早看到、提早指派車輛/醫院。
@@ -5811,16 +5837,28 @@ function mciEvacPatientCard(p){
     ${p.complaint ? `<div class="mci-patient-complaint">${esc(p.complaint)}</div>` : ""}
     ${needsAssign ? "" : `<div class="mci-evac-chain"><span>${esc(p.vehicle)}</span><span class="mci-evac-arrow">→</span><span>${esc(p.hospital)}</span></div>`}
     ${p.departedAt ? `<div class="mci-evac-time">離開現場：${fmtTime(new Date(p.departedAt).getTime())}</div>` : ""}
-    ${p.arrivedAt ? `<div class="mci-evac-time">抵達醫院：${fmtTime(new Date(p.arrivedAt).getTime())}${p.mileage?'・里程 '+esc(String(p.mileage))+' 公里':''}${p.notes?'・'+esc(p.notes):''}</div>` : ""}
+    ${p.arrivedAt ? `<div class="mci-evac-time">抵達醫院：${fmtTime(new Date(p.arrivedAt).getTime())}${p.notes?'・'+esc(p.notes):''}</div>` : ""}
     <div class="mci-patient-actions">
       ${needsAssign ? `<button class="icon-btn primary" onclick="window.__openMciAssign('${p.id}')">${icon('depart',15)} 指派車輛／醫院</button>` : ""}
       ${!needsAssign && !p.departedAt ? `<button class="icon-btn primary" onclick="window.__mciMarkDeparted('${p.id}')">${icon('depart',15)} 離開現場</button>` : ""}
       ${p.departedAt && !p.arrivedAt ? `<button class="icon-btn primary" onclick="window.__openMciArrive('${p.id}')">${icon('hospital',15)} 抵達醫院</button>` : ""}
     </div>
+    <!-- 資料校正用的編輯按鈕：只補正資料本身，不逆轉離開現場/抵達醫院
+         這類已經按下去的生命週期節點。已指派的車輛/醫院隨時可以改；抵達
+         醫院之後備註也可以改，時間點本身不受影響。 -->
+    <div class="mci-patient-actions">
+      ${!needsAssign ? `<button class="icon-btn" onclick="window.__openMciAssign('${p.id}')">${icon('depart',14)} 編輯車輛／醫院</button>` : ""}
+      ${p.arrivedAt ? `<button class="icon-btn" onclick="window.__openMciArrive('${p.id}')">${icon('hospital',14)} 編輯備註</button>` : ""}
+      <button class="icon-btn danger" onclick="window.__deleteMciPatientFromCcp('${p.id}')">${icon('close',14)} 刪除此傷患</button>
+    </div>
   </div>`;
 }
 // 後送官在這裡指派車輛/醫院（沿用事件建立時設定的資源池範圍，留空代表
-// 不限制），指派完成才會出現離開現場／抵達醫院的動作按鈕。
+// 不限制），指派完成才會出現離開現場／抵達醫院的動作按鈕。同一個彈窗也
+// 用來「編輯」已經指派過的傷患（資料校正，不影響已經記錄的生命週期時
+// 間點）：車輛選單會排除掉目前正被其他傷患佔用（還沒返回）的車，但
+// 會把這位傷患自己原本選的車留著（excludeId），不然編輯時看不到自己
+// 原本選的那台。
 function viewMciAssignModal(){
   const id = state.mciAssignId;
   if (!id) return "";
@@ -5828,31 +5866,33 @@ function viewMciAssignModal(){
   if (!p) return "";
   const ev = state.mciEvents.find(e => e.id === p.eventId);
   const outSet = dispatchedVehiclePlates();
-  const vehiclePool = ev && ev.vehicles && ev.vehicles.length
+  const vehiclePool = (ev && ev.vehicles && ev.vehicles.length
     ? state.vehicles.filter(v => v.active!==false && ev.vehicles.includes(v.plate))
-    : state.vehicles.filter(v=>v.active!==false);
+    : state.vehicles.filter(v=>v.active!==false)
+  ).filter(v => !mciVehicleIsBusy(p.eventId, v.plate, p.id));
   const hospitalPool = ev && ev.hospitals && ev.hospitals.length
     ? state.hospitals.filter(h => ev.hospitals.includes(h.name))
     : state.hospitals.slice();
+  const editing = !!(p.vehicle && p.hospital);
   return `
   <div class="modal-overlay" onclick="if(event.target===this) window.__closeMciAssign()">
     <div class="modal-sheet">
       <div class="modal-handle"></div>
-      <div class="modal-title">${icon('depart',19)} MCI-${String(p.seq||0).padStart(2,'0')} 指派車輛／醫院</div>
+      <div class="modal-title">${icon('depart',19)} MCI-${String(p.seq||0).padStart(2,'0')} ${editing?'編輯':'指派'}車輛／醫院</div>
       <form onsubmit="window.__submitMciAssign(event,'${p.id}')">
         <div class="field"><label>選取本次出勤車輛</label>
           <select name="vehicle" required>
             <option value="">請選擇車輛</option>
-            ${vehiclePool.map(v => `<option value="${esc(v.plate)}">${esc(vehicleOptionLabel(v.plate,outSet))}</option>`).join("")}
+            ${vehiclePool.map(v => `<option value="${esc(v.plate)}" ${v.plate===p.vehicle?'selected':''}>${esc(vehicleOptionLabel(v.plate,outSet))}</option>`).join("")}
           </select>
         </div>
         <div class="field"><label>選取後送目標醫院</label>
           <select name="hospital" required>
             <option value="">請選擇醫院</option>
-            ${hospitalPool.sort((a,b)=>HOSPITAL_NAME_COLLATOR.compare(a.name||'',b.name||'')).map(h => `<option value="${esc(h.name)}">${esc(h.name)}${h.tier?'・'+esc(h.tier):''}</option>`).join("")}
+            ${hospitalPool.sort((a,b)=>HOSPITAL_NAME_COLLATOR.compare(a.name||'',b.name||'')).map(h => `<option value="${esc(h.name)}" ${h.name===p.hospital?'selected':''}>${esc(h.name)}${h.tier?'・'+esc(h.tier):''}</option>`).join("")}
           </select>
         </div>
-        <button class="btn-primary" type="submit">確認指派</button>
+        <button class="btn-primary" type="submit">${editing?'儲存':'確認指派'}</button>
         <button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__closeMciAssign()">取消</button>
       </form>
     </div>
@@ -5869,12 +5909,64 @@ function viewMciArriveModal(){
       <div class="modal-handle"></div>
       <div class="modal-title">${icon('hospital',19)} MCI-${String(p.seq||0).padStart(2,'0')} 抵達醫院</div>
       <form onsubmit="window.__submitMciArrive(event,'${p.id}')">
-        <div class="field"><label>里程（公里）</label><input name="mileage" type="number" inputmode="decimal" placeholder="目前里程" required></div>
-        <div class="field"><label>備註（選填）</label><input name="notes" placeholder="備註"></div>
+        <div class="field"><label>備註（選填）</label><input name="notes" value="${esc(p.notes||'')}" placeholder="備註"></div>
         <button class="btn-primary" type="submit">確認送出</button>
         <button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__closeMciArrive()">取消</button>
       </form>
     </div>
+  </div>`;
+}
+
+/* ---- 車輛視角：救護車車長看「自己這台車現在在哪裡」，跟後送官負責
+   「把傷患送到醫院」的視角互補——後送官只在意傷患本身有沒有送到；這裡
+   在意的是傷患送達之後，車輛自己還沒走完的旅程（返回後管站或現地），
+   讓車輛真正「回報待命」之前，後送官在指派車輛時看不到、選不到這台
+   車，避免同一台車被誤重複派出去。狀態掛在「這台車最近一次載的那位
+   傷患」的紀錄上，不另外開一個獨立的車輛集合。 ---- */
+function viewMciVehicleTab(eventId){
+  const patients = state.mciPatients.filter(p => p.eventId === eventId && p.vehicle);
+  const plates = [...new Set(patients.map(p => p.vehicle))].sort((a,b)=>a.localeCompare(b));
+  const cards = plates.map(plate => mciVehicleCard(eventId, plate));
+  return `
+    <div class="section-label">車輛狀態（共 ${plates.length} 台出勤過）</div>
+    ${cards.length ? cards.join("") : `<div class="empty">目前還沒有車輛出勤</div>`}
+  `;
+}
+function mciVehicleCard(eventId, plate){
+  const p = mciVehicleLatestAssignment(eventId, plate, null);
+  if (!p) return "";
+  const destLabel = p.returnDestination === "scene" ? "現地" : "後管站";
+  let statusText, accent, actions = "";
+  if (!p.arrivedAt) {
+    statusText = `運送中 → ${esc(p.hospital||'')}`;
+    accent = "var(--blue)";
+  } else if (!p.returnDestination) {
+    statusText = `已抵達 ${esc(p.hospital||'')}，等待選擇返回地點`;
+    accent = mciTriageInfo('yellow').color;
+    actions = `
+      <div class="mci-patient-actions">
+        <button class="icon-btn primary" onclick="window.__mciVehicleReturn('${p.id}','station')">${icon('returnArrow',15)} 返回後管站</button>
+        <button class="icon-btn primary" onclick="window.__mciVehicleReturn('${p.id}','scene')">${icon('returnArrow',15)} 返回現地</button>
+      </div>`;
+  } else if (!p.returnArrivedAt) {
+    statusText = `返回中：${destLabel}`;
+    accent = mciTriageInfo('yellow').color;
+    actions = `
+      <div class="mci-patient-actions">
+        <button class="icon-btn primary" onclick="window.__mciVehicleReturnArrive('${p.id}')">${icon('returnArrow',15)} 已抵達${destLabel}</button>
+      </div>`;
+  } else {
+    statusText = `待命中（可再派遣）`;
+    accent = "var(--green)";
+  }
+  return `
+  <div class="mci-patient-card spatial-card" style="--card-accent:${accent};">
+    <div class="mci-patient-top">
+      <span class="mci-patient-seq">${esc(plate)}</span>
+      <span class="mci-patient-status">MCI-${String(p.seq||0).padStart(2,'0')}</span>
+    </div>
+    <div class="mci-patient-complaint">${statusText}</div>
+    ${actions}
   </div>`;
 }
 
@@ -6874,7 +6966,7 @@ function viewProfile(){
   const userRows = [
     settingsRow({icon:'user', bg:'#E8F1FF', fg:'#0056C7', title:'個人資料', onclick:"window.__editProfile()"}),
     settingsRow({icon:'user', bg:'#E9F9EF', fg:'#177A34', title:'成員列表', subtitle:'各單位人員姓名/階級/電話/證照', onclick:"window.__nav({name:'memberList'})"}),
-    settingsRow({icon:'alert', bg:'#FFEAEA', fg:'#C7233B', title:'大量傷患事件', subtitle:'開事件、傷患檢傷分類與車輛/醫院指派', onclick:"window.__nav({name:'mciList'})"}),
+    settingsRow({icon:'alert', bg:'#FFEAEA', fg:'#C7233B', title:'大量傷患演練模組（建構中）', subtitle:'開事件、傷患檢傷分類與車輛/醫院指派', onclick:"window.__nav({name:'mciList'})"}),
     settingsRow({icon:'sun', bg:'#F2E9FE', fg:'#6B23C7', title:'螢幕顯示', subtitle:THEME_MODE_LABEL[state.themeMode], onclick:"window.__nav({name:'displayAppearance'})"}),
     settingsRow({icon:'bell', bg:'#FFEAEA', fg:'#C7233B', title:'推播通知', subtitle:pushStatusLabel(), onclick:"window.__nav({name:'pushSettings'})"}),
     settingsRow({icon:'chat', bg:'#E9F9EF', fg:'#177A34', title:'意見回饋', onclick:"window.__nav({name:'feedback'})"}),
@@ -8822,7 +8914,7 @@ window.__submitMciTriageForm = (ev, eventId) => {
     redSubcat: state.mciTriageColor === "red" ? state.mciTriageRedSubcat : null,
     complaint: f.get("complaint") || "",
     vehicle: "", hospital: "",
-    departedAt: null, arrivedAt: null, mileage: "", notes: ""
+    departedAt: null, arrivedAt: null, notes: ""
   };
   addMciPatient(eventId, data).then(() => { window.__mciStartRestart(); }).catch(baseDataErr);
 };
@@ -8870,9 +8962,24 @@ window.__closeMciArrive = () => { state.mciArriveId = null; render(); };
 window.__submitMciArrive = (ev, id) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
-  updateMciPatient(id, { arrivedAt: new Date(), mileage: f.get("mileage")||"", notes: f.get("notes")||"" }).then(() => {
+  // 資料校正：如果這位傷患已經抵達過（重新打開這個彈窗只是要改備註），
+  // 不要把 arrivedAt 這個已經記錄的時間點覆蓋掉，只更新備註。
+  const p = state.mciPatients.find(x => x.id === id);
+  const data = { notes: f.get("notes")||"" };
+  if (!p || !p.arrivedAt) data.arrivedAt = new Date();
+  updateMciPatient(id, data).then(() => {
     state.mciArriveId = null; render();
   }).catch(baseDataErr);
+};
+// 車輛視角：選擇返回地點（後管站／現地），以及確認已經抵達返回地點。
+// 這兩步都掛在「這台車最近一次載的那位傷患」的紀錄上，不是另外開一個
+// 獨立的車輛集合；車輛真正「返回待命」前，後送官指派車輛時看不到、選
+// 不到這台車（見 viewMciAssignModal／mciVehicleIsBusy）。
+window.__mciVehicleReturn = (id, dest) => {
+  updateMciPatient(id, { returnDestination: dest, returningAt: new Date() }).catch(baseDataErr);
+};
+window.__mciVehicleReturnArrive = (id) => {
+  updateMciPatient(id, { returnArrivedAt: new Date() }).catch(baseDataErr);
 };
 // 醫院道路距離（OSRM Table API，router.project-osrm.org 公開 demo server）：
 // 只當直線距離之外的加分項，永遠不擋主流程。這台 demo server 官方明講不
