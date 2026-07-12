@@ -225,16 +225,14 @@ service cloud.firestore {
       allow create, delete: if false;
     }
 
-    // 大量傷患事件（MCI）：這是模擬演練用的系統，不是真實傷患個資，所有
-    // 功能故意不分角色——任何在職帳號都能開事件/結束事件/指派車輛醫院/
-    // 檢傷分類，跟系統其他集合「開事件/指派限特定角色」的慣例不同，是
-    // 刻意的設計選擇（見專案討論：現場多人同時檢傷不同傷患的情境，不該
-    // 被角色卡住）。也不分單位，跨單位支援同一場演練很常見。
+    // 大量傷患演練模組：還在建構中，目前只開放 admin 使用（前端更多頁
+    // 對其他角色顯示灰階、點不進去，這裡是後端同步擋一次，避免有人繞過
+    // 前端直接呼叫 API）。等模組正式開放時再放寬回所有在職帳號可用。
     match /mciEvents/{id} {
-      allow read, create, update, delete: if isActive();
+      allow read, create, update, delete: if isAdmin();
     }
     match /mciPatients/{id} {
-      allow read, create, update, delete: if isActive();
+      allow read, create, update, delete: if isAdmin();
     }
   }
 }
