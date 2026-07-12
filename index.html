@@ -1622,7 +1622,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-12-357-vitals-diagnosis-chips";
+const BUILD_TAG = "2026-07-12-358-report-scene-status-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2553,6 +2553,7 @@ const RELEASE_NOTES = [
       "「醫官初步診斷」自由輸入框改成跟其他欄位一樣的常見項目 chips（熱暈眩、熱衰竭、熱中暑、低血糖、暈厥等），選不到的情況可選「其他」自行輸入，這個區塊獨立成一個小節「醫官初步判定」",
       "處置項目重新排序：「保暖」「心理支持」「觀察生命徵象」這三個幾乎每筆都會用到的基本處置移到最前面，並新增「靜脈注射（IV）」選項；處置也獨立回一個小節「處置」",
       "「複製回報文字」按鈕改放到處置項目下面，跟「編輯」分開（編輯留在最上面），閱讀順序更順",
+      "修正回報文字「狀況」那一行：改抓現場狀況分類（創傷/非創傷＋勾選的症狀），不是主訴自由輸入文字——主訴常常只是簡短的不舒服部位定位詞（例如「胸口」），單獨放進回報文字讀起來像沒講完",
     ] },
     { category: "任務管理", items: [
       "建立勤務頁「營內／營外」改成跟上面「任務類型」同樣大小的切換鈕，佔滿整行、更清楚好點，預設改成「營內」",
@@ -6707,6 +6708,14 @@ function vitalsNormalFlag(v){
   if (!known.length) return "";
   return known.every(Boolean) ? "數據正常" : "數據異常";
 }
+// 回報文字的「狀況」要反映現場狀況分類（創傷/非創傷＋勾選的症狀），不是
+// 主訴自由輸入文字——主訴常常只是「哪裡不舒服」的簡短定位詞（例如
+// 「胸口」），單獨放進回報文字讀起來像沒講完，現場狀況才是完整的判斷。
+function vitalsSceneStatusText(v){
+  if (!v.sceneType) return "";
+  const findings = (v.sceneFindings||[]).join('、');
+  return `${v.sceneType}${findings?`：${findings}`:''}${v.sceneFindingsOtherDetail?`（${v.sceneFindingsOtherDetail}）`:''}`;
+}
 function buildVitalsReportText(v, greeting){
   const d = new Date(v.ts || Date.now());
   const dateStr = `${d.getMonth()+1}/${d.getDate()}`;
@@ -6718,6 +6727,7 @@ function buildVitalsReportText(v, greeting){
   const flag = vitalsNormalFlag(v);
   const treatmentsText = (v.treatments||[]).join("、");
   const liaisonLine = `${v.liaisonRank||''}${v.liaisonName||''}`;
+  const sceneStatusText = vitalsSceneStatusText(v);
 
   const vitalsParts = [];
   if (v.consciousness) vitalsParts.push(`意識${v.consciousness}`);
@@ -6730,7 +6740,7 @@ function buildVitalsReportText(v, greeting){
   lines.push(`報告${greeting || '連長'}：`);
   lines.push(`今日(${dateStr}) ${timeStr} 事件回報：`);
   lines.push(`🔹 對象：${patientLine}${historyText?` (${historyText})`:''}`);
-  lines.push(`🔹 狀況：${v.complaint||''}${v.diagnosis?`，醫官研判為【${v.diagnosis}】`:''}`);
+  lines.push(`🔹 狀況：${sceneStatusText}${v.diagnosis?`，醫官研判為【${v.diagnosis}】`:''}`);
   if (vitalsParts.length) lines.push(`🔹 生命徵象：${vitalsParts.join('｜')}${flag?` (${flag})`:''}`);
   if (treatmentsText) lines.push(`🔹 目前處置：${treatmentsText}，目前持續留觀生命徵象。`);
   if (liaisonLine) lines.push(`隨隊幹部：${liaisonLine}${v.liaisonPhone?` (${v.liaisonPhone})`:''}`);
