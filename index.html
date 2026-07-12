@@ -320,7 +320,12 @@
      不捲動），這樣 sticky 的參考點永遠是 main 沒有 padding 的真正邊緣，
      子選單之類需要「貼齊捲動區最上方」的元素才能真的貼齊，不會卡著一段
      main 留白的縫隙。 */
-  main{flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain;}
+  /* overflow-y 沒有搭配明確宣告 overflow-x 時，瀏覽器會把 overflow-x 也
+     隱性算成 auto（不是 visible）——只要內容寬度多出一點點（真機上常見的
+     次像素捲動誤差），main 就會允許左右捲動，手指滑動稍微歪一點就會觸發
+     左右彈跳（rubber-band），畫面看起來像在晃動。明確鎖死 overflow-x:hidden
+     才會徹底關掉這個左右晃動的可能性，不管內容實際寬度算得準不準。 */
+  main{flex:1; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain;}
   .main-content{padding:16px 16px 24px 16px; max-width:680px; width:100%; margin:0 auto;}
 
   /* ---- login ---- */
@@ -1472,7 +1477,7 @@
   .modal-sheet{
     background:var(--panel); width:100%; max-width:520px; border-radius:22px 22px 0 0;
     padding:14px 20px calc(20px + env(safe-area-inset-bottom)) 20px;
-    max-height:88vh; max-height:88dvh; overflow-y:auto;
+    max-height:88vh; max-height:88dvh; overflow-y:auto; overflow-x:hidden;
     overscroll-behavior:contain;
     box-shadow:0 -12px 40px rgba(0,0,0,0.2); animation:modalSlideUp 0.24s cubic-bezier(.22,1,.36,1);
   }
@@ -1622,7 +1627,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-12-358-report-scene-status-fix";
+const BUILD_TAG = "2026-07-12-359-trauma-diagnosis-hscroll-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2554,6 +2559,10 @@ const RELEASE_NOTES = [
       "處置項目重新排序：「保暖」「心理支持」「觀察生命徵象」這三個幾乎每筆都會用到的基本處置移到最前面，並新增「靜脈注射（IV）」選項；處置也獨立回一個小節「處置」",
       "「複製回報文字」按鈕改放到處置項目下面，跟「編輯」分開（編輯留在最上面），閱讀順序更順",
       "修正回報文字「狀況」那一行：改抓現場狀況分類（創傷/非創傷＋勾選的症狀），不是主訴自由輸入文字——主訴常常只是簡短的不舒服部位定位詞（例如「胸口」），單獨放進回報文字讀起來像沒講完",
+      "「醫官初步判定」補上創傷類診斷選項（骨折、脫臼、撕裂傷、擦挫傷、燒燙傷、開放性傷口、腦震盪／頭部外傷），先前只有熱傷害等非創傷症狀可選",
+    ] },
+    { category: "介面優化", items: [
+      "修正患者紀錄等頁面在部分裝置上滑動時畫面會左右輕微晃動彈跳的問題：捲動區塊只宣告垂直可捲動、沒有明確關閉水平捲動，真機上內容寬度只要多算出一點點誤差就會被判定成可以左右捲動，手指滑動稍微歪一點就觸發左右彈跳；改成明確鎖死水平捲動",
     ] },
     { category: "任務管理", items: [
       "建立勤務頁「營內／營外」改成跟上面「任務類型」同樣大小的切換鈕，佔滿整行、更清楚好點，預設改成「營內」",
@@ -3044,7 +3053,7 @@ function vitalsQaPanelHtml(v){
 const PAST_HISTORY_OPTIONS = ["糖尿病", "高血壓", "心臟疾病", "中風", "氣喘", "慢性阻塞性肺病", "肝臟疾病", "腎臟疾病", "癌症", "癲癇", "精神疾病", "其他", "不清楚", "無"];
 const ALLERGY_OPTIONS = ["藥物", "食物", "其他", "不清楚", "無"];
 // 醫官初步判定：常見的非創傷症狀類別，選不到再用「其他」自行輸入。
-const DIAGNOSIS_OPTIONS = ["熱暈眩", "熱衰竭", "熱中暑", "低血糖", "暈厥", "過度換氣", "腸胃不適", "扭傷／拉傷", "感冒／上呼吸道感染", "其他"];
+const DIAGNOSIS_OPTIONS = ["熱暈眩", "熱衰竭", "熱中暑", "低血糖", "暈厥", "過度換氣", "腸胃不適", "感冒／上呼吸道感染", "扭傷／拉傷", "骨折", "脫臼", "撕裂傷", "擦挫傷", "燒燙傷", "開放性傷口", "腦震盪／頭部外傷", "其他"];
 // 處置項目涵蓋創傷與非創傷常見處置，不只是外傷包紮固定這類；保暖／心理
 // 支持／觀察生命徵象是幾乎每筆紀錄都會用到的基本處置，排在最前面。
 const TREATMENT_OPTIONS = ["保暖", "心理支持", "觀察生命徵象", "暢通呼吸道", "抽吸", "使用甦醒球（BVM）", "給氧", "使用AED", "CPR", "頸圈固定", "清洗傷口", "止血、包紮", "止血帶", "骨折固定", "姿勢擺位／半坐臥", "血糖處置（給予口服糖分）", "靜脈注射（IV）", "協助服藥", "其他"];
