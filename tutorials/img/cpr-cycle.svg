@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 320" font-family="'PingFang TC','Microsoft JhengHei',sans-serif">
+  <rect width="600" height="320" fill="#F8F9FC"/>
+  <text x="300" y="34" text-anchor="middle" font-size="18" font-weight="700" fill="#15161B">成人 CPR：30:2 循環</text>
+
+  <!-- torso -->
+  <g transform="translate(60,60)">
+    <ellipse cx="90" cy="150" rx="90" ry="110" fill="#FFEAEA"/>
+    <circle cx="90" cy="30" r="26" fill="#FFD9D9"/>
+    <!-- hands -->
+    <rect x="60" y="120" width="60" height="18" rx="9" fill="#C7233B"/>
+    <rect x="66" y="102" width="48" height="18" rx="9" fill="#C7233B" opacity="0.7"/>
+    <path d="M90 145v40" stroke="#8A8D98" stroke-width="2" stroke-dasharray="4 4"/>
+    <text x="90" y="205" text-anchor="middle" font-size="12.5" fill="#15161B">按壓位置：胸骨中下段</text>
+    <text x="90" y="222" text-anchor="middle" font-size="12.5" fill="#15161B">深度 5-6 公分／速率 100-120 次/分</text>
+  </g>
+
+  <!-- cycle diagram -->
+  <g transform="translate(320,70)">
+    <circle cx="110" cy="110" r="95" fill="none" stroke="#E7E8EE" stroke-width="18"/>
+    <path d="M110 15 A95 95 0 0 1 205 110" fill="none" stroke="#C7233B" stroke-width="18" stroke-linecap="round"/>
+    <path d="M205 110 A95 95 0 0 1 175 190" fill="none" stroke="#0056C7" stroke-width="18" stroke-linecap="round"/>
+    <text x="110" y="105" text-anchor="middle" font-size="26" font-weight="800" fill="#C7233B">30</text>
+    <text x="110" y="130" text-anchor="middle" font-size="13" fill="#8A8D98">下胸部按壓</text>
+    <text x="175" y="185" text-anchor="middle" font-size="26" font-weight="800" fill="#0056C7">2</text>
+    <text x="175" y="205" text-anchor="middle" font-size="13" fill="#8A8D98" transform="translate(0,-20)"></text>
+  </g>
+  <text x="435" y="290" text-anchor="middle" font-size="13" fill="#15161B">30 次胸部按壓 → 2 次人工呼吸，持續循環</text>
+</svg>

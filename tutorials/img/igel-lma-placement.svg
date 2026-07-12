@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 320" font-family="'PingFang TC','Microsoft JhengHei',sans-serif">
+  <rect width="600" height="320" fill="#F8F9FC"/>
+  <text x="300" y="34" text-anchor="middle" font-size="18" font-weight="700" fill="#15161B">聲門上呼吸道置入方向與確認重點</text>
+
+  <g transform="translate(60,60)">
+    <rect width="230" height="200" rx="16" fill="#F2E9FE"/>
+    <text x="115" y="30" text-anchor="middle" font-size="14" font-weight="800" fill="#6B23C7">頭頸中線置入</text>
+    <circle cx="115" cy="80" r="24" fill="#DCC5F5"/>
+    <path d="M115 104 C115 130 90 140 90 165" stroke="#6B23C7" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <text x="115" y="190" text-anchor="middle" font-size="12" fill="#15161B">沿硬顎方向盲插</text>
+    <text x="115" y="208" text-anchor="middle" font-size="12" fill="#15161B">至感覺到阻力為止</text>
+  </g>
+
+  <g transform="translate(320,60)">
+    <rect width="230" height="200" rx="16" fill="#FFEAEA"/>
+    <text x="115" y="30" text-anchor="middle" font-size="14" font-weight="800" fill="#C7233B">置入後確認</text>
+    <path d="M60 90h50M60 110h50" stroke="#C7233B" stroke-width="4" stroke-linecap="round"/>
+    <path d="M150 90h50M150 110h50" stroke="#C7233B" stroke-width="4" stroke-linecap="round"/>
+    <text x="115" y="150" text-anchor="middle" font-size="12" fill="#15161B">雙側呼吸音對稱</text>
+    <text x="115" y="170" text-anchor="middle" font-size="12" fill="#15161B">胸廓起伏對稱</text>
+    <text x="115" y="190" text-anchor="middle" font-size="12" fill="#15161B">上腹部無異音（排除誤入食道）</text>
+  </g>
+</svg>

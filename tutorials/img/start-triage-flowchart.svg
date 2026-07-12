@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" font-family="'PingFang TC','Microsoft JhengHei',sans-serif">
+  <rect width="600" height="400" fill="#F8F9FC"/>
+  <text x="300" y="30" text-anchor="middle" font-size="18" font-weight="700" fill="#15161B">START 檢傷分類法決策流程</text>
+
+  <g font-size="12.5" fill="#15161B">
+    <rect x="220" y="50" width="160" height="40" rx="10" fill="#F3F4F7" stroke="#D8DAE3" stroke-width="2"/>
+    <text x="300" y="75" text-anchor="middle">能自行走動？</text>
+
+    <rect x="60" y="120" width="120" height="40" rx="10" fill="#E9F9EF" stroke="#177A34" stroke-width="2"/>
+    <text x="120" y="145" text-anchor="middle" font-weight="700" fill="#177A34">綠色（能走動）</text>
+
+    <rect x="220" y="120" width="160" height="40" rx="10" fill="#F3F4F7" stroke="#D8DAE3" stroke-width="2"/>
+    <text x="300" y="145" text-anchor="middle">有呼吸？</text>
+
+    <rect x="420" y="120" width="140" height="40" rx="10" fill="#3A3A3C" opacity="0.85"/>
+    <text x="490" y="145" text-anchor="middle" fill="#fff" font-weight="700">黑色（暢通呼吸道後仍無呼吸）</text>
+
+    <rect x="220" y="190" width="160" height="40" rx="10" fill="#F3F4F7" stroke="#D8DAE3" stroke-width="2"/>
+    <text x="300" y="215" text-anchor="middle">呼吸&gt;30次/分？</text>
+
+    <rect x="420" y="190" width="140" height="40" rx="10" fill="#FF3B30" opacity="0.85"/>
+    <text x="490" y="215" text-anchor="middle" fill="#fff" font-weight="700">紅色（立即）</text>
+
+    <rect x="220" y="260" width="160" height="40" rx="10" fill="#F3F4F7" stroke="#D8DAE3" stroke-width="2"/>
+    <text x="300" y="285" text-anchor="middle">橈動脈摸得到？</text>
+
+    <rect x="220" y="330" width="160" height="40" rx="10" fill="#F3F4F7" stroke="#D8DAE3" stroke-width="2"/>
+    <text x="300" y="355" text-anchor="middle">能聽從指令？</text>
+
+    <rect x="420" y="330" width="140" height="40" rx="10" fill="#FFCC00" opacity="0.9"/>
+    <text x="490" y="355" text-anchor="middle" font-weight="700">黃色（延遲）</text>
+  </g>
+
+  <!-- arrows -->
+  <g stroke="#8A8D98" stroke-width="1.6" fill="none" marker-end="url(#arrow)">
+    <path d="M270 90 L150 120"/>
+    <path d="M330 90 L330 120"/>
+    <path d="M330 160 L330 190"/>
+    <path d="M400 140 L420 140"/>
+    <path d="M330 230 L330 260"/>
+    <path d="M400 210 L420 210"/>
+    <path d="M330 300 L330 330"/>
+    <path d="M400 350 L420 350"/>
+  </g>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8Z" fill="#8A8D98"/>
+    </marker>
+  </defs>
+  <text x="300" y="400" text-anchor="middle" font-size="12" fill="#8A8D98">紅C（循環）判定為摸不到脈搏／橈動脈觸診不到；紅A/B/D 依序對應呼吸道/呼吸/神經學</text>
+</svg>

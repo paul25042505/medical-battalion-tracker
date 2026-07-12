@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 320" font-family="'PingFang TC','Microsoft JhengHei',sans-serif">
+  <rect width="600" height="320" fill="#F8F9FC"/>
+  <text x="300" y="34" text-anchor="middle" font-size="18" font-weight="700" fill="#15161B">口咽／鼻咽通氣道尺寸測量</text>
+
+  <!-- OPA -->
+  <g transform="translate(50,60)">
+    <rect width="230" height="200" rx="16" fill="#E8F1FF"/>
+    <text x="115" y="30" text-anchor="middle" font-size="14" font-weight="800" fill="#0056C7">口咽通氣道 OPA</text>
+    <circle cx="60" cy="90" r="26" fill="#B9D6FF"/>
+    <path d="M86 90 L150 90" stroke="#0056C7" stroke-width="3" stroke-dasharray="5 4"/>
+    <circle cx="150" cy="90" r="6" fill="#0056C7"/>
+    <text x="115" y="140" text-anchor="middle" font-size="12.5" fill="#15161B">測量：嘴角到耳垂</text>
+    <text x="115" y="158" text-anchor="middle" font-size="12.5" fill="#15161B">（或下顎角）</text>
+    <text x="115" y="182" text-anchor="middle" font-size="11.5" fill="#8A8D98">適用：意識喪失、無嘔吐反射</text>
+  </g>
+
+  <!-- NPA -->
+  <g transform="translate(310,60)">
+    <rect width="230" height="200" rx="16" fill="#E9F9EF"/>
+    <text x="115" y="30" text-anchor="middle" font-size="14" font-weight="800" fill="#177A34">鼻咽通氣道 NPA</text>
+    <ellipse cx="60" cy="90" rx="14" ry="20" fill="#B7ECC8"/>
+    <path d="M74 90 L150 90" stroke="#177A34" stroke-width="3" stroke-dasharray="5 4"/>
+    <circle cx="150" cy="90" r="6" fill="#177A34"/>
+    <text x="115" y="140" text-anchor="middle" font-size="12.5" fill="#15161B">測量：鼻孔到耳垂</text>
+    <text x="115" y="158" text-anchor="middle" font-size="12.5" fill="#15161B">直徑約小指粗細</text>
+    <text x="115" y="182" text-anchor="middle" font-size="11.5" fill="#8A8D98">適用：意識程度較高、耐受度較好</text>
+  </g>
+</svg>
