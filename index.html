@@ -1555,7 +1555,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-344-kb-field-smooth-scroll-fix";
+const BUILD_TAG = "2026-07-11-345-mci-treatment-complete-gate";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2159,15 +2159,19 @@ function mciPatientSortRank(p){
   }
   return MCI_NON_RED_RANK[p.triageColor] != null ? MCI_NON_RED_RANK[p.triageColor] : 7;
 }
-// 傷患生命週期：待命（檢傷官剛建立，人還在集中區，尚未指派車輛/醫院）→
-// 待後送（後送官已指派車輛/醫院，車輛還沒出發）→ 後送中（已離開現場，還
-// 沒抵達）→ 已送達（抵達醫院，填過里程/備註）。車輛/醫院指派是後送官的
-// 職責，不在檢傷官建立傷患的當下決定，所以「待命」是新傷患的預設狀態。
+// 傷患生命週期：待命（檢傷官剛建立，人還在集中區給治療官處置，尚未標記
+// 處置完成）→ 待後送（治療官點「處置完成」，後送官才看得到、開始安排；
+// 尚未指派車輛/醫院）→ 待出發（後送官已指派車輛/醫院，車輛還沒出發）→
+// 後送中（已離開現場，還沒抵達）→ 已送達（抵達醫院，填過里程/備註）。
+// 「待命」跟「待後送」的差別是治療官有沒有點過處置完成——後送官分頁只
+// 看得到已經處置完成的傷患，還在治療中的傷患後送官看不到、也不會被誤
+// 提早指派車輛/醫院。
 function mciPatientStatus(p){
   if (!p.triageColor) return "待檢傷";
   if (p.arrivedAt) return "已送達";
   if (p.departedAt) return "後送中";
-  if (p.vehicle && p.hospital) return "待後送";
+  if (p.vehicle && p.hospital) return "待出發";
+  if (p.treatmentComplete) return "待後送";
   return "待命";
 }
 // 健保署「全民健康保險特約醫事機構基本資料」清冊（醫學中心／區域醫院／地區醫院
@@ -2318,6 +2322,7 @@ const RELEASE_NOTES = [
       "檢傷官／治療官／後送官分頁切換鈕移到事件詳情頁最上面（跟任務頁「勤務/天氣/紀錄」主分頁同一套排版慣例），不用先滑過傷患統計跟人員配置才看得到、切得到",
       "事件詳情頁新增「首頁」分頁：事件標題/狀態/編輯車輛醫院/結束事件、傷患統計、人員配置都收進這個獨立分頁；檢傷官分頁只留下一號傷患編號跟 START 檢傷問答，切分頁不用重複看到一樣的事件概況",
       "首頁分頁新增完整「傷患名冊」：不分角色、不管每位傷患目前在生命週期哪個節點，都看得到檢傷分類、主訴、車輛/醫院配對、離開現場/抵達醫院時間與里程備註，一次掌握全部傷患現況",
+      "治療官編輯彈窗新增「處置完成」按鈕（跟「刪除此傷患」排同一列）：點過之後這位傷患才會從治療官的待命清單移到後送官分頁，後送官才看得到、才能指派車輛/醫院——治療中的傷患不會被後送官提早看到、提早安排後送",
     ] },
   ] },
   { date: "2026/07/10", groups: [
@@ -5766,15 +5771,20 @@ function viewMciCcpEditModal(){
       ` : `
         <button type="button" class="icon-btn danger" style="width:100%; margin-top:18px;" onclick="window.__startMciRetriage()">${icon('alert',15)} 傷情惡化，二次檢傷升級為紅色</button>
       `) : ""}
-      <button type="button" class="icon-btn danger" style="width:100%; margin-top:12px;" onclick="window.__deleteMciPatientFromCcp('${p.id}')">刪除此傷患</button>
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <button type="button" class="icon-btn danger" style="flex:1;" onclick="window.__deleteMciPatientFromCcp('${p.id}')">刪除此傷患</button>
+        <button type="button" class="icon-btn primary" style="flex:1;" onclick="window.__completeMciTreatment('${p.id}')">處置完成</button>
+      </div>
       <button type="button" class="btn-ghost" style="width:100%;margin-top:10px;" onclick="window.__closeMciCcpEdit()">關閉</button>
     </div>
   </div>`;
 }
 
 /* ---- 後送官視角：雙節點後送生命週期（離開現場／抵達醫院） ---- */
+// 治療官還沒點「處置完成」（狀態仍是「待命」）的傷患不會出現在這裡：
+// 後送官只處理已經處置完成的傷患，不會提早看到、提早指派車輛/醫院。
 function viewMciEvacTab(eventId){
-  const patients = state.mciPatients.filter(p => p.eventId === eventId)
+  const patients = state.mciPatients.filter(p => p.eventId === eventId && mciPatientStatus(p) !== "待命")
     .sort((a,b) => mciPatientSortRank(a) - mciPatientSortRank(b) || (a.seq||0) - (b.seq||0));
   return `
     <div class="section-label">後送指揮（共 ${patients.length} 人）</div>
@@ -8832,6 +8842,15 @@ window.__confirmMciRetriage = (ev, id) => {
 window.__deleteMciPatientFromCcp = (id) => {
   if (!confirm("確定刪除此傷患紀錄？此動作無法復原。")) return;
   deleteMciPatient(id).then(() => { state.mciCcpEditId = null; render(); }).catch(baseDataErr);
+};
+// 治療官標記「處置完成」：連同輸入框裡可能還沒按儲存的主訴一起存檔，
+// 避免使用者直接點處置完成卻遺失剛打的字。完成後這位傷患會從治療官的
+// 待命清單消失，改在後送官分頁出現（見 mciPatientStatus／viewMciEvacTab）。
+window.__completeMciTreatment = (id) => {
+  const input = document.querySelector('.modal-sheet input[name="complaint"]');
+  const data = { treatmentComplete: true };
+  if (input) data.complaint = input.value;
+  updateMciPatient(id, data).then(() => { state.mciCcpEditId = null; render(); }).catch(baseDataErr);
 };
 // 後送官：先指派車輛/醫院，才會出現離開現場／抵達醫院（填里程/備註）的
 // 雙節點生命週期動作。
