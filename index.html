@@ -1627,7 +1627,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-12-359-trauma-diagnosis-hscroll-fix";
+const BUILD_TAG = "2026-07-12-360-frequent-hospital";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2132,6 +2132,17 @@ const HOSPITAL_TIERS = ["醫學中心", "區域醫院", "地區醫院"];
 // 內建 ICU 都支援），比預設的 localeCompare（拼音/Unicode 碼點排序）更符合
 // 中文使用者對「醫院名冊」的排序直覺。
 const HOSPITAL_NAME_COLLATOR = new Intl.Collator("zh-u-co-stroke");
+// 送醫醫院下拉選單：標記過「常用」的醫院分組排在最前面（各自筆畫排序），
+// 軍中固定後送的那幾間醫院不用每次都在一長串名冊裡找；完全沒有標記常用
+// 醫院時就不分組，維持原本一路到底的筆畫排序。
+function hospitalSelectOptionsHtml(list, selectedName){
+  const sorted = list.slice().sort((a,b) => HOSPITAL_NAME_COLLATOR.compare(a.name||'', b.name||''));
+  const opt = h => `<option value="${esc(h.name)}" ${selectedName && h.name===selectedName?'selected':''}>${esc(h.name)}</option>`;
+  const frequent = sorted.filter(h => h.frequent);
+  if (!frequent.length) return sorted.map(opt).join("");
+  const others = sorted.filter(h => !h.frequent);
+  return `<optgroup label="常用醫院">${frequent.map(opt).join("")}</optgroup><optgroup label="其他醫院">${others.map(opt).join("")}</optgroup>`;
+}
 
 /* =========================================================
    2e-2) 大量傷患事件（MCI）：檢傷分類／人員配置常數
@@ -2566,6 +2577,9 @@ const RELEASE_NOTES = [
     ] },
     { category: "任務管理", items: [
       "建立勤務頁「營內／營外」改成跟上面「任務類型」同樣大小的切換鈕，佔滿整行、更清楚好點，預設改成「營內」",
+    ] },
+    { category: "醫院資訊", items: [
+      "新增／編輯醫院表單新增「標記為常用醫院」選項：軍中固定後送的那幾間醫院標記後，「醫院資訊」預設排序（沒開依距離／依人數時）跟回報「出勤」的送醫醫院下拉選單都會排在最前面（下拉選單另外分成「常用醫院」「其他醫院」兩組），不用每次都在一長串名冊裡找；醫院卡片上也會顯示「⭐ 常用」標籤",
     ] },
   ] },
   { date: "2026/07/11", groups: [
@@ -3513,9 +3527,9 @@ async function addRecorder(unit, code){
   await fsAddDoc("recorders", { unit, code, active: true });
   showToast("已新增行車紀錄器"); if (recordersPoll) recordersPoll.refreshNow();
 }
-async function addHospital(name, tier, level, phone, note, address, nhiCode, lat, lng){
+async function addHospital(name, tier, level, phone, note, address, nhiCode, lat, lng, frequent){
   const coords = (lat != null && lng != null) ? { lat, lng } : {};
-  await fsAddDoc("hospitals", { name, tier, level, phone: phone||"", note: note||"", address: address||"", nhiCode: nhiCode||"", ...coords });
+  await fsAddDoc("hospitals", { name, tier, level, phone: phone||"", note: note||"", address: address||"", nhiCode: nhiCode||"", frequent: !!frequent, ...coords });
   showToast("已新增醫院"); if (hospitalsPoll) hospitalsPoll.refreshNow();
 }
 // 使用者在「座標」欄位貼「緯度,經度」（例如 24.1786,120.6400），這裡負責
@@ -6963,7 +6977,7 @@ function viewTaskDetail(taskId){
             ${needsHospital ? `<div class="field"><label>送醫醫院（選填）</label>
               <select id="rf-hospital">
                 <option value="">請選擇醫院</option>
-                ${state.hospitals.slice().sort((a,b) => HOSPITAL_NAME_COLLATOR.compare(a.name||'', b.name||'')).map(h => `<option value="${esc(h.name)}">${esc(h.name)}</option>`).join("")}
+                ${hospitalSelectOptionsHtml(state.hospitals)}
               </select>
             </div>` : ""}
             <div class="field">
@@ -7819,6 +7833,10 @@ function renderHospitalListBody(){
       if (ia.tier !== ib.tier) return ia.tier - ib.tier;
       if (ia.tier === 0) return ia.km - ib.km;
     }
+    // 純預設排序（沒開依人數、也還沒定位）才把標記過「常用」的醫院排最
+    // 前面；依人數／依距離排序時不要跟著調整，避免使用者已經選了其他
+    // 排序依據，常用醫院卻突然插隊到看不懂為什麼在那個位置。
+    if (!state.hospitalSortBySee && state.myLat == null && !!a.frequent !== !!b.frequent) return a.frequent ? -1 : 1;
     return HOSPITAL_NAME_COLLATOR.compare(a.name||'', b.name||'');
   });
   return `
@@ -7847,7 +7865,7 @@ function renderHospitalListBody(){
       <div class="hospital-card">
         <div class="hospital-card-top">
           <div class="hospital-card-badges">
-            ${nearBadge}${erFullBadge}
+            ${x.frequent ? `<span class="badge completed">⭐ 常用</span>` : ''}${nearBadge}${erFullBadge}
             <h3 class="hospital-card-name">${esc(x.name)}</h3>
             <span class="hospital-card-subtitle">${subtitle}</span>
           </div>
@@ -8309,6 +8327,8 @@ function viewBaseDataModal(){
         </select>
       </div>
       <div class="field"><label>電話</label><input name="phone" type="tel" inputmode="tel" value="${esc(editing?.phone||'')}" placeholder="總機或急診專線"></div>
+      <label class="checkbox-inline" style="margin-bottom:12px;"><input type="checkbox" name="frequent" ${editing?.frequent?'checked':''}> 標記為常用醫院</label>
+      <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">標記後，這間醫院在「醫院資訊」預設排序跟回報「出勤」的送醫醫院選單都會排在最前面，適合軍中固定後送的那幾間醫院。</div>
       <div class="field"><label>備註（選填）</label><input name="note" value="${esc(editing?.note||'')}" placeholder="例如：電話為總機，急診專線待確認"></div>
       <div class="field"><label>健保特約代號（選填）</label><input name="nhiCode" value="${esc(editing?.nhiCode||'')}" placeholder="例如：0000000000"></div>
       <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">填了健保特約代號，「醫院資訊」列表會顯示健保署提供的急診即時等待人數／119 滿床通報（每 15 分鐘更新一次）；目前健保署只公開重度級急救責任醫院的資料，其餘醫院即使填了代號也不會有資料。</div>`;
@@ -9359,13 +9379,13 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
   const action = id
     ? (coll === "personnel" ? updateBaseData(coll, id, { displayName: f.get("name"), rank: f.get("title"), phone: f.get("phone")||"", emtLevel: f.get("emtLevel")||"", email: (f.get("email")||"").trim().toLowerCase() })
        : coll === "vehicles" ? updateBaseData(coll, id, { plate: f.get("plate"), type: f.get("type") })
-       : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return updateBaseData(coll, id, { name: f.get("name"), tier: f.get("tier"), level: f.get("level"), phone: f.get("phone")||"", note: f.get("note")||"", address: f.get("address")||"", nhiCode: f.get("nhiCode")||"", lat: c ? c.lat : null, lng: c ? c.lng : null }); })()
+       : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return updateBaseData(coll, id, { name: f.get("name"), tier: f.get("tier"), level: f.get("level"), phone: f.get("phone")||"", note: f.get("note")||"", address: f.get("address")||"", nhiCode: f.get("nhiCode")||"", frequent: f.get("frequent")==="on", lat: c ? c.lat : null, lng: c ? c.lng : null }); })()
        : coll === "doctors" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"" })
        : coll === "notifications" ? updateBaseData(coll, id, { title: f.get("title"), body: f.get("body") })
        : updateBaseData(coll, id, { code: f.get("code") }))
     : (coll === "personnel" ? addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone"), f.get("emtLevel"), f.get("email"))
        : coll === "vehicles" ? addVehicle(unit, f.get("plate"), f.get("type"))
-       : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return addHospital(f.get("name"), f.get("tier"), f.get("level"), f.get("phone"), f.get("note"), f.get("address"), f.get("nhiCode"), c ? c.lat : null, c ? c.lng : null); })()
+       : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return addHospital(f.get("name"), f.get("tier"), f.get("level"), f.get("phone"), f.get("note"), f.get("address"), f.get("nhiCode"), c ? c.lat : null, c ? c.lng : null, f.get("frequent")==="on"); })()
        : coll === "doctors" ? addDoctor(f.get("name"), f.get("title"), f.get("phone"))
        : coll === "notifications" ? addNotification(f.get("title"), f.get("body"))
        : addRecorder(unit, f.get("code")));
