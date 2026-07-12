@@ -1,0 +1,24 @@
+name: Deploy to Firebase Hosting preview channel on PR
+
+# 只部署 Hosting 的靜態內容到一個 PR 專屬的臨時預覽網址（存活 7 天，
+# PR 更新會自動重新部署到同一個網址），不動 Firestore rules／Cloud
+# Functions——那兩個是全域共用資源，不該因為某個功能分支的預覽就先套用。
+# 正式上版仍然是 merge 到 main 後由 firebase-hosting-merge.yml 處理。
+on: pull_request
+
+permissions:
+  checks: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  build_and_preview:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: "${{ secrets.GITHUB_TOKEN }}"
+          firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_MEDICAL_BATTALION_TRACKER }}"
+          projectId: medical-battalion-tracker
