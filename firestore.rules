@@ -177,6 +177,13 @@ service cloud.firestore {
       allow create, update, delete: if isStaff() || isCommander();
     }
 
+    // 建立勤務頁「任務名稱」快速選擇範本，是全營共用的參考資料，不綁定
+    // 特定單位；維護權限比照基礎資料管理。
+    match /taskTitleTemplates/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isStaff() || isCommander();
+    }
+
     // 健保署急診即時資訊快取（見 functions/index.js 的 syncErRealtime，每
     // 15 分鐘排程呼叫一次），只有這支排程函式（Admin SDK，本來就不受安全
     // 規則限制）會寫入，一般使用者/前端一律唯讀，不開放任何人直接寫入。
