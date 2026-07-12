@@ -1555,7 +1555,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-11-346-mci-ccp-modal-button-relayout";
+const BUILD_TAG = "2026-07-12-347-mci-pulltorefresh-treating-label";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2159,20 +2159,20 @@ function mciPatientSortRank(p){
   }
   return MCI_NON_RED_RANK[p.triageColor] != null ? MCI_NON_RED_RANK[p.triageColor] : 7;
 }
-// 傷患生命週期：待命（檢傷官剛建立，人還在集中區給治療官處置，尚未標記
-// 處置完成）→ 待後送（治療官點「處置完成」，後送官才看得到、開始安排；
-// 尚未指派車輛/醫院）→ 待出發（後送官已指派車輛/醫院，車輛還沒出發）→
-// 後送中（已離開現場，還沒抵達）→ 已送達（抵達醫院，填過里程/備註）。
-// 「待命」跟「待後送」的差別是治療官有沒有點過處置完成——後送官分頁只
-// 看得到已經處置完成的傷患，還在治療中的傷患後送官看不到、也不會被誤
-// 提早指派車輛/醫院。
+// 傷患生命週期：治療中（檢傷官剛建立，人還在集中區給治療官處置，尚未
+// 標記處置完成）→ 待後送（治療官點「處置完成」，後送官才看得到、開始
+// 安排；尚未指派車輛/醫院）→ 待出發（後送官已指派車輛/醫院，車輛還沒
+// 出發）→ 後送中（已離開現場，還沒抵達）→ 已送達（抵達醫院，填過里程/
+// 備註）。「治療中」跟「待後送」的差別是治療官有沒有點過處置完成——
+// 後送官分頁只看得到已經處置完成的傷患，還在治療中的傷患後送官看不
+// 到、也不會被誤提早指派車輛/醫院。
 function mciPatientStatus(p){
   if (!p.triageColor) return "待檢傷";
   if (p.arrivedAt) return "已送達";
   if (p.departedAt) return "後送中";
   if (p.vehicle && p.hospital) return "待出發";
   if (p.treatmentComplete) return "待後送";
-  return "待命";
+  return "治療中";
 }
 // 健保署「全民健康保險特約醫事機構基本資料」清冊（醫學中心／區域醫院／地區醫院
 // 三個層級的公開資料集合併去重，只留下這裡實際會用到的欄位：c=醫事機構代碼
@@ -2275,6 +2275,12 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/07/12", groups: [
+    { category: "大量傷患事件", items: [
+      "修正檢傷官／治療官／後送官分頁下拉沒辦法重新整理的問題：這幾個分頁案件不多時內容很短、main 完全捲不動，先前的判斷式要求頁面真的可以捲動才允許觸發下拉手勢，內容不足一螢幕的分頁因此永遠沒辦法下拉重新整理；改成只要求手勢起點在頂端（捲不動的頁面本來就恆成立），內容再短也可以下拉重新整理",
+      "治療官分頁的傷患狀態文字「待命」改成「治療中」，跟「處置完成」後的「待後送」意思更好區分",
+    ] },
+  ] },
   { date: "2026/07/11", groups: [
     { category: "急診待命", items: [
       "新增「一鍵緊急動員廣播」：待命中的醫務所卡片上新增一條紅色滑動條，把拖曳塊完整滑到最右側（超過92%）才會真的送出，滑不到位放開會自動彈回起點，避免單手操作或放口袋誤觸就發出動員通知；尚未建立待命勤務時不會顯示這個滑動條",
@@ -5720,14 +5726,14 @@ function viewMciTriageForm(eventId){
 }
 
 /* ---- 治療官視角：傷患集中區（CCP）動態追蹤，含二次檢傷 ----
-   只看得到還在「待命」的傷患：一旦後送官指派車輛/醫院開始後送，這位傷患
-   就離開集中區、交給後送官的分頁繼續追蹤，不會同時出現在兩邊。 */
+   只看得到還在「治療中」的傷患：一旦點過處置完成，這位傷患就離開集中
+   區、交給後送官的分頁繼續追蹤，不會同時出現在兩邊。 */
 function viewMciCcpTab(eventId){
-  const patients = state.mciPatients.filter(p => p.eventId === eventId && mciPatientStatus(p) === "待命")
+  const patients = state.mciPatients.filter(p => p.eventId === eventId && mciPatientStatus(p) === "治療中")
     .sort((a,b) => mciPatientSortRank(a) - mciPatientSortRank(b) || (a.seq||0) - (b.seq||0));
   return `
     <div class="section-label">傷患集中區（共 ${patients.length} 人）</div>
-    ${patients.length ? patients.map(mciCcpPatientCard).join("") : `<div class="empty">目前沒有待命中的傷患</div>`}
+    ${patients.length ? patients.map(mciCcpPatientCard).join("") : `<div class="empty">目前沒有治療中的傷患</div>`}
   `;
 }
 function mciCcpPatientCard(p){
@@ -5779,10 +5785,10 @@ function viewMciCcpEditModal(){
 }
 
 /* ---- 後送官視角：雙節點後送生命週期（離開現場／抵達醫院） ---- */
-// 治療官還沒點「處置完成」（狀態仍是「待命」）的傷患不會出現在這裡：
+// 治療官還沒點「處置完成」（狀態仍是「治療中」）的傷患不會出現在這裡：
 // 後送官只處理已經處置完成的傷患，不會提早看到、提早指派車輛/醫院。
 function viewMciEvacTab(eventId){
-  const patients = state.mciPatients.filter(p => p.eventId === eventId && mciPatientStatus(p) !== "待命")
+  const patients = state.mciPatients.filter(p => p.eventId === eventId && mciPatientStatus(p) !== "治療中")
     .sort((a,b) => mciPatientSortRank(a) - mciPatientSortRank(b) || (a.seq||0) - (b.seq||0));
   return `
     <div class="section-label">後送指揮（共 ${patients.length} 人）</div>
@@ -9340,14 +9346,17 @@ window.__saveTaskEdit = (ev, taskId) => {
     // scrollTop 無關；在這些區域內手勢不應誤觸外層下拉重新整理。
     const inModal = e.target.closest && e.target.closest('.modal-sheet, .bottomnav');
     // App Shell 改成 main 自己捲動以後（見 #app 的 CSS 註解），要判斷的是
-    // main 的 scrollHeight／scrollTop，不是 window 的。頁面內容不足一螢幕
-    // （例如首頁任務不多時）main 根本沒有可捲動的空間，scrollTop 永遠是
-    // 0，這種情況下「頁面最上方」跟「頁面最下方」沒有實質區別——只靠
-    // scrollTop 判斷會導致在畫面任何位置下拉都被誤判成「已在頂端」。因此
-    // 下拉重新整理只在頁面「真的可以捲動」時才允許觸發，且必須確實捲到頂部。
+    // main 的 scrollTop，不是 window 的。之前這裡還多判斷過 main 的
+    // scrollHeight 是否真的超過 clientHeight（內容不足一螢幕就整個不給
+    // 觸發），原意是想避免「內容不夠捲、到處都算頂端」誤觸——但這反而讓
+    // 內容本來就短的頁面（例如大量傷患系統的檢傷官/治療官/後送官分頁，
+    // 案件不多時一眼就看完，完全捲不動）永遠沒辦法下拉重新整理，變成
+    // 「內容越簡單的畫面越沒辦法刷新」的反效果。內容不足一螢幕時整頁本
+    // 來就等於「頂端」，從任何位置下拉都合理，不需要额外擋掉，只要
+    // scrollTop<=0（捲得動的頁面用來確認真的捲到頂；捲不動的頁面本來就
+    // 恆成立）就夠了。
     const m = document.querySelector('main');
-    const canScroll = !!m && m.scrollHeight > m.clientHeight + 1;
-    startY = (!inModal && canScroll && m.scrollTop <= 0) ? e.touches[0].clientY : null;
+    startY = (!inModal && m && m.scrollTop <= 0) ? e.touches[0].clientY : null;
   }, { passive: true });
 
   window.addEventListener('touchmove', (e) => {
