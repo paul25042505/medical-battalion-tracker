@@ -1627,7 +1627,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-12-362-task-title-template-admin";
+const BUILD_TAG = "2026-07-12-363-task-title-template-no-parens";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2060,11 +2060,11 @@ function vehicleUnitLabel(plate){
 // 欄位時，預設當作營外（多數勤務本來就是出營區執行）。
 const TASK_SCOPE_OPTIONS = ["營內","營外"];
 function taskScope(t){ return t && t.scope === "營內" ? "營內" : "營外"; }
-// 任務名稱快速選擇：很多任務名稱是固定格式「（地點）任務性質」（例如
-// 「（彈藥庫）射擊救護待命」），選了範本後把「OO」反白選取起來（沿用
-// 站內既有「OO」當填空佔位符的慣例，例如回報彈窗地點欄位的
+// 任務名稱快速選擇：很多任務名稱是固定格式「地點＋任務性質」（例如
+// 「彈藥庫射擊救護待命」），選了範本後把「OO」反白選取起來（沿用站內
+// 既有「OO」當填空佔位符的慣例，例如回報彈窗地點欄位的
 // placeholder="加油站、OO超商"），使用者接下來打字會直接蓋掉「OO」、
-// 不會動到括號跟後面的任務性質文字，也不會漏填地點。範本清單改成存在
+// 不會動到後面的任務性質文字，也不會漏填地點。範本清單改成存在
 // Firestore（state.taskTitleTemplates，見「基礎資料管理 → 任務名稱範本」），
 // 管理員可以自行新增/編輯/刪除，不用再改程式碼、等出貨。
 // 急診待命：兩個醫務所地點固定，每個地點一筆文件（doc id = key），只存
@@ -2586,6 +2586,7 @@ const RELEASE_NOTES = [
       "建立勤務頁「營內／營外」改成跟上面「任務類型」同樣大小的切換鈕，佔滿整行、更清楚好點，預設改成「營內」",
       "建立勤務頁「任務名稱」新增快速選擇範本（勤務類型才有，洽公沒有）：很多任務名稱是固定格式「（地點）任務性質」（例如「（彈藥庫）射擊救護待命」），選了範本後輸入框會帶入範本文字，並自動把佔位符「OO」反白選取，接下來打字直接蓋掉「OO」就好，不會漏打地點",
       "任務名稱快速選擇範本改成存在後台：新增「基礎資料管理 → 任務名稱範本」頁面，管理員可以自行新增/編輯/刪除範本，不用再等改程式碼、出新版才能加",
+      "任務名稱範本的預設格式拿掉括號，改成「地點＋任務性質」（例如「彈藥庫射擊救護待命」），不是「（地點）任務性質」",
     ] },
     { category: "醫院資訊", items: [
       "新增／編輯醫院表單新增「標記為常用醫院」選項：軍中固定後送的那幾間醫院標記後，「醫院資訊」預設排序（沒開依距離／依人數時）跟回報「出勤」的送醫醫院下拉選單都會排在最前面（下拉選單另外分成「常用醫院」「其他醫院」兩組），不用每次都在一長串名冊裡找；醫院卡片上也會顯示「⭐ 常用」標籤",
@@ -4270,7 +4271,7 @@ async function ensureHospitalsSeeded(){
 }
 // 首次啟用時自動補進「任務名稱」快速選擇範本的預設清單；之後管理員可以
 // 在「基礎資料管理 → 任務名稱範本」自行新增/編輯/刪除，不用再改程式碼。
-const TASK_TITLE_TEMPLATE_SEED = ["（OO）射擊救護待命"];
+const TASK_TITLE_TEMPLATE_SEED = ["OO射擊救護待命"];
 let taskTitleTemplatesSeeded = false;
 async function ensureTaskTitleTemplatesSeeded(){
   if (taskTitleTemplatesSeeded) return;
@@ -8418,8 +8419,8 @@ function viewBaseDataModal(){
   } else if (coll === "taskTitleTemplates") {
     title = editing ? "編輯任務名稱範本" : "新增任務名稱範本";
     fields = `
-      <div class="field"><label>範本文字</label><input name="text" required value="${esc(editing?.text||'')}" placeholder="例如：（OO）射擊救護待命"></div>
-      <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">很多任務名稱是固定格式「（地點）任務性質」，用「OO」當地點的佔位符（沿用站內既有的填空慣例）；建立勤務頁選了這個範本後，「OO」會自動反白選取，接下來打字直接蓋掉「OO」就好。不含「OO」的範本會直接整段帶入，游標停在最後面。</div>`;
+      <div class="field"><label>範本文字</label><input name="text" required value="${esc(editing?.text||'')}" placeholder="例如：OO射擊救護待命"></div>
+      <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">很多任務名稱是固定格式「地點＋任務性質」，用「OO」當地點的佔位符（沿用站內既有的填空慣例）；建立勤務頁選了這個範本後，「OO」會自動反白選取，接下來打字直接蓋掉「OO」就好。不含「OO」的範本會直接整段帶入，游標停在最後面。</div>`;
   } else {
     title = editing ? "編輯行車紀錄器" : "新增行車紀錄器";
     fields = `<div class="field"><label>編號</label><input name="code" required value="${esc(editing?.code||'')}"></div>`;
