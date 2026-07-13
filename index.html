@@ -1666,7 +1666,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-13-381-erstandby-cross-unit-visibility";
+const BUILD_TAG = "2026-07-13-382-firestore-composite-index-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2666,6 +2666,7 @@ const RELEASE_NOTES = [
     ] },
     { category: "急診待命", items: [
       "急診待命頁改成看得到全營（不分單位）的待命勤務：兩個醫務所地點是全營共用資源，別單位的待命勤務也會顯示車號／值班醫官／車長／駕駛等摘要，方便掌握全營待命狀況；別單位的待命勤務點不進去看詳情（「查看／管理」按鈕改成鎖頭提示），患者相關資料仍然限本單位查看。一般勤務（非急診待命）維持原本規則，各單位只看得到自己單位的勤務",
+      "修正一般成員／主官管的勤務／患者紀錄查詢缺少後端資料庫索引、導致整批查詢失敗看不到任何資料的問題（連自己單位的資料都受影響）：新增查詢需要的複合索引設定，並補上部署流程，出貨時會自動建立；另外調整查詢邏輯，往後就算某一項查詢（例如急診待命的跨單位查詢）本身出問題，也不會連帶讓同一批裡「自己單位」原本查得到的資料一起消失不見",
     ] },
   ] },
   { date: "2026/07/12", groups: [
@@ -4308,11 +4309,17 @@ function startDataListeners(){
     const unitFilter = myQueryUnitFilter();
     let docs;
     if (unitFilter) {
-      const [ownDocs, erDocs] = await Promise.all([
+      // 用 allSettled 而不是 all：這是兩個各自獨立的查詢，急診待命那支
+      // （erStandbyKey in [...] + createdAt 範圍）需要額外的複合索引，
+      // 索引還沒建好、或這支查詢本身出問題時不能連累自己單位的勤務也
+      // 一起讀不到——那樣反而比只有急診待命看不到還嚴重。
+      const [ownResult, erResult] = await Promise.allSettled([
         fsQuerySince("tasks", "createdAt", recentCutoffDate(), null, unitFilter),
         fsQueryErStandbyTasks(recentCutoffDate())
       ]);
-      docs = mergeById(ownDocs, erDocs);
+      if (erResult.status === "rejected") console.error("急診待命跨單位查詢失敗（可能缺少 Firestore 複合索引）", erResult.reason);
+      if (ownResult.status === "rejected") throw ownResult.reason;
+      docs = mergeById(ownResult.value, erResult.status === "fulfilled" ? erResult.value : []);
     } else {
       docs = await fsQuerySince("tasks", "createdAt", recentCutoffDate());
     }
