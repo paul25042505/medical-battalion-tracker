@@ -1647,7 +1647,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-13-365-no-transport-badge";
+const BUILD_TAG = "2026-07-13-366-records-filter-scroll-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2572,6 +2572,9 @@ const RELEASE_NOTES = [
       "患者狀況卡片新增「標記不送醫」「離開醫務所」兩個按鈕：醫務所處理完但不用送醫的患者，先按「標記不送醫」留紀錄，患者實際離開後再按「離開醫務所」結案，卡片會恢復成「尚未建立患者紀錄」，可以直接開始記錄下一位新患者，不用另外開一筆新任務",
       "一筆任務（例如醫務所待命）現在可以依序處理好幾位不同患者：舊患者結案後，紀錄依然完整保留在歷史清單裡（依結案時間點分成一個個案件，各自有自己的初評／二評），只是不再顯示在「目前患者」卡片摘要上；任務列表卡片的「有患者」紅色標籤也只反映目前這個進行中的案件",
       "「標記不送醫」「離開醫務所」改成跟上面「查看／更新紀錄」一樣佔滿整行、上下堆疊，不再是並排的小按鈕；標記不送醫後，任務列表卡片會多顯示一個綠色「不送醫」標籤（跟紅色「有患者」並排），一眼就能看出這位患者還需不需要車輛／醫院資源",
+    ] },
+    { category: "介面優化", items: [
+      "修正紀錄頁「任務名稱」「地點」篩選欄位打字時畫面會跳動、鍵盤也可能跟著閃一下的問題：這兩個欄位先前每打一個字就整頁重新繪製一次，把正在輸入中的輸入框整個換成新的節點，導致捲動位置被重置、輸入框也跟著失焦；改成只更新篩選條件本身，等按下「查詢」才套用，打字過程不再重新繪製畫面",
     ] },
   ] },
   { date: "2026/07/12", groups: [
@@ -7310,8 +7313,8 @@ function viewRecords(){
     </div>
     ${f.period === "custom" ? `
     <div class="search-grid">
-      <div class="field"><label>起始日期</label><input type="date" value="${f.customDateFrom}" max="${f.customDateTo||''}" oninput="window.__setRecordsFilter('customDateFrom', this.value)"></div>
-      <div class="field"><label>結束日期</label><input type="date" value="${f.customDateTo}" min="${f.customDateFrom||''}" oninput="window.__setRecordsFilter('customDateTo', this.value)"></div>
+      <div class="field"><label>起始日期</label><input type="date" value="${f.customDateFrom}" max="${f.customDateTo||''}" oninput="window.__setRecordsFilterQuiet('customDateFrom', this.value)"></div>
+      <div class="field"><label>結束日期</label><input type="date" value="${f.customDateTo}" min="${f.customDateFrom||''}" oninput="window.__setRecordsFilterQuiet('customDateTo', this.value)"></div>
     </div>` : ""}`;
   const unitPills = canSeeAllUnits(p) ? `
     <div class="pill-row">
@@ -7348,8 +7351,8 @@ function viewRecords(){
       <div class="field"><label>車號</label><select onchange="window.__setRecordsFilter('vehicle', this.value)">${vehicleOptions}</select></div>
       <div class="field"><label>人員（車長/駕駛）</label><select onchange="window.__setRecordsFilter('person', this.value)">${personOptions}</select></div>
       <div class="field"><label>狀態</label><select onchange="window.__setRecordsFilter('status', this.value)">${statusOptions}</select></div>
-      <div class="field"><label>任務名稱</label><input value="${esc(f.title)}" oninput="window.__setRecordsFilter('title', this.value)"></div>
-      <div class="field full"><label>地點</label><input value="${esc(f.location)}" oninput="window.__setRecordsFilter('location', this.value)"></div>
+      <div class="field"><label>任務名稱</label><input value="${esc(f.title)}" oninput="window.__setRecordsFilterQuiet('title', this.value)"></div>
+      <div class="field full"><label>地點</label><input value="${esc(f.location)}" oninput="window.__setRecordsFilterQuiet('location', this.value)"></div>
     </div>` : ""}
     <div class="row" style="display:flex; gap:10px; margin:12px 0;">
       <button class="btn-ghost" style="flex:0 0 auto; padding:15px 22px;" onclick="window.__clearRecordsQuery()">清除</button>
@@ -10033,6 +10036,17 @@ window.__submitFeedbackForm = (ev) => {
   }).catch(err => showToast(`送出失敗：[${err.code||'?'}] ${err.message||err}`));
 };
 window.__setRecordsFilter = (key, value) => { state.recordsFilter[key] = value; render(); };
+// 自由輸入的文字/日期欄位（任務名稱、地點、自訂日期）打字當下不需要立刻
+// 反映到畫面上——查詢結果要等按「查詢」才會套用（見 viewRecords 的
+// applied/f 分離），所以不必也不應該像上面 __setRecordsFilter 一樣整頁
+// render()。整頁 render() 會把使用者正在輸入的 <input> 整個節點換掉，
+// 打字打到一半游標／注音組字狀態被打斷，還會讓輸入框失焦，造成兩個實機
+// 回報過的症狀同時出現：(1) 每打一個字畫面就「跳一下」（捲動位置被换掉的
+// 新節點重置），(2) 聚焦欄位捲到鍵盤上方的機制只在 focusin 當下觸發一次，
+// 欄位一失焦就不會再自動幫忙捲，變成打完第一個字之後開始「點下去也不會
+// 捲到鍵盤上面」。只更新 state、不重繪，欄位全程維持同一個 DOM 節點、
+// 焦點跟捲動位置都不會被打斷。
+window.__setRecordsFilterQuiet = (key, value) => { state.recordsFilter[key] = value; };
 window.__toggleRecordsFilters = () => { state.recordsFiltersExpanded = !state.recordsFiltersExpanded; render(); };
 window.__toggleHospitalFiltersExpanded = () => { state.hospitalFiltersExpanded = !state.hospitalFiltersExpanded; render(); };
 window.__toggleTyphoonExpanded = () => { state.typhoonExpanded = !state.typhoonExpanded; render(); };
