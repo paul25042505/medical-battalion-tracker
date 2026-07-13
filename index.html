@@ -1647,7 +1647,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-13-367-closed-vitals-collapse";
+const BUILD_TAG = "2026-07-13-368-trauma-scene-detail";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2573,6 +2573,8 @@ const RELEASE_NOTES = [
       "一筆任務（例如醫務所待命）現在可以依序處理好幾位不同患者：舊患者結案後，紀錄依然完整保留在歷史清單裡（依結案時間點分成一個個案件，各自有自己的初評／二評），只是不再顯示在「目前患者」卡片摘要上；任務列表卡片的「有患者」紅色標籤也只反映目前這個進行中的案件",
       "「標記不送醫」「離開醫務所」改成跟上面「查看／更新紀錄」一樣佔滿整行、上下堆疊，不再是並排的小按鈕；標記不送醫後，任務列表卡片會多顯示一個綠色「不送醫」標籤（跟紅色「有患者」並排），一眼就能看出這位患者還需不需要車輛／醫院資源",
       "歷史清單裡已結案案件的每一筆紀錄改成預設收合，只顯示患者身分、對職幹部、現場狀況這幾項摘要，點「展開全部資訊」才會看到完整的問診、生命徵象、處置內容；已結案的案件通常只是回頭查資料，不用每筆都攤開一長串——進行中案件維持原本全部展開，不受影響",
+      "比對紙本救護紀錄表確認現場狀況「創傷」「非創傷」的勾選項目名稱正確；「創傷」勾選「墜落傷」「燒燙傷」時新增專屬的數字細節欄位（墜落高度約幾公尺；燒燙傷程度與範圍 %），不用再擠進通用的「其他說明」自由輸入",
+      "「備註」欄位從表單最下面搬到「主訴」區塊「5. 評估脊椎是否損傷」下面，跟問診相關的內容放在一起比較好填；複測（二評）表單沒有脊椎評估項目，備註欄位維持在表單最下面",
     ] },
     { category: "介面優化", items: [
       "修正紀錄頁「任務名稱」「地點」篩選欄位打字時畫面會跳動、鍵盤也可能跟著閃一下的問題：這兩個欄位先前每打一個字就整頁重新繪製一次，把正在輸入中的輸入框整個換成新的節點，導致捲動位置被重置、輸入框也跟著失焦；改成只更新篩選條件本身，等按下「查詢」才套用，打字過程不再重新繪製畫面",
@@ -6639,6 +6641,11 @@ function viewVitalsPage(taskId, id, adding){
   const sceneType = editingVitals?.sceneType || '';
   const sceneNonTraumaOtherChecked = sceneType === '非創傷' && (editingVitals?.sceneFindings||[]).includes('其他');
   const sceneTraumaOtherChecked = sceneType === '創傷' && (editingVitals?.sceneFindings||[]).includes('其他');
+  // 紙本救護紀錄表「墜落傷」「燒燙傷」各自帶了數字細節欄位（約：__公尺／
+  // __度__%），跟其他創傷項目共用的「其他說明」自由輸入格式不一樣，各自
+  // 獨立成專屬欄位，比照 __syncDetailVisibility 的勾選才顯示模式。
+  const sceneTraumaFallChecked = sceneType === '創傷' && (editingVitals?.sceneFindings||[]).includes('墜落傷');
+  const sceneTraumaBurnChecked = sceneType === '創傷' && (editingVitals?.sceneFindings||[]).includes('燒燙傷');
 
   // 一筆任務可能依序處理過好幾位不同患者（見 vitalsEpisodes 說明），歷史
   // 清單依「離開醫務所」結案標記切成一段一段的案件，各自從「初評」開始
@@ -6695,7 +6702,7 @@ function viewVitalsPage(taskId, id, adding){
           ${v.sceneType ? `
           <div class="vitals-scene-block">
             <span class="lbl">現場狀況</span>
-            <h3 class="vitals-scene-headline">${esc(v.sceneType)}：${v.sceneFindings&&v.sceneFindings.length?`<span class="danger">${v.sceneFindings.map(esc).join('、')}</span>`:''}${v.sceneFindingsOtherDetail?` <span class="muted-note">（${esc(v.sceneFindingsOtherDetail)}）</span>`:''}</h3>
+            <h3 class="vitals-scene-headline">${esc(v.sceneType)}：${v.sceneFindings&&v.sceneFindings.length?`<span class="danger">${v.sceneFindings.map(esc).join('、')}</span>`:''}${v.sceneFindingsOtherDetail?` <span class="muted-note">（${esc(v.sceneFindingsOtherDetail)}）</span>`:''}${v.sceneFallHeight?` <span class="muted-note">（約${esc(v.sceneFallHeight)}公尺）</span>`:''}${(v.sceneBurnDegree||v.sceneBurnPercent)?` <span class="muted-note">（${[v.sceneBurnDegree?esc(v.sceneBurnDegree):'',v.sceneBurnPercent?esc(v.sceneBurnPercent)+'%':''].filter(Boolean).join('　')}）</span>`:''}</h3>
           </div>` : ""}
           ${expanded ? restHtml : ""}
           </div>
@@ -6749,9 +6756,25 @@ function viewVitalsPage(taskId, id, adding){
           </div>
         </div>
         <div id="scene-trauma-wrap" style="display:${sceneType==='創傷'?'block':'none'};">
-          <div class="field">${chipGroup('vf-scene-trauma', TRAUMA_OPTIONS, editingVitals?.sceneFindings||[], true, [{values:['其他'], wrapId:'scene-trauma-other-wrap'}])}</div>
+          <div class="field">${chipGroup('vf-scene-trauma', TRAUMA_OPTIONS, editingVitals?.sceneFindings||[], true, [
+            {values:['其他'], wrapId:'scene-trauma-other-wrap'},
+            {values:['墜落傷'], wrapId:'scene-trauma-fall-wrap'},
+            {values:['燒燙傷'], wrapId:'scene-trauma-burn-wrap'}
+          ])}</div>
           <div id="scene-trauma-other-wrap" style="display:${sceneTraumaOtherChecked?'block':'none'};">
             <div class="field" style="margin-top:10px; margin-bottom:0;"><label>其他說明（選填）</label><input id="vf-scene-trauma-other" value="${esc(sceneType==='創傷'?(editingVitals?.sceneFindingsOtherDetail||''):'')}" placeholder="請說明"></div>
+          </div>
+          <div id="scene-trauma-fall-wrap" style="display:${sceneTraumaFallChecked?'block':'none'};">
+            <div class="field" style="margin-top:10px; margin-bottom:0;"><label>墜落高度（選填，約幾公尺）</label><input id="vf-scene-trauma-fall-height" type="text" inputmode="decimal" value="${esc(sceneType==='創傷'?(editingVitals?.sceneFallHeight||''):'')}" placeholder="例如：3"></div>
+          </div>
+          <div id="scene-trauma-burn-wrap" style="display:${sceneTraumaBurnChecked?'block':'none'};">
+            <div class="field" style="margin-top:10px; margin-bottom:0;">
+              <label>燒燙傷程度與範圍（選填）</label>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <input id="vf-scene-trauma-burn-degree" type="text" style="flex:1;" value="${esc(sceneType==='創傷'?(editingVitals?.sceneBurnDegree||''):'')}" placeholder="度數，例如：二度">
+                <input id="vf-scene-trauma-burn-percent" type="text" inputmode="numeric" style="flex:1;" value="${esc(sceneType==='創傷'?(editingVitals?.sceneBurnPercent||''):'')}" placeholder="範圍 %，例如：10">
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -6762,6 +6785,7 @@ function viewVitalsPage(taskId, id, adding){
         <div class="field"><div class="field-label-row"><label>3. 大約不舒服多久了？（選填）</label>${quickFillSelect('vf-complaint-duration', COMPLAINT_DURATION_OPTIONS)}</div><input id="vf-complaint-duration" value="${esc(editingVitals?.complaintDuration||'')}" placeholder="例如：約五分鐘"></div>
         <div class="field"><div class="field-label-row"><label>4. 還有其他地方不舒服嗎？（選填）</label>${quickFillSelect('vf-complaint-others', COMPLAINT_OTHERS_OPTIONS)}</div><input id="vf-complaint-others" value="${esc(editingVitals?.complaintOthers||'')}" placeholder="沒有／請描述"></div>
         <div class="field"><div class="field-label-row"><label>5. 評估脊椎是否損傷？（創傷患者，選填）</label>${quickFillSelect('vf-spine-check', SPINE_CHECK_OPTIONS)}</div><input id="vf-spine-check" value="${esc(editingVitals?.spineCheck||'')}" placeholder="例如：頸椎無痠麻痛"></div>
+        <div class="field"><label>備註（選填）</label><input id="vf-note" value="${esc(editingVitals?.note||'')}"></div>
       </div>
       <div class="form-section">
         <div class="form-section-title"><span class="step-num">4</span>過去病史</div>
@@ -6841,7 +6865,7 @@ function viewVitalsPage(taskId, id, adding){
           <div class="field" style="margin-top:10px; margin-bottom:0;"><label>其他處置說明（選填）</label><input id="vf-treatment-other-detail" value="${esc(editingVitals?.treatmentOtherDetail||'')}" placeholder="請說明"></div>
         </div>
       </div>
-      <div class="field"><label>備註（選填）</label><input id="vf-note" value="${esc(editingVitals?.note||'')}"></div>
+      ${!isInitialEntry ? `<div class="field"><label>備註（選填）</label><input id="vf-note" value="${esc(editingVitals?.note||'')}"></div>` : ""}
       <button class="btn-primary" type="submit">${editingVitals?'儲存修正':'送出紀錄'}</button>
       ${formCancelBtn}
     </form>
@@ -6885,7 +6909,12 @@ function vitalsNormalFlag(v){
 function vitalsSceneStatusText(v){
   if (!v.sceneType) return "";
   const findings = (v.sceneFindings||[]).join('、');
-  return `${v.sceneType}${findings?`：${findings}`:''}${v.sceneFindingsOtherDetail?`（${v.sceneFindingsOtherDetail}）`:''}`;
+  const detailParts = [
+    v.sceneFindingsOtherDetail,
+    v.sceneFallHeight ? `約${v.sceneFallHeight}公尺` : "",
+    [v.sceneBurnDegree, v.sceneBurnPercent ? `${v.sceneBurnPercent}%` : ""].filter(Boolean).join('　'),
+  ].filter(Boolean);
+  return `${v.sceneType}${findings?`：${findings}`:''}${detailParts.length?`（${detailParts.join('、')}）`:''}`;
 }
 function buildVitalsReportText(v, greeting){
   const d = new Date(v.ts || Date.now());
@@ -9565,6 +9594,9 @@ window.__submitVitals = (taskId, id) => {
     data.sceneType = sceneTypeVal;
     data.sceneFindings = sceneTypeVal === "創傷" ? checkedValues("vf-scene-trauma") : sceneTypeVal === "非創傷" ? checkedValues("vf-scene-nontrauma") : [];
     data.sceneFindingsOtherDetail = sceneTypeVal === "創傷" ? get("vf-scene-trauma-other") : sceneTypeVal === "非創傷" ? get("vf-scene-nontrauma-other") : "";
+    data.sceneFallHeight = sceneTypeVal === "創傷" ? get("vf-scene-trauma-fall-height") : "";
+    data.sceneBurnDegree = sceneTypeVal === "創傷" ? get("vf-scene-trauma-burn-degree") : "";
+    data.sceneBurnPercent = sceneTypeVal === "創傷" ? get("vf-scene-trauma-burn-percent") : "";
     data.complaintQuality = get("vf-complaint-quality");
     data.complaintDuration = get("vf-complaint-duration");
     data.complaintOthers = get("vf-complaint-others");
