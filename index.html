@@ -1663,7 +1663,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-13-375-remove-assist-med";
+const BUILD_TAG = "2026-07-13-376-report-wording";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2599,6 +2599,7 @@ const RELEASE_NOTES = [
       "處置項目補齊比對紙本救護紀錄表後仍缺少的「基本呼吸道／呼吸處置」「創傷處置」項目（口咽呼吸道、鼻咽呼吸道、哈姆立克法、聲門上呼吸道（SGA）、鼻管、面罩、非再呼吸型面罩、霧化吸入型面罩、長背板固定、KED固定），並比照醫官初步判定改成分類顯示（基本照護／呼吸道／心肺復甦／創傷處置／藥物處置），選項變多也不會擠成一長串",
       "「藥物處置」分類再補上「協助使用Aspirin」「協助使用NTG含片」「協助使用支氣管擴張劑」這幾個比對紙本後還缺的項目",
       "移除「藥物處置」分類裡的通用「協助服藥」選項",
+      "「複製回報文字」用詞調整，讀起來更順口：意識欄位（AVPU 量表）在報告裡改成完整說法（例如「清醒」而不是「清」，避免連長看不懂縮寫）；「非創傷」這個預設分類不再特別標出來，「創傷」才會標；現場狀況/處置項目勾了「其他」時直接顯示填寫的說明文字，不再卡一個「其他」；「數據異常」改成列出實際異常的項目（例如「血壓、脈搏異常」），不用自己再對一次數字",
     ] },
     { category: "介面優化", items: [
       "修正紀錄頁「任務名稱」「地點」篩選欄位打字時畫面會跳動、鍵盤也可能跟著閃一下的問題：這兩個欄位先前每打一個字就整頁重新繪製一次，把正在輸入中的輸入框整個換成新的節點，導致捲動位置被重置、輸入框也跟著失焦；改成只更新篩選條件本身，等按下「查詢」才套用，打字過程不再重新繪製畫面",
@@ -6947,42 +6948,64 @@ function vitalsNumOk(val, min, max){
   if (isNaN(n)) return null;
   return n >= min && n <= max;
 }
+// 「數據異常」原本只會顯示一個籠統的標籤，連長看了不知道是哪一項異常；
+// 改成列出實際異常的項目名稱（例如「血壓異常」），一次好幾項都異常就用
+// 頓號接起來（例如「血壓、脈搏異常」）。
 function vitalsNormalFlag(v){
-  const checks = [
-    vitalsNumOk(v.spo2, 95, 100),
-    vitalsNumOk(v.hr, 60, 100),
-    vitalsNumOk(v.temp, 36, 37.5)
-  ];
+  const abnormal = [];
+  let known = 0;
+  const spo2Ok = vitalsNumOk(v.spo2, 95, 100);
+  if (spo2Ok !== null) { known++; if (!spo2Ok) abnormal.push('血氧'); }
+  const hrOk = vitalsNumOk(v.hr, 60, 100);
+  if (hrOk !== null) { known++; if (!hrOk) abnormal.push('脈搏'); }
+  const tempOk = vitalsNumOk(v.temp, 36, 37.5);
+  if (tempOk !== null) { known++; if (!tempOk) abnormal.push('體溫'); }
   if (v.bp) {
     const [sys, dia] = v.bp.split("/").map(s => Number(s));
-    if (!isNaN(sys)) checks.push(sys >= 90 && sys <= 140);
-    if (!isNaN(dia)) checks.push(dia >= 60 && dia <= 90);
+    let bpOk = true;
+    if (!isNaN(sys)) { known++; if (!(sys >= 90 && sys <= 140)) bpOk = false; }
+    if (!isNaN(dia)) { known++; if (!(dia >= 60 && dia <= 90)) bpOk = false; }
+    if (!bpOk) abnormal.push('血壓');
   }
-  const known = checks.filter(c => c !== null);
-  if (!known.length) return "";
-  return known.every(Boolean) ? "數據正常" : "數據異常";
+  if (!known) return "";
+  return abnormal.length ? `${abnormal.join('、')}異常` : "數據正常";
 }
 // 回報文字的「狀況」要反映現場狀況分類（創傷/非創傷＋勾選的症狀），不是
 // 主訴自由輸入文字——主訴常常只是「哪裡不舒服」的簡短定位詞（例如
 // 「胸口」），單獨放進回報文字讀起來像沒講完，現場狀況才是完整的判斷。
+// 「非創傷」是多數情況下的預設分類，報告裡特別標出來反而沒有資訊量、
+// 讀起來也卡；「創傷」才是真的需要提醒連長注意的分類，所以只在創傷時
+// 才加上這個字首。「其他」比照處置項目的做法，直接用使用者填的說明文字
+// 取代，不要讓「其他」這個空泛的詞卡在報告句子中間。
 function vitalsSceneStatusText(v){
   if (!v.sceneType) return "";
-  const findings = (v.sceneFindings||[]).join('、');
+  const findings = (v.sceneFindings||[]).map(f => f === '其他' && v.sceneFindingsOtherDetail ? v.sceneFindingsOtherDetail : f).join('、');
   const detailParts = [
-    v.sceneFindingsOtherDetail,
     v.sceneFallHeight ? `約${v.sceneFallHeight}公尺` : "",
     [v.sceneBurnDegree, v.sceneBurnPercent ? `${v.sceneBurnPercent}%` : ""].filter(Boolean).join('　'),
   ].filter(Boolean);
-  return `${v.sceneType}${findings?`：${findings}`:''}${detailParts.length?`（${detailParts.join('、')}）`:''}`;
+  const prefix = v.sceneType === '創傷' ? '創傷：' : '';
+  return `${prefix}${findings}${detailParts.length?`（${detailParts.join('、')}）`:''}`;
 }
 // 處置項目勾了「其他」時，光顯示「其他」兩個字看不出實際做了什麼，要
 // 連同使用者填的說明文字（treatmentOtherDetail）一起顯示在同一個標籤裡
-// （例如「其他（EKG）」），不是分開顯示在下面單獨一行——現場狀況的
-// 「其他」也是同樣的顯示方式（見 vitalsSceneStatusText），這裡沿用一致
-// 的呈現邏輯。
+// （例如「其他（EKG）」），不是分開顯示在下面單獨一行——這是患者紀錄卡片
+// 本身的顯示邏輯，資訊要完整保留給實際查閱紀錄的人看。
 function treatmentLabel(x, v){
   return x === '其他' && v.treatmentOtherDetail ? `其他（${v.treatmentOtherDetail}）` : x;
 }
+// 回報文字給連長看的是精簡版，跟上面患者紀錄卡片完整顯示的取向不同：
+// 「其他」比照現場狀況的做法直接用說明文字取代，不需要保留「其他」
+// 這個字，句子讀起來更順（例如「保暖、心理支持、EKG」而不是「保暖、
+// 心理支持、其他（EKG）」）。
+function reportTreatmentLabel(x, v){
+  return x === '其他' && v.treatmentOtherDetail ? v.treatmentOtherDetail : x;
+}
+// 意識欄位是照 AVPU 量表勾選（清/聲/痛/否＝Alert/Verbal/Pain/Unresponsive
+// 的簡稱），這個縮寫給熟悉救護紀錄表的人看沒問題，但回報文字是要給連長
+// 這類不一定懂 AVPU 術語的人看，「意識清」容易被誤讀成別的意思；報告裡
+// 換成完整說法，患者紀錄卡片本身的顯示不受影響。
+const CONSCIOUSNESS_REPORT_LABEL = { "清": "清醒", "聲": "呼喚有反應", "痛": "刺痛有反應", "否": "刺激無反應" };
 function buildVitalsReportText(v, greeting){
   const d = new Date(v.ts || Date.now());
   const dateStr = `${d.getMonth()+1}/${d.getDate()}`;
@@ -6992,12 +7015,12 @@ function buildVitalsReportText(v, greeting){
     ? (v.pastHistory.length===1 && v.pastHistory[0]==="無" ? "無病史" : v.pastHistory.join("、")+"病史")
     : "";
   const flag = vitalsNormalFlag(v);
-  const treatmentsText = (v.treatments||[]).map(x => treatmentLabel(x, v)).join("、");
+  const treatmentsText = (v.treatments||[]).map(x => reportTreatmentLabel(x, v)).join("、");
   const liaisonLine = `${v.liaisonRank||''}${v.liaisonName||''}`;
   const sceneStatusText = vitalsSceneStatusText(v);
 
   const vitalsParts = [];
-  if (v.consciousness) vitalsParts.push(`意識${v.consciousness}`);
+  if (v.consciousness) vitalsParts.push(`意識${CONSCIOUSNESS_REPORT_LABEL[v.consciousness] || v.consciousness}`);
   if (v.spo2) vitalsParts.push(`血氧 ${v.spo2}%`);
   if (v.hr) vitalsParts.push(`脈搏 ${v.hr}`);
   if (v.bp) vitalsParts.push(`血壓 ${v.bp}`);
