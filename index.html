@@ -366,11 +366,19 @@
     position:fixed; inset:0; z-index:9999; background:rgba(10,10,14,0.6); backdrop-filter:blur(2px);
     display:flex; align-items:center; justify-content:center; padding:20px;
     animation:modalFade 0.18s ease;
+    /* 這個守門員彈窗只會在「還沒加入主畫面」時出現，也就是使用者還在一般
+       Safari 分頁裡——手機瀏覽器的網址列會隨捲動收合/展開，靠 inset:0
+       撐出來的高度只吃得到當下那一瞬間的視窗尺寸，網址列一收合/展開，
+       固定定位的彈窗高度就跟著重算一次，肉眼看起來像上下抖動；比照
+       #app 的寫法，明確宣告 100dvh（動態視窗高度，會自動跟著網址列
+       收合/展開調整，不會在計算的當下被鎖死）取代單純依賴 inset 撐開的
+       高度，同一支瀏覽器有支援 dvh 就不會再抖動。 */
+    height:100vh; height:100dvh;
   }
   .push-gatekeeper-card{
     position:relative; background:var(--panel); width:100%; max-width:400px; border-radius:var(--radius-lg);
     padding:26px 22px calc(22px + env(safe-area-inset-bottom)) 22px; box-shadow:0 20px 60px rgba(0,0,0,0.35);
-    animation:modalSlideUp 0.24s cubic-bezier(.22,1,.36,1); max-height:86vh; overflow-y:auto;
+    animation:modalSlideUp 0.24s cubic-bezier(.22,1,.36,1); max-height:86vh; max-height:86dvh; overflow-y:auto;
   }
   .push-gatekeeper-close{
     position:absolute; top:14px; right:14px; width:30px; height:30px; border-radius:50%;
@@ -1672,7 +1680,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-13-384-revert-immersive-status-bar";
+const BUILD_TAG = "2026-07-13-385-gatekeeper-dvh-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2671,6 +2679,7 @@ const RELEASE_NOTES = [
       "修正一般成員／主官管新註冊帳號登入後，任務、車輛、人員名冊、急診待命等頁面都顯示空白（看不到自己單位的資料）的問題：背景查詢資料時沒有帶上自己單位的篩選條件，導致伺服器端權限規則沒辦法只放行「屬於自己單位」的部分、乾脆整批全部擋下來；改成查詢時一併帶上單位篩選，admin／高勤官不受影響（本來就能看所有單位）",
       "加到主畫面（PWA）後最上方的狀態列（時間/訊號/電量那排）改成沉浸式：畫面本身的底色直接延伸到狀態列底下，不再是一塊跟深色模式格格不入的白色色塊；狀態列文字/圖示固定顯示白色（iOS 系統限制，沒辦法跟著淺色/深色模式切換），淺色模式下狀態列文字對比會偏低，這是已知取捨",
       "上一項「沉浸式狀態列」實機回報畫面上下各多出一塊空白色塊，已復原成原本的狀態列樣式（不再是沉浸式），避免繼續影響使用；這個問題需要真機才能重現排查，先復原確保能正常使用",
+      "修正「請將本系統加入主畫面」提示彈窗在手機瀏覽器（尚未加入主畫面、網址列會隨捲動收合展開）裡上下抖動的問題：彈窗高度原本單純依賴 CSS inset 撐開，網址列一收合/展開就要重新計算一次，肉眼看起來像抖動；改用 dvh（動態視窗高度）明確宣告高度，跟其他彈窗一致，不再抖動",
     ] },
     { category: "急診待命", items: [
       "急診待命頁改成看得到全營（不分單位）的待命勤務：兩個醫務所地點是全營共用資源，別單位的待命勤務也會顯示車號／值班醫官／車長／駕駛等摘要，方便掌握全營待命狀況；別單位的待命勤務點不進去看詳情（「查看／管理」按鈕改成鎖頭提示），患者相關資料仍然限本單位查看。一般勤務（非急診待命）維持原本規則，各單位只看得到自己單位的勤務",
