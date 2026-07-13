@@ -603,6 +603,16 @@
      一眼就能分辨哪一筆是基準值（初評）、哪一筆是後續追蹤（二評）。 */
   .vitals-entry.stage-initial{border-left-color:var(--blue);}
   .vitals-entry.stage-followup{border-left-color:var(--amber);}
+  /* 同一個案件（同一位患者）的初評／二評，實機回報看起來像兩個各自獨立
+     的患者卡片，容易誤會成兩個不同的人；改成同一案件的所有紀錄合併成
+     一張卡片外觀（外層卡片邊框/陰影/圓角只在最外面出現一次），每一筆
+     紀錄之間只用一條分隔線區分，左側色條（初評藍／二評橘）繼續保留在
+     各自紀錄上，同一案件內還是分得出哪筆是初評、哪筆是二評。 */
+  .vitals-episode-card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); margin-bottom:14px; box-shadow:var(--shadow-xs); overflow:hidden;}
+  .vitals-episode-card .vitals-entry{background:transparent; border:none; border-left:4px solid transparent; border-radius:0; margin-bottom:0; box-shadow:none;}
+  .vitals-episode-card .vitals-entry.stage-initial{border-left-color:var(--blue);}
+  .vitals-episode-card .vitals-entry.stage-followup{border-left-color:var(--amber);}
+  .vitals-episode-card .vitals-entry + .vitals-entry{border-top:1px solid var(--border);}
   .vitals-entry-head{display:flex; justify-content:space-between; align-items:center; padding:16px var(--space-card) 0 var(--space-card);}
   .vitals-entry-time{font-family:var(--mono); font-size:var(--text-xs); color:var(--muted); font-weight:600;}
   .vitals-entry-body{padding:var(--space-card); display:flex; flex-direction:column; gap:var(--space-section);}
@@ -1647,7 +1657,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-13-368-trauma-scene-detail";
+const BUILD_TAG = "2026-07-13-369-merge-episode-card";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2575,6 +2585,7 @@ const RELEASE_NOTES = [
       "歷史清單裡已結案案件的每一筆紀錄改成預設收合，只顯示患者身分、對職幹部、現場狀況這幾項摘要，點「展開全部資訊」才會看到完整的問診、生命徵象、處置內容；已結案的案件通常只是回頭查資料，不用每筆都攤開一長串——進行中案件維持原本全部展開，不受影響",
       "比對紙本救護紀錄表確認現場狀況「創傷」「非創傷」的勾選項目名稱正確；「創傷」勾選「墜落傷」「燒燙傷」時新增專屬的數字細節欄位（墜落高度約幾公尺；燒燙傷程度與範圍 %），不用再擠進通用的「其他說明」自由輸入",
       "「備註」欄位從表單最下面搬到「主訴」區塊「5. 評估脊椎是否損傷」下面，跟問診相關的內容放在一起比較好填；複測（二評）表單沒有脊椎評估項目，備註欄位維持在表單最下面",
+      "同一案件的初評／二評歷史紀錄改成合併顯示成一張卡片（原本各自獨立成一張，容易誤會成不同患者），卡片之間只用一條分隔線區分，初評藍色／二評橘色的左側色條保留，還是看得出哪筆是初評、哪筆是二評",
     ] },
     { category: "介面優化", items: [
       "修正紀錄頁「任務名稱」「地點」篩選欄位打字時畫面會跳動、鍵盤也可能跟著閃一下的問題：這兩個欄位先前每打一個字就整頁重新繪製一次，把正在輸入中的輸入框整個換成新的節點，導致捲動位置被重置、輸入框也跟著失焦；改成只更新篩選條件本身，等按下「查詢」才套用，打字過程不再重新繪製畫面",
@@ -6658,6 +6669,7 @@ function viewVitalsPage(taskId, id, adding){
         ${vitalsEpisodeList.length > 1
           ? `<div class="vitals-episode-divider">案件 ${epIdx+1}${ep[ep.length-1].caseClosedAt ? '（已結案）' : ''}</div>`
           : (ep[ep.length-1].caseClosedAt ? `<div class="vitals-episode-divider">已結案</div>` : '')}
+        <div class="vitals-episode-card">
         ${ep.map((v,i) => {
           // 已結案案件的每一筆紀錄，預設只顯示跟這張截圖紅框範圍一樣的摘要
           // （身分／對職幹部／現場狀況），完整的問診、生命徵象、處置這些
@@ -6709,6 +6721,7 @@ function viewVitalsPage(taskId, id, adding){
           ${closedEpisode ? `<button class="filters-toggle ${expanded?'open':''}" style="border-top:1px solid var(--border);" type="button" onclick="window.__toggleVitalsEntryExpanded('${v.id}')">${icon('chevronDown',16).replace('<svg ', '<svg class="chev" ')} ${expanded ? '收合詳細資訊' : '展開全部資訊'}</button>` : ""}
         </div>`;
         }).join("")}
+        </div>
       `).join("")}
     </div>
     ${canDoReport ? `<button class="btn-primary" type="button" onclick="window.__showAddVitalsForm('${taskId}')">${icon('plus',16)} 新增紀錄</button>` : ""}
