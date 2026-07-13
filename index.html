@@ -1663,7 +1663,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-13-377-consciousness-wording-fix";
+const BUILD_TAG = "2026-07-13-378-report-complaint-note";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2601,6 +2601,7 @@ const RELEASE_NOTES = [
       "移除「藥物處置」分類裡的通用「協助服藥」選項",
       "「複製回報文字」用詞調整，讀起來更順口：意識欄位（AVPU 量表）在報告裡改成完整說法（例如「清醒」而不是「清」，避免連長看不懂縮寫）；「非創傷」這個預設分類不再特別標出來，「創傷」才會標；現場狀況/處置項目勾了「其他」時直接顯示填寫的說明文字，不再卡一個「其他」；「數據異常」改成列出實際異常的項目（例如「血壓、脈搏異常」），不用自己再對一次數字",
       "修正意識欄位「聲」「痛」「否」在複製回報文字裡的說法，讀起來更通順：「對呼喚有反應」「對疼痛有反應」「無反應」",
+      "「複製回報文字」的「狀況」補上主訴摘要（哪裡不舒服＋怎麼不舒服），像「上禮拜有回診心臟科」這類對急症判斷關鍵的描述才不會漏掉；備註欄位有填寫的話，緊接在狀況後面獨立成一行",
     ] },
     { category: "介面優化", items: [
       "修正紀錄頁「任務名稱」「地點」篩選欄位打字時畫面會跳動、鍵盤也可能跟著閃一下的問題：這兩個欄位先前每打一個字就整頁重新繪製一次，把正在輸入中的輸入框整個換成新的節點，導致捲動位置被重置、輸入框也跟著失焦；改成只更新篩選條件本身，等按下「查詢」才套用，打字過程不再重新繪製畫面",
@@ -7007,6 +7008,14 @@ function reportTreatmentLabel(x, v){
 // 這類不一定懂 AVPU 術語的人看，「意識清」容易被誤讀成別的意思；報告裡
 // 換成完整說法，患者紀錄卡片本身的顯示不受影響。
 const CONSCIOUSNESS_REPORT_LABEL = { "清": "清醒", "聲": "對呼喚有反應", "痛": "對疼痛有反應", "否": "無反應" };
+// 「狀況」原本只有現場狀況分類，完全看不到主訴內容——像「上禮拜有回診
+// 心臟科」這種對急症判斷很關鍵的描述，連長光看報告文字會漏掉。摘要只取
+// 「哪裡不舒服」＋「怎麼不舒服」，「多久了」跟「其他不適」通常是次要
+// 細節、放進來反而讓句子太長，需要的話連長還是可以打電話問。
+function vitalsComplaintSummary(v){
+  if (!v.complaint) return "";
+  return `${v.complaint}${v.complaintQuality?`（${v.complaintQuality}）`:''}`;
+}
 function buildVitalsReportText(v, greeting){
   const d = new Date(v.ts || Date.now());
   const dateStr = `${d.getMonth()+1}/${d.getDate()}`;
@@ -7019,6 +7028,7 @@ function buildVitalsReportText(v, greeting){
   const treatmentsText = (v.treatments||[]).map(x => reportTreatmentLabel(x, v)).join("、");
   const liaisonLine = `${v.liaisonRank||''}${v.liaisonName||''}`;
   const sceneStatusText = vitalsSceneStatusText(v);
+  const complaintSummary = vitalsComplaintSummary(v);
 
   const vitalsParts = [];
   if (v.consciousness) vitalsParts.push(`意識${CONSCIOUSNESS_REPORT_LABEL[v.consciousness] || v.consciousness}`);
@@ -7031,7 +7041,8 @@ function buildVitalsReportText(v, greeting){
   lines.push(`報告${greeting || '連長'}：`);
   lines.push(`今日(${dateStr}) ${timeStr} 事件回報：`);
   lines.push(`🔹 對象：${patientLine}${historyText?` (${historyText})`:''}`);
-  lines.push(`🔹 狀況：${sceneStatusText}${v.diagnosis?`，醫官研判為【${v.diagnosis}】`:''}`);
+  lines.push(`🔹 狀況：${sceneStatusText}${complaintSummary?`，主訴${complaintSummary}`:''}${v.diagnosis?`，醫官研判為【${v.diagnosis}】`:''}`);
+  if (v.note) lines.push(`備註：${v.note}`);
   if (vitalsParts.length) lines.push(`🔹 生命徵象：${vitalsParts.join('｜')}${flag?` (${flag})`:''}`);
   if (treatmentsText) lines.push(`🔹 目前處置：${treatmentsText}，目前持續留觀生命徵象。`);
   if (liaisonLine) lines.push(`隨隊幹部：${liaisonLine}${v.liaisonPhone?` (${v.liaisonPhone})`:''}`);
