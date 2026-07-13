@@ -532,6 +532,7 @@
     display:inline-flex; align-items:center; gap:4px; padding:5px 10px; border-radius:999px;
     background:var(--red); color:#fff; font-size:var(--text-xs); font-weight:700; white-space:nowrap;
   }
+  .patient-badge.no-transport{background:var(--green);}
   @keyframes patientCardIn{from{opacity:0; transform:translateY(3px);} to{opacity:1; transform:translateY(0);}}
   .patient-card{
     display:block; width:100%; margin-bottom:14px; padding:0;
@@ -546,12 +547,13 @@
   .patient-card-main{display:block; width:100%; text-align:left; padding:0; background:transparent; border:none; color:inherit; font:inherit;}
   .patient-card-main:active{transform:scale(0.99);}
   .patient-card-episode-actions{
-    display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+    display:flex; flex-direction:column; gap:8px;
     padding:0 var(--space-card) var(--space-card) var(--space-card); margin-top:-4px;
   }
   .patient-card-disposition-tag{
-    display:inline-flex; align-items:center; gap:4px; padding:7px 12px; border-radius:var(--radius-sm);
-    font-size:var(--text-xs); font-weight:700; color:var(--green-text);
+    display:flex; align-items:center; justify-content:center; gap:6px; width:100%; box-sizing:border-box;
+    min-height:var(--btn-height); padding:0 20px; border-radius:var(--radius-btn);
+    font-size:var(--text-base); font-weight:600; color:var(--green-text);
     background:color-mix(in srgb, var(--green) 13%, transparent);
   }
   .patient-card-top{display:flex; align-items:flex-start; gap:13px; padding:var(--space-card) var(--space-card) 4px var(--space-card);}
@@ -1645,7 +1647,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-13-364-vitals-case-close";
+const BUILD_TAG = "2026-07-13-365-no-transport-badge";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2569,6 +2571,7 @@ const RELEASE_NOTES = [
     { category: "患者紀錄", items: [
       "患者狀況卡片新增「標記不送醫」「離開醫務所」兩個按鈕：醫務所處理完但不用送醫的患者，先按「標記不送醫」留紀錄，患者實際離開後再按「離開醫務所」結案，卡片會恢復成「尚未建立患者紀錄」，可以直接開始記錄下一位新患者，不用另外開一筆新任務",
       "一筆任務（例如醫務所待命）現在可以依序處理好幾位不同患者：舊患者結案後，紀錄依然完整保留在歷史清單裡（依結案時間點分成一個個案件，各自有自己的初評／二評），只是不再顯示在「目前患者」卡片摘要上；任務列表卡片的「有患者」紅色標籤也只反映目前這個進行中的案件",
+      "「標記不送醫」「離開醫務所」改成跟上面「查看／更新紀錄」一樣佔滿整行、上下堆疊，不再是並排的小按鈕；標記不送醫後，任務列表卡片會多顯示一個綠色「不送醫」標籤（跟紅色「有患者」並排），一眼就能看出這位患者還需不需要車輛／醫院資源",
     ] },
   ] },
   { date: "2026/07/12", groups: [
@@ -5275,13 +5278,18 @@ function taskCard(t){
       ? (inTransit ? `前往 ${esc(currentLocation)} 中` : esc(currentLocation))
       : "";
   // 有患者記錄的任務要在卡片上凸顯出來，讓人一眼就看得到，不會被其他一般
-  // 任務蓋過去（首頁清單排序見 viewHome，這裡只負責視覺樣式）。
-  const hasPatient = activeEpisodeVitals(state.vitals.filter(v => v.taskId === t.id).sort(eventOrderCompare)).length > 0;
+  // 任務蓋過去（首頁清單排序見 viewHome，這裡只負責視覺樣式）；已經標記
+  // 不送醫的患者另外標一個綠色「不送醫」標籤，跟紅色「有患者」放在一起，
+  // 一眼就能分辨這位患者現在還需不需要車輛/醫院資源。
+  const activeVitalsForCard = activeEpisodeVitals(state.vitals.filter(v => v.taskId === t.id).sort(eventOrderCompare));
+  const hasPatient = activeVitalsForCard.length > 0;
+  const noTransportMarked = activeVitalsForCard[activeVitalsForCard.length-1]?.disposition === "不送醫";
   return `
   <div class="task-card spatial-card ${taskCardClass(s)}${hasPatient ? ' has-patient' : ''}" onclick="if(!event.target.closest('a')) window.__nav({name:'task', id:'${t.id}'})">
     <div class="task-top">
       <p class="task-title">${esc(t.title)}</p>
       <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+        ${noTransportMarked ? `<span class="patient-badge no-transport">${icon('check',13)} 不送醫</span>` : ""}
         ${hasPatient ? `<span class="patient-badge">${icon('alert',13)} 有患者</span>` : ""}
         ${statusBadge(s)}
       </div>
@@ -7074,9 +7082,9 @@ function viewTaskDetail(taskId){
       ${hasActivePatient && canDoReport ? `
       <div class="patient-card-episode-actions">
         ${markedNoTransport
-          ? `<span class="patient-card-disposition-tag">${icon('check',14)} 已標記不送醫</span>`
-          : `<button type="button" class="icon-btn" onclick="window.__markNoTransport('${taskId}')">標記不送醫</button>`}
-        <button type="button" class="icon-btn" onclick="window.__closeVitalsCase('${taskId}')">離開醫務所</button>
+          ? `<span class="patient-card-disposition-tag">${icon('check',16)} 已標記不送醫</span>`
+          : `<button type="button" class="btn-ghost" style="width:100%;" onclick="window.__markNoTransport('${taskId}')">標記不送醫</button>`}
+        <button type="button" class="btn-ghost" style="width:100%;" onclick="window.__closeVitalsCase('${taskId}')">離開醫務所</button>
       </div>` : ""}
     </div>
   ` : "";
