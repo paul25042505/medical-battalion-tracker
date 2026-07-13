@@ -1663,7 +1663,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-13-379-pending-page-scroll-fix";
+const BUILD_TAG = "2026-07-13-380-unit-scoped-query-permission-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1823,12 +1823,21 @@ async function fsBatchUpdate(updates){
 // 每日/每週回報累積下去，勤務／事件／患者紀錄這幾個集合的文件數只會越來
 // 越多，若每次登入都整個抓一次，讀取量會隨歷史資料量無限成長；改成只抓
 // 最近一段期間，讀取量才會維持在一個固定範圍。
-async function fsQuerySince(collectionId, field, sinceDate, limit){
+// unitFilter（選填）：一般成員／主官管一定要帶，見 fsQueryEquals 的說明——
+// tasks/events/vitals 的讀取規則允許「isStaff() 或本人單位跟這筆文件的
+// unit 一樣」，查詢卻只篩時間、沒有篩 unit，Firestore 沒辦法從查詢本身
+// 證明每一筆結果都符合權限，會把整批查詢直接擋掉；admin／高勤官
+// （isStaff()）本來就不分單位，不用帶這個參數。
+async function fsQuerySince(collectionId, field, sinceDate, limit, unitFilter){
   const idToken = await auth.currentUser.getIdToken();
+  const timeFilter = { fieldFilter: { field: { fieldPath: field }, op: "GREATER_THAN_OR_EQUAL", value: { timestampValue: sinceDate.toISOString() } } };
+  const where = unitFilter
+    ? { compositeFilter: { op: "AND", filters: [ timeFilter, { fieldFilter: { field: { fieldPath: "unit" }, op: "EQUAL", value: { stringValue: unitFilter } } } ] } }
+    : timeFilter;
   const body = {
     structuredQuery: {
       from: [{ collectionId }],
-      where: { fieldFilter: { field: { fieldPath: field }, op: "GREATER_THAN_OR_EQUAL", value: { timestampValue: sinceDate.toISOString() } } },
+      where,
       limit: limit || 300
     }
   };
@@ -1846,10 +1855,12 @@ async function fsQuerySince(collectionId, field, sinceDate, limit){
   const data = await res.json();
   return (data||[]).filter(d => d.document).map(d => ({ id: d.document.name.split("/").pop(), ...fromFsFields(d.document.fields) }));
 }
-// 依單一欄位做「等於」查詢，目前只給 pushLog（系統推播個人紀錄）用：
-// firestore.rules 只允許 request.auth.uid == resource.data.uid 才能讀到那筆
-// 文件，plain list（fsListCollection 整批抓）在有其他人的文件混在同一個
-// 集合時會被規則整批擋掉，一定要用查詢限定 uid 才讀得到「只有自己的」那些。
+// 依單一欄位做「等於」查詢：pushLog（系統推播個人紀錄）用 uid 篩自己的；
+// users/vehicles/recorders 這幾個「依單位分類」的集合，一般成員/主官管
+// 用 unit 篩自己單位的——firestore.rules 只允許 isStaff() 或本人單位跟
+// 這筆文件的 unit 一樣才能讀到，plain list（fsListCollection 整批抓）在
+// 有其他單位的文件混在同一個集合時會被規則整批擋掉，一定要用查詢限定
+// 欄位值才讀得到「只有自己權限範圍內」的那些。
 async function fsQueryEquals(collectionId, field, value, limit){
   const idToken = await auth.currentUser.getIdToken();
   const body = {
@@ -1877,15 +1888,17 @@ async function fsQueryEquals(collectionId, field, value, limit){
 // 以前的資料），才需要另外針對該區間單獨查一次；查完的勤務／事件／患者
 // 紀錄直接併入現有的 state 陣列（用 id 去重），維持既有畫面邏輯不用另外
 // 處理一套「額外資料」的顯示路徑。
-async function fsQueryRange(collectionId, field, fromDate, toDate, limit){
+async function fsQueryRange(collectionId, field, fromDate, toDate, limit, unitFilter){
   const idToken = await auth.currentUser.getIdToken();
+  const filters = [
+    { fieldFilter: { field: { fieldPath: field }, op: "GREATER_THAN_OR_EQUAL", value: { timestampValue: fromDate.toISOString() } } },
+    { fieldFilter: { field: { fieldPath: field }, op: "LESS_THAN_OR_EQUAL", value: { timestampValue: toDate.toISOString() } } }
+  ];
+  if (unitFilter) filters.push({ fieldFilter: { field: { fieldPath: "unit" }, op: "EQUAL", value: { stringValue: unitFilter } } });
   const body = {
     structuredQuery: {
       from: [{ collectionId }],
-      where: { compositeFilter: { op: "AND", filters: [
-        { fieldFilter: { field: { fieldPath: field }, op: "GREATER_THAN_OR_EQUAL", value: { timestampValue: fromDate.toISOString() } } },
-        { fieldFilter: { field: { fieldPath: field }, op: "LESS_THAN_OR_EQUAL", value: { timestampValue: toDate.toISOString() } } }
-      ] } },
+      where: { compositeFilter: { op: "AND", filters } },
       limit: limit || 300
     }
   };
@@ -1906,17 +1919,24 @@ async function fsQueryRange(collectionId, field, fromDate, toDate, limit){
 // 依 taskId 批次查詢 events／vitals（Firestore IN 最多 30 個值一組，
 // 超過就分批查完再合併），用於「查詢更早的資料」把某批舊勤務對應的事件
 // ／患者紀錄一起補齊，不然舊勤務進到詳情頁會看起來完全沒有回報紀錄。
-async function fsQueryByTaskIds(collectionId, taskIds){
+async function fsQueryByTaskIds(collectionId, taskIds, unitFilter){
   if (!taskIds.length) return [];
   const idToken = await auth.currentUser.getIdToken();
   const batches = [];
   for (let i = 0; i < taskIds.length; i += 30) batches.push(taskIds.slice(i, i+30));
   const results = [];
   for (const batch of batches) {
+    const taskIdFilter = { fieldFilter: { field: { fieldPath: "taskId" }, op: "IN", value: { arrayValue: { values: batch.map(id => ({ stringValue: id })) } } } };
+    // taskId 清單本身沒辦法讓 Firestore 證明每一筆結果都符合單位權限（IN
+    // 篩選跟 unit 欄位是兩回事），一般成員/主官管一定要另外帶 unit 篩選，
+    // 理由跟 fsQuerySince 的說明一致。
+    const where = unitFilter
+      ? { compositeFilter: { op: "AND", filters: [ taskIdFilter, { fieldFilter: { field: { fieldPath: "unit" }, op: "EQUAL", value: { stringValue: unitFilter } } } ] } }
+      : taskIdFilter;
     const body = {
       structuredQuery: {
         from: [{ collectionId }],
-        where: { fieldFilter: { field: { fieldPath: "taskId" }, op: "IN", value: { arrayValue: { values: batch.map(id => ({ stringValue: id })) } } } },
+        where,
         limit: 300
       }
     };
@@ -2606,6 +2626,7 @@ const RELEASE_NOTES = [
     { category: "介面優化", items: [
       "修正紀錄頁「任務名稱」「地點」篩選欄位打字時畫面會跳動、鍵盤也可能跟著閃一下的問題：這兩個欄位先前每打一個字就整頁重新繪製一次，把正在輸入中的輸入框整個換成新的節點，導致捲動位置被重置、輸入框也跟著失焦；改成只更新篩選條件本身，等按下「查詢」才套用，打字過程不再重新繪製畫面",
       "修正帳號待審核頁面（填寫單位/姓名/階級等個人資料）送出後整頁卡死、上下都滑不動的問題：這個畫面沒有真正的捲動容器，內容比視窗高（鍵盤打開時特別容易發生）就完全看不到超出範圍的欄位；已停用帳號的畫面也一併修正",
+      "修正一般成員／主官管新註冊帳號登入後，任務、車輛、人員名冊、急診待命等頁面都顯示空白（看不到自己單位的資料）的問題：背景查詢資料時沒有帶上自己單位的篩選條件，導致伺服器端權限規則沒辦法只放行「屬於自己單位」的部分、乾脆整批全部擋下來；改成查詢時一併帶上單位篩選，admin／高勤官不受影響（本來就能看所有單位）",
     ] },
   ] },
   { date: "2026/07/12", groups: [
@@ -3411,6 +3432,10 @@ function normalizeRole(role){ return role === "company_commander" ? "commander" 
 function myRole(p){ return p ? normalizeRole(p.role) : ""; }
 function myUnit(p){ return (p && p.unit) || ""; }
 function canSeeAllUnits(p){ const r = myRole(p); return r === "admin" || r === "duty_officer"; }
+// 一般成員/主官管的清單查詢／背景輪詢一定要帶自己的單位當篩選條件，
+// 否則會被 firestore.rules 整批擋掉（見 fsQuerySince 的說明）；
+// admin／高勤官不分單位，回傳 undefined 表示查詢時不加這個篩選。
+function myQueryUnitFilter(){ return canSeeAllUnits(state.profile) ? undefined : myUnit(state.profile); }
 function canManageUsers(p){ return myRole(p) === "admin"; }
 // 任務管理／基礎資料管理：admin、高勤官（全單位），連級主官管（僅自己單位）皆可進入管理後台
 function canManageTasks(p){ const r = myRole(p); return r === "admin" || r === "duty_officer" || r === "commander"; }
@@ -4229,7 +4254,7 @@ function mapUserToPersonnel(u){
 function startDataListeners(){
   if (tasksPoll || eventsPoll) return;
   tasksPoll = poll(async () => {
-    const docs = await fsQuerySince("tasks", "createdAt", recentCutoffDate());
+    const docs = await fsQuerySince("tasks", "createdAt", recentCutoffDate(), null, myQueryUnitFilter());
     const merged = mergeById(docs, state.deepTasks);
     merged.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0));
     const changed = changedSince("tasks", merged);
@@ -4237,7 +4262,7 @@ function startDataListeners(){
     if (changed) safeRender();
   });
   eventsPoll = poll(async () => {
-    const docs = await fsQuerySince("events", "timestamp", recentCutoffDate());
+    const docs = await fsQuerySince("events", "timestamp", recentCutoffDate(), null, myQueryUnitFilter());
     const merged = mergeById(docs, state.deepEvents);
     merged.forEach(d => { d.ts = d.timestamp ? new Date(d.timestamp).getTime() : Date.now(); });
     merged.sort(eventOrderCompare);
@@ -4246,19 +4271,23 @@ function startDataListeners(){
     if (changed) safeRender();
   });
   personnelPoll = poll(async () => {
-    const docs = (await fsListCollection("users")).map(mapUserToPersonnel);
+    const unitFilter = myQueryUnitFilter();
+    const raw = unitFilter ? await fsQueryEquals("users", "unit", unitFilter) : await fsListCollection("users");
+    const docs = raw.map(mapUserToPersonnel);
     const changed = changedSince("personnel", docs);
     state.personnel = docs;
     if (changed) safeRender();
   });
   vehiclesPoll = poll(async () => {
-    const docs = await fsListCollection("vehicles");
+    const unitFilter = myQueryUnitFilter();
+    const docs = unitFilter ? await fsQueryEquals("vehicles", "unit", unitFilter) : await fsListCollection("vehicles");
     const changed = changedSince("vehicles", docs);
     state.vehicles = docs;
     if (changed) safeRender();
   });
   recordersPoll = poll(async () => {
-    const docs = await fsListCollection("recorders");
+    const unitFilter = myQueryUnitFilter();
+    const docs = unitFilter ? await fsQueryEquals("recorders", "unit", unitFilter) : await fsListCollection("recorders");
     const changed = changedSince("recorders", docs);
     state.recorders = docs;
     if (changed) safeRender();
@@ -4276,7 +4305,7 @@ function startDataListeners(){
     if (changed) safeRender();
   });
   vitalsPoll = poll(async () => {
-    const docs = await fsQuerySince("vitals", "timestamp", recentCutoffDate());
+    const docs = await fsQuerySince("vitals", "timestamp", recentCutoffDate(), null, myQueryUnitFilter());
     const merged = mergeById(docs, state.deepVitals);
     merged.forEach(d => { d.ts = d.timestamp ? new Date(d.timestamp).getTime() : Date.now(); });
     merged.sort(eventOrderCompare);
@@ -10241,11 +10270,12 @@ window.__runRecordsDeepQuery = async () => {
   state.recordsDeepQuery = { loading: true, from: f.customDateFrom, to: f.customDateTo };
   render();
   try {
-    const taskDocs = await fsQueryRange("tasks", "createdAt", from, to);
+    const unitFilter = myQueryUnitFilter();
+    const taskDocs = await fsQueryRange("tasks", "createdAt", from, to, null, unitFilter);
     const taskIds = taskDocs.map(t => t.id);
     const [eventDocs, vitalDocs] = await Promise.all([
-      fsQueryByTaskIds("events", taskIds),
-      fsQueryByTaskIds("vitals", taskIds)
+      fsQueryByTaskIds("events", taskIds, unitFilter),
+      fsQueryByTaskIds("vitals", taskIds, unitFilter)
     ]);
     state.deepTasks = mergeById(state.deepTasks, taskDocs);
     state.deepEvents = mergeById(state.deepEvents, eventDocs);

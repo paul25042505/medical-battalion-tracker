@@ -127,7 +127,16 @@ service cloud.firestore {
       // 回報（建立 event）僅開放給這筆勤務指定的車長/駕駛/洽公人員本人與 admin
       // （後台支援／強制結束用）；同單位其他成員不能代填沒有被指派到的勤務；
       // 高勤官、主官管屬於督導/查看角色，不進行第一線回報操作。
-      allow read: if isStaff() || sameUnit(get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.unit);
+      //
+      // 讀取權限比對這筆 event 自己的 unit 欄位（建立時就從所屬勤務複製過來，
+      // 見 index.html 的 addEvent），不是每次都額外 get() 勤務文件查 unit——
+      // 這裡曾經用 get() 查勤務單位，但這樣一來，一般成員／主官管的清單查詢
+      // 因為 rules 判斷式依賴的是「查詢範圍以外」的另一份文件（tasks），
+      // Firestore 沒辦法單靠查詢本身的 where 條件證明每一筆結果都符合權限，
+      // 會整批查詢直接被拒絕（跟 pushLog 曾經踩過的坑同一種成因，見
+      // fsQueryEquals 的說明）；改成直接比對這筆文件自己的 unit 欄位，前端才
+      // 能加上 where unit==自己單位 的查詢條件，讓 Firestore 能夠證明查詢安全。
+      allow read: if isStaff() || sameUnit(resource.data.unit);
       allow create: if isAdmin() ||
                     (isSignedIn() && myRole() == 'member'
                      && isAssignedToTaskData(get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data));
@@ -150,7 +159,9 @@ service cloud.firestore {
       // 患者生命徵象/主訴紀錄，權限比照 events：誰能回報這筆勤務（admin、
       // 該勤務指定的車長/駕駛/洽公人員本人）就能修正自己填錯的內容；不開放
       // 刪除，避免病歷紀錄憑空消失。
-      allow read: if isStaff() || sameUnit(get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.unit);
+      // 讀取權限比對這筆 vitals 自己的 unit 欄位（建立時就從所屬勤務複製過來，
+      // 見 index.html 的 addVitalsEntry），理由跟上面 events 的說明一致。
+      allow read: if isStaff() || sameUnit(resource.data.unit);
       allow create: if isAdmin() ||
                     (isSignedIn() && myRole() == 'member'
                      && isAssignedToTaskData(get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data));
