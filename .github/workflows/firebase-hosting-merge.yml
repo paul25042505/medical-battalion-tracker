@@ -16,15 +16,6 @@ jobs:
           firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_MEDICAL_BATTALION_TRACKER }}"
           channelId: live
           projectId: medical-battalion-tracker
-      # 暫時性 debug 步驟：印出部署用服務帳戶的 client_email（不是私鑰，
-      # 只是識別用的帳號名稱，方便對照 IAM 頁面上到底是不是同一個帳號被
-      # 授權），確認完問題就會移除這個步驟。
-      - name: 顯示部署用服務帳戶（debug，用完即移除）
-        run: |
-          echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/service-account.json
-          node -e "console.log('DEPLOY_SERVICE_ACCOUNT_EMAIL:', JSON.parse(require('fs').readFileSync('/tmp/service-account.json','utf8')).client_email)"
-        env:
-          FIREBASE_SERVICE_ACCOUNT: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_MEDICAL_BATTALION_TRACKER }}"
       - name: Deploy Firestore rules
         run: |
           echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/service-account.json
@@ -33,12 +24,15 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/service-account.json
           FIREBASE_SERVICE_ACCOUNT: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_MEDICAL_BATTALION_TRACKER }}"
       # 索引部署跟規則部署分開一個步驟、且允許失敗（continue-on-error）：
-      # 目前這組服務帳戶只被授權管理 firestore rules，沒有
-      # datastore.indexes.create 這個 IAM 權限，部署索引會直接被 Firestore
-      # API 回 403 拒絕（實際發生過一次，見 2026-07-13 的 workflow run，連帶
-      # 讓後面的 Cloud Functions 部署整個被跳過，因為原本兩者是同一個步驟）。
-      # 在服務帳戶被授予「Cloud Datastore Index Admin」權限之前，索引需要
-      # 專案擁有者自行到 Firebase 主控台的 Firestore → 索引 手動建立
+      # 部署實際用的服務帳戶是 firebase-adminsdk-fbsvc@medical-battalion-
+      # tracker.iam.gserviceaccount.com（2026-07-13 debug 步驟確認過），
+      # 沒有 datastore.indexes.create 這個 IAM 權限，部署索引會直接被
+      # Firestore API 回 403 拒絕（實際發生過兩次）；continue-on-error 讓
+      # 步驟顯示成功，不影響後面的 Cloud Functions 部署，但不代表索引真的
+      # 有建立成功——這只是「失敗了也不擋住其他部署」，不是「解決了權限
+      # 問題」。要讓索引真的生效，這個帳號需要被授予「Cloud Datastore
+      # Index Admin」角色（Google Cloud Console → IAM），或者專案擁有者
+      # 自行到 Firebase 主控台的 Firestore → 索引 手動建立
       # （見 firestore.indexes.json 列出的欄位組合）。
       - name: Deploy Firestore indexes（若服務帳戶權限不足會失敗，不影響後續部署）
         continue-on-error: true
