@@ -1657,7 +1657,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-13-370-treatment-other-label";
+const BUILD_TAG = "2026-07-13-371-scene-treatment-cleanup";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2587,6 +2587,8 @@ const RELEASE_NOTES = [
       "「備註」欄位從表單最下面搬到「主訴」區塊「5. 評估脊椎是否損傷」下面，跟問診相關的內容放在一起比較好填；複測（二評）表單沒有脊椎評估項目，備註欄位維持在表單最下面",
       "同一案件的初評／二評歷史紀錄改成合併顯示成一張卡片（原本各自獨立成一張，容易誤會成不同患者），卡片之間只用一條分隔線區分，初評藍色／二評橘色的左側色條保留，還是看得出哪筆是初評、哪筆是二評",
       "處置項目勾選「其他」時，標籤直接顯示填寫的說明文字（例如「其他（EKG）」），不再另外獨立一行顯示；複製回報文字的「目前處置」也同步帶出這段說明",
+      "再次比對紙本救護紀錄表，現場狀況移除非創傷的「一般疾病」「疑似毒藥物中毒」「疑似一氧化碳中毒」「路倒」、創傷的「一般外傷」這幾個項目；「評估脊椎是否損傷」改成只在創傷時才顯示，選非創傷不會再看到這題",
+      "處置項目新增「心電圖監測」；「靜脈注射（IV）」拆成三個更明確的選項：「靜脈輸液（0.9%N/S）」「靜脈輸液（葡萄糖液）」「靜脈輸液（L/R）」，可以直接勾選實際輸注的液體種類",
     ] },
     { category: "介面優化", items: [
       "修正紀錄頁「任務名稱」「地點」篩選欄位打字時畫面會跳動、鍵盤也可能跟著閃一下的問題：這兩個欄位先前每打一個字就整頁重新繪製一次，把正在輸入中的輸入框整個換成新的節點，導致捲動位置被重置、輸入框也跟著失焦；改成只更新篩選條件本身，等按下「查詢」才套用，打字過程不再重新繪製畫面",
@@ -3125,13 +3127,13 @@ const ALLERGY_OPTIONS = ["藥物", "食物", "其他", "不清楚", "無"];
 const DIAGNOSIS_OPTIONS = ["熱暈眩", "熱衰竭", "熱中暑", "低血糖", "暈厥", "過度換氣", "腸胃不適", "感冒／上呼吸道感染", "扭傷／拉傷", "骨折", "脫臼", "撕裂傷", "擦挫傷", "燒燙傷", "開放性傷口", "腦震盪／頭部外傷", "其他"];
 // 處置項目涵蓋創傷與非創傷常見處置，不只是外傷包紮固定這類；保暖／心理
 // 支持／觀察生命徵象是幾乎每筆紀錄都會用到的基本處置，排在最前面。
-const TREATMENT_OPTIONS = ["保暖", "心理支持", "觀察生命徵象", "暢通呼吸道", "抽吸", "使用甦醒球（BVM）", "給氧", "使用AED", "CPR", "頸圈固定", "清洗傷口", "止血、包紮", "止血帶", "骨折固定", "姿勢擺位／半坐臥", "血糖處置（給予口服糖分）", "靜脈注射（IV）", "協助服藥", "其他"];
+const TREATMENT_OPTIONS = ["保暖", "心理支持", "觀察生命徵象", "心電圖監測", "暢通呼吸道", "抽吸", "使用甦醒球（BVM）", "給氧", "使用AED", "CPR", "頸圈固定", "清洗傷口", "止血、包紮", "止血帶", "骨折固定", "姿勢擺位／半坐臥", "血糖處置（給予口服糖分）", "靜脈輸液（0.9%N/S）", "靜脈輸液（葡萄糖液）", "靜脈輸液（L/R）", "協助服藥", "其他"];
 const GENDER_OPTIONS = ["男", "女"];
 // 現場狀況：比照救護紀錄表分成非創傷／創傷兩大類，各自有一組常見情況勾選，
 // 只在初評問一次（跟過去病史/過敏史一樣，複測不用每次重填）。
 const SCENE_TYPES = ["非創傷", "創傷"];
-const NON_TRAUMA_OPTIONS = ["呼吸問題（喘／呼吸急促）", "呼吸道問題（異物哽塞）", "昏迷（意識不清）", "胸痛／悶", "腹痛", "一般疾病", "頭痛／頭暈／昏倒／昏厥", "發燒", "噁心／嘔吐／腹瀉", "肢體無力", "疑似毒藥物中毒", "疑似一氧化碳中毒", "癲癇／抽搐", "路倒", "行為急症／精神異常", "孕婦急產", "到院前心肺功能停止", "其他"];
-const TRAUMA_OPTIONS = ["一般外傷", "頭部外傷", "胸部外傷", "腹部外傷", "背部外傷", "肢體外傷", "溺水", "摔跌傷", "墜落傷", "穿刺傷", "燒燙傷", "電擊傷", "生物咬螫傷", "到院前心肺功能停止", "其他"];
+const NON_TRAUMA_OPTIONS = ["呼吸問題（喘／呼吸急促）", "呼吸道問題（異物哽塞）", "昏迷（意識不清）", "胸痛／悶", "腹痛", "頭痛／頭暈／昏倒／昏厥", "發燒", "噁心／嘔吐／腹瀉", "肢體無力", "癲癇／抽搐", "行為急症／精神異常", "孕婦急產", "到院前心肺功能停止", "其他"];
+const TRAUMA_OPTIONS = ["頭部外傷", "胸部外傷", "腹部外傷", "背部外傷", "肢體外傷", "溺水", "摔跌傷", "墜落傷", "穿刺傷", "燒燙傷", "電擊傷", "生物咬螫傷", "到院前心肺功能停止", "其他"];
 // 主訴這幾格是自由輸入文字框（不像上面幾組是純勾選），常見用語做成旁邊
 // 的快捷按鈕，點一下塞進輸入框，不用每次都手動打字；輸入框本身還是可以
 // 自由輸入，快捷按鈕只是省打字，不是取代自由輸入。
@@ -6797,7 +6799,9 @@ function viewVitalsPage(taskId, id, adding){
         <div class="field"><div class="field-label-row"><label>2. 感覺怎麼的不舒服？（選填）</label>${quickFillSelect('vf-complaint-quality', COMPLAINT_QUALITY_OPTIONS)}</div><input id="vf-complaint-quality" value="${esc(editingVitals?.complaintQuality||'')}" placeholder="例如：悶痛、刺痛"></div>
         <div class="field"><div class="field-label-row"><label>3. 大約不舒服多久了？（選填）</label>${quickFillSelect('vf-complaint-duration', COMPLAINT_DURATION_OPTIONS)}</div><input id="vf-complaint-duration" value="${esc(editingVitals?.complaintDuration||'')}" placeholder="例如：約五分鐘"></div>
         <div class="field"><div class="field-label-row"><label>4. 還有其他地方不舒服嗎？（選填）</label>${quickFillSelect('vf-complaint-others', COMPLAINT_OTHERS_OPTIONS)}</div><input id="vf-complaint-others" value="${esc(editingVitals?.complaintOthers||'')}" placeholder="沒有／請描述"></div>
-        <div class="field"><div class="field-label-row"><label>5. 評估脊椎是否損傷？（創傷患者，選填）</label>${quickFillSelect('vf-spine-check', SPINE_CHECK_OPTIONS)}</div><input id="vf-spine-check" value="${esc(editingVitals?.spineCheck||'')}" placeholder="例如：頸椎無痠麻痛"></div>
+        <div id="spine-check-wrap" style="display:${sceneType==='創傷'?'block':'none'};">
+          <div class="field"><div class="field-label-row"><label>5. 評估脊椎是否損傷？（創傷患者，選填）</label>${quickFillSelect('vf-spine-check', SPINE_CHECK_OPTIONS)}</div><input id="vf-spine-check" value="${esc(editingVitals?.spineCheck||'')}" placeholder="例如：頸椎無痠麻痛"></div>
+        </div>
         <div class="field"><label>備註（選填）</label><input id="vf-note" value="${esc(editingVitals?.note||'')}"></div>
       </div>
       <div class="form-section">
@@ -9369,8 +9373,12 @@ window.__syncDetailVisibility = (wrapId, groupName, triggerValues) => {
 window.__syncSceneType = (value) => {
   const nonTraumaWrap = document.getElementById("scene-non-trauma-wrap");
   const traumaWrap = document.getElementById("scene-trauma-wrap");
+  const spineWrap = document.getElementById("spine-check-wrap");
   if (nonTraumaWrap) nonTraumaWrap.style.display = value === "非創傷" ? "block" : "none";
   if (traumaWrap) traumaWrap.style.display = value === "創傷" ? "block" : "none";
+  // 評估脊椎是否損傷只跟創傷患者有關，非創傷不需要問這題，選了非創傷
+  // 就把這題藏起來，不用還要使用者自己判斷這題跟自己有沒有關係。
+  if (spineWrap) spineWrap.style.display = value === "創傷" ? "block" : "none";
 };
 /* =========================================================
    車長／駕駛人員選擇器：一律預設只列該勤務所屬單位的人（比照「跨單位
