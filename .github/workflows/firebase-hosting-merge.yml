@@ -16,6 +16,15 @@ jobs:
           firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_MEDICAL_BATTALION_TRACKER }}"
           channelId: live
           projectId: medical-battalion-tracker
+      # 暫時性 debug 步驟：印出部署用服務帳戶的 client_email（不是私鑰，
+      # 只是識別用的帳號名稱，方便對照 IAM 頁面上到底是不是同一個帳號被
+      # 授權），確認完問題就會移除這個步驟。
+      - name: 顯示部署用服務帳戶（debug，用完即移除）
+        run: |
+          echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/service-account.json
+          node -e "console.log('DEPLOY_SERVICE_ACCOUNT_EMAIL:', JSON.parse(require('fs').readFileSync('/tmp/service-account.json','utf8')).client_email)"
+        env:
+          FIREBASE_SERVICE_ACCOUNT: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_MEDICAL_BATTALION_TRACKER }}"
       - name: Deploy Firestore rules
         run: |
           echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/service-account.json
