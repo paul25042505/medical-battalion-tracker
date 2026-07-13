@@ -534,13 +534,26 @@
   }
   @keyframes patientCardIn{from{opacity:0; transform:translateY(3px);} to{opacity:1; transform:translateY(0);}}
   .patient-card{
-    display:block; width:100%; text-align:left; margin-bottom:14px; padding:0;
+    display:block; width:100%; margin-bottom:14px; padding:0;
     background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg);
     box-shadow:var(--shadow-xs); overflow:hidden; animation:patientCardIn 0.2s ease;
     transition:background 0.2s ease, border-color 0.2s ease;
   }
-  .patient-card:active{transform:scale(0.99);}
   .patient-card.has-record{background:color-mix(in srgb, var(--red) 4.5%, transparent); border-color:color-mix(in srgb, var(--red) 24%, transparent);}
+  /* 卡片外層改成純容器（不再是按鈕本身），實際可點的導覽區塊移到
+     .patient-card-main，才能在同一張卡片下面另外放「標記不送醫」「離開
+     醫務所」這兩個獨立按鈕，不會變成按鈕裡面還嵌按鈕的不合法結構。 */
+  .patient-card-main{display:block; width:100%; text-align:left; padding:0; background:transparent; border:none; color:inherit; font:inherit;}
+  .patient-card-main:active{transform:scale(0.99);}
+  .patient-card-episode-actions{
+    display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+    padding:0 var(--space-card) var(--space-card) var(--space-card); margin-top:-4px;
+  }
+  .patient-card-disposition-tag{
+    display:inline-flex; align-items:center; gap:4px; padding:7px 12px; border-radius:var(--radius-sm);
+    font-size:var(--text-xs); font-weight:700; color:var(--green-text);
+    background:color-mix(in srgb, var(--green) 13%, transparent);
+  }
   .patient-card-top{display:flex; align-items:flex-start; gap:13px; padding:var(--space-card) var(--space-card) 4px var(--space-card);}
   .patient-card-icon{
     width:44px; height:44px; border-radius:50%; flex-shrink:0;
@@ -565,6 +578,11 @@
   }
   .patient-card.has-record .patient-card-action{background:var(--red);}
   .vitals-history{margin-bottom:4px;}
+  .vitals-episode-divider{
+    display:flex; align-items:center; gap:8px; margin:18px 0 10px; font-size:var(--text-xs);
+    font-weight:700; color:var(--muted); text-align:center;
+  }
+  .vitals-episode-divider::before, .vitals-episode-divider::after{content:""; flex:1; height:1px; background:var(--border);}
   /* 患者紀錄改成獨立頁面（不再是彈窗）後，欄位較多，分成一區一區的卡片，
      比純文字的 section-label 更容易掃視、知道填到哪一段了。 */
   .form-section{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:var(--space-card); margin-bottom:var(--space-section); box-shadow:var(--shadow-xs);}
@@ -1627,7 +1645,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-12-363-task-title-template-no-parens";
+const BUILD_TAG = "2026-07-13-364-vitals-case-close";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1635,7 +1653,7 @@ const BUILD_TAG = "2026-07-12-363-task-title-template-no-parens";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.11";
+const APP_MAJOR_MINOR = "2.12";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -2547,6 +2565,12 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/07/13", groups: [
+    { category: "患者紀錄", items: [
+      "患者狀況卡片新增「標記不送醫」「離開醫務所」兩個按鈕：醫務所處理完但不用送醫的患者，先按「標記不送醫」留紀錄，患者實際離開後再按「離開醫務所」結案，卡片會恢復成「尚未建立患者紀錄」，可以直接開始記錄下一位新患者，不用另外開一筆新任務",
+      "一筆任務（例如醫務所待命）現在可以依序處理好幾位不同患者：舊患者結案後，紀錄依然完整保留在歷史清單裡（依結案時間點分成一個個案件，各自有自己的初評／二評），只是不再顯示在「目前患者」卡片摘要上；任務列表卡片的「有患者」紅色標籤也只反映目前這個進行中的案件",
+    ] },
+  ] },
   { date: "2026/07/12", groups: [
     { category: "大量傷患事件", items: [
       "修正檢傷官／治療官／後送官分頁下拉沒辦法重新整理的問題：這幾個分頁案件不多時內容很短、main 完全捲不動，先前的判斷式要求頁面真的可以捲動才允許觸發下拉手勢，內容不足一螢幕的分頁因此永遠沒辦法下拉重新整理；改成只要求手勢起點在頂端（捲不動的頁面本來就恆成立），內容再短也可以下拉重新整理",
@@ -3224,6 +3248,31 @@ function changedSince(cacheKey, value){
 // 數，跟使用者填的時間無關，只在打平手時當穩定的次要排序依據，確保
 // 「寫入順序」跟「顯示順序」一致。
 function eventOrderCompare(a, b){ return (a.ts||0) - (b.ts||0) || (a.seq||0) - (b.seq||0); }
+// 同一筆勤務（尤其是醫務所待命）可能會依序處理好幾位不同患者：一位患者
+// 「離開醫務所」結案後，同一筆任務還能繼續開一位新患者的紀錄，不是整筆
+// 任務的患者紀錄從頭到尾都算同一個人。「目前有沒有患者」要看最後一次
+// 結案（caseClosedAt）之後有沒有新的紀錄，不是看這筆任務有沒有任何患者
+// 紀錄史——已結案的舊紀錄還是保留在歷史清單裡，只是不算進「目前患者」。
+// 傳入的 sortedTaskVitals 要先依 eventOrderCompare 排序過（舊到新）。
+// 把一筆任務底下的患者紀錄，依「離開醫務所」結案標記（caseClosedAt）切成
+// 一段一段的「案件」（episode）；每個案件自己的第一筆是「初評」、之後是
+// 「二評」，跟哪一個案件無關（不是整筆任務從頭到尾只有一個初評）。
+function vitalsEpisodes(sortedTaskVitals){
+  const episodes = [];
+  let current = [];
+  sortedTaskVitals.forEach(v => {
+    current.push(v);
+    if (v.caseClosedAt) { episodes.push(current); current = []; }
+  });
+  if (current.length) episodes.push(current);
+  return episodes;
+}
+function activeEpisodeVitals(sortedTaskVitals){
+  const episodes = vitalsEpisodes(sortedTaskVitals);
+  if (!episodes.length) return [];
+  const last = episodes[episodes.length - 1];
+  return last[last.length - 1].caseClosedAt ? [] : last;
+}
 function deriveStatus(taskId) {
   const t = state.tasks.find(x => x.id === taskId);
   const evs = state.events.filter(e => e.taskId === taskId).sort(eventOrderCompare);
@@ -5227,7 +5276,7 @@ function taskCard(t){
       : "";
   // 有患者記錄的任務要在卡片上凸顯出來，讓人一眼就看得到，不會被其他一般
   // 任務蓋過去（首頁清單排序見 viewHome，這裡只負責視覺樣式）。
-  const hasPatient = state.vitals.some(v => v.taskId === t.id);
+  const hasPatient = activeEpisodeVitals(state.vitals.filter(v => v.taskId === t.id).sort(eventOrderCompare)).length > 0;
   return `
   <div class="task-card spatial-card ${taskCardClass(s)}${hasPatient ? ' has-patient' : ''}" onclick="if(!event.target.closest('a')) window.__nav({name:'task', id:'${t.id}'})">
     <div class="task-top">
@@ -6531,14 +6580,27 @@ function viewVitalsPage(taskId, id, adding){
   const canDoReport = canReport(p, t);
   const taskVitals = state.vitals.filter(v => v.taskId === taskId).sort(eventOrderCompare);
   const hasPatient = taskVitals.length > 0;
+  // hasPatient＝這筆任務有沒有任何患者紀錄史（含已結案的舊案件），決定
+  // 看得到看不到；hasActivePatient＝目前有沒有「還沒離開醫務所」的患者，
+  // 決定新增紀錄要當成新案件的初評、還是既有案件的複測（見 vitalsEpisodes）。
+  const hasActivePatient = activeEpisodeVitals(taskVitals).length > 0;
   if (!canDoReport && !hasPatient) return `<div class="empty">您沒有記錄患者狀況的權限</div>`;
 
   const editingVitals = id ? taskVitals.find(v => v.id === id) : null;
+  // isFirstVitals：這筆任務完全沒有任何紀錄史（連已結案的舊案件都沒有），
+  // 表單才會自動出現，不用先點「新增紀錄」按鈕——單純判斷「要不要自動show
+  // 表單」，跟下面「新增的這筆算不算初評」是兩件事，已結案舊案件仍然算
+  // 「有紀錄史」，不能自動跳表單（要先看到歷史清單才能點新增）。
   const isFirstVitals = !editingVitals && !hasPatient;
-  // 「初評」＝該任務的第一筆生命徵象紀錄，比照救護紀錄表完整記錄患者基本
-  // 資料、結構化主訴、過去病史、過敏史；「複測」＝後續紀錄，只需要生命
-  // 徵象與本次處置，前面那些不用每次重問。
-  const isInitialEntry = editingVitals ? taskVitals[0]?.id === editingVitals.id : isFirstVitals;
+  // 「初評」＝該案件的第一筆生命徵象紀錄，比照救護紀錄表完整記錄患者基本
+  // 資料、結構化主訴、過去病史、過敏史；「複測」＝同一案件的後續紀錄，只
+  // 需要生命徵象與本次處置，前面那些不用每次重問；一筆任務可能依序處理
+  // 過好幾個案件，判斷基準是「這筆紀錄所屬案件」的第一筆，不是整份任務
+  // 紀錄史的第一筆——新增紀錄當下沒有進行中的案件（!hasActivePatient）
+  // 就代表這筆要開一個新案件，一樣當初評處理。
+  const isInitialEntry = editingVitals
+    ? (vitalsEpisodes(taskVitals).find(ep => ep.some(v => v.id === editingVitals.id)) || [])[0]?.id === editingVitals.id
+    : !hasActivePatient;
   // 血壓拆成收縮壓／舒張壓兩格輸入，儲存時仍合併成「收縮/舒張」字串，
   // 沿用既有的 bp 欄位與所有顯示邏輯（時間軸、歷史紀錄清單皆顯示 120/80）。
   const [bpSys, bpDia] = (editingVitals?.bp || "").split("/");
@@ -6564,9 +6626,18 @@ function viewVitalsPage(taskId, id, adding){
   const sceneNonTraumaOtherChecked = sceneType === '非創傷' && (editingVitals?.sceneFindings||[]).includes('其他');
   const sceneTraumaOtherChecked = sceneType === '創傷' && (editingVitals?.sceneFindings||[]).includes('其他');
 
+  // 一筆任務可能依序處理過好幾位不同患者（見 vitalsEpisodes 說明），歷史
+  // 清單依「離開醫務所」結案標記切成一段一段的案件，各自從「初評」開始
+  // 編號，不是整份清單從頭到尾只有一筆初評；有多個案件時案件之間插入
+  // 分隔線方便辨識。
+  const vitalsEpisodeList = vitalsEpisodes(taskVitals);
   const historyHtml = showHistory ? `
     <div class="vitals-history">
-      ${taskVitals.map((v,i) => `
+      ${vitalsEpisodeList.map((ep, epIdx) => `
+        ${vitalsEpisodeList.length > 1
+          ? `<div class="vitals-episode-divider">案件 ${epIdx+1}${ep[ep.length-1].caseClosedAt ? '（已結案）' : ''}</div>`
+          : (ep[ep.length-1].caseClosedAt ? `<div class="vitals-episode-divider">已結案</div>` : '')}
+        ${ep.map((v,i) => `
         <div class="vitals-entry ${i===0?'stage-initial':'stage-followup'}">
           <div class="vitals-entry-head">
             <span class="vitals-entry-time"><span class="vitals-stage-tag${i===0?'':' alt'}">${i===0?'初評':'二評'}</span>${fmtTime(v.ts)} · ${nameWithRank(v.userName, v.unit)}</span>
@@ -6601,8 +6672,11 @@ function viewVitalsPage(taskId, id, adding){
           ${v.treatmentOtherDetail ? `<div class="detail-item"><span class="lbl">其他處置</span><span class="val">${esc(v.treatmentOtherDetail)}</span></div>` : ""}
           <button class="tl-edit-btn" type="button" style="margin-top:10px;" onclick="window.__openVitalsReport('${v.id}')">${icon('share',14)} 複製回報文字</button>
           ${v.note ? `<div class="step-note">${esc(v.note)}</div>` : ""}
+          ${v.disposition ? `<div class="detail-item"><span class="lbl">處置結果</span><span class="val">${esc(v.disposition)}</span></div>` : ""}
+          ${v.caseClosedAt ? `<div class="step-note">已離開醫務所結案：${fmtTime(new Date(v.caseClosedAt).getTime())}</div>` : ""}
           </div>
         </div>`).join("")}
+      `).join("")}
     </div>
     ${canDoReport ? `<button class="btn-primary" type="button" onclick="window.__showAddVitalsForm('${taskId}')">${icon('plus',16)} 新增紀錄</button>` : ""}
   ` : "";
@@ -6951,39 +7025,60 @@ function viewTaskDetail(taskId){
   // 看出病人狀況變化。首頁／任務卡片會依此凸顯有患者的任務（見 taskCard）。
   const taskVitals = state.vitals.filter(v => v.taskId === taskId).sort(eventOrderCompare);
   const hasPatient = taskVitals.length > 0;
-  const latestComplaint = taskVitals.slice().reverse().find(v => v.complaint)?.complaint || "";
-  // 患者基本資料（單位／級職／姓名／性別）只在初評（第一筆紀錄）詢問，
-  // 卡片摘要沿用那一筆的資料顯示。
-  const initialVitals = taskVitals[0];
+  // 一筆任務（尤其是醫務所待命）可能依序處理過好幾位不同患者：舊患者
+  // 「離開醫務所」結案後，卡片要恢復成「尚未建立患者紀錄」，才能再開始
+  // 記錄下一位新患者；舊患者的紀錄不會不見，只是不再算進「目前患者」
+  // （見 activeEpisodeVitals 說明）。
+  const activeVitals = activeEpisodeVitals(taskVitals);
+  const hasActivePatient = activeVitals.length > 0;
+  const activeLatest = activeVitals[activeVitals.length - 1];
+  const markedNoTransport = activeLatest?.disposition === "不送醫";
+  const latestComplaint = activeVitals.slice().reverse().find(v => v.complaint)?.complaint || "";
+  // 患者基本資料（單位／級職／姓名／性別）只在初評（案件第一筆紀錄）詢問，
+  // 卡片摘要沿用目前這個案件初評那一筆的資料顯示。
+  const initialVitals = activeVitals[0];
   const patientLabel = initialVitals
     ? [initialVitals.patientUnit, initialVitals.patientRank, initialVitals.patientName].filter(Boolean).join('　') + (initialVitals.patientGender ? `（${initialVitals.patientGender}）` : '')
     : '';
   // 高勤官、主官管不能自己記錄患者狀況，但既有紀錄仍要能點進去查看（唯讀），
   // 不能因為沒有回報權限就完全看不到卡片可以點——canView 決定「有紀錄時
-  // 能不能點進去看」，canDoReport 才決定「能不能新增/編輯」。
+  // 能不能點進去看」，canDoReport 才決定「能不能新增/編輯」；這裡看的是
+  // hasPatient（任何紀錄史，含已結案案件），不是 hasActivePatient，舊案件
+  // 結案後還是要能點進去回顧。
   const canView = canViewVitals(p, t);
   const canOpenPatientCard = canDoReport || (canView && hasPatient);
   const patientCardTag = canOpenPatientCard ? "button" : "div";
   const patientCardClickAttr = canOpenPatientCard ? ` onclick="window.__startVitals('${taskId}')"` : "";
-  const patientActionLabel = hasPatient ? (canDoReport ? '查看／更新紀錄' : '查看紀錄') : '開始記錄';
+  const patientActionLabel = hasActivePatient
+    ? (canDoReport ? '查看／更新紀錄' : '查看紀錄')
+    : (canDoReport ? '開始記錄' : '查看紀錄');
   const vitalsSection = !isLiaison && (canDoReport || hasPatient) ? `
     <div class="section-label">患者狀況</div>
-    <${patientCardTag} class="patient-card${hasPatient ? ' has-record' : ''}"${patientCardClickAttr}>
-      <div class="patient-card-top">
-        <div class="patient-card-icon">${icon('heartbeat',20)}</div>
-        <div class="patient-card-body">
-          <div class="patient-card-title-row">
-            <div class="patient-card-title">患者狀況</div>
-            ${hasPatient ? `<span class="patient-card-badge">患者紀錄中</span>` : ""}
+    <div class="patient-card${hasActivePatient ? ' has-record' : ''}">
+      <${patientCardTag} class="patient-card-main"${patientCardClickAttr}>
+        <div class="patient-card-top">
+          <div class="patient-card-icon">${icon('heartbeat',20)}</div>
+          <div class="patient-card-body">
+            <div class="patient-card-title-row">
+              <div class="patient-card-title">患者狀況</div>
+              ${hasActivePatient ? `<span class="patient-card-badge">患者紀錄中</span>` : ""}
+            </div>
+            ${hasActivePatient ? (patientLabel ? `<div class="patient-card-sub">${esc(patientLabel)}</div>` : "") : `<div class="patient-card-sub">尚未建立患者紀錄</div>`}
+            <div class="patient-card-desc">${hasActivePatient
+              ? (latestComplaint ? `主訴：${esc(latestComplaint)}。請持續更新生命徵象及處置內容。` : "已建立患者紀錄。請持續更新主訴、生命徵象及處置內容。") + (markedNoTransport ? '<br>已標記不送醫，患者離開醫務所後請點選「離開醫務所」結案。' : '')
+              : "勤務過程中若發現患者需要救護，可點擊建立患者紀錄。"}</div>
           </div>
-          ${hasPatient ? (patientLabel ? `<div class="patient-card-sub">${esc(patientLabel)}</div>` : "") : `<div class="patient-card-sub">尚未建立患者紀錄</div>`}
-          <div class="patient-card-desc">${hasPatient
-            ? (latestComplaint ? `主訴：${esc(latestComplaint)}。請持續更新生命徵象及處置內容。` : "已建立患者紀錄。請持續更新主訴、生命徵象及處置內容。")
-            : "勤務過程中若發現患者需要救護，可點擊建立患者紀錄。"}</div>
         </div>
-      </div>
-      ${canOpenPatientCard ? `<div class="patient-card-action">${hasPatient ? icon('heartbeat',16) : icon('plus',16)} ${patientActionLabel}</div>` : ""}
-    </${patientCardTag}>
+        ${canOpenPatientCard ? `<div class="patient-card-action">${hasActivePatient ? icon('heartbeat',16) : icon('plus',16)} ${patientActionLabel}</div>` : ""}
+      </${patientCardTag}>
+      ${hasActivePatient && canDoReport ? `
+      <div class="patient-card-episode-actions">
+        ${markedNoTransport
+          ? `<span class="patient-card-disposition-tag">${icon('check',14)} 已標記不送醫</span>`
+          : `<button type="button" class="icon-btn" onclick="window.__markNoTransport('${taskId}')">標記不送醫</button>`}
+        <button type="button" class="icon-btn" onclick="window.__closeVitalsCase('${taskId}')">離開醫務所</button>
+      </div>` : ""}
+    </div>
   ` : "";
 
   // ---- 回報表單／Sticky Bottom Action Bar ----
@@ -9022,6 +9117,24 @@ window.__startVitals = (taskId) => { state.vitalsSubmitting = false; nav({ name:
 window.__editVitals = (taskId, id) => { state.vitalsSubmitting = false; nav({ name: 'vitals', taskId, id, adding: false }); };
 window.__showAddVitalsForm = (taskId) => { state.vitalsSubmitting = false; nav({ name: 'vitals', taskId, id: null, adding: true }); };
 window.__backToVitalsHistory = (taskId) => { state.vitalsSubmitting = false; nav({ name: 'vitals', taskId, id: null, adding: false }); };
+// 標記不送醫／離開醫務所：兩者都是在「目前這個案件」最後一筆紀錄上補
+// 欄位（disposition／caseClosedAt），不是新增一筆紀錄，也不是覆蓋整包
+// 資料——沿用既有 updateVitalsEntry 的局部更新寫法。
+window.__markNoTransport = (taskId) => {
+  const taskVitals = state.vitals.filter(v => v.taskId === taskId).sort(eventOrderCompare);
+  const active = activeEpisodeVitals(taskVitals);
+  const latest = active[active.length - 1];
+  if (!latest) return;
+  updateVitalsEntry(latest.id, { disposition: "不送醫" }).catch(baseDataErr);
+};
+window.__closeVitalsCase = (taskId) => {
+  if (!confirm("確定患者已離開醫務所？結案後這筆任務會恢復成「尚未建立患者紀錄」，可以開始記錄下一位患者；這位患者的紀錄仍會保留在歷史清單裡。")) return;
+  const taskVitals = state.vitals.filter(v => v.taskId === taskId).sort(eventOrderCompare);
+  const active = activeEpisodeVitals(taskVitals);
+  const latest = active[active.length - 1];
+  if (!latest) return;
+  updateVitalsEntry(latest.id, { caseClosedAt: new Date() }).catch(baseDataErr);
+};
 window.__resetVitalsTime = () => {
   const el = document.getElementById("vf-time");
   if (el) el.value = hhmmValue(new Date());
