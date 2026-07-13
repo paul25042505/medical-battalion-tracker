@@ -1,0 +1,29 @@
+{
+  "indexes": [
+    { "collectionGroup": "tasks", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "unit", "order": "ASCENDING" },
+      { "fieldPath": "createdAt", "order": "ASCENDING" }
+    ]},
+    { "collectionGroup": "tasks", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "erStandbyKey", "order": "ASCENDING" },
+      { "fieldPath": "createdAt", "order": "ASCENDING" }
+    ]},
+    { "collectionGroup": "events", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "unit", "order": "ASCENDING" },
+      { "fieldPath": "timestamp", "order": "ASCENDING" }
+    ]},
+    { "collectionGroup": "events", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "taskId", "order": "ASCENDING" },
+      { "fieldPath": "unit", "order": "ASCENDING" }
+    ]},
+    { "collectionGroup": "vitals", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "unit", "order": "ASCENDING" },
+      { "fieldPath": "timestamp", "order": "ASCENDING" }
+    ]},
+    { "collectionGroup": "vitals", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "taskId", "order": "ASCENDING" },
+      { "fieldPath": "unit", "order": "ASCENDING" }
+    ]}
+  ],
+  "fieldOverrides": []
+}
