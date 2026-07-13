@@ -1647,7 +1647,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-13-366-records-filter-scroll-fix";
+const BUILD_TAG = "2026-07-13-367-closed-vitals-collapse";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2572,6 +2572,7 @@ const RELEASE_NOTES = [
       "患者狀況卡片新增「標記不送醫」「離開醫務所」兩個按鈕：醫務所處理完但不用送醫的患者，先按「標記不送醫」留紀錄，患者實際離開後再按「離開醫務所」結案，卡片會恢復成「尚未建立患者紀錄」，可以直接開始記錄下一位新患者，不用另外開一筆新任務",
       "一筆任務（例如醫務所待命）現在可以依序處理好幾位不同患者：舊患者結案後，紀錄依然完整保留在歷史清單裡（依結案時間點分成一個個案件，各自有自己的初評／二評），只是不再顯示在「目前患者」卡片摘要上；任務列表卡片的「有患者」紅色標籤也只反映目前這個進行中的案件",
       "「標記不送醫」「離開醫務所」改成跟上面「查看／更新紀錄」一樣佔滿整行、上下堆疊，不再是並排的小按鈕；標記不送醫後，任務列表卡片會多顯示一個綠色「不送醫」標籤（跟紅色「有患者」並排），一眼就能看出這位患者還需不需要車輛／醫院資源",
+      "歷史清單裡已結案案件的每一筆紀錄改成預設收合，只顯示患者身分、對職幹部、現場狀況這幾項摘要，點「展開全部資訊」才會看到完整的問診、生命徵象、處置內容；已結案的案件通常只是回頭查資料，不用每筆都攤開一長串——進行中案件維持原本全部展開，不受影響",
     ] },
     { category: "介面優化", items: [
       "修正紀錄頁「任務名稱」「地點」篩選欄位打字時畫面會跳動、鍵盤也可能跟著閃一下的問題：這兩個欄位先前每打一個字就整頁重新繪製一次，把正在輸入中的輸入框整個換成新的節點，導致捲動位置被重置、輸入框也跟著失焦；改成只更新篩選條件本身，等按下「查詢」才套用，打字過程不再重新繪製畫面",
@@ -3167,6 +3168,8 @@ const state = {
   eventEditId: null, // 正在編輯哪一筆已回報事件（時間/里程填錯時修正用）
   recordsFilter: { period: "today", unit: "", vehicle: "", title: "", location: "", status: "", person: "", customDateFrom: "", customDateTo: "" },
   recordsFiltersExpanded: false,
+  vitalsHistoryExpanded: new Set(), // 已結案案件的患者紀錄卡片預設收合成摘要，點「展開全部資訊」才看得到完整內容；存展開過的 vitals 文件 id
+
   hospitalFiltersExpanded: false, // 醫院資訊頁「更多篩選」是否展開（急救責任等級），跟紀錄頁同一套收合樣式
   pushCatalogExpanded: false, // 訊息管理頁「系統推播內容一覽」參考清單是否展開
   recordsApplied: null, // 查詢後的篩選條件快照；null 代表尚未按下查詢
@@ -6648,7 +6651,31 @@ function viewVitalsPage(taskId, id, adding){
         ${vitalsEpisodeList.length > 1
           ? `<div class="vitals-episode-divider">案件 ${epIdx+1}${ep[ep.length-1].caseClosedAt ? '（已結案）' : ''}</div>`
           : (ep[ep.length-1].caseClosedAt ? `<div class="vitals-episode-divider">已結案</div>` : '')}
-        ${ep.map((v,i) => `
+        ${ep.map((v,i) => {
+          // 已結案案件的每一筆紀錄，預設只顯示跟這張截圖紅框範圍一樣的摘要
+          // （身分／對職幹部／現場狀況），完整的問診、生命徵象、處置這些
+          // 細節收在「展開全部資訊」按鈕後面——已經結案的案件通常只是回頭
+          // 查資料，不需要每筆都攤開一長串；進行中的案件(closedEpisode為false)
+          // 還在持續照護，維持原本全部攤開顯示，不需要多一次點擊才看得到。
+          const closedEpisode = !!ep[ep.length-1].caseClosedAt;
+          const expanded = !closedEpisode || state.vitalsHistoryExpanded.has(v.id);
+          const restHtml = `
+          ${(v.complaint || v.complaintQuality || v.complaintDuration || v.complaintOthers || v.spineCheck) ? `<div class="vitals-complaint-block"><span class="lbl">主訴</span></div>` : ""}
+          ${vitalsQaPanelHtml(v)}
+          ${vitalsCoreGridHtml(v)}
+          ${vitalsSecondaryGridHtml(v)}
+          ${v.diagnosis ? `<div class="detail-item"><span class="lbl">醫官初步診斷</span><span class="val">${esc(v.diagnosis)}</span></div>` : ""}
+          ${v.treatments&&v.treatments.length ? `
+          <div class="vitals-treatment-block">
+            <span class="lbl">處置項目</span>
+            <div class="treatment-pills">${v.treatments.map(x=>`<span class="treatment-pill">${esc(x)}</span>`).join("")}</div>
+          </div>` : ""}
+          ${v.treatmentOtherDetail ? `<div class="detail-item"><span class="lbl">其他處置</span><span class="val">${esc(v.treatmentOtherDetail)}</span></div>` : ""}
+          <button class="tl-edit-btn" type="button" style="margin-top:10px;" onclick="window.__openVitalsReport('${v.id}')">${icon('share',14)} 複製回報文字</button>
+          ${v.note ? `<div class="step-note">${esc(v.note)}</div>` : ""}
+          ${v.disposition ? `<div class="detail-item"><span class="lbl">處置結果</span><span class="val">${esc(v.disposition)}</span></div>` : ""}
+          ${v.caseClosedAt ? `<div class="step-note">已離開醫務所結案：${fmtTime(new Date(v.caseClosedAt).getTime())}</div>` : ""}`;
+          return `
         <div class="vitals-entry ${i===0?'stage-initial':'stage-followup'}">
           <div class="vitals-entry-head">
             <span class="vitals-entry-time"><span class="vitals-stage-tag${i===0?'':' alt'}">${i===0?'初評':'二評'}</span>${fmtTime(v.ts)} · ${nameWithRank(v.userName, v.unit)}</span>
@@ -6670,23 +6697,11 @@ function viewVitalsPage(taskId, id, adding){
             <span class="lbl">現場狀況</span>
             <h3 class="vitals-scene-headline">${esc(v.sceneType)}：${v.sceneFindings&&v.sceneFindings.length?`<span class="danger">${v.sceneFindings.map(esc).join('、')}</span>`:''}${v.sceneFindingsOtherDetail?` <span class="muted-note">（${esc(v.sceneFindingsOtherDetail)}）</span>`:''}</h3>
           </div>` : ""}
-          ${(v.complaint || v.complaintQuality || v.complaintDuration || v.complaintOthers || v.spineCheck) ? `<div class="vitals-complaint-block"><span class="lbl">主訴</span></div>` : ""}
-          ${vitalsQaPanelHtml(v)}
-          ${vitalsCoreGridHtml(v)}
-          ${vitalsSecondaryGridHtml(v)}
-          ${v.diagnosis ? `<div class="detail-item"><span class="lbl">醫官初步診斷</span><span class="val">${esc(v.diagnosis)}</span></div>` : ""}
-          ${v.treatments&&v.treatments.length ? `
-          <div class="vitals-treatment-block">
-            <span class="lbl">處置項目</span>
-            <div class="treatment-pills">${v.treatments.map(x=>`<span class="treatment-pill">${esc(x)}</span>`).join("")}</div>
-          </div>` : ""}
-          ${v.treatmentOtherDetail ? `<div class="detail-item"><span class="lbl">其他處置</span><span class="val">${esc(v.treatmentOtherDetail)}</span></div>` : ""}
-          <button class="tl-edit-btn" type="button" style="margin-top:10px;" onclick="window.__openVitalsReport('${v.id}')">${icon('share',14)} 複製回報文字</button>
-          ${v.note ? `<div class="step-note">${esc(v.note)}</div>` : ""}
-          ${v.disposition ? `<div class="detail-item"><span class="lbl">處置結果</span><span class="val">${esc(v.disposition)}</span></div>` : ""}
-          ${v.caseClosedAt ? `<div class="step-note">已離開醫務所結案：${fmtTime(new Date(v.caseClosedAt).getTime())}</div>` : ""}
+          ${expanded ? restHtml : ""}
           </div>
-        </div>`).join("")}
+          ${closedEpisode ? `<button class="filters-toggle ${expanded?'open':''}" style="border-top:1px solid var(--border);" type="button" onclick="window.__toggleVitalsEntryExpanded('${v.id}')">${icon('chevronDown',16).replace('<svg ', '<svg class="chev" ')} ${expanded ? '收合詳細資訊' : '展開全部資訊'}</button>` : ""}
+        </div>`;
+        }).join("")}
       `).join("")}
     </div>
     ${canDoReport ? `<button class="btn-primary" type="button" onclick="window.__showAddVitalsForm('${taskId}')">${icon('plus',16)} 新增紀錄</button>` : ""}
@@ -9128,6 +9143,11 @@ window.__startVitals = (taskId) => { state.vitalsSubmitting = false; nav({ name:
 window.__editVitals = (taskId, id) => { state.vitalsSubmitting = false; nav({ name: 'vitals', taskId, id, adding: false }); };
 window.__showAddVitalsForm = (taskId) => { state.vitalsSubmitting = false; nav({ name: 'vitals', taskId, id: null, adding: true }); };
 window.__backToVitalsHistory = (taskId) => { state.vitalsSubmitting = false; nav({ name: 'vitals', taskId, id: null, adding: false }); };
+window.__toggleVitalsEntryExpanded = (id) => {
+  if (state.vitalsHistoryExpanded.has(id)) state.vitalsHistoryExpanded.delete(id);
+  else state.vitalsHistoryExpanded.add(id);
+  render();
+};
 // 標記不送醫／離開醫務所：兩者都是在「目前這個案件」最後一筆紀錄上補
 // 欄位（disposition／caseClosedAt），不是新增一筆紀錄，也不是覆蓋整包
 // 資料——沿用既有 updateVitalsEntry 的局部更新寫法。
