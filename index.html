@@ -1663,7 +1663,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-13-378-report-complaint-note";
+const BUILD_TAG = "2026-07-13-379-pending-page-scroll-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2605,6 +2605,7 @@ const RELEASE_NOTES = [
     ] },
     { category: "介面優化", items: [
       "修正紀錄頁「任務名稱」「地點」篩選欄位打字時畫面會跳動、鍵盤也可能跟著閃一下的問題：這兩個欄位先前每打一個字就整頁重新繪製一次，把正在輸入中的輸入框整個換成新的節點，導致捲動位置被重置、輸入框也跟著失焦；改成只更新篩選條件本身，等按下「查詢」才套用，打字過程不再重新繪製畫面",
+      "修正帳號待審核頁面（填寫單位/姓名/階級等個人資料）送出後整頁卡死、上下都滑不動的問題：這個畫面沒有真正的捲動容器，內容比視窗高（鍵盤打開時特別容易發生）就完全看不到超出範圍的欄位；已停用帳號的畫面也一併修正",
     ] },
   ] },
   { date: "2026/07/12", groups: [
@@ -9033,10 +9034,22 @@ function render(){
   // 行為不受影響。
   const prevMain = document.querySelector("main");
   const prevScrollTop = prevMain ? prevMain.scrollTop : 0;
+  // 這幾個提前 return 的畫面（登入前／待審核／已停用）本來就沒有
+  // <main>，跟下面正式畫面「window/document 永遠不捲動，只有 main 自己
+  // 捲動」的 App Shell 前提不一致：#app 本身是 overflow:hidden，內容一旦
+  // 比視窗高（例如待審核頁的個人資料表單，鍵盤打開時特別容易發生）就
+  // 完全沒有捲動容器可以看到超出範圍的內容。實機回報「建立帳號頁面送出
+  // 後沒辦法上下滑動」：填表當下 iOS Safari 原生的「捲到聚焦欄位」流氓
+  // 行為，剛好意外讓使用者搆得到下面的欄位／送出按鈕；送出後鍵盤收起，
+  // 我們自己攔截流氓捲動的 resetRogueWindowScroll() 把畫面釘回頂端，這個
+  // 畫面卻沒有真正的捲動容器接手，就完全卡死、上下都動不了。待審核／
+  // 已停用這兩個畫面內容長度會隨資料變動（單位/職稱越長、或有其他插入
+  // 內容），一律包進 <main> 提供真正的捲動容器；登入頁內容固定短、
+  // spinner 也是全螢幕置中的一次性畫面，維持原樣不用改。
   if (!state.user) { app.innerHTML = viewLogin(); return; }
   if (!state.profile) { app.innerHTML = `<div class="spinner"></div>`; return; }
-  if (state.profile.role === "pending") { app.innerHTML = viewPending(); return; }
-  if (state.profile.role === "disabled") { app.innerHTML = viewDisabled(); return; }
+  if (state.profile.role === "pending") { app.innerHTML = `<main><div class="main-content">${viewPending()}</div></main>`; return; }
+  if (state.profile.role === "disabled") { app.innerHTML = `<main><div class="main-content">${viewDisabled()}</div></main>`; return; }
 
   const view = ROUTE_VIEWS[state.route.name] || viewHome;
   const body = view();
