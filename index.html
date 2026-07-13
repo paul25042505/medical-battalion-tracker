@@ -1680,7 +1680,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-13-385-gatekeeper-dvh-fix";
+const BUILD_TAG = "2026-07-13-386-gatekeeper-rerender-jitter-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2680,6 +2680,7 @@ const RELEASE_NOTES = [
       "加到主畫面（PWA）後最上方的狀態列（時間/訊號/電量那排）改成沉浸式：畫面本身的底色直接延伸到狀態列底下，不再是一塊跟深色模式格格不入的白色色塊；狀態列文字/圖示固定顯示白色（iOS 系統限制，沒辦法跟著淺色/深色模式切換），淺色模式下狀態列文字對比會偏低，這是已知取捨",
       "上一項「沉浸式狀態列」實機回報畫面上下各多出一塊空白色塊，已復原成原本的狀態列樣式（不再是沉浸式），避免繼續影響使用；這個問題需要真機才能重現排查，先復原確保能正常使用",
       "修正「請將本系統加入主畫面」提示彈窗在手機瀏覽器（尚未加入主畫面、網址列會隨捲動收合展開）裡上下抖動的問題：彈窗高度原本單純依賴 CSS inset 撐開，網址列一收合/展開就要重新計算一次，肉眼看起來像抖動；改用 dvh（動態視窗高度）明確宣告高度，跟其他彈窗一致，不再抖動",
+      "修正推播通知相關的提示彈窗（含上一項的「加入主畫面」，以及後續的「開啟推播通知」）剛出現時會卡一下、不滑順的問題：畫面背景資料（例如天氣危險係數）非同步載入完成時會觸發整頁重新整理，先前這個彈窗每次重新整理都會把內容整個重建一次，就算彈窗本身該顯示的內容根本沒變，也會把進場動畫從頭打斷重播一次；改成內容真的有變才重建，動畫不會再被無謂打斷",
     ] },
     { category: "急診待命", items: [
       "急診待命頁改成看得到全營（不分單位）的待命勤務：兩個醫務所地點是全營共用資源，別單位的待命勤務也會顯示車號／值班醫官／車長／駕駛等摘要，方便掌握全營待命狀況；別單位的待命勤務點不進去看詳情（「查看／管理」按鈕改成鎖頭提示），患者相關資料仍然限本單位查看。一般勤務（非急診待命）維持原本規則，各單位只看得到自己單位的勤務",
@@ -4210,21 +4211,34 @@ function pushGatekeeperContent(gate){
 // 理由），這樣才能確實蓋住 #app 裡面所有畫面（含 sticky-head／bottomnav），
 // 也不會被 render() 整段 #app.innerHTML 重繪影響。每次 render() 都會呼叫
 // 這個函式重新判斷一次，不需要另外輪詢。
+// gate 沒變就不重寫 innerHTML：render() 在頁面剛載入那幾秒常常連續呼叫
+// 好幾次（登入狀態確定、個人資料載入完成、天氣危險係數非同步抓到後各觸發
+// 一次），先前每次呼叫都無條件整個重寫 .push-gatekeeper-card，就算 gate
+// 根本沒變也一樣——這會把 CSS 進場動畫（modalSlideUp）打斷重新播放一次，
+// 彈窗剛出現那一瞬間如果又緊接著碰到下一次 render()，看起來就像卡一下。
+// 用簽章記住上次重繪的內容（gate 本身＋會影響按鈕文字的 pushEnabling），
+// 沒變就跳過，避免動畫被無謂打斷。
+let lastGatekeeperSig = null;
 function renderPushGatekeeper(){
   const gate = pushGatekeeperState();
   let el = document.getElementById("push-gatekeeper");
-  if (!gate) { if (el) el.remove(); return; }
-  if (!el) {
+  if (!gate) { if (el) el.remove(); lastGatekeeperSig = null; return; }
+  const isNew = !el;
+  if (isNew) {
     el = document.createElement("div");
     el.id = "push-gatekeeper";
     el.className = "push-gatekeeper-overlay";
     document.body.appendChild(el);
   }
-  el.innerHTML = `
-    <div class="push-gatekeeper-card">
-      <button class="push-gatekeeper-close" onclick="window.__dismissGatekeeper()" aria-label="關閉">${icon('close',18)}</button>
-      ${pushGatekeeperContent(gate)}
-    </div>`;
+  const sig = `${gate}:${state.pushEnabling}`;
+  if (isNew || sig !== lastGatekeeperSig) {
+    el.innerHTML = `
+      <div class="push-gatekeeper-card">
+        <button class="push-gatekeeper-close" onclick="window.__dismissGatekeeper()" aria-label="關閉">${icon('close',18)}</button>
+        ${pushGatekeeperContent(gate)}
+      </div>`;
+  }
+  lastGatekeeperSig = sig;
 }
 window.__dismissGatekeeper = () => {
   state.gatekeeperDismissed = true;
