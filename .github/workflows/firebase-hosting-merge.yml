@@ -23,17 +23,12 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/service-account.json
           FIREBASE_SERVICE_ACCOUNT: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_MEDICAL_BATTALION_TRACKER }}"
-      # 索引部署跟規則部署分開一個步驟、且允許失敗（continue-on-error）：
-      # 部署實際用的服務帳戶是 firebase-adminsdk-fbsvc@medical-battalion-
-      # tracker.iam.gserviceaccount.com（2026-07-13 debug 步驟確認過），
-      # 沒有 datastore.indexes.create 這個 IAM 權限，部署索引會直接被
-      # Firestore API 回 403 拒絕（實際發生過兩次）；continue-on-error 讓
-      # 步驟顯示成功，不影響後面的 Cloud Functions 部署，但不代表索引真的
-      # 有建立成功——這只是「失敗了也不擋住其他部署」，不是「解決了權限
-      # 問題」。要讓索引真的生效，這個帳號需要被授予「Cloud Datastore
-      # Index Admin」角色（Google Cloud Console → IAM），或者專案擁有者
-      # 自行到 Firebase 主控台的 Firestore → 索引 手動建立
-      # （見 firestore.indexes.json 列出的欄位組合）。
+      # 索引部署跟規則部署分開一個步驟：部署服務帳戶
+      # firebase-adminsdk-fbsvc@medical-battalion-tracker.iam.gserviceaccount.com
+      # 已在 Google Cloud IAM 被授予「Cloud Datastore Index Admin」角色
+      # （2026-07-13 確認）。continue-on-error 保留著，避免索引未來有變動
+      # 需要人工介入時（例如索引定義衝突）連累 Cloud Functions 部署一起
+      # 失敗。
       - name: Deploy Firestore indexes（若服務帳戶權限不足會失敗，不影響後續部署）
         continue-on-error: true
         run: |
