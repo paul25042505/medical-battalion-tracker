@@ -509,6 +509,9 @@
   .task-foot{display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:var(--text-xs); color:var(--muted);}
   .task-crew{display:flex; flex-direction:column; gap:6px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border); font-size:var(--text-sm); color:var(--text); font-family:var(--mono); font-variant-numeric:tabular-nums; font-weight:500;}
   .empty{color:var(--muted); font-size:var(--text-sm); text-align:center; padding:46px 22px; border:1px dashed var(--border-strong); border-radius:var(--radius-lg);}
+  /* 急診待命卡片：別單位的待命勤務只顯示鎖頭提示文字（見 viewErStandby），
+     取代原本可以點進去的「查看／管理」按鈕。 */
+  .task-card-locked-note{display:inline-flex; align-items:center; gap:4px;}
 
   /* ---- 患者狀況：突發狀況時記錄生命徵象/主訴，任務卡片凸顯提示。
      有患者的急迫性比單純的勤務狀態更高，所以整張卡片的液態變色強制蓋成
@@ -1663,7 +1666,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-13-380-unit-scoped-query-permission-fix";
+const BUILD_TAG = "2026-07-13-381-erstandby-cross-unit-visibility";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1671,7 +1674,7 @@ const BUILD_TAG = "2026-07-13-380-unit-scoped-query-permission-fix";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.12";
+const APP_MAJOR_MINOR = "2.13";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -1955,6 +1958,39 @@ async function fsQueryByTaskIds(collectionId, taskIds, unitFilter){
     results.push(...(data||[]).filter(d => d.document).map(d => ({ id: d.document.name.split("/").pop(), ...fromFsFields(d.document.fields) })));
   }
   return results;
+}
+// 急診待命的醫務所地點是全營共用資源，別單位的待命勤務摘要也要查得到
+// 才能在急診待命頁顯示唯讀外部卡片（見 firestore.rules 的 tasks 讀取規則、
+// viewErStandby／canViewTaskDetail 的說明）。一般成員/主官管沒辦法直接查
+// 「所有單位」的勤務，但可以用 erStandbyKey in [固定的醫務所代碼清單]
+// 這個查詢條件，讓 Firestore 從查詢本身就能證明每一筆結果都符合
+// 「這筆文件有 erStandbyKey」這個放行條件，不用整批擋掉。
+async function fsQueryErStandbyTasks(sinceDate){
+  const idToken = await auth.currentUser.getIdToken();
+  const keys = ER_STANDBY_LOCATIONS.map(l => l.key);
+  const body = {
+    structuredQuery: {
+      from: [{ collectionId: "tasks" }],
+      where: { compositeFilter: { op: "AND", filters: [
+        { fieldFilter: { field: { fieldPath: "createdAt" }, op: "GREATER_THAN_OR_EQUAL", value: { timestampValue: sinceDate.toISOString() } } },
+        { fieldFilter: { field: { fieldPath: "erStandbyKey" }, op: "IN", value: { arrayValue: { values: keys.map(k => ({ stringValue: k })) } } } }
+      ] } },
+      limit: 100
+    }
+  };
+  const res = await fetch(`${FIRESTORE_BASE}:runQuery`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    let msg = res.statusText;
+    try { const j = await res.json(); msg = (Array.isArray(j)?j[0]:j).error?.message || msg; } catch(e){}
+    const err = new Error(msg); err.code = res.status;
+    throw err;
+  }
+  const data = await res.json();
+  return (data||[]).filter(d => d.document).map(d => ({ id: d.document.name.split("/").pop(), ...fromFsFields(d.document.fields) }));
 }
 const RECENT_WINDOW_DAYS = 30;
 function recentCutoffDate(){ return new Date(Date.now() - RECENT_WINDOW_DAYS*24*60*60*1000); }
@@ -2627,6 +2663,9 @@ const RELEASE_NOTES = [
       "修正紀錄頁「任務名稱」「地點」篩選欄位打字時畫面會跳動、鍵盤也可能跟著閃一下的問題：這兩個欄位先前每打一個字就整頁重新繪製一次，把正在輸入中的輸入框整個換成新的節點，導致捲動位置被重置、輸入框也跟著失焦；改成只更新篩選條件本身，等按下「查詢」才套用，打字過程不再重新繪製畫面",
       "修正帳號待審核頁面（填寫單位/姓名/階級等個人資料）送出後整頁卡死、上下都滑不動的問題：這個畫面沒有真正的捲動容器，內容比視窗高（鍵盤打開時特別容易發生）就完全看不到超出範圍的欄位；已停用帳號的畫面也一併修正",
       "修正一般成員／主官管新註冊帳號登入後，任務、車輛、人員名冊、急診待命等頁面都顯示空白（看不到自己單位的資料）的問題：背景查詢資料時沒有帶上自己單位的篩選條件，導致伺服器端權限規則沒辦法只放行「屬於自己單位」的部分、乾脆整批全部擋下來；改成查詢時一併帶上單位篩選，admin／高勤官不受影響（本來就能看所有單位）",
+    ] },
+    { category: "急診待命", items: [
+      "急診待命頁改成看得到全營（不分單位）的待命勤務：兩個醫務所地點是全營共用資源，別單位的待命勤務也會顯示車號／值班醫官／車長／駕駛等摘要，方便掌握全營待命狀況；別單位的待命勤務點不進去看詳情（「查看／管理」按鈕改成鎖頭提示），患者相關資料仍然限本單位查看。一般勤務（非急診待命）維持原本規則，各單位只看得到自己單位的勤務",
     ] },
   ] },
   { date: "2026/07/12", groups: [
@@ -3487,6 +3526,14 @@ function visibleTasks(p, tasks){
   if (canSeeAllUnits(p)) return tasks;
   return tasks.filter(t => t.unit === myUnit(p));
 }
+// 急診待命頁專用：一般勤務維持只看得到自己單位（見 visibleTasks），但
+// 急診待命的醫務所地點是全營共用資源，別單位待命勤務的摘要仍然要顯示
+// （車號/車長/駕駛/值班醫官），只是「查看／管理」這個點進詳情頁的動作
+// 鎖住——詳情頁本來就會另外去抓 events/vitals（患者紀錄），那兩個集合的
+// firestore.rules 仍然限定同單位，就算前端沒鎖住點擊，點進去也看不到
+// 別單位的患者資料；這裡在前端也鎖住「點進去」這個動作，是為了避免
+// 使用者點了才發現詳情頁空空如也，體驗上更清楚。
+function canViewTaskDetail(p, t){ return canSeeAllUnits(p) || (t && t.unit === myUnit(p)); }
 
 /* =========================================================
    5b) 角色權限預覽（僅限 admin）
@@ -4254,7 +4301,21 @@ function mapUserToPersonnel(u){
 function startDataListeners(){
   if (tasksPoll || eventsPoll) return;
   tasksPoll = poll(async () => {
-    const docs = await fsQuerySince("tasks", "createdAt", recentCutoffDate(), null, myQueryUnitFilter());
+    // 一般勤務維持只查自己單位（跟原本行為一致）；額外併入全營的急診待命
+    // 勤務（不分單位），才能在急診待命頁顯示別單位待命勤務的唯讀外部卡片
+    // （見 viewErStandby／canViewTaskDetail、firestore.rules 的 tasks 讀取
+    // 規則說明）。admin／高勤官不分單位，維持單一查詢。
+    const unitFilter = myQueryUnitFilter();
+    let docs;
+    if (unitFilter) {
+      const [ownDocs, erDocs] = await Promise.all([
+        fsQuerySince("tasks", "createdAt", recentCutoffDate(), null, unitFilter),
+        fsQueryErStandbyTasks(recentCutoffDate())
+      ]);
+      docs = mergeById(ownDocs, erDocs);
+    } else {
+      docs = await fsQuerySince("tasks", "createdAt", recentCutoffDate());
+    }
     const merged = mergeById(docs, state.deepTasks);
     merged.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0));
     const changed = changedSince("tasks", merged);
@@ -5113,7 +5174,8 @@ const ICON_PATHS = {
   share: `<path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>`,
   close: `<path d="M6 6l12 12M18 6 6 18"/>`,
   lungs: `<path d="M12 3v7"/><path d="M12 10c-1.5-2-4-2.5-5.5-1S4 13 5 16.5c.6 2 1.8 3 3 3 1 0 1.5-.8 1.5-2v-6"/><path d="M12 10c1.5-2 4-2.5 5.5-1S20 13 19 16.5c-.6 2-1.8 3-3 3-1 0-1.5-.8-1.5-2v-6"/>`,
-  wrench: `<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.8 2.8-2-2 2.8-2.8Z"/>`
+  wrench: `<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.8 2.8-2-2 2.8-2.8Z"/>`,
+  lock: `<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>`
 };
 function icon(name, size){
   size = size || 20;
@@ -5819,6 +5881,9 @@ function viewHome(){
   // 車輛動態＝目前所有進行中的勤務（一輛車理論上同時只會有一個進行中任務，
   // 但測試資料常會讓同一車號被多筆任務共用，所以直接以「任務」為單位列出，
   // 不要用「車輛」去找對應任務，否則同一車號的第二筆任務會被吃掉不顯示）。
+  // 一般勤務跟原本行為一致，只看得到自己單位的任務（別單位的一般勤務
+  // 完全不顯示，不是外部卡片）——只有急診待命的跨單位待命勤務才會顯示
+  // 唯讀外部卡片，見 viewErStandby 的說明。
   // 「進行中」統計直接沿用這份清單的數量，確保上面數字跟下面實際列出的
   // 卡片一定對得上；不能只算「今天建立」的任務，否則跨日還在進行中的
   // 勤務（例如昨天出勤、今天還沒返營）會出現在下面清單卻沒被算進數字。
@@ -8323,7 +8388,9 @@ function viewErStandby(){
           <div class="emergency-slider-track"><span class="emergency-slider-text">🚨 右滑發送：${esc(loc.label)} 緊急動員通知</span></div>
           <div class="emergency-slider-handle">→</div>
         </div>` : ""}
-        <button class="btn-primary" style="width:100%;" onclick="window.__nav({name:'task', id:'${boundTask.id}'})">查看／管理</button>
+        ${canViewTaskDetail(p, boundTask)
+          ? `<button class="btn-primary" style="width:100%;" onclick="window.__nav({name:'task', id:'${boundTask.id}'})">查看／管理</button>`
+          : `<div class="task-card-locked-note" style="justify-content:center; padding:10px 0;">${icon('lock',13)} ${esc(unitLabel(boundTask.unit))}勤務・僅供掌握動態</div>`}
         ` : `
         <div class="empty" style="padding:16px 0;">尚未建立待命勤務</div>
         ${canDispatch ? `<button class="btn-primary" style="width:100%;" onclick='window.__startErStandbyTask(${JSON.stringify(loc.key)}, ${JSON.stringify(loc.label)})'>建立待命勤務</button>` : ""}

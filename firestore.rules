@@ -113,7 +113,16 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
-      allow read: if isStaff() || sameUnit(resource.data.unit);
+      // 一般勤務維持原本限制（本單位或 staff 才能讀取）。急診待命的醫務所
+      // 地點是全營共用資源，例外開放：erStandbyKey 只有透過急診待命頁建立
+      // 的勤務才會寫入這個欄位（見 index.html 的 __createTask），一般勤務
+      // 沒有這個欄位，不受這條例外影響。開放讀取的別單位待命勤務只是
+      // 調度層級的摘要（車號/車長/駕駛/值班醫官），不含患者資料——前端把
+      // 「點進去看詳情」這個動作鎖住，不代表其他單位、不給操作（見
+      // index.html 的 viewErStandby／canViewTaskDetail）；真正的患者資料
+      // （events/vitals）仍然限本單位讀取，就算前端沒鎖住點擊，點進另一個
+      // 單位的待命勤務詳情頁也看不到患者資料。
+      allow read: if isStaff() || sameUnit(resource.data.unit) || ('erStandbyKey' in resource.data);
       // 建立勤務限一般成員（限自己單位）與管理員；高勤官、主官管維持督導/查看角色，不再能自己建立。
       allow create: if isAdmin() || (isSignedIn() && myRole() == 'member' && sameUnit(request.resource.data.unit));
       // 高勤官、主官管對勤務只有查看權限：不可編輯、不可刪除（含強制結束），僅 admin 可操作。
