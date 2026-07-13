@@ -15,10 +15,26 @@ jobs:
           firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_MEDICAL_BATTALION_TRACKER }}"
           channelId: live
           projectId: medical-battalion-tracker
-      - name: Deploy Firestore rules and indexes
+      - name: Deploy Firestore rules
         run: |
           echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/service-account.json
-          npx firebase-tools deploy --only firestore:rules,firestore:indexes --project medical-battalion-tracker
+          npx firebase-tools deploy --only firestore:rules --project medical-battalion-tracker
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/service-account.json
+          FIREBASE_SERVICE_ACCOUNT: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_MEDICAL_BATTALION_TRACKER }}"
+      # 索引部署跟規則部署分開一個步驟、且允許失敗（continue-on-error）：
+      # 目前這組服務帳戶只被授權管理 firestore rules，沒有
+      # datastore.indexes.create 這個 IAM 權限，部署索引會直接被 Firestore
+      # API 回 403 拒絕（實際發生過一次，見 2026-07-13 的 workflow run，連帶
+      # 讓後面的 Cloud Functions 部署整個被跳過，因為原本兩者是同一個步驟）。
+      # 在服務帳戶被授予「Cloud Datastore Index Admin」權限之前，索引需要
+      # 專案擁有者自行到 Firebase 主控台的 Firestore → 索引 手動建立
+      # （見 firestore.indexes.json 列出的欄位組合）。
+      - name: Deploy Firestore indexes（若服務帳戶權限不足會失敗，不影響後續部署）
+        continue-on-error: true
+        run: |
+          echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/service-account.json
+          npx firebase-tools deploy --only firestore:indexes --project medical-battalion-tracker
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/service-account.json
           FIREBASE_SERVICE_ACCOUNT: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_MEDICAL_BATTALION_TRACKER }}"
