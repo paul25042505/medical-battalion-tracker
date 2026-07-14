@@ -1156,6 +1156,15 @@
     display:flex; align-items:center; justify-content:center; gap:8px;
   }
   .btn-ghost.danger{color:var(--red); border-color:color-mix(in srgb, var(--red) 25%, transparent); background:color-mix(in srgb, var(--red) 6%, transparent);}
+  /* 藍色細邊框按鈕：次要但重要的安全操作（例如急診待命「啟用今日新
+     勤務」），比灰色 icon-btn 更精緻，也不會跟上方主要操作（實心藍色
+     按鈕）搶焦點，同時不會被誤會成停用/不可點擊。 */
+  .btn-outline-blue{
+    width:100%; min-height:var(--btn-height); background:transparent; color:var(--blue); font-weight:700;
+    border:1.5px solid var(--blue); padding:0 20px; border-radius:var(--radius-btn); font-size:var(--text-base); font-family:var(--sans);
+    display:flex; align-items:center; justify-content:center; gap:8px; transition:background 0.15s ease;
+  }
+  .btn-outline-blue:active{background:color-mix(in srgb, var(--blue) 10%, transparent);}
 
   .tl-edit-btn{background:none; border:none; color:var(--blue); font-size:var(--text-xs); font-weight:600; padding:2px 0; flex-shrink:0;}
 
@@ -1216,6 +1225,25 @@
   .ios-switch input:checked ~ .track{background:var(--green);}
   .ios-switch input:checked ~ .knob{transform:translateX(20px);}
   .appearance-auto-row{display:flex; align-items:center; justify-content:space-between; gap:12px;}
+  /* 軍品攜帶：展開/收合購物車清單用 grid-template-rows 做滑動動畫（見
+     militaryCarrySectionHtml），瞬間 display:none/block 會讓版面看起來
+     突然跳動，這樣改成有滑動過程、比較符合預期心理。 */
+  .military-items-collapse{display:grid; grid-template-rows:0fr; transition:grid-template-rows 0.28s ease, margin-top 0.28s ease;}
+  .military-items-collapse.expanded{grid-template-rows:1fr; margin-top:14px;}
+  .military-items-collapse-inner{overflow:hidden; min-height:0;}
+  .mi-stepper{display:flex; align-items:center; gap:8px;}
+  /* 數量輸入框固定白底＋放大加粗數字，跟列表其餘淺灰底的欄位區隔開來，
+     一眼就能找到數量在哪；數量>0時（.mi-row-active）連同整列背景一起
+     淡藍提示「這項已經選了」，數字顏色也跟著變成藍色更醒目。 */
+  .mi-qty-input{
+    width:56px; text-align:center; font-family:var(--mono); font-size:var(--text-lg); font-weight:700;
+    background:#fff; color:#1a1a1a; border:1.5px solid var(--border); border-radius:var(--radius-sm); padding:8px 4px;
+    transition:color 0.15s ease, border-color 0.15s ease;
+  }
+  .mi-row{transition:background 0.15s ease;}
+  .mi-row-active{background:color-mix(in srgb, var(--blue) 8%, var(--panel));}
+  .mi-row-active .mi-qty-input{color:var(--blue); border-color:var(--blue);}
+  .mi-minus-btn:disabled{opacity:0.35; pointer-events:none;}
   /* 洽公任務：人員多選改用可勾選的標籤（chip），行動裝置上比原生 multi-select 好操作 */
   .chip-select{display:flex; flex-wrap:wrap; gap:8px;}
   /* 醫官初步判定、處置項目都分成好幾大類（醫官初步判定：心肺血管與呼吸
@@ -1680,7 +1708,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-14-387-weblinks-militaryitems-erstandby-renew";
+const BUILD_TAG = "2026-07-14-388-militaryitems-ux-polish";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2657,9 +2685,11 @@ const RELEASE_NOTES = [
     { category: "任務管理", items: [
       "里程改成只在「出勤」跟「抵達營區」這頭尾兩個節點記錄，中間「抵達現場／離開現場／返營」不用再逐站填里程，回報表單跟勤務詳情頁一併簡化",
       "軍車出勤新增「軍品攜帶」勾選：勾選後可從武器裝備／通信裝備品項清單，用購物車風格的加減按鈕選擇攜行品項與數量，勤務詳情頁會顯示攜行清單；品項本身可在「基礎資料管理 → 軍品項目」新增/編輯/刪除（已先建好 T91步槍、刺刀、彈匣三項武器裝備）",
+      "「軍品攜帶」改成獨立卡片＋大顆開關（iOS 風格 Switch），比原本的小勾選框好點很多；展開/收合品項清單改成有滑動動畫，不再是畫面瞬間跳出來",
+      "軍品品項的數量輸入框改成固定白底、數字放大加粗，選了數量的品項那一列會整個淡藍色高亮，一眼就能看出帶了哪些、帶了多少；數量歸零時「－」按鈕會鎖住不能再往下按，輸入框也只會跳出純數字鍵盤",
     ] },
     { category: "急診待命", items: [
-      "急診待命卡片新增「更新勤務」按鈕：同一組車長／駕駛／車輛繼續值班不用真的跑一趟返營再重新出勤，點下去會開啟預填好目前車號/車長/駕駛/值班醫官的建立勤務表單，直接送出就是原班底續勤，也可以先改幾個欄位再送出換班",
+      "急診待命卡片新增「啟用今日新勤務」按鈕（原「更新勤務」）：同一組車長／駕駛／車輛繼續值班不用真的跑一趟返營再重新出勤，點下去會開啟預填好目前車號/車長/駕駛/值班醫官的建立勤務表單，直接送出就是原班底續勤，也可以先改幾個欄位再送出換班；樣式改成藍色細邊框，跟上方「查看／管理」的實心按鈕做出主副操作的區隔，也不會被誤會成停用/不可點擊",
     ] },
     { category: "系統功能", items: [
       "更多頁新增「網網相連」：常用網址快速切換清單，管理員可在「基礎資料管理 → 網網相連」新增/編輯/刪除，一般成員在「更多 → 網網相連」查看並開啟連結",
@@ -6670,16 +6700,35 @@ function militaryItemsCartHtml(currentQtyByName){
       ${items.map(x => {
         const qty = currentQtyByName[x.name] || 0;
         return `
-        <div class="admin-row">
+        <div class="admin-row mi-row${qty>0?' mi-row-active':''}">
           <div><div class="name">${esc(x.name)}</div></div>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <button type="button" class="icon-btn" onclick="window.__adjustMilitaryQty('${x.id}',-1)">−</button>
-            <input type="number" min="0" step="1" inputmode="numeric" id="mi-qty-${x.id}" name="mi_qty__${x.id}" value="${qty}" style="width:52px; text-align:center;">
+          <div class="mi-stepper">
+            <button type="button" class="icon-btn mi-minus-btn" ${qty<=0?'disabled':''} onclick="window.__adjustMilitaryQty('${x.id}',-1)">−</button>
+            <input type="text" inputmode="numeric" pattern="[0-9]*" class="mi-qty-input" id="mi-qty-${x.id}" name="mi_qty__${x.id}" value="${qty}" oninput="window.__onMilitaryQtyInput(this)">
             <button type="button" class="icon-btn" onclick="window.__adjustMilitaryQty('${x.id}',1)">＋</button>
           </div>
         </div>`;
       }).join("")}`;
   }).join("");
+}
+// 軍品攜帶開關卡片：獨立白底卡片＋iOS Switch（比純 checkbox 熱區大很多，
+// 手機上好點），展開/收合購物車清單用 grid-template-rows 做滑動動畫，
+// 不是瞬間 display:none/block，避免版面突然跳動。
+function militaryCarrySectionHtml(checked, currentQtyByName){
+  return `
+    <div class="detail-head" style="margin:2px 0 14px;">
+      <div class="appearance-auto-row">
+        <span style="font-size:var(--text-base); color:var(--text); font-weight:600;">軍品攜帶</span>
+        <label class="ios-switch">
+          <input type="checkbox" name="militaryCarry" ${checked?'checked':''} onchange="window.__toggleMilitaryItems(this.checked)">
+          <span class="track"></span>
+          <span class="knob"></span>
+        </label>
+      </div>
+      <div id="tf-military-items" class="military-items-collapse${checked?' expanded':''}">
+        <div class="military-items-collapse-inner">${militaryItemsCartHtml(currentQtyByName)}</div>
+      </div>
+    </div>`;
 }
 
 /* =========================================================
@@ -6772,8 +6821,7 @@ function viewCreateTask(){
       </div>
       <div class="field"><label>出發前里程（公里）</label><input name="startMileage" type="number" inputmode="decimal" placeholder="例如：12345" value="${state.route.presetMileage!=null?state.route.presetMileage:''}"></div>
       <div class="field"><label>出發前油量</label><select name="startFuel">${fuelOptions(state.route.presetFuel||"")}</select></div>
-      <div class="field"><label class="checkbox-inline"><input type="checkbox" name="militaryCarry" onchange="window.__toggleMilitaryItems(this.checked)"> 軍品攜帶</label></div>
-      <div id="tf-military-items" style="display:none;">${militaryItemsCartHtml()}</div>`}
+      ${militaryCarrySectionHtml(false, {})}`}
       <div class="field"><label>備註（選填）</label><textarea name="notes" placeholder="其他需要註記的事項"></textarea></div>
       <button class="btn-primary" type="submit">建立${isLiaison?'洽公':'勤務'}</button>
     </form>
@@ -6858,8 +6906,7 @@ function viewEditTask(taskId){
       </div>
       <div class="field"><label>出發前里程（公里）</label><input name="startMileage" type="number" inputmode="decimal" value="${t.startMileage!=null?t.startMileage:''}"></div>
       <div class="field"><label>出發前油量</label><select name="startFuel">${fuelOptions(t.startFuel||"")}</select></div>
-      <div class="field"><label class="checkbox-inline"><input type="checkbox" name="militaryCarry" ${currentMilitaryItems.length?'checked':''} onchange="window.__toggleMilitaryItems(this.checked)"> 軍品攜帶</label></div>
-      <div id="tf-military-items" style="display:${currentMilitaryItems.length?'':'none'};">${militaryItemsCartHtml(currentMilitaryQtyByName)}</div>`}
+      ${militaryCarrySectionHtml(!!currentMilitaryItems.length, currentMilitaryQtyByName)}`}
       <div class="field"><label>備註（選填）</label><textarea name="notes">${esc(t.notes||'')}</textarea></div>
       <button class="btn-primary" type="submit">儲存變更</button>
     </form>
@@ -8543,7 +8590,7 @@ function viewErStandby(){
         </div>` : ""}
         ${canViewTaskDetail(p, boundTask)
           ? `<button class="btn-primary" style="width:100%;" onclick="window.__nav({name:'task', id:'${boundTask.id}'})">查看／管理</button>
-             ${canDispatch ? `<button class="icon-btn" style="width:100%;margin-top:8px;" onclick='window.__renewErStandbyTask(${JSON.stringify(loc.key)}, ${JSON.stringify(loc.label)})'>${icon('refresh',15)} 更新勤務</button>` : ""}`
+             ${canDispatch ? `<button class="btn-outline-blue" style="margin-top:8px;" onclick='window.__renewErStandbyTask(${JSON.stringify(loc.key)}, ${JSON.stringify(loc.label)})'>${icon('refresh',15)} 啟用今日新勤務</button>` : ""}`
           : `<div class="task-card-locked-note" style="justify-content:center; padding:10px 0;">${icon('lock',13)} ${esc(unitLabel(boundTask.unit))}勤務・僅供掌握動態</div>`}
         ` : `
         <div class="empty" style="padding:16px 0;">尚未建立待命勤務</div>
@@ -10635,12 +10682,31 @@ function collectMilitaryItemsFromForm(f){
 }
 window.__toggleMilitaryItems = (checked) => {
   const el = document.getElementById('tf-military-items');
-  if (el) el.style.display = checked ? '' : 'none';
+  if (el) el.classList.toggle('expanded', checked);
 };
+// 數量>0時整列高亮＋減號按鈕鎖住不能再往下按到負數，+/- 按鈕跟使用者
+// 直接在輸入框打字兩種途徑改數量都要同步更新這個狀態，所以拆成共用函式。
+function updateMilitaryRowState(el, qty){
+  const row = el.closest('.mi-row');
+  if (!row) return;
+  row.classList.toggle('mi-row-active', qty > 0);
+  const minusBtn = row.querySelector('.mi-minus-btn');
+  if (minusBtn) minusBtn.disabled = qty <= 0;
+}
 window.__adjustMilitaryQty = (id, delta) => {
   const el = document.getElementById(`mi-qty-${id}`);
   if (!el) return;
-  el.value = Math.max(0, (parseInt(el.value, 10)||0) + delta);
+  const qty = Math.max(0, (parseInt(el.value, 10)||0) + delta);
+  el.value = qty;
+  updateMilitaryRowState(el, qty);
+};
+// 輸入框改成 type="text" + inputmode="numeric" + pattern="[0-9]*"（純數字
+// 鍵盤，不會跳出小數點/正負號鍵，鍵盤也不會擋住畫面太多），手動打字仍要
+// 擋掉非數字字元、跟 +/- 按鈕一樣即時更新高亮/防呆狀態。
+window.__onMilitaryQtyInput = (el) => {
+  const digits = el.value.replace(/[^0-9]/g, '');
+  if (digits !== el.value) el.value = digits;
+  updateMilitaryRowState(el, parseInt(digits, 10) || 0);
 };
 window.__createTask = (ev, unit, type) => {
   ev.preventDefault();
