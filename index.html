@@ -1231,7 +1231,14 @@
   .military-items-collapse{display:grid; grid-template-rows:0fr; transition:grid-template-rows 0.28s ease, margin-top 0.28s ease;}
   .military-items-collapse.expanded{grid-template-rows:1fr; margin-top:14px;}
   .military-items-collapse-inner{overflow:hidden; min-height:0;}
-  .mi-stepper{display:flex; align-items:center; gap:8px;}
+  /* +/- 數量控制固定在最右邊、不換行到名稱下方——名稱較長、或這一列以後
+     加了更多欄位時，名稱本身可以在自己的欄寬裡換行，但 +/- 控制不會被
+     擠到下一行，版面不會因為東西變多而整個跑掉。 */
+  /* 用 .admin-row.mi-row 兩個 class 疊加才能贏過後面定義的 .admin-row{flex-wrap:wrap}
+     （兩者都是單一 class 選擇器，specificity 一樣的話後定義的贏，所以不能只寫 .mi-row）。 */
+  .admin-row.mi-row{flex-wrap:nowrap; transition:background 0.15s ease;}
+  .mi-row .name{overflow-wrap:break-word;}
+  .mi-stepper{display:flex; align-items:center; gap:8px; flex-shrink:0;}
   /* 數量輸入框固定白底＋放大加粗數字，跟列表其餘淺灰底的欄位區隔開來，
      一眼就能找到數量在哪；數量>0時（.mi-row-active）連同整列背景一起
      淡藍提示「這項已經選了」，數字顏色也跟著變成藍色更醒目。 */
@@ -1240,7 +1247,6 @@
     background:#fff; color:#1a1a1a; border:1.5px solid var(--border); border-radius:var(--radius-sm); padding:8px 4px;
     transition:color 0.15s ease, border-color 0.15s ease;
   }
-  .mi-row{transition:background 0.15s ease;}
   .mi-row-active{background:color-mix(in srgb, var(--blue) 8%, var(--panel));}
   .mi-row-active .mi-qty-input{color:var(--blue); border-color:var(--blue);}
   .mi-minus-btn:disabled{opacity:0.35; pointer-events:none;}
@@ -1708,7 +1714,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-14-388-militaryitems-ux-polish";
+const BUILD_TAG = "2026-07-14-389-militaryitems-stepper-noWrap";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2687,6 +2693,7 @@ const RELEASE_NOTES = [
       "軍車出勤新增「軍品攜帶」勾選：勾選後可從武器裝備／通信裝備品項清單，用購物車風格的加減按鈕選擇攜行品項與數量，勤務詳情頁會顯示攜行清單；品項本身可在「基礎資料管理 → 軍品項目」新增/編輯/刪除（已先建好 T91步槍、刺刀、彈匣三項武器裝備）",
       "「軍品攜帶」改成獨立卡片＋大顆開關（iOS 風格 Switch），比原本的小勾選框好點很多；展開/收合品項清單改成有滑動動畫，不再是畫面瞬間跳出來",
       "軍品品項的數量輸入框改成固定白底、數字放大加粗，選了數量的品項那一列會整個淡藍色高亮，一眼就能看出帶了哪些、帶了多少；數量歸零時「－」按鈕會鎖住不能再往下按，輸入框也只會跳出純數字鍵盤",
+      "修正軍品品項名稱較長時，+/- 數量控制會被擠到名稱下方另起一行的問題：改成固定貼齊列的右邊，名稱在自己的欄位裡換行就好，以後品項欄位變多也不會影響",
     ] },
     { category: "急診待命", items: [
       "急診待命卡片新增「啟用今日新勤務」按鈕（原「更新勤務」）：同一組車長／駕駛／車輛繼續值班不用真的跑一趟返營再重新出勤，點下去會開啟預填好目前車號/車長/駕駛/值班醫官的建立勤務表單，直接送出就是原班底續勤，也可以先改幾個欄位再送出換班；樣式改成藍色細邊框，跟上方「查看／管理」的實心按鈕做出主副操作的區隔，也不會被誤會成停用/不可點擊",
