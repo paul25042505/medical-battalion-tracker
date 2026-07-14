@@ -204,6 +204,20 @@ service cloud.firestore {
       allow create, update, delete: if isStaff() || isCommander();
     }
 
+    // 網網相連：後台管理的常用網址快速切換清單，是全營共用的參考資料，
+    // 不綁定特定單位；維護權限比照基礎資料管理。
+    match /webLinks/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isStaff() || isCommander();
+    }
+
+    // 軍品攜帶：後台管理的軍品項目名冊（武器裝備／通信裝備），是全營共用的
+    // 參考資料，不綁定特定單位；維護權限比照基礎資料管理。
+    match /militaryItems/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isStaff() || isCommander();
+    }
+
     // 健保署急診即時資訊快取（見 functions/index.js 的 syncErRealtime，每
     // 15 分鐘排程呼叫一次），只有這支排程函式（Admin SDK，本來就不受安全
     // 規則限制）會寫入，一般使用者/前端一律唯讀，不開放任何人直接寫入。

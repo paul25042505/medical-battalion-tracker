@@ -1680,7 +1680,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-13-386-gatekeeper-rerender-jitter-fix";
+const BUILD_TAG = "2026-07-14-387-weblinks-militaryitems-erstandby-renew";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1688,7 +1688,7 @@ const BUILD_TAG = "2026-07-13-386-gatekeeper-rerender-jitter-fix";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.13";
+const APP_MAJOR_MINOR = "2.14";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -2653,6 +2653,18 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/07/14", groups: [
+    { category: "任務管理", items: [
+      "里程改成只在「出勤」跟「抵達營區」這頭尾兩個節點記錄，中間「抵達現場／離開現場／返營」不用再逐站填里程，回報表單跟勤務詳情頁一併簡化",
+      "軍車出勤新增「軍品攜帶」勾選：勾選後可從武器裝備／通信裝備品項清單，用購物車風格的加減按鈕選擇攜行品項與數量，勤務詳情頁會顯示攜行清單；品項本身可在「基礎資料管理 → 軍品項目」新增/編輯/刪除（已先建好 T91步槍、刺刀、彈匣三項武器裝備）",
+    ] },
+    { category: "急診待命", items: [
+      "急診待命卡片新增「更新勤務」按鈕：同一組車長／駕駛／車輛繼續值班不用真的跑一趟返營再重新出勤，點下去會開啟預填好目前車號/車長/駕駛/值班醫官的建立勤務表單，直接送出就是原班底續勤，也可以先改幾個欄位再送出換班",
+    ] },
+    { category: "系統功能", items: [
+      "更多頁新增「網網相連」：常用網址快速切換清單，管理員可在「基礎資料管理 → 網網相連」新增/編輯/刪除，一般成員在「更多 → 網網相連」查看並開啟連結",
+    ] },
+  ] },
   { date: "2026/07/13", groups: [
     { category: "患者紀錄", items: [
       "患者狀況卡片新增「標記不送醫」「離開醫務所」兩個按鈕：醫務所處理完但不用送醫的患者，先按「標記不送醫」留紀錄，患者實際離開後再按「離開醫務所」結案，卡片會恢復成「尚未建立患者紀錄」，可以直接開始記錄下一位新患者，不用另外開一筆新任務",
@@ -3287,6 +3299,8 @@ const state = {
   hospitals: [], vitals: [], // 醫院資訊（急救責任等級/電話）、患者生命徵象/主訴紀錄
   doctors: [], // 醫官名冊（姓名/電話），供建立勤務的「值班醫官」欄位選用
   taskTitleTemplates: [], // 建立勤務頁「任務名稱」快速選擇範本，全營共用
+  webLinks: [], // 網網相連：後台管理的常用網址快速切換清單，全營共用
+  militaryItems: [], // 軍品攜帶：後台管理的軍品項目名冊（武器裝備／通信裝備），全營共用
   erStandby: [], // 急診待命：每個地點目前綁定的待命勤務指標（currentTaskId）
   notifications: [], // 通知中心（收件匣歷史紀錄，公告，全體共用），依 timestamp 新到舊排序
   pushLog: [], // 系統實際推播過的個人化紀錄（任務/事件/生命徵象異常/緊急動員等），只查得到自己的份，跟 notifications（全體公告）分開存放
@@ -3361,7 +3375,7 @@ const state = {
 applyThemeMode(state.themeMode); // 在第一次 render() 之前就套用，避免畫面先閃一次錯的模式再跳回正確的
 let tasksPoll = null, eventsPoll = null, profilePoll = null;
 let personnelPoll = null, vehiclesPoll = null, recordersPoll = null;
-let hospitalsPoll = null, vitalsPoll = null, erStandbyPoll = null, doctorsPoll = null, taskTitleTemplatesPoll = null;
+let hospitalsPoll = null, vitalsPoll = null, erStandbyPoll = null, doctorsPoll = null, taskTitleTemplatesPoll = null, webLinksPoll = null, militaryItemsPoll = null;
 let notificationsPoll = null;
 let pushLogPoll = null;
 let erRealtimePoll = null;
@@ -3758,6 +3772,16 @@ async function addTaskTitleTemplate(text){
   await fsAddDoc("taskTitleTemplates", { text });
   showToast("已新增範本"); if (taskTitleTemplatesPoll) taskTitleTemplatesPoll.refreshNow();
 }
+async function addWebLink(name, url){
+  await fsAddDoc("webLinks", { name, url });
+  showToast("已新增網址"); if (webLinksPoll) webLinksPoll.refreshNow();
+}
+// 軍品攜帶：固定分兩大類（武器裝備／通信裝備），品項本身在後台管理維護。
+const MILITARY_ITEM_CATEGORIES = ["武器裝備", "通信裝備"];
+async function addMilitaryItem(category, name){
+  await fsAddDoc("militaryItems", { category, name });
+  showToast("已新增軍品項目"); if (militaryItemsPoll) militaryItemsPoll.refreshNow();
+}
 // 意見回饋：任何在職帳號都能送出，一律具名（顯示送出者姓名），只有
 // admin 能在管理後台「意見回饋」頁籤檢視，不提供列表輪詢（很少人會
 // 用到，開啟該頁籤時現抓一次就好，見下方 state._feedbackCache）。
@@ -3824,6 +3848,8 @@ function refreshBaseDataPoll(coll){
   if (coll === "hospitals" && hospitalsPoll) hospitalsPoll.refreshNow();
   if (coll === "doctors" && doctorsPoll) doctorsPoll.refreshNow();
   if (coll === "taskTitleTemplates" && taskTitleTemplatesPoll) taskTitleTemplatesPoll.refreshNow();
+  if (coll === "webLinks" && webLinksPoll) webLinksPoll.refreshNow();
+  if (coll === "militaryItems" && militaryItemsPoll) militaryItemsPoll.refreshNow();
   if (coll === "notifications" && notificationsPoll) notificationsPoll.refreshNow();
 }
 // coll 是畫面上用的內部識別字串（沿用「personnel」這個名字，跟建立勤務下拉
@@ -4430,6 +4456,19 @@ function startDataListeners(){
     state.taskTitleTemplates = docs;
     if (changed) safeRender();
   });
+  webLinksPoll = poll(async () => {
+    const docs = await fsListCollection("webLinks");
+    docs.sort((a,b) => HOSPITAL_NAME_COLLATOR.compare(a.name||'', b.name||''));
+    const changed = changedSince("webLinks", docs);
+    state.webLinks = docs;
+    if (changed) safeRender();
+  });
+  militaryItemsPoll = poll(async () => {
+    const docs = await fsListCollection("militaryItems");
+    const changed = changedSince("militaryItems", docs);
+    state.militaryItems = docs;
+    if (changed) safeRender();
+  });
   notificationsPoll = poll(async () => {
     const docs = await fsListCollection("notifications");
     docs.sort((a,b) => new Date(b.timestamp||0) - new Date(a.timestamp||0));
@@ -4460,13 +4499,14 @@ function startDataListeners(){
   ensureUnitsSeeded();
   ensureHospitalsSeeded();
   ensureTaskTitleTemplatesSeeded();
+  ensureMilitaryItemsSeeded();
 }
 function cleanupListeners(){
-  [tasksPoll, eventsPoll, profilePoll, personnelPoll, vehiclesPoll, recordersPoll, hospitalsPoll, vitalsPoll, erStandbyPoll, doctorsPoll, taskTitleTemplatesPoll, notificationsPoll, pushLogPoll, mciEventsPoll, mciPatientsPoll].forEach(p => p && p.stop());
+  [tasksPoll, eventsPoll, profilePoll, personnelPoll, vehiclesPoll, recordersPoll, hospitalsPoll, vitalsPoll, erStandbyPoll, doctorsPoll, taskTitleTemplatesPoll, webLinksPoll, militaryItemsPoll, notificationsPoll, pushLogPoll, mciEventsPoll, mciPatientsPoll].forEach(p => p && p.stop());
   for (const k in lastJson) delete lastJson[k];
-  tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = hospitalsPoll = vitalsPoll = erStandbyPoll = doctorsPoll = taskTitleTemplatesPoll = notificationsPoll = pushLogPoll = erRealtimePoll = mciEventsPoll = mciPatientsPoll = null;
+  tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = hospitalsPoll = vitalsPoll = erStandbyPoll = doctorsPoll = taskTitleTemplatesPoll = webLinksPoll = militaryItemsPoll = notificationsPoll = pushLogPoll = erRealtimePoll = mciEventsPoll = mciPatientsPoll = null;
   state.tasks = []; state.events = []; state.personnel = []; state.vehicles = []; state.recorders = [];
-  state.hospitals = []; state.vitals = []; state.erStandby = []; state.doctors = []; state.taskTitleTemplates = []; state.notifications = []; state.pushLog = [];
+  state.hospitals = []; state.vitals = []; state.erStandby = []; state.doctors = []; state.taskTitleTemplates = []; state.webLinks = []; state.militaryItems = []; state.notifications = []; state.pushLog = [];
   state.mciEvents = []; state.mciPatients = [];
   state.deepTasks = []; state.deepEvents = []; state.deepVitals = []; state.recordsDeepQuery = null;
   state.previewActive = false; state.realRoleUnit = null;
@@ -4518,6 +4558,26 @@ async function ensureTaskTitleTemplatesSeeded(){
     }
     if (taskTitleTemplatesPoll) await taskTitleTemplatesPoll.refreshNow();
   } catch (e) { console.error("初始化任務名稱範本失敗", e); }
+}
+// 首次啟用時自動補進軍品項目的預設清單（目前只先幫武器裝備補齊三項，
+// 通信裝備留空，之後管理員自行在「基礎資料管理 → 軍品項目」新增）。
+const MILITARY_ITEM_SEED = [
+  { category: "武器裝備", name: "T91步槍" },
+  { category: "武器裝備", name: "刺刀" },
+  { category: "武器裝備", name: "彈匣" },
+];
+let militaryItemsSeeded = false;
+async function ensureMilitaryItemsSeeded(){
+  if (militaryItemsSeeded) return;
+  militaryItemsSeeded = true;
+  try {
+    const existing = await fsListCollection("militaryItems");
+    const have = new Set(existing.map(x => `${x.category}|${x.name}`));
+    for (const item of MILITARY_ITEM_SEED) {
+      if (!have.has(`${item.category}|${item.name}`)) await fsAddDoc("militaryItems", item);
+    }
+    if (militaryItemsPoll) await militaryItemsPoll.refreshNow();
+  } catch (e) { console.error("初始化軍品項目失敗", e); }
 }
 
 // 醫院有登記自己的經緯度時，直接算跟 GPS 定位的實際距離最準；沒登記
@@ -5133,8 +5193,8 @@ const ROUTE_REFRESH = {
   mciEvent: ['mciEvents','mciPatients','vehicles','hospitals'],
   task: ['tasks','events','vitals'],
   vitals: ['tasks','events','vitals'],
-  editTask: ['tasks','events','personnel','vehicles','recorders','doctors'],
-  createTask: ['personnel','vehicles','recorders','doctors','taskTitleTemplates'],
+  editTask: ['tasks','events','personnel','vehicles','recorders','doctors','militaryItems'],
+  createTask: ['personnel','vehicles','recorders','doctors','taskTitleTemplates','militaryItems'],
   stats: ['tasks','events'],
   hospitals: ['hospitals','erRealtime'],
   erStandby: ['erStandby','tasks','events'],
@@ -5148,6 +5208,9 @@ const ROUTE_REFRESH = {
   baseDataHospitals: ['hospitals'],
   baseDataDoctors: ['doctors'],
   baseDataTaskTitleTemplates: ['taskTitleTemplates'],
+  baseDataWebLinks: ['webLinks'],
+  webLinks: ['webLinks'],
+  baseDataMilitaryItems: ['militaryItems'],
   adminUsers: ['personnel'],
   notifications: ['notifications', 'pushLog'],
 };
@@ -5163,7 +5226,7 @@ function nav(route){
   // 輪詢；每次導覽過去都清掉快取強制重抓一次，才看得到剛送出的意見回饋。
   if (route.name === "adminFeedback") state._feedbackCache = null;
   render(); scrollContentToTop();
-  const polls = { tasks: tasksPoll, events: eventsPoll, personnel: personnelPoll, vehicles: vehiclesPoll, recorders: recordersPoll, hospitals: hospitalsPoll, vitals: vitalsPoll, erStandby: erStandbyPoll, doctors: doctorsPoll, taskTitleTemplates: taskTitleTemplatesPoll, notifications: notificationsPoll, pushLog: pushLogPoll, erRealtime: erRealtimePoll, mciEvents: mciEventsPoll, mciPatients: mciPatientsPoll };
+  const polls = { tasks: tasksPoll, events: eventsPoll, personnel: personnelPoll, vehicles: vehiclesPoll, recorders: recordersPoll, hospitals: hospitalsPoll, vitals: vitalsPoll, erStandby: erStandbyPoll, doctors: doctorsPoll, taskTitleTemplates: taskTitleTemplatesPoll, webLinks: webLinksPoll, militaryItems: militaryItemsPoll, notifications: notificationsPoll, pushLog: pushLogPoll, erRealtime: erRealtimePoll, mciEvents: mciEventsPoll, mciPatients: mciPatientsPoll };
   (ROUTE_REFRESH[route.name] || []).forEach(key => { if (polls[key]) polls[key].refreshNow(); });
   // 保險機制：換頁時強制重新校正一次 #app 高度／window 捲動值，不依賴
   // 前一頁鍵盤關閉時是否有確實觸發 visualViewport 事件或輸入框 focusout
@@ -5180,6 +5243,10 @@ function nav(route){
   }, 120);
 }
 function esc(s){ return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// 網網相連的網址是後台自行輸入的資料，直接塞進 href 屬性前先擋掉
+// javascript: 之類的非常規協定（只放行 http/https），避免萬一有人在
+// 後台填入惡意網址，點擊時被當成腳本執行。
+function safeUrl(url){ return /^https?:\/\//i.test(url||"") ? url : "#"; }
 
 /* =========================================================
    8b) 線條 SVG 圖標（取代 emoji，搭配淺色 iOS 風格）
@@ -5213,7 +5280,8 @@ const ICON_PATHS = {
   close: `<path d="M6 6l12 12M18 6 6 18"/>`,
   lungs: `<path d="M12 3v7"/><path d="M12 10c-1.5-2-4-2.5-5.5-1S4 13 5 16.5c.6 2 1.8 3 3 3 1 0 1.5-.8 1.5-2v-6"/><path d="M12 10c1.5-2 4-2.5 5.5-1S20 13 19 16.5c-.6 2-1.8 3-3 3-1 0-1.5-.8-1.5-2v-6"/>`,
   wrench: `<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.8 2.8-2-2 2.8-2.8Z"/>`,
-  lock: `<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>`
+  lock: `<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>`,
+  link: `<path d="M9 15l6-6"/><path d="M11 7l1.3-1.3a3.7 3.7 0 0 1 5.3 5.3L16 12.7"/><path d="M13 17l-1.3 1.3a3.7 3.7 0 0 1-5.3-5.3L8 11.3"/>`
 };
 function icon(name, size){
   size = size || 20;
@@ -6587,6 +6655,34 @@ function mciVehicleCard(eventId, plate){
 }
 
 /* =========================================================
+   12z) 軍品攜帶：購物車風格的品項＋數量選擇器，建立/編輯勤務表單共用
+   （見 state.militaryItems、MILITARY_ITEM_CATEGORIES）。currentQtyByName
+   用來在編輯既有勤務時，把之前記錄的數量帶回表單上。
+   ========================================================= */
+function militaryItemsCartHtml(currentQtyByName){
+  currentQtyByName = currentQtyByName || {};
+  if (!state.militaryItems.length) return `<div class="empty">尚無軍品項目，請至基礎資料管理新增</div>`;
+  return MILITARY_ITEM_CATEGORIES.map(cat => {
+    const items = state.militaryItems.filter(x => x.category === cat).slice().sort((a,b) => HOSPITAL_NAME_COLLATOR.compare(a.name||'', b.name||''));
+    if (!items.length) return '';
+    return `
+      <div style="font-size:var(--text-xs); color:var(--muted); font-weight:600; margin:10px 0 6px;">${cat}</div>
+      ${items.map(x => {
+        const qty = currentQtyByName[x.name] || 0;
+        return `
+        <div class="admin-row">
+          <div><div class="name">${esc(x.name)}</div></div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button type="button" class="icon-btn" onclick="window.__adjustMilitaryQty('${x.id}',-1)">−</button>
+            <input type="number" min="0" step="1" inputmode="numeric" id="mi-qty-${x.id}" name="mi_qty__${x.id}" value="${qty}" style="width:52px; text-align:center;">
+            <button type="button" class="icon-btn" onclick="window.__adjustMilitaryQty('${x.id}',1)">＋</button>
+          </div>
+        </div>`;
+      }).join("")}`;
+  }).join("");
+}
+
+/* =========================================================
    13) 畫面：建立勤務
    ========================================================= */
 function viewCreateTask(){
@@ -6645,22 +6741,22 @@ function viewCreateTask(){
       <div class="field"><label>車號</label>
         <select name="vehicle" data-unit="${unit}">
           <option value="">請選擇車輛</option>
-          ${vehicleOptionsByType(vehicleOpts, v => `<option value="${esc(v.plate)}">${esc(vehicleOptionLabel(v.plate, outSet))}</option>`)}
+          ${vehicleOptionsByType(vehicleOpts, v => `<option value="${esc(v.plate)}" ${state.route.presetVehicle===v.plate?'selected':''}>${esc(vehicleOptionLabel(v.plate, outSet))}</option>`)}
         </select>
         <label class="checkbox-inline"><input type="checkbox" onchange="window.__toggleCrossUnitVehicle(this)"> 跨單位借車</label>
         ${!vehicleOpts.length ? `<div style="color:var(--muted);font-size:var(--text-xs);margin-top:6px;">此單位尚未建立車輛資料，請至「基礎資料管理」新增</div>` : ""}
       </div>
       <div class="field"><label>車長</label>
         <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openPersonPicker('crewLeader', this)">
-          <span class="picker-field-text placeholder">請選擇車長</span>${icon('chevronDown',16)}
+          <span class="picker-field-text${state.route.presetCrewLeader?'':' placeholder'}">${state.route.presetCrewLeader ? esc(crewDisplayLabel(state.route.presetCrewLeader, unit)) : '請選擇車長'}</span>${icon('chevronDown',16)}
         </button>
-        <input type="hidden" name="crewLeader" value="">
+        <input type="hidden" name="crewLeader" value="${esc(state.route.presetCrewLeader||'')}">
       </div>
       <div class="field"><label>駕駛</label>
         <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openPersonPicker('driver', this)">
-          <span class="picker-field-text placeholder">請選擇駕駛</span>${icon('chevronDown',16)}
+          <span class="picker-field-text${state.route.presetDriver?'':' placeholder'}">${state.route.presetDriver ? esc(crewDisplayLabel(state.route.presetDriver, unit)) : '請選擇駕駛'}</span>${icon('chevronDown',16)}
         </button>
-        <input type="hidden" name="driver" value="">
+        <input type="hidden" name="driver" value="${esc(state.route.presetDriver||'')}">
       </div>
       ${isStandbyDispatch ? `
       <div class="field"><label>值班醫官（選填）</label>
@@ -6674,8 +6770,10 @@ function viewCreateTask(){
           ${recorderOpts.map(x => `<option value="${esc(x.code)}">${esc(x.code)}</option>`).join("")}
         </select>
       </div>
-      <div class="field"><label>出發前里程（公里）</label><input name="startMileage" type="number" inputmode="decimal" placeholder="例如：12345"></div>
-      <div class="field"><label>出發前油量</label><select name="startFuel">${fuelOptions("")}</select></div>`}
+      <div class="field"><label>出發前里程（公里）</label><input name="startMileage" type="number" inputmode="decimal" placeholder="例如：12345" value="${state.route.presetMileage!=null?state.route.presetMileage:''}"></div>
+      <div class="field"><label>出發前油量</label><select name="startFuel">${fuelOptions(state.route.presetFuel||"")}</select></div>
+      <div class="field"><label class="checkbox-inline"><input type="checkbox" name="militaryCarry" onchange="window.__toggleMilitaryItems(this.checked)"> 軍品攜帶</label></div>
+      <div id="tf-military-items" style="display:none;">${militaryItemsCartHtml()}</div>`}
       <div class="field"><label>備註（選填）</label><textarea name="notes" placeholder="其他需要註記的事項"></textarea></div>
       <button class="btn-primary" type="submit">建立${isLiaison?'洽公':'勤務'}</button>
     </form>
@@ -6706,6 +6804,9 @@ function viewEditTask(taskId){
   // 車號下拉也要一開始就展開列出所有單位的車，不然選單裡會找不到它。
   const currentVehicleRecord = t.vehicle ? state.vehicles.find(v => v.plate === t.vehicle) : null;
   const isCrossUnitVehicle = !!(currentVehicleRecord && currentVehicleRecord.unit !== unit);
+  const currentMilitaryItems = t.militaryItems || [];
+  const currentMilitaryQtyByName = {};
+  currentMilitaryItems.forEach(x => { currentMilitaryQtyByName[x.name] = x.qty; });
 
   return `
     <div class="back-row">${backBtn({name:'task', id:taskId})}</div>
@@ -6756,7 +6857,9 @@ function viewEditTask(taskId){
         </select>
       </div>
       <div class="field"><label>出發前里程（公里）</label><input name="startMileage" type="number" inputmode="decimal" value="${t.startMileage!=null?t.startMileage:''}"></div>
-      <div class="field"><label>出發前油量</label><select name="startFuel">${fuelOptions(t.startFuel||"")}</select></div>`}
+      <div class="field"><label>出發前油量</label><select name="startFuel">${fuelOptions(t.startFuel||"")}</select></div>
+      <div class="field"><label class="checkbox-inline"><input type="checkbox" name="militaryCarry" ${currentMilitaryItems.length?'checked':''} onchange="window.__toggleMilitaryItems(this.checked)"> 軍品攜帶</label></div>
+      <div id="tf-military-items" style="display:${currentMilitaryItems.length?'':'none'};">${militaryItemsCartHtml(currentMilitaryQtyByName)}</div>`}
       <div class="field"><label>備註（選填）</label><textarea name="notes">${esc(t.notes||'')}</textarea></div>
       <button class="btn-primary" type="submit">儲存變更</button>
     </form>
@@ -7236,22 +7339,11 @@ function viewTaskDetail(taskId){
   const isLiaison = t.type === "liaison";
   const evDefs = eventTypesFor(t);
 
-  // 勤務資訊：出發/抵達/返營/最終里程與油量、自動計算行駛公里數與任務耗時
-  // （抵達現場可能有多筆，因為同一趟勤務可能去兩個以上的地點；洽公任務地點
-  // 單一、不追蹤里程油量，這段資料只有勤務類任務才會用到）
+  // 勤務資訊：出發/最終里程與油量、自動計算行駛公里數與任務耗時（里程只在
+  // 出勤／抵達營區這頭尾兩個節點記錄，中間各站不再逐一記里程，見回報表單
+  // 的 needsMileage 判斷；洽公任務地點單一、不追蹤里程油量，這段資料只有
+  // 勤務類任務才會用到）。
   const dispatchEv = eventByType(taskId, "DISPATCH");
-  const arrivedEvs = evs.filter(e => e.type === "ARRIVED_SCENE");
-  const departEvs = evs.filter(e => e.type === "DEPART_SCENE");
-  // 多地點時每一站分開列成自己的一列（不要用頓號串在同一行），才看得出來
-  // 抵達／離開的流水時間線，一眼就知道第幾站對應哪個里程。
-  const arrivalRows = arrivedEvs.length
-    ? arrivedEvs.map((e,i) => `<div class="k">抵達里程${arrivedEvs.length>1?' '+(i+1):''}</div><div class="v">${e.mileage!=null?e.mileage+' km':'—'}</div>`).join("")
-    : `<div class="k">抵達里程</div><div class="v">—</div>`;
-  // 前往地點是離開現場當下就先問清楚（決定要去哪裡才會按前往下一個地點），
-  // 所以顯示在離開里程這一列，不是抵達里程那一列。
-  const departRows = departEvs.length
-    ? departEvs.map((e,i) => `<div class="k">離開里程${departEvs.length>1?' '+(i+1):''}</div><div class="v">${e.mileage!=null?e.mileage+' km':'—'}${e.location?'（前往：'+esc(e.location)+'）':''}</div>`).join("")
-    : `<div class="k">離開里程</div><div class="v">—</div>`;
   const returningEv = eventByType(taskId, "RETURNING");
   const completedEv = eventByType(taskId, "COMPLETED");
   const startMileage = dispatchEv?.mileage ?? t.startMileage ?? null;
@@ -7394,9 +7486,12 @@ function viewTaskDetail(taskId){
     // 是移動之後才回報，先帶入上一筆已知里程當作起始值，使用者只要接著往
     // 上改，不用從零開始整串重打一次；抵達營區才是完全空白，需要手動輸入。
     // 洽公任務不追蹤里程。
-    const lastMileageEv = evs.slice().reverse().find(e => e.mileage != null);
-    const isNextStopArrival = !isLiaison && draft.type === "ARRIVED_SCENE" && arrivedEvs.length > 0;
-    const prefillMileage = !isLiaison && (draft.type === "RETURNING" || draft.type === "DEPART_SCENE" || isNextStopArrival) && lastMileageEv ? lastMileageEv.mileage : null;
+    // 里程只在「出勤」（實際出發那一刻）跟「抵達營區」（真的回到營區）這兩個
+    //節點記錄，中間「抵達現場／離開現場／返營（開始返程）」不用填——這幾個
+    // 節點車輛人員都還在外面移動，逐站記里程對調度來說意義不大，只留頭尾
+    // 兩個數字（出發里程／最終里程）就夠算出整趟總里程。
+    const needsMileage = !isLiaison && (draft.type === "DISPATCH" || draft.type === "COMPLETED");
+    const mileageLabel = draft.type === "DISPATCH" ? "出發里程（公里）" : "最終里程（公里）";
     // 回報表單改用彈窗（跟基礎資料管理的新增/編輯彈窗同一套元件），避免表單
     // 內容被固定在畫面底部的 Sticky Action Bar 擋住看不到。
     // 除了備註以外都是必填欄位，避免漏填造成紀錄不完整。
@@ -7420,7 +7515,7 @@ function viewTaskDetail(taskId){
                 <button type="button" class="icon-btn" style="flex-shrink:0;" onclick="window.__resetReportTime()">套用目前</button>
               </div>
             </div>
-            ${!isLiaison ? `<div class="field"><label>里程（公里）</label><input id="rf-mileage" type="number" inputmode="decimal" placeholder="目前里程" value="${prefillMileage != null ? prefillMileage : ''}" required></div>` : ""}
+            ${needsMileage ? `<div class="field"><label>${mileageLabel}</label><input id="rf-mileage" type="number" inputmode="decimal" placeholder="目前里程" required></div>` : ""}
             ${isFinal ? `<div class="field"><label>剩餘油量</label><select id="rf-fuel" required>${fuelOptions("")}</select></div>` : ""}
             <div class="field"><label>備註（選填）</label><input id="rf-note" placeholder="備註"></div>
             <button class="btn-primary" type="submit">確認送出</button>
@@ -7464,6 +7559,10 @@ function viewTaskDetail(taskId){
     const def = evDefs.find(x=>x.type===editingEvent.type);
     const isFinalEv = !isLiaison && editingEvent.type === "COMPLETED";
     const hasLocationField = !isLiaison && editingEvent.type === "DEPART_SCENE";
+    // 里程只在出勤／抵達營區記錄（見回報表單的 needsMileage 判斷）；如果是
+    // 舊資料在中間節點還留有里程（改版前記的），編輯時仍然要能看到/修正，
+    // 不能因為現在不收集這個欄位就讓舊資料沒辦法改。
+    const hasMileageField = !isLiaison && (editingEvent.type === "DISPATCH" || editingEvent.type === "COMPLETED" || editingEvent.mileage != null);
     // 誤按到不該回報的步驟時要能整筆撤銷，但只開放刪除時間軸上「最後一筆」，
     // 刪掉中間的歷史紀錄會讓時間軸出現斷層（例如出勤→離開現場中間憑空少了
     // 抵達現場），跟既有「歷史紀錄不能刪除」的設計精神衝突，所以限制在
@@ -7477,7 +7576,7 @@ function viewTaskDetail(taskId){
           <form onsubmit="event.preventDefault(); window.__submitEditEvent('${editingEvent.id}')">
             ${hasLocationField ? `<div class="field"><label>前往地點</label><input id="ee-location" value="${esc(editingEvent.location||'')}" placeholder="例如：加油站、OO超商"></div>` : ""}
             <div class="field"><label>時間</label><input id="ee-time" type="time" value="${hhmmValue(new Date(editingEvent.ts))}" required></div>
-            ${!isLiaison ? `<div class="field"><label>里程（公里）</label><input id="ee-mileage" type="number" inputmode="decimal" value="${editingEvent.mileage!=null?editingEvent.mileage:''}" required></div>` : ""}
+            ${hasMileageField ? `<div class="field"><label>里程（公里）</label><input id="ee-mileage" type="number" inputmode="decimal" value="${editingEvent.mileage!=null?editingEvent.mileage:''}" required></div>` : ""}
             ${isFinalEv ? `<div class="field"><label>剩餘油量</label><select id="ee-fuel" required>${fuelOptions(editingEvent.endFuel||"")}</select></div>` : ""}
             <div class="field"><label>備註（選填）</label><input id="ee-note" value="${esc(editingEvent.note||'')}" placeholder="備註"></div>
             <button class="btn-primary" type="submit">儲存修正</button>
@@ -7514,7 +7613,8 @@ function viewTaskDetail(taskId){
         <div class="k">車長</div><div class="v">${crewLabel(t.crewLeader, t.unit)}</div>
         <div class="k">駕駛</div><div class="v">${crewLabel(t.driver, t.unit)}</div>
         ${t.dutyOfficer ? `<div class="k">值班醫官</div><div class="v">${doctorLabel(t.dutyOfficer)}</div>` : ""}
-        <div class="k">紀錄器</div><div class="v">${esc((t.recorders||[]).join('、') || '—')}</div>` : ""}
+        <div class="k">紀錄器</div><div class="v">${esc((t.recorders||[]).join('、') || '—')}</div>
+        ${Array.isArray(t.militaryItems) && t.militaryItems.length ? `<div class="k">攜行軍品</div><div class="v">${t.militaryItems.map(x => `${esc(x.name)} x${x.qty}`).join('、')}</div>` : ""}` : ""}
         <div class="k">建立人</div><div class="v">${nameWithRank(t.createdByName, t.unit)}</div>
         <div class="k">建立時間</div><div class="v">${fmtTime(new Date(t.createdAt||0).getTime())}</div>
       </div>
@@ -7531,9 +7631,6 @@ function viewTaskDetail(taskId){
       <div class="kv">
         <div class="k">出發里程</div><div class="v">${startMileage!=null ? startMileage+' km' : '—'}</div>
         ${dispatchEv?.hospital ? `<div class="k">送醫醫院</div><div class="v">${esc(dispatchEv.hospital)}</div>` : ""}
-        ${arrivalRows}
-        ${departRows}
-        <div class="k">返營里程</div><div class="v">${returningEv?.mileage!=null ? returningEv.mileage+' km' : '—'}</div>
         <div class="k">最終里程</div><div class="v">${finalMileage!=null ? finalMileage+' km' : '—'}</div>
         <div class="k">出發油量</div><div class="v">${esc(t.startFuel||'—')}</div>
         <div class="k">剩餘油量</div><div class="v">${esc(completedEv?.endFuel||'—')}</div>
@@ -7851,6 +7948,7 @@ function viewProfile(){
   const userRows = [
     settingsRow({icon:'user', bg:'#E8F1FF', fg:'#0056C7', title:'個人資料', onclick:"window.__editProfile()"}),
     settingsRow({icon:'user', bg:'#E9F9EF', fg:'#177A34', title:'成員列表', subtitle:'各單位人員姓名/階級/電話/證照', onclick:"window.__nav({name:'memberList'})"}),
+    settingsRow({icon:'link', bg:'#EAF1FF', fg:'#0052E0', title:'網網相連', subtitle:'常用網址快速切換', onclick:"window.__nav({name:'webLinks'})"}),
     settingsRow({icon:'alert', bg:'#FFEAEA', fg:'#C7233B', title:'大量傷患演練模組（建構中）', subtitle:'開事件、傷患檢傷分類與車輛/醫院指派', onclick:"window.__nav({name:'mciList'})", disabled: myRole(p) !== 'admin'}),
     settingsRow({icon:'records', bg:'#F2E9FE', fg:'#6B23C7', title:'教學園地（建構中）', subtitle:'救護技術教學文章，圖文解說', onclick:"window.__nav({name:'tutorials'})", disabled: myRole(p) !== 'admin'}),
     settingsRow({icon:'sun', bg:'#F2E9FE', fg:'#6B23C7', title:'螢幕顯示', subtitle:THEME_MODE_LABEL[state.themeMode], onclick:"window.__nav({name:'displayAppearance'})"}),
@@ -7925,6 +8023,23 @@ function viewMemberList(){
           ${x.emtLevel ? emtBadgeHtml(x.emtLevel) : ''}
         </div>`).join("") : `<div class="empty">尚無成員資料</div>`}
     ` : `<div class="empty">您尚未被指派單位，請聯繫管理員。</div>`}
+  `;
+}
+
+/* =========================================================
+   17a-0a) 畫面：網網相連（唯讀常用網址清單，所有登入使用者皆可見；
+   新增/編輯/刪除在「基礎資料管理 → 網網相連」，見 viewBaseDataWebLinks）
+   ========================================================= */
+function viewWebLinks(){
+  const rows = state.webLinks.slice().sort((a,b) => HOSPITAL_NAME_COLLATOR.compare(a.name||'', b.name||''));
+  return `
+    <div class="back-row">${backBtn({name:'profile'})}</div>
+    <div class="section-label">網網相連</div>
+    ${rows.length ? rows.map(x => `
+      <a class="admin-row clickable" href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener noreferrer" style="text-decoration:none; color:inherit;">
+        <div><div class="name">${esc(x.name)}</div><div class="sub">${esc(x.url)}</div></div>
+        ${icon('share',18)}
+      </a>`).join("") : `<div class="empty">尚無常用網址，請聯繫管理員在後台新增</div>`}
   `;
 }
 
@@ -8427,7 +8542,8 @@ function viewErStandby(){
           <div class="emergency-slider-handle">→</div>
         </div>` : ""}
         ${canViewTaskDetail(p, boundTask)
-          ? `<button class="btn-primary" style="width:100%;" onclick="window.__nav({name:'task', id:'${boundTask.id}'})">查看／管理</button>`
+          ? `<button class="btn-primary" style="width:100%;" onclick="window.__nav({name:'task', id:'${boundTask.id}'})">查看／管理</button>
+             ${canDispatch ? `<button class="icon-btn" style="width:100%;margin-top:8px;" onclick='window.__renewErStandbyTask(${JSON.stringify(loc.key)}, ${JSON.stringify(loc.label)})'>${icon('refresh',15)} 更新勤務</button>` : ""}`
           : `<div class="task-card-locked-note" style="justify-content:center; padding:10px 0;">${icon('lock',13)} ${esc(unitLabel(boundTask.unit))}勤務・僅供掌握動態</div>`}
         ` : `
         <div class="empty" style="padding:16px 0;">尚未建立待命勤務</div>
@@ -8527,6 +8643,16 @@ function viewBaseDataTaskTitleTemplatesPage(){
   if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
   return viewBaseDataTaskTitleTemplates();
 }
+function viewBaseDataWebLinksPage(){
+  const p = state.profile;
+  if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
+  return viewBaseDataWebLinks();
+}
+function viewBaseDataMilitaryItemsPage(){
+  const p = state.profile;
+  if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
+  return viewBaseDataMilitaryItems();
+}
 function viewAdminUsersPage(){
   const p = state.profile;
   if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
@@ -8614,6 +8740,8 @@ function viewBaseDataHub(){
     settingsRow({icon:'hospital', bg:'#E9F9EF', fg:'#177A34', title:'醫院', subtitle:'急救責任等級／電話，全營共用', onclick:"window.__nav({name:'baseDataHospitals'})"}),
     settingsRow({icon:'heartbeat', bg:'#FFEAEA', fg:'#C7233B', title:'醫官', subtitle:'值班醫官名冊，全營共用', onclick:"window.__nav({name:'baseDataDoctors'})"}),
     settingsRow({icon:'tasks', bg:'#EAF1FF', fg:'#0052E0', title:'任務名稱範本', subtitle:'建立勤務頁「任務名稱」快速選擇，全營共用', onclick:"window.__nav({name:'baseDataTaskTitleTemplates'})"}),
+    settingsRow({icon:'link', bg:'#E9F9EF', fg:'#177A34', title:'網網相連', subtitle:'常用網址快速切換清單，全營共用', onclick:"window.__nav({name:'baseDataWebLinks'})"}),
+    settingsRow({icon:'wrench', bg:'#FFEAEA', fg:'#C7233B', title:'軍品項目', subtitle:'武器裝備／通信裝備品項，供建立勤務「軍品攜帶」選用', onclick:"window.__nav({name:'baseDataMilitaryItems'})"}),
   ];
   return `
     ${settingsSection('單位資料', unitRows)}
@@ -8712,6 +8840,38 @@ function viewBaseDataTaskTitleTemplates(){
       </div>`).join("") : `<div class="empty">尚無範本，建立勤務頁的「任務名稱」欄位不會顯示快速選擇</div>`}`;
   return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">任務名稱範本</div>${body}`;
 }
+function viewBaseDataWebLinks(){
+  const rows = state.webLinks.slice().sort((a,b) => HOSPITAL_NAME_COLLATOR.compare(a.name||'', b.name||''));
+  const body = `
+    <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('webLinks', null, '')">${icon('plus',15)} 新增網址</button>
+    ${rows.length ? rows.map(x => `
+      <div class="admin-row">
+        <div><div class="name">${esc(x.name)}</div><div class="sub">${esc(x.url)}</div></div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="icon-btn" onclick="window.__openBaseDataModal('webLinks','${x.id}','')">編輯</button>
+          <button class="icon-btn danger" onclick="window.__deleteBaseData('webLinks','${x.id}')">刪除</button>
+        </div>
+      </div>`).join("") : `<div class="empty">尚無網址，「網網相連」頁不會顯示任何連結</div>`}`;
+  return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">網網相連</div>${body}`;
+}
+function viewBaseDataMilitaryItems(){
+  const groups = MILITARY_ITEM_CATEGORIES.map(cat => ({
+    cat, items: state.militaryItems.filter(x => x.category === cat).slice().sort((a,b) => HOSPITAL_NAME_COLLATOR.compare(a.name||'', b.name||''))
+  }));
+  const body = `
+    <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('militaryItems', null, '')">${icon('plus',15)} 新增品項</button>
+    ${groups.map(g => `
+      <div class="section-label" style="margin-top:14px;">${g.cat}</div>
+      ${g.items.length ? g.items.map(x => `
+        <div class="admin-row">
+          <div><div class="name">${esc(x.name)}</div></div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="icon-btn" onclick="window.__openBaseDataModal('militaryItems','${x.id}','')">編輯</button>
+            <button class="icon-btn danger" onclick="window.__deleteBaseData('militaryItems','${x.id}')">刪除</button>
+          </div>
+        </div>`).join("") : `<div class="empty">尚無「${g.cat}」品項</div>`}`).join("")}`;
+  return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">軍品項目</div>${body}`;
+}
 
 /* =========================================================
    18c) 畫面：基礎資料新增／編輯彈窗
@@ -8720,7 +8880,7 @@ function viewBaseDataModal(){
   const m = state.baseDataModal;
   if (!m) return "";
   const { coll, id, unit } = m;
-  const pool = coll === "personnel" ? state.personnel : coll === "vehicles" ? state.vehicles : coll === "hospitals" ? state.hospitals : coll === "doctors" ? state.doctors : coll === "notifications" ? state.notifications : coll === "taskTitleTemplates" ? state.taskTitleTemplates : state.recorders;
+  const pool = coll === "personnel" ? state.personnel : coll === "vehicles" ? state.vehicles : coll === "hospitals" ? state.hospitals : coll === "doctors" ? state.doctors : coll === "notifications" ? state.notifications : coll === "taskTitleTemplates" ? state.taskTitleTemplates : coll === "webLinks" ? state.webLinks : coll === "militaryItems" ? state.militaryItems : state.recorders;
   const editing = id ? pool.find(x => x.id === id) : null;
   let title, fields;
   if (coll === "personnel") {
@@ -8808,6 +8968,21 @@ function viewBaseDataModal(){
     fields = `
       <div class="field"><label>範本文字</label><input name="text" required value="${esc(editing?.text||'')}" placeholder="例如：OO射擊救護待命"></div>
       <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">很多任務名稱是固定格式「地點＋任務性質」，用「OO」當地點的佔位符（沿用站內既有的填空慣例）；建立勤務頁選了這個範本後，「OO」會自動反白選取，接下來打字直接蓋掉「OO」就好。不含「OO」的範本會直接整段帶入，游標停在最後面。</div>`;
+  } else if (coll === "webLinks") {
+    title = editing ? "編輯網址" : "新增網址";
+    fields = `
+      <div class="field"><label>名稱</label><input name="name" required value="${esc(editing?.name||'')}" placeholder="例如：健保署醫療資訊網"></div>
+      <div class="field"><label>網址</label><input name="url" type="url" required value="${esc(editing?.url||'')}" placeholder="https://..."></div>`;
+  } else if (coll === "militaryItems") {
+    title = editing ? "編輯軍品項目" : "新增軍品項目";
+    fields = `
+      <div class="field"><label>類別</label>
+        <select name="category" required>
+          <option value="">請選擇類別</option>
+          ${MILITARY_ITEM_CATEGORIES.map(c => `<option value="${c}" ${editing?.category===c?'selected':''}>${c}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field"><label>名稱</label><input name="name" required value="${esc(editing?.name||'')}" placeholder="例如：T91步槍"></div>`;
   } else {
     title = editing ? "編輯行車紀錄器" : "新增行車紀錄器";
     fields = `<div class="field"><label>編號</label><input name="code" required value="${esc(editing?.code||'')}"></div>`;
@@ -9119,6 +9294,9 @@ const ROUTE_VIEWS = {
   baseDataHospitals: viewBaseDataHospitalsPage,
   baseDataDoctors: viewBaseDataDoctorsPage,
   baseDataTaskTitleTemplates: viewBaseDataTaskTitleTemplatesPage,
+  baseDataWebLinks: viewBaseDataWebLinksPage,
+  webLinks: viewWebLinks,
+  baseDataMilitaryItems: viewBaseDataMilitaryItemsPage,
   adminUsers: viewAdminUsersPage,
   adminMessages: viewAdminMessagesPage,
   adminSettings: viewAdminSettingsPage,
@@ -9900,6 +10078,8 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
        : coll === "doctors" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"" })
        : coll === "notifications" ? updateBaseData(coll, id, { title: f.get("title"), body: f.get("body") })
        : coll === "taskTitleTemplates" ? updateBaseData(coll, id, { text: f.get("text") })
+       : coll === "webLinks" ? updateBaseData(coll, id, { name: f.get("name"), url: f.get("url") })
+       : coll === "militaryItems" ? updateBaseData(coll, id, { category: f.get("category"), name: f.get("name") })
        : updateBaseData(coll, id, { code: f.get("code") }))
     : (coll === "personnel" ? addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone"), f.get("emtLevel"), f.get("email"))
        : coll === "vehicles" ? addVehicle(unit, f.get("plate"), f.get("type"))
@@ -9907,6 +10087,8 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
        : coll === "doctors" ? addDoctor(f.get("name"), f.get("title"), f.get("phone"))
        : coll === "notifications" ? addNotification(f.get("title"), f.get("body"))
        : coll === "taskTitleTemplates" ? addTaskTitleTemplate(f.get("text"))
+       : coll === "webLinks" ? addWebLink(f.get("name"), f.get("url"))
+       : coll === "militaryItems" ? addMilitaryItem(f.get("category"), f.get("name"))
        : addRecorder(unit, f.get("code")));
   action.then(() => { state.baseDataModal = null; render(); }).catch(baseDataErr);
 };
@@ -10419,6 +10601,47 @@ window.__startErStandbyTask = (key, locationLabel) => {
   if (loc && loc.defaultUnit) state.createTaskUnit = loc.defaultUnit;
   nav({ name: "createTask", erStandbyKey: key, presetLocation: locationLabel });
 };
+// 急診待命「更新勤務」：同一組車長／駕駛／車輛繼續值班時，不用真的跑一趟
+// 返營再重新出勤，只是把「建立時間」重置成現在（isStandbyStale 判斷是否
+// 提醒確認換班的依據），沿用建立勤務頁，把目前綁定任務的車號/車長/駕駛/
+// 值班醫官/里程/油量當成預設值先帶進去——直接送出就是原班底續勤，先改
+// 幾個欄位再送出就是換班。跟 __startErStandbyTask 一樣，送出後會建立一筆
+// 新任務並把 erStandby/{key}.currentTaskId 指過去，舊任務原樣保留在紀錄裡
+// （見 __createTask 的 erStandbyKey 分支）。
+window.__renewErStandbyTask = (key, locationLabel) => {
+  const rec = state.erStandby.find(x => x.id === key);
+  const boundTask = rec && rec.currentTaskId ? state.tasks.find(t => t.id === rec.currentTaskId) : null;
+  state.createTaskType = "duty";
+  const loc = ER_STANDBY_LOCATIONS.find(x => x.key === key);
+  if (boundTask && boundTask.unit) state.createTaskUnit = boundTask.unit;
+  else if (loc && loc.defaultUnit) state.createTaskUnit = loc.defaultUnit;
+  nav({
+    name: "createTask", erStandbyKey: key, presetLocation: locationLabel,
+    presetVehicle: boundTask?.vehicle || "", presetCrewLeader: boundTask?.crewLeader || "",
+    presetDriver: boundTask?.driver || "", presetDutyOfficer: boundTask?.dutyOfficer || "",
+    presetMileage: boundTask?.startMileage != null ? boundTask.startMileage : null,
+    presetFuel: boundTask?.startFuel || ""
+  });
+};
+// 軍品攜帶：只有勾了「軍品攜帶」才收集，且只收數量 > 0 的品項；FormData
+// 裡每個品項的數量欄位名稱是 mi_qty__{militaryItems文件id}（見
+// militaryItemsCartHtml），逐一對照 state.militaryItems 找出對應名稱/類別。
+function collectMilitaryItemsFromForm(f){
+  if (f.get("militaryCarry") !== "on") return [];
+  return state.militaryItems.map(x => {
+    const qty = parseInt(f.get(`mi_qty__${x.id}`) || "0", 10);
+    return qty > 0 ? { name: x.name, category: x.category, qty } : null;
+  }).filter(Boolean);
+}
+window.__toggleMilitaryItems = (checked) => {
+  const el = document.getElementById('tf-military-items');
+  if (el) el.style.display = checked ? '' : 'none';
+};
+window.__adjustMilitaryQty = (id, delta) => {
+  const el = document.getElementById(`mi-qty-${id}`);
+  if (!el) return;
+  el.value = Math.max(0, (parseInt(el.value, 10)||0) + delta);
+};
 window.__createTask = (ev, unit, type) => {
   ev.preventDefault();
   // 手機觸控偶爾會在網路還沒回應前被連點兩下，沒有這個防呆的話會真的
@@ -10435,12 +10658,14 @@ window.__createTask = (ev, unit, type) => {
   } else {
     const recorders = f.getAll("recorders");
     const startMileage = f.get("startMileage");
+    const militaryItems = collectMilitaryItemsFromForm(f);
     action = createTask({
       unit, type: "duty", title: f.get("title"), vehicle: f.get("vehicle"), location: f.get("location"),
       scope: f.get("scope") || "營外",
       crewLeader: f.get("crewLeader"), driver: f.get("driver"), dutyOfficer: f.get("dutyOfficer")||"", recorders,
       startMileage: startMileage ? Number(startMileage) : null,
       startFuel: f.get("startFuel"), notes: f.get("notes"),
+      ...(militaryItems.length ? { militaryItems } : {}),
       // 標記這筆任務是從急診待命建立的，任務完成時才知道要幫哪個地點自動
       // 續約下一筆待命勤務（見 renewStandbyTask）。
       ...(erStandbyKey ? { erStandbyKey } : {})
@@ -10475,7 +10700,11 @@ window.__saveTaskEdit = (ev, taskId) => {
           // （這裡本來就沒有值可覆蓋，但保險起見沿用原本的值，不要誤清空）。
           dutyOfficer: f.has("dutyOfficer") ? (f.get("dutyOfficer")||"") : (t.dutyOfficer||""), recorders,
           startMileage: startMileage ? Number(startMileage) : null,
-          startFuel: f.get("startFuel"), notes: f.get("notes")
+          startFuel: f.get("startFuel"), notes: f.get("notes"),
+          // 跟建立勤務不同：這裡一定要帶上 militaryItems 欄位（即使是空陣列），
+          // 否則使用者把「軍品攜帶」勾勾取消掉之後，fsSetDoc 只會合併新欄位，
+          // 舊的攜行清單不會被清空。
+          militaryItems: collectMilitaryItemsFromForm(f)
         };
       })();
   updateTask(taskId, fields)
