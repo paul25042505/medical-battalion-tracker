@@ -303,5 +303,33 @@ service cloud.firestore {
     match /mciPatients/{id} {
       allow read, create, update, delete: if isAdmin();
     }
+
+    // 洽公登記／廠商入營登記：值日官登記表，跟現有的「洽公」任務類型完全
+    // 獨立（不同集合，見 index.html 的洽公登記頁）。日期沒有時間，只記錄
+    // 當天有沒有排這筆登記；「已登記」是值日官謄寫進軍用電腦後勾選的狀態，
+    // 跟登記內容本身（地點/車輛/事由/人員或單位）分開存取控制，值日官只能
+    // 動這個狀態欄位，不能改別人送出的登記內容。
+    function isCampDutyOfficer() { return isSignedIn() && myUserDoc().isCampDutyOfficer == true; }
+    match /campRegistrations/{id} {
+      // 讀取比照門禁登記：admin／高勤官不分單位；一般成員/主官管只看得到
+      // 自己單位的登記；值日官（獨立旗標，不分原本角色）額外看得到成功嶺
+      // 營區（營部＋第一連）的登記，方便值日時掌握整個營區的進出狀況。
+      allow read: if isStaff() || sameUnit(resource.data.unit)
+                  || (isCampDutyOfficer() && resource.data.unit in ['hq', 'co1']);
+      // 建立：任何在職帳號都能登記自己單位的（createdBy 只能填自己，不能
+      // 代別人的名義送出——人員/廠商欄位記錄「跟誰有關」，createdBy 記錄
+      // 「誰送出這筆登記」，兩者是分開的兩件事）。
+      allow create: if isActive() && request.auth.uid == request.resource.data.createdBy
+                    && sameUnit(request.resource.data.unit);
+      // 編輯：admin 不限；登記人本人可以改自己送出的登記（限在職帳號）；
+      // 值日官（成功嶺營區範圍內）只能勾選/取消「已登記」狀態相關欄位，
+      // 不能動登記內容本身。
+      allow update: if isAdmin()
+                    || (isActive() && request.auth.uid == resource.data.createdBy)
+                    || (isCampDutyOfficer() && resource.data.unit in ['hq', 'co1']
+                        && onlyChanged(['transcribed', 'transcribedBy', 'transcribedByName', 'transcribedAt']));
+      // 刪除：admin 或登記人本人（限在職帳號）。
+      allow delete: if isAdmin() || (isActive() && request.auth.uid == resource.data.createdBy);
+    }
   }
 }
