@@ -1742,7 +1742,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-15-393-camp-registration";
+const BUILD_TAG = "2026-07-15-394-camp-registration-tweaks";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2770,6 +2770,8 @@ const RELEASE_NOTES = [
       "新增「洽公／廠商入營登記」（更多頁入口）：跟現有的洽公任務完全獨立的門禁登記表，只記錄日期（不含時間）、地點、車種、車號、事由，洽公登記可複選多位人員（一台車有好幾個人也能一次填完），廠商入營則改成填「單位」，有行事曆與列表兩種檢視方式",
       "新增獨立旗標「值日官」（帳號管理可勾選，跟原本角色分開設定）：值日官不受自己單位限制，可以查看成功嶺營區（營部＋第一連）範圍的洽公／廠商入營登記，方便值日時掌握整個營區的進出狀況，但只能查看、不能修改別人登記的內容",
       "洽公／廠商入營登記新增「已登記」勾選狀態：值日官謄寫進軍用電腦後可以勾選，讓大家知道名冊已經繕造完成；值日官只能切換這個狀態，不能更動登記內容本身，登記內容仍只有登記人本人與管理員能編輯/刪除",
+      "「洽公／廠商入營登記」入口從「更多」頁移到「任務」頁最上面子選單（勤務右邊），改名為「洽公登記」，不用再繞去更多頁才找得到",
+      "新增登記表單欄位順序調整：「事由」移到「地點」上面，並把範例文字改成更貼近實際使用情境（事由「例如：資料繳交」、地點「例如：指揮部」）",
     ] },
   ] },
   { date: "2026/07/14", groups: [
@@ -5430,7 +5432,7 @@ const ROUTE_REFRESH = {
   // 任務頁現在把「紀錄」子選單也併進來（見 TASKS_MAIN_TABS），紀錄的查詢
   // 結果跟篩選下拉選單要用到的集合（vitals/personnel/vehicles）一併列在
   // 這裡，不能只列勤務清單本身用到的 tasks/events。
-  tasks: ['tasks','events','vitals','personnel','vehicles'],
+  tasks: ['tasks','events','vitals','personnel','vehicles','campRegistrations'],
   // 大量傷患事件從「更多」頁進入（獨立入口，不掛在任務頁底下），列表頁
   // 只需要 mciEvents/mciPatients（算統計數字），事件詳情頁另外要指派傷患
   // 車輛/醫院，多列 vehicles/hospitals。
@@ -5461,7 +5463,6 @@ const ROUTE_REFRESH = {
   baseDataMilitaryItems: ['militaryItems'],
   adminUsers: ['personnel'],
   notifications: ['notifications', 'pushLog'],
-  campReg: ['campRegistrations'],
 };
 // App Shell 改成 <main> 自己捲動（見 #app 的 CSS 註解）以後，window 本身
 // 不會再捲動，換頁／換頁籤要回頂端得改成重設 main 的 scrollTop。
@@ -6325,6 +6326,7 @@ function tabStatuses(tb){ return tb.statuses || [tb.key]; }
 // 醫院資訊，見 NAV_ITEMS）。
 const TASKS_MAIN_TABS = [
   { key:"duty", label:"勤務", iconName:"tasks" },
+  { key:"campReg", label:"洽公登記", iconName:"calendar" },
   { key:"weather", label:"天氣", iconName:"cloud" },
   { key:"records", label:"紀錄", iconName:"records" }
 ];
@@ -6345,6 +6347,13 @@ function viewTasks(){
           <span class="label">${tb.label}</span>
         </button>`).join("")}
     </div>`;
+
+  if (state.tasksMainTab === "campReg") {
+    return `
+      ${mainTabs}
+      ${viewCampRegBody()}
+    `;
+  }
 
   if (state.tasksMainTab === "weather") {
     return `
@@ -8220,7 +8229,6 @@ function viewProfile(){
     settingsRow({icon:'user', bg:'#E8F1FF', fg:'#0056C7', title:'個人資料', onclick:"window.__editProfile()"}),
     settingsRow({icon:'user', bg:'#E9F9EF', fg:'#177A34', title:'成員列表', subtitle:'各單位人員姓名/階級/電話/證照', onclick:"window.__nav({name:'memberList'})"}),
     settingsRow({icon:'link', bg:'#EAF1FF', fg:'#0052E0', title:'網網相連', subtitle:'常用網址快速切換', onclick:"window.__nav({name:'webLinks'})"}),
-    settingsRow({icon:'calendar', bg:'#FFF2E0', fg:'#B45F00', title:'洽公／廠商入營登記', subtitle:'行事曆登記，值日官營區進出一覽', onclick:"window.__nav({name:'campReg'})"}),
     settingsRow({icon:'alert', bg:'#FFEAEA', fg:'#C7233B', title:'大量傷患演練模組（建構中）', subtitle:'開事件、傷患檢傷分類與車輛/醫院指派', onclick:"window.__nav({name:'mciList'})", disabled: myRole(p) !== 'admin'}),
     settingsRow({icon:'records', bg:'#F2E9FE', fg:'#6B23C7', title:'教學園地（建構中）', subtitle:'救護技術教學文章，圖文解說', onclick:"window.__nav({name:'tutorials'})", disabled: myRole(p) !== 'admin'}),
     settingsRow({icon:'sun', bg:'#F2E9FE', fg:'#6B23C7', title:'螢幕顯示', subtitle:THEME_MODE_LABEL[state.themeMode], onclick:"window.__nav({name:'displayAppearance'})"}),
@@ -9664,11 +9672,12 @@ function viewCampRegList(){
   });
   return groups.map(g => `<div class="section-label" style="margin-top:18px;">${g.date}</div>${g.items.map(campRegRowHtml).join("")}`).join("");
 }
-function viewCampRegPage(){
+// 洽公／廠商入營登記：掛在「任務」頁最上面子選單（勤務右邊），不是獨立
+// 路由，所以不用返回鍵／頁面標題，跟 viewTasks() 的天氣／紀錄子頁同一種
+// 只有 mainTabs + 內容的組成方式。
+function viewCampRegBody(){
   const view = state.campRegView || "calendar";
   return `
-    <div class="back-row">${backBtn({name:'profile'})}</div>
-    <div class="section-label">洽公／廠商入營登記</div>
     <div class="tabs2">
       <div class="tab2 ${view==='calendar'?'active':''}" onclick="window.__setCampRegView('calendar')">行事曆</div>
       <div class="tab2 ${view==='list'?'active':''}" onclick="window.__setCampRegView('list')">列表</div>
@@ -9698,7 +9707,8 @@ function viewCampRegModal(){
         </div>` : `<div class="field"><label>類型</label><input value="${esc((CAMP_REG_TYPES.find(t=>t.key===type)||{}).label||type)}" disabled></div>`}
         <form onsubmit="window.__submitCampRegModal(event, '${type}'${editing?`, '${editing.id}'`:''})">
           <div class="field"><label>日期 *</label><input type="date" name="date" required value="${esc((editing?editing.date:m.date)||isoDate(new Date()))}"></div>
-          <div class="field"><label>地點 *</label><input name="location" required value="${esc(editing?.location||'')}" placeholder="例如：成功嶺營區大門"></div>
+          <div class="field"><label>事由 *</label><textarea name="reason" required placeholder="例如：資料繳交">${esc(editing?.reason||'')}</textarea></div>
+          <div class="field"><label>地點 *</label><input name="location" required value="${esc(editing?.location||'')}" placeholder="例如：指揮部"></div>
           <div class="field"><label>車種 *</label>${chipGroup('vehicleType', CAMP_REG_VEHICLE_TYPES, editing?.vehicleType||'汽', false)}</div>
           <div class="field"><label>車號 *</label><input name="plateNumber" required value="${esc(editing?.plateNumber||'')}"></div>
           ${isVendor ? `
@@ -9710,7 +9720,6 @@ function viewCampRegModal(){
             </button>
             <div class="personnel-hidden-checkboxes">${currentPersonnel.map(name => `<input type="checkbox" name="personnel" value="${esc(name)}" checked style="display:none">`).join("")}</div>
           </div>`}
-          <div class="field"><label>事由 *</label><textarea name="reason" required placeholder="例如：洽借場地">${esc(editing?.reason||'')}</textarea></div>
           <button class="btn-primary" type="submit">${editing?'儲存變更':'新增登記'}</button>
           <button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__closeCampRegModal()">取消</button>
         </form>
@@ -9763,8 +9772,7 @@ const ROUTE_VIEWS = {
   mciEvent: () => viewMciEvent(state.route.id),
   tutorials: viewTutorialCategories,
   tutorialCategory: () => viewTutorialCategory(state.route.key),
-  tutorialArticle: () => viewTutorialArticle(state.route.key, state.route.id),
-  campReg: viewCampRegPage
+  tutorialArticle: () => viewTutorialArticle(state.route.key, state.route.id)
 };
 const NAV_ITEMS = [
   { name:"home", iconName:"home", label:"首頁", accent:"#007AFF" },
