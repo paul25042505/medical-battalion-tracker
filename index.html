@@ -1831,7 +1831,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-15-403-person-role-preview";
+const BUILD_TAG = "2026-07-15-404-todays-task-titles";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2848,6 +2848,7 @@ const RELEASE_NOTES = [
     { category: "任務管理", items: [
       "被指派為車長／駕駛／洽公人員的本人，現在可以編輯自己當天建立的勤務；一旦過了當天 24:00，這筆勤務就算進了紀錄查詢的歷史資料，只剩管理員能再修改",
       "首頁與任務列表的勤務卡片新增顯示攜帶軍品的品項與數量（例如「攜行軍品：T91步槍x2、彈匣x3」），不用點進詳情頁才看得到",
+      "建立勤務頁「任務名稱」新增「今天已建立」快速選擇：同一波多台車支援同一個任務時，第一台車手動打完名稱後，後面的車直接點選今天、同單位已經建立過的任務名稱就好，不用重打、也不會各自打出不一樣的名稱；跟既有的「快速選擇範本」並存，只在建立勤務（不含洽公）才會出現",
     ] },
     { category: "急診待命", items: [
       "「完成當前勤務，啟動新勤務」（原「更新勤務」）改成真的會把舊任務標記完成，不會再留著一筆沒有結束的舊勤務；如果舊任務目前還有進行中、尚未結案的患者紀錄，會先擋住並提示「請先結案患者紀錄」",
@@ -5731,9 +5732,9 @@ function quickFillSelect(inputId, options){
 }
 // 任務名稱快速選擇：見 state.taskTitleTemplates 說明，跟 quickFillSelect()
 // 不同的地方是選了之後不是附加文字，是整個蓋掉輸入框內容並把「OO」反白選取。
-function taskTitleTemplateSelect(inputId, templates){
+function taskTitleTemplateSelect(inputId, templates, placeholderLabel){
   return `<select class="quick-fill-select" onchange='window.__applyTaskTitleTemplate("${inputId}", this)'>
-    <option value="">快速選擇範本</option>
+    <option value="">${esc(placeholderLabel || "快速選擇範本")}</option>
     ${templates.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("")}
   </select>`;
 }
@@ -7115,6 +7116,28 @@ function militaryCarrySectionHtml(checked, currentQtyByName){
     </div>`;
 }
 
+// 「今天已建立的任務名稱」快速選擇：跟「任務名稱範本」是兩份不同的
+// 清單——範本是 admin 手動維護的精選常用格式，這份是抓「今天、同單位」
+// 已經真的建立過的勤務任務名稱去重清單，讓同一波多台車出勤（例如五台
+// 車出去支援同一個任務）時，第一台車手動打完之後，後面的車直接點選
+// 就好，不用重打一次也不會各自打出不一樣的名稱；資料直接來自現有的
+// tasks 集合，不用另外寫入或維護，過了今天自然就不會再出現，不會像
+// 自動把使用者輸入內容寫進範本清單那樣越用越亂、混進大量單次性名稱。
+// 只列勤務（不含洽公）：洽公可以直接用複選人員把同一波人放進同一筆
+// 任務，本來就不會有「同一件事拆成好幾筆、名稱要對齊」的需求。
+function todaysTaskTitles(unit){
+  const todayStr = isoDate(new Date());
+  const seen = new Set();
+  const titles = [];
+  state.tasks.forEach(t => {
+    if (t.unit !== unit || t.type === "liaison" || !t.title) return;
+    if (isoDate(new Date(t.createdAt||0)) !== todayStr) return;
+    if (seen.has(t.title)) return;
+    seen.add(t.title);
+    titles.push(t.title);
+  });
+  return titles;
+}
 /* =========================================================
    13) 畫面：建立勤務
    ========================================================= */
@@ -7157,7 +7180,10 @@ function viewCreateTask(){
             ${UNITS.map(u => `<option value="${u.code}" ${unit===u.code?'selected':''}>${u.label}</option>`).join("")}
           </select>
         </div>` : `<div class="field"><label>單位</label><input value="${unitLabel(unit)}" disabled></div>`}
-      <div class="field"><div class="field-label-row"><label>任務名稱 *</label>${(!isLiaison && state.taskTitleTemplates.length) ? taskTitleTemplateSelect('tf-title', state.taskTitleTemplates.map(t => t.text)) : ''}</div><input id="tf-title" name="title" required placeholder="${isLiaison?'例如：軍公民任務現勘':'例如：OHCA 患者搶救'}"></div>
+      <div class="field"><div class="field-label-row"><label>任務名稱 *</label><div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">${!isLiaison ? (() => {
+        const todaysTitles = todaysTaskTitles(unit);
+        return `${todaysTitles.length ? taskTitleTemplateSelect('tf-title', todaysTitles, '今天已建立') : ''}${state.taskTitleTemplates.length ? taskTitleTemplateSelect('tf-title', state.taskTitleTemplates.map(t => t.text), '快速選擇範本') : ''}`;
+      })() : ''}</div></div><input id="tf-title" name="title" required placeholder="${isLiaison?'例如：軍公民任務現勘':'例如：OHCA 患者搶救'}"></div>
       ${isStandbyDispatch ? `
       <div class="field"><label>醫務所</label>
         <input value="${esc(state.route.presetLocation)}" disabled>
