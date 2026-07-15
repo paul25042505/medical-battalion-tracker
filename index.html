@@ -1714,7 +1714,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-14-390-about-dev-info";
+const BUILD_TAG = "2026-07-15-391-task-selfedit-standby-autocomplete";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1722,7 +1722,7 @@ const BUILD_TAG = "2026-07-14-390-about-dev-info";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.14";
+const APP_MAJOR_MINOR = "2.15";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -2687,6 +2687,15 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/07/15", groups: [
+    { category: "任務管理", items: [
+      "被指派為車長／駕駛／洽公人員的本人，現在可以編輯自己當天建立的勤務；一旦過了當天 24:00，這筆勤務就算進了紀錄查詢的歷史資料，只剩管理員能再修改",
+      "首頁與任務列表的勤務卡片新增顯示攜帶軍品的品項與數量（例如「攜行軍品：T91步槍x2、彈匣x3」），不用點進詳情頁才看得到",
+    ] },
+    { category: "急診待命", items: [
+      "「完成當前勤務，啟動新勤務」（原「更新勤務」）改成真的會把舊任務標記完成，不會再留著一筆沒有結束的舊勤務；如果舊任務目前還有進行中、尚未結案的患者紀錄，會先擋住並提示「請先結案患者紀錄」",
+    ] },
+  ] },
   { date: "2026/07/14", groups: [
     { category: "任務管理", items: [
       "里程改成只在「出勤」跟「抵達營區」這頭尾兩個節點記錄，中間「抵達現場／離開現場／返營」不用再逐站填里程，回報表單跟勤務詳情頁一併簡化",
@@ -3572,7 +3581,15 @@ function canForceEndTask(p){ return myRole(p) === "admin"; }
 // 建立勤務改為一般成員、管理員專用；高勤官／主官管維持督導/查看角色（canManageTasks），
 // 不再能自己建立勤務。
 function canCreateTask(p){ const r = myRole(p); return r === "admin" || r === "member"; }
-function canEditTask(p, t){ return myRole(p) === "admin"; }
+// admin 隨時都能編輯；一般成員（僅限本人被指派的車長/駕駛/洽公人員）只能
+// 在建立當天（still isSameDay）編輯自己的勤務，超過當天 24:00 就只剩 admin
+// 能改——這筆勤務一旦「過夜」就算進了紀錄查詢的歷史資料，不能再讓本人隨意
+// 修改；高勤官、主官管維持原本督導/查看角色，不開放編輯。
+function canEditTask(p, t){
+  const r = myRole(p);
+  if (r === "admin") return true;
+  return r === "member" && isAssignedToTask(p, t) && isSameDay(new Date(t.createdAt||0).getTime(), new Date());
+}
 // 車長／駕駛／洽公人員都是直接記錄「姓名」字串，跟登入者個人資料的
 // displayName 同步而來（見 updateOwnProfile／personnel 名冊自動同步），
 // 用 displayName 直接比對，就能知道目前登入者是不是這筆勤務指定的人員。
@@ -3682,6 +3699,24 @@ async function renewStandbyTask(oldTask){
   } catch (e) {
     console.error("待命勤務續約失敗", e);
   }
+}
+// 急診待命「完成當前勤務，啟動新勤務」：結案舊任務時故意不透過 addEvent()
+// 直接寫入事件，而不是呼叫 addEvent()——addEvent 對 COMPLETED 事件有內建
+// 的「自動續約下一筆待命勤務」side effect（見上面的 renewStandbyTask），
+// 如果借用 addEvent 來結案，會變成它自己又搶著建一筆新任務、把使用者剛
+// 在表單上填好（可能已經改過車長/駕駛）的新任務指標蓋掉。這裡的續約已經
+// 由 __createTask 呼叫端自己處理，舊任務只需要單純標記完成就好。
+async function silentlyCompleteTask(taskId, note){
+  const task = state.tasks.find(t => t.id === taskId);
+  if (!task) return;
+  const finalType = task.type === "liaison" ? "RETURNING" : "COMPLETED";
+  await fsAddDoc("events", {
+    taskId, type: finalType, unit: task.unit,
+    timestamp: new Date(), userId: state.user.uid,
+    userName: state.profile.displayName || state.user.displayName || state.user.email,
+    note, seq: Date.now()
+  });
+  if (eventsPoll) eventsPoll.refreshNow();
 }
 // 時間、里程有時候會填寫錯誤，回報後仍要能修正，不能整筆事件唯讀鎖死。
 async function updateEvent(id, fields){
@@ -5235,7 +5270,10 @@ const ROUTE_REFRESH = {
   createTask: ['personnel','vehicles','recorders','doctors','taskTitleTemplates','militaryItems'],
   stats: ['tasks','events'],
   hospitals: ['hospitals','erRealtime'],
-  erStandby: ['erStandby','tasks','events'],
+  // vitals 是給「完成當前勤務，啟動新勤務」按鈕的進行中患者紀錄檢查用
+  // （見 __renewErStandbyTask），沒有這個就只能吃 vitalsPoll 登入當下抓的
+  // 那份舊快照，很容易誤判成「沒有進行中患者」而放行不該放行的結案動作。
+  erStandby: ['erStandby','tasks','events','vitals'],
   // 管理後台改成分區列表入口＋各自獨立路由後，每個子頁只重抓自己真的會
   // 用到的集合，不用像以前那樣進管理後台就整批重抓（hub 本身不用抓）。
   adminTasks: ['tasks','events'],
@@ -5589,6 +5627,7 @@ function taskCard(t){
       ${isLiaison
         ? `<span>人員：${personnelLine}</span>`
         : `<span>車長：${crewLabel(t.crewLeader, t.unit)}</span><span>駕駛：${crewLabel(t.driver, t.unit)}</span>`}
+      ${!isLiaison && Array.isArray(t.militaryItems) && t.militaryItems.length ? `<span>攜行軍品：${t.militaryItems.map(x => `${esc(x.name)}x${x.qty}`).join('、')}</span>` : ""}
     </div>
     <div class="task-foot" style="justify-content:${last ? 'flex-end' : 'flex-start'};">
       <span>${last ? timeAgo(last.ts) : '尚無回報'}</span>
@@ -8598,7 +8637,7 @@ function viewErStandby(){
         </div>` : ""}
         ${canViewTaskDetail(p, boundTask)
           ? `<button class="btn-primary" style="width:100%;" onclick="window.__nav({name:'task', id:'${boundTask.id}'})">查看／管理</button>
-             ${canDispatch ? `<button class="btn-outline-blue" style="margin-top:8px;" onclick='window.__renewErStandbyTask(${JSON.stringify(loc.key)}, ${JSON.stringify(loc.label)})'>${icon('refresh',15)} 啟用今日新勤務</button>` : ""}`
+             ${canDispatch ? `<button class="btn-outline-blue" style="margin-top:8px;" onclick='window.__renewErStandbyTask(${JSON.stringify(loc.key)}, ${JSON.stringify(loc.label)})'>${icon('refresh',15)} 完成當前勤務，啟動新勤務</button>` : ""}`
           : `<div class="task-card-locked-note" style="justify-content:center; padding:10px 0;">${icon('lock',13)} ${esc(unitLabel(boundTask.unit))}勤務・僅供掌握動態</div>`}
         ` : `
         <div class="empty" style="padding:16px 0;">尚未建立待命勤務</div>
@@ -10666,6 +10705,13 @@ window.__startErStandbyTask = (key, locationLabel) => {
 window.__renewErStandbyTask = (key, locationLabel) => {
   const rec = state.erStandby.find(x => x.id === key);
   const boundTask = rec && rec.currentTaskId ? state.tasks.find(t => t.id === rec.currentTaskId) : null;
+  // 舊任務如果還有進行中、尚未結案的患者紀錄，不能讓「完成當前勤務」把
+  // 它靜默結案掉——患者紀錄還沒處理完，貿然結案會讓人搞不清楚這個案件
+  // 到底算不算結束，必須先手動去結案患者紀錄才能繼續。
+  if (boundTask) {
+    const activePatient = activeEpisodeVitals(state.vitals.filter(v => v.taskId === boundTask.id).sort(eventOrderCompare));
+    if (activePatient.length > 0) { showToast("此任務目前有進行中的患者紀錄，請先結案患者紀錄才能完成此勤務"); return; }
+  }
   state.createTaskType = "duty";
   const loc = ER_STANDBY_LOCATIONS.find(x => x.key === key);
   if (boundTask && boundTask.unit) state.createTaskUnit = boundTask.unit;
@@ -10724,6 +10770,11 @@ window.__createTask = (ev, unit, type) => {
   state.taskSubmitting = true;
   const f = new FormData(ev.target);
   const erStandbyKey = state.route.erStandbyKey || null;
+  // 「完成當前勤務，啟動新勤務」：這筆表單提交時，如果這個地點目前已經
+  // 綁定一筆任務，先記下它的 id，等新任務真的建立成功後再結案（見下面
+  // silentlyCompleteTask），避免使用者半路取消表單卻已經把舊任務結掉。
+  const erStandbyRec = erStandbyKey ? state.erStandby.find(x => x.id === erStandbyKey) : null;
+  const oldStandbyTaskId = erStandbyRec ? erStandbyRec.currentTaskId : null;
   let action;
   if (type === "liaison") {
     const personnel = f.getAll("personnel");
@@ -10743,8 +10794,11 @@ window.__createTask = (ev, unit, type) => {
       // 標記這筆任務是從急診待命建立的，任務完成時才知道要幫哪個地點自動
       // 續約下一筆待命勤務（見 renewStandbyTask）。
       ...(erStandbyKey ? { erStandbyKey } : {})
-    }, { skipDispatch: !!erStandbyKey }).then(created => {
+    }, { skipDispatch: !!erStandbyKey }).then(async created => {
       if (!erStandbyKey) return;
+      if (oldStandbyTaskId && oldStandbyTaskId !== created.id) {
+        await silentlyCompleteTask(oldStandbyTaskId, "已啟動新勤務，自動結案").catch(err => console.error("舊待命勤務結案失敗", err));
+      }
       fsSetDoc(`erStandby/${erStandbyKey}`, {
         currentTaskId: created.id, updatedAt: new Date(),
         updatedByName: state.profile.displayName || state.profile.email || ""
