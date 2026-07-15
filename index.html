@@ -1833,7 +1833,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-15-407-typhoon-expiry-filter";
+const BUILD_TAG = "2026-07-15-408-weatherstats-openmeteo";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2301,13 +2301,12 @@ const CAMP_DUTY_OFFICER_UNITS = ["hq", "co1"];
    ========================================================= */
 const CWA_API_KEY = "CWA-C471B712-733E-4115-9AD2-0E1D96D3A10E";
 const UNIT_WEATHER_LOCATION = { hq: "臺中市", co1: "臺中市", co2: "嘉義縣" };
-// 體感溫度用「鄉鎮天氣預報」資料集（F-D0047-093），這組資料是用鄉鎮查詢，
-// 不是縣市，所以另外設一組單位→鄉鎮的對應（成功北醫務所在烏日區、精北
-// 醫務所在大林鎮）。
+// 觀測數據小卡（體感/濕度/露點/風速/紫外線/雨量）跟 Header「危險係數」
+// 徽章都改用 Open-Meteo（跟上面 CWA 開放資料是不同來源，不用授權碼、也
+// 不會排到 cwaRequestQueue 裡），要用鄉鎮對應的經緯度查詢，不是縣市/
+// 鄉鎮名稱，所以另外設一組單位→鄉鎮的對應（成功北醫務所在烏日區、精北
+// 醫務所在大林鎮）跟鄉鎮→經緯度的對照表。
 const UNIT_WEATHER_TOWNSHIP = { hq: "烏日區", co1: "烏日區", co2: "大林鎮" };
-// Header「天氣危險係數」徽章用 Open-Meteo（跟上面 CWA 開放資料是不同來源，
-// 不用另外申請授權碼，也不會排到 cwaRequestQueue 裡），需要經緯度而不是
-// 縣市/鄉鎮名稱查詢，這裡另外對應每個鄉鎮的概略中心座標。
 const TOWNSHIP_LATLNG = { "烏日區": { lat: 24.1064, lon: 120.6255 }, "大林鎮": { lat: 23.5992, lon: 120.5636 } };
 /* =========================================================
    2c) 階級（依權重排序，數字越小階級越高）
@@ -2876,6 +2875,7 @@ const RELEASE_NOTES = [
     ] },
     { category: "天氣資訊", items: [
       "修正颱風警報卡片沒有隨著警報解除自動消失的問題：氣象署把警報下架的時間點有時會晚於警報實際的效期（expires），現在改成用效期判斷，只要已經過了效期就不再顯示，不用等氣象署資料更新完成",
+      "天氣頁「觀測數據小卡」（體感溫度／相對濕度／露點溫度／風速／紫外線指數／近3小時雨量）資料來源從氣象署鄉鎮預報＋雨量站觀測兩份資料改成統一改用 Open-Meteo（跟 header「危險係數」徽章同一個來源），一次請求就拿到全部 6 項數值，不用再打兩個氣象署 API；天氣特報／未來預報／一週預報仍維持氣象署資料不變",
     ] },
     { category: "介面優化", items: [
       "管理後台「人員與帳號」改成卡片式排版：大頭貼＋姓名＋階級徽章＋信箱一目了然，電話號碼改成獨立的可點撥膠囊列，編輯功能改成右上角的鉛筆圖示按鈕；角色/單位下拉選單、值日官勾選框、刪除鈕維持原本功能不變",
@@ -3563,10 +3563,9 @@ const state = {
   previewActive: false, realProfileSnapshot: null, // 角色/人員權限預覽（僅限 admin）
   weather: null, // 任務頁「天氣」子選單的氣象預報（依單位對應縣市，見 ensureWeatherLoaded）
   hazards: null, // 任務頁「天氣」子選單的天氣特報／陸上警報（依單位對應縣市，見 ensureHazardsLoaded）
-  apparentTemp: null, // 任務頁「天氣」子選單的體感溫度（依單位對應鄉鎮，見 ensureApparentTempLoaded）
+  apparentTemp: null, // 任務頁「天氣」子選單的體感/濕度/露點/風速風向/紫外線/近3小時雨量觀測數據小卡（Open-Meteo，依單位對應鄉鎮，見 ensureApparentTempLoaded）
   weatherRisk: null, // Header 天氣危險係數徽章（依單位對應鄉鎮，見 ensureWeatherRiskLoaded），null 代表還沒讀到資料
   weeklyForecast: null, // 任務頁「天氣」子選單的一週天氣預報（依單位對應縣市，見 ensureWeeklyForecastLoaded）
-  rainfall: null, // 任務頁「天氣」子選單的雨量站觀測（依單位對應縣市，見 ensureRainfallLoaded）
   typhoon: null, // 任務頁「天氣」子選單的颱風警報（全國一份，不分單位，見 ensureTyphoonLoaded）
   typhoonExpanded: false, // 颱風警報卡片預設只顯示數據小卡，點「展開」才顯示位置示意圖跟警報原文段落
   myLat: null, // 醫院資訊頁：手機 GPS 定位的原始緯度，null 代表尚未定位；有登記座標的醫院直接拿這個算實際距離
@@ -5185,62 +5184,6 @@ function ensureWeeklyForecastLoaded(unit){
     safeRender();
   });
 }
-// 雨量站觀測（O-A0002-001）：這組資料集沒有縣市查詢參數，一次回傳全臺
-// 所有雨量站，要靠每筆資料自帶的 parameter（CITY/TOWN）自己篩出目標縣市
-// 範圍內的測站。同一個縣市裡通常有好幾個測站，這裡取「近 3 小時累積雨量」
-// 最高的那一個當代表值——比隨便挑第一筆更保守，對執勤安全判斷更有意義
-// （最糟情況才是該注意的情況）。負值（-99 之類）是氣象署慣用的缺測標記，
-// 一律當成無效值處理。
-const rainfallCache = {}; // { [縣市名稱]: { data, fetchedAt } }
-let rainfallLoadingCounty = null;
-async function fetchRainfallStation(county){
-  const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0002-001?Authorization=${CWA_API_KEY}`;
-  const res = await fetchCwa(url);
-  if (!res.ok) {
-    let detail = ""; try { detail = (await res.text()).slice(0,200); } catch(e){}
-    throw new Error(`HTTP ${res.status}${detail ? `：${detail}` : ""}`);
-  }
-  const json = await res.json();
-  const stations = json?.records?.location || [];
-  const matches = stations.filter(s => (s.parameter || []).some(p => p.parameterName === "CITY" && p.parameterValue === county));
-  if (!matches.length) return { county, stationName: null, hour3: null, hour24: null };
-  const val = (s, name) => {
-    const el = (s.weatherElement || []).find(e => e.elementName === name);
-    const v = el ? Number(el.elementValue) : NaN;
-    return Number.isFinite(v) && v >= 0 ? v : -1;
-  };
-  let best = matches[0];
-  matches.forEach(s => { if (val(s, "HOUR_3") > val(best, "HOUR_3")) best = s; });
-  const hour3 = val(best, "HOUR_3");
-  const hour24 = val(best, "HOUR_24");
-  return {
-    county,
-    stationName: best.locationName || null,
-    hour3: hour3 >= 0 ? hour3 : null,
-    hour24: hour24 >= 0 ? hour24 : null
-  };
-}
-function ensureRainfallLoaded(unit){
-  const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
-  const cached = rainfallCache[county];
-  const freshFor = cached?.error ? 2*60*1000 : 15*60*1000;
-  if (cached && Date.now() - cached.fetchedAt < freshFor) { state.rainfall = cached.error ? { county, error: true, message: cached.message } : { county, ...cached.data }; return; }
-  if (rainfallLoadingCounty === county) return;
-  rainfallLoadingCounty = county;
-  fetchRainfallStation(county).then(data => {
-    rainfallCache[county] = { data, fetchedAt: Date.now() };
-    state.rainfall = { county, ...data };
-    rainfallLoadingCounty = null;
-    safeRender();
-  }).catch(err => {
-    console.error("雨量站資料載入失敗", err);
-    const message = err.message || String(err);
-    rainfallCache[county] = { fetchedAt: Date.now(), error: true, message };
-    state.rainfall = { county, error: true, message };
-    rainfallLoadingCounty = null;
-    safeRender();
-  });
-}
 function weatherIconFor(wx){
   if (!wx) return "cloud";
   if (wx.includes("雷") || wx.includes("雨")) return "rain";
@@ -5302,94 +5245,103 @@ function ensureHazardsLoaded(unit){
   });
 }
 
-// 鄉鎮天氣預報（F-D0047-093）：這組資料集不接受用鄉鎮名稱查詢，實際
-// 查證（透過氣象署 Swagger 文件的 Try it out 對照真實請求)確認要用
-// locationId 帶「該縣市專屬的子資料集代碼」（例如臺中市是 F-D0047-075、
-// 嘉義縣是 F-D0047-031，不是 093 本身），回應包裹格式也跟其他資料集不同：
-// records.Locations[]（該縣市）→ Location[]（鄉鎮）→ WeatherElement[]
-// （中文 ElementName，例如「平均相對濕度」）→ Time[]（12 小時一個區間，
-// 不是瞬時值）→ ElementValue[0]（依欄位名稱各自命名的值，例如
-// {RelativeHumidity:"76"}）。這組資料實際查證後才發現原來也有風速風向、
-// 紫外線指數，先前用另一份舊資料判斷「沒有風速風向」是錯的。
-//
-// 參考資料（未來這組資料集又出問題時，從這裡重新查證，不要用舊 fixture
-// 或搜尋結果猜 schema）：
-// - Swagger 互動文件（可以直接用自己的授權碼 Try it out，執行後會顯示
-//   實際送出的完整請求網址／curl，這是本次查出正確用法的關鍵）：
-//   https://opendata.cwa.gov.tw/dist/opendata-swagger.html
-// - 資料集介紹頁（有「JSON／XML 檔案下載」按鈕，可以直接看到目前實際
-//   在用的縣市代碼、資料範例）：
-//   https://opendata.cwa.gov.tw/dataset/forecast/F-D0047-093
-// - 若某縣市不在 COUNTY_TOWNSHIP_DATASET_ID 對照表裡，要用上面兩個
-//   管道其中一個查出該縣市對應的 F-D0047-0XX 代碼，不要用臆測的號碼。
-const COUNTY_TOWNSHIP_DATASET_ID = { "臺中市": "F-D0047-075", "嘉義縣": "F-D0047-031" };
-const apparentTempCache = {}; // { [鄉鎮名稱]: { data, fetchedAt } }
-let apparentTempLoadingTownship = null;
-// 取「現在」所在的 12 小時區間（找不到就退回第一筆），回傳該區間的
-// ElementValue[0]（一個物件，key 是欄位名稱，例如 {RelativeHumidity:"76"}）。
-function currentWindowValue(el){
-  const times = el?.Time || [];
-  if (!times.length) return null;
-  const now = Date.now();
-  const match = times.find(t => {
-    const s = new Date(t.StartTime).getTime();
-    const e = new Date(t.EndTime).getTime();
-    return now >= s && now < e;
-  });
-  return (match || times[0])?.ElementValue?.[0] || null;
+// 體感溫度／濕度／露點／風速風向／紫外線指數／近3小時雨量：原本拆成
+// 氣象署 F-D0047-093（鄉鎮預報）＋O-A0002-001（雨量站觀測）兩份資料拼
+// 起來，改成全部改用 Open-Meteo（跟 header「危險係數」徽章同一個來源，
+// 不用授權碼、也不會撞到 CWA 併發連線限制），一次請求就拿到全部 6 項，
+// 不用再打兩個氣象署 API。
+// - current 直接給溫度／濕度／露點／體感／風速風向的即時觀測值；
+//   wind_speed_unit=ms 讓風速單位跟畫面上的 m/s 一致，不用自己換算。
+// - 紫外線指數／近 3 小時雨量 Open-Meteo 的 current 沒有這兩項，改用
+//   hourly（搭配 past_hours=3 一併拿到最近 3 小時的資料），取最接近現在
+//   時刻的那一筆當「現在」的紫外線指數，近 3 小時雨量則加總最近 3 個
+//   小時的 hourly 雨量。
+// - 蒲福風級／風向文字／紫外線等級文字是通用的標準氣象換算公式（不是
+//   氣象署專屬資料，任何風速/風向/UV 數值來源都能套用），見下面
+//   beaufortFromSpeed／windDirLabel／uvLevelLabel。
+const BEAUFORT_THRESHOLDS_MS = [0.3,1.6,3.4,5.5,8.0,10.8,13.9,17.2,20.8,24.5,28.5,32.7];
+function beaufortFromSpeed(ms){
+  if (ms == null) return null;
+  for (let i = 0; i < BEAUFORT_THRESHOLDS_MS.length; i++) { if (ms < BEAUFORT_THRESHOLDS_MS[i]) return i; }
+  return BEAUFORT_THRESHOLDS_MS.length;
 }
-async function fetchApparentTemp(county, township){
-  const datasetId = COUNTY_TOWNSHIP_DATASET_ID[county];
-  if (!datasetId) throw new Error(`${county} 沒有對應的鄉鎮預報資料集代碼`);
-  const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-093?Authorization=${CWA_API_KEY}&format=JSON&locationId=${datasetId}`;
-  const res = await fetchCwa(url);
-  if (!res.ok) {
-    let detail = ""; try { detail = (await res.text()).slice(0,200); } catch(e){}
-    throw new Error(`HTTP ${res.status}${detail ? `：${detail}` : ""}`);
-  }
+// 風向角度（氣象慣例：風的來向，0=北、90=東...）換算成 8 方位中文，跟
+// 氣象署慣用的「偏OO風」說法一致。
+const WIND_DIR_LABELS = ["偏北風","偏東北風","偏東風","偏東南風","偏南風","偏西南風","偏西風","偏西北風"];
+function windDirLabel(deg){
+  if (deg == null) return null;
+  const idx = Math.round((((Number(deg) % 360) + 360) % 360) / 45) % 8;
+  return WIND_DIR_LABELS[idx];
+}
+// 紫外線指數等級文字，門檻沿用氣象署／WHO 共用的標準分級（低量/中量/
+// 高量/過量/危險），不是氣象署專屬資料，任何來源的 UV 指數數值都能套用。
+function uvLevelLabel(uv){
+  if (uv == null) return null;
+  if (uv >= 11) return "危險級";
+  if (uv >= 8) return "過量級";
+  if (uv >= 6) return "高量級";
+  if (uv >= 3) return "中量級";
+  return "低量級";
+}
+const weatherStatsCache = {}; // { [鄉鎮名稱]: { data, fetchedAt } }
+let weatherStatsLoadingTownship = null;
+async function fetchWeatherStats(township){
+  const loc = TOWNSHIP_LATLNG[township];
+  if (!loc) throw new Error(`${township} 沒有對應座標`);
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,wind_speed_10m,wind_direction_10m&hourly=uv_index,precipitation&past_hours=3&forecast_days=1&wind_speed_unit=ms&timezone=Asia%2FTaipei`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const json = await res.json();
-  const loc = (json?.records?.Locations?.[0]?.Location || []).find(l => l.LocationName === township);
-  if (!loc) throw new Error("查無鄉鎮預報資料");
-  const els = {};
-  (loc.WeatherElement || []).forEach(e => { els[e.ElementName] = e; });
-  const rh = currentWindowValue(els["平均相對濕度"])?.RelativeHumidity;
-  const td = currentWindowValue(els["平均露點溫度"])?.DewPoint;
-  const atMax = currentWindowValue(els["最高體感溫度"])?.MaxApparentTemperature;
-  const windVal = currentWindowValue(els["風速"]);
-  const windDirVal = currentWindowValue(els["風向"])?.WindDirection;
-  const uvVal = currentWindowValue(els["紫外線指數"]);
-  const toNum = v => (v != null && v !== "" ? Number(v) : null);
+  const cur = json?.current;
+  if (!cur) throw new Error("查無天氣觀測資料");
+  const hourly = json?.hourly || {};
+  const times = hourly.time || [];
+  const nowMs = Date.now();
+  // 找「現在」對應的 hourly 索引：取最後一筆時間 <= 現在的那一筆，找不到
+  // 就退回第一筆（資料還沒涵蓋到現在這個鐘點時，用最接近的一筆頂上去，
+  // 比整格不顯示更有用）。
+  let idx = -1;
+  times.forEach((t, i) => { if (new Date(t).getTime() <= nowMs) idx = i; });
+  if (idx === -1) idx = 0;
+  const uvIndex = hourly.uv_index?.[idx] != null ? Number(hourly.uv_index[idx]) : null;
+  let hour3 = null;
+  if (Array.isArray(hourly.precipitation)) {
+    const from = Math.max(0, idx - 2);
+    const slice = hourly.precipitation.slice(from, idx + 1).map(Number).filter(Number.isFinite);
+    if (slice.length) hour3 = Math.round(slice.reduce((a,b) => a+b, 0) * 10) / 10;
+  }
+  const windSpeed = cur.wind_speed_10m != null ? Number(cur.wind_speed_10m) : null;
   return {
     township,
-    at: toNum(atMax),
-    rh: toNum(rh),
-    td: toNum(td),
-    windSpeed: toNum(windVal?.WindSpeed),
-    beaufort: toNum(windVal?.BeaufortScale),
-    windDir: windDirVal || null,
-    uvIndex: toNum(uvVal?.UVIndex),
-    uvLevel: uvVal?.UVExposureLevel || null
+    at: cur.apparent_temperature != null ? Math.round(Number(cur.apparent_temperature)) : null,
+    rh: cur.relative_humidity_2m != null ? Math.round(Number(cur.relative_humidity_2m)) : null,
+    td: cur.dew_point_2m != null ? Math.round(Number(cur.dew_point_2m)) : null,
+    windSpeed: windSpeed != null ? Math.round(windSpeed * 10) / 10 : null,
+    beaufort: beaufortFromSpeed(windSpeed),
+    windDir: windDirLabel(cur.wind_direction_10m),
+    uvIndex: uvIndex != null ? Math.round(uvIndex) : null,
+    uvLevel: uvLevelLabel(uvIndex),
+    hour3
   };
 }
 function ensureApparentTempLoaded(unit){
-  const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
   const township = UNIT_WEATHER_TOWNSHIP[unit] || UNIT_WEATHER_TOWNSHIP.hq;
-  const cached = apparentTempCache[township];
+  const cached = weatherStatsCache[township];
   const freshFor = cached?.error ? 2*60*1000 : 30*60*1000;
   if (cached && Date.now() - cached.fetchedAt < freshFor) { state.apparentTemp = cached.error ? { township, error: true, message: cached.message } : { township, ...cached.data }; return; }
-  if (apparentTempLoadingTownship === township) return;
-  apparentTempLoadingTownship = township;
-  fetchApparentTemp(county, township).then(data => {
-    apparentTempCache[township] = { data, fetchedAt: Date.now() };
+  if (weatherStatsLoadingTownship === township) return;
+  weatherStatsLoadingTownship = township;
+  fetchWeatherStats(township).then(data => {
+    weatherStatsCache[township] = { data, fetchedAt: Date.now() };
     state.apparentTemp = { township, ...data };
-    apparentTempLoadingTownship = null;
+    weatherStatsLoadingTownship = null;
     safeRender();
   }).catch(err => {
-    console.error("體感溫度載入失敗", err);
+    console.error("天氣觀測數據載入失敗", err);
     const message = err.message || String(err);
-    apparentTempCache[township] = { fetchedAt: Date.now(), error: true, message };
+    weatherStatsCache[township] = { fetchedAt: Date.now(), error: true, message };
     state.apparentTemp = { township, error: true, message };
-    apparentTempLoadingTownship = null;
+    weatherStatsLoadingTownship = null;
     safeRender();
   });
 }
@@ -6045,31 +5997,26 @@ function weatherStatAccent(key, val){
   return null;
 }
 function renderWeatherStatsGrid(unit){
-  const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
   const township = UNIT_WEATHER_TOWNSHIP[unit] || UNIT_WEATHER_TOWNSHIP.hq;
   const at = state.apparentTemp;
   const townshipOk = at && at.township === township && !at.error;
   const atError = at && at.township === township && at.error;
-  const rain = state.rainfall;
-  const rainOk = rain && rain.county === county && !rain.error;
-  const rainError = rain && rain.county === county && rain.error;
   const items = [];
   if (townshipOk && at.at != null) items.push({ lbl:"體感溫度", val:`${at.at}°C`, accent: weatherStatAccent("at", at.at) });
   if (townshipOk && at.rh != null) items.push({ lbl:"相對濕度", val:`${at.rh}%` });
   if (townshipOk && at.td != null) items.push({ lbl:"露點溫度", val:`${at.td}°C`, accent: weatherStatAccent("td", at.td) });
   if (townshipOk && at.windSpeed != null) items.push({ lbl:"風速", val:`${at.windDir ? esc(at.windDir)+' ' : ''}${at.windSpeed}m/s`, accent: weatherStatAccent("beaufort", at.beaufort) });
   if (townshipOk && at.uvIndex != null) items.push({ lbl:"紫外線指數", val:`${at.uvIndex}${at.uvLevel ? '／'+esc(at.uvLevel) : ''}`, accent: weatherStatAccent("uvLevel", at.uvLevel || "") });
-  // 沒偵測到雨（測站缺測或附近測站沒下雨）一律當 0mm 顯示，不要整格
-  // 消失——雨量小卡要一直在，才能一眼確認「現在真的沒下雨」跟「還沒
-  // 載入完成」的差別（後者是 gridHtml 整段還沒出現，不是這格不見）。
-  if (rainOk) { const hour3 = rain.hour3 != null ? rain.hour3 : 0; items.push({ lbl:"近3小時雨量", val:`${hour3}mm`, accent: weatherStatAccent("rainHour3", hour3) }); }
+  // 沒偵測到雨一律當 0mm 顯示，不要整格消失——雨量小卡要一直在，才能
+  // 一眼確認「現在真的沒下雨」跟「還沒載入完成」的差別（後者是 gridHtml
+  // 整段還沒出現，不是這格不見）。
+  if (townshipOk) { const hour3 = at.hour3 != null ? at.hour3 : 0; items.push({ lbl:"近3小時雨量", val:`${hour3}mm`, accent: weatherStatAccent("rainHour3", hour3) }); }
   const gridHtml = items.length ? `
     <div class="weather-stats-grid">
       ${items.map(i => `<div class="weather-stat-tile${i.accent?' accent-'+i.accent:''}"><span class="lbl">${esc(i.lbl)}</span><span class="val">${i.val}</span></div>`).join("")}
     </div>` : "";
-  const atErrorHtml = atError ? `<div class="weather-tip">${icon('bell',16)}<div>體感/濕度/露點/風速/紫外線載入失敗${at.message ? '：'+esc(at.message) : ''}</div></div>` : "";
-  const rainErrorHtml = rainError ? `<div class="weather-tip">${icon('bell',16)}<div>雨量資料載入失敗${rain.message ? '：'+esc(rain.message) : ''}</div></div>` : "";
-  return gridHtml + atErrorHtml + rainErrorHtml;
+  const atErrorHtml = atError ? `<div class="weather-tip">${icon('bell',16)}<div>天氣觀測數據載入失敗${at.message ? '：'+esc(at.message) : ''}</div></div>` : "";
+  return gridHtml + atErrorHtml;
 }
 // 未來預報橫向捲動：把「未來預報」（36 小時內，今晚/明天白天）跟「未來
 // 一週」（縣市層級，一天一格）接在同一條橫向捲動軸上，取代原本上下疊兩份
@@ -6503,7 +6450,6 @@ function viewTasks(){
   ensureHazardsLoaded(unit);
   ensureApparentTempLoaded(unit);
   ensureWeeklyForecastLoaded(unit);
-  ensureRainfallLoaded(unit);
   ensureTyphoonLoaded();
   const mainTabs = `
     <div class="icon-subtabs">
