@@ -1796,7 +1796,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-15-397-camp-reg-card-redesign";
+const BUILD_TAG = "2026-07-15-398-camp-reg-toggle-hint";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2829,6 +2829,8 @@ const RELEASE_NOTES = [
       "拿掉行事曆／列表切換頁籤，只留行事曆（點選日期即顯示當天登記明細），畫面更單純；行事曆每格拉高、每週列的間距也拉大，避免登記筆數紅點跟下一週的日期數字擠在一起",
       "登記卡片改版：標題改顯示「事由」，明細依序改成「汽車／機車：車號」「地點：地點」「洽公人員：姓名 階級」（依階級權重排序）／「單位：廠商名稱」，一眼看出重點內容",
       "登記卡片視覺重新設計：類別標籤＋事由標題＋放大版「已登記」切換鈕、車輛／地點雙欄並排、洽公人員/廠商單位獨立一行、底部登記人與編輯／刪除按鈕分區更清楚；車輛/人員圖示改用站內線條 SVG 圖示，不再使用 emoji",
+      "已登記切換鈕未勾選時明確顯示灰色「未登記」（原本未勾選時也顯示「已登記」字樣，只是灰色，容易誤會成已經登記過）",
+      "值日官登入洽公登記頁時，會在畫面上方看到提示框，說明成功嶺營區範圍的登記卡片要點右上角哪個按鈕才能標記「已登記」",
     ] },
   ] },
   { date: "2026/07/14", groups: [
@@ -9677,7 +9679,7 @@ function campRegRowHtml(r){
         <label class="camp-reg-toggle">
           <input type="checkbox" ${r.transcribed?'checked':''} ${canToggle?'':'disabled'} onchange="window.__toggleCampRegTranscribed('${r.id}', this.checked)">
           <span class="camp-reg-toggle-btn">
-            <span class="camp-reg-toggle-icon">${icon('check',12)}</span>已登記
+            <span class="camp-reg-toggle-icon">${icon('check',12)}</span>${r.transcribed ? '已登記' : '未登記'}
           </span>
         </label>
       </div>
@@ -9769,7 +9771,14 @@ function viewCampRegCalendar(){
 // 只有 mainTabs + 內容的組成方式。只有行事曆一種檢視（原本另有一個列表
 // 頁籤，跟行事曆下方的「登記明細」重複顯示同一批資料，拿掉了）。
 function viewCampRegBody(){
+  const p = state.profile;
+  // 值日官登入時提示一次「該點哪個按鈕」：卡片右上角那顆「已登記／未登記」
+  // 藥丸按鈕，本人在成功嶺營區範圍的登記卡片上都能點——用跟教學園地
+  // 提示框一致的樣式（tutorial-callout），不用另外開一套視覺。
+  const dutyOfficerHint = p && p.isCampDutyOfficer ? `
+    <div class="tutorial-callout">${icon('lightbulb',16)}<span>你是值日官：成功嶺營區（營部／第一連）範圍的登記卡片，右上角的灰色「未登記」按鈕點一下就會變成藍色「已登記」，用來標記名冊已經謄寫進軍用電腦，不影響登記內容本身。</span></div>` : '';
   return `
+    ${dutyOfficerHint}
     <button class="icon-btn primary" style="margin-bottom:14px;" onclick="window.__openCampRegModal(null)">${icon('plus',15)} 新增登記</button>
     ${viewCampRegCalendar()}
   `;
