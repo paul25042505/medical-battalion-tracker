@@ -1796,7 +1796,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-15-399-camp-reg-hint-wording";
+const BUILD_TAG = "2026-07-15-400-camp-reg-vendor-tweaks";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2832,6 +2832,8 @@ const RELEASE_NOTES = [
       "已登記切換鈕未勾選時明確顯示灰色「未登記」（原本未勾選時也顯示「已登記」字樣，只是灰色，容易誤會成已經登記過）",
       "值日官登入洽公登記頁時，會在畫面上方看到提示框，說明成功嶺營區範圍的登記卡片要點右上角哪個按鈕才能標記「已登記」",
       "值日官提示框文字調整為正式提醒用語：完成謄寫至洽公名冊後，請將「未登記」切換為「已登記」，方便相關人員快速確認資料已登記、避免重複或遺漏作業",
+      "廠商入營登記拿掉「地點」欄位，「單位」改名「單位或姓名」（例如：OO工程行 或 王OO），廠商跟個人（沒有行號）都能填",
+      "第二連（嘉義，不在成功嶺營區範圍）的洽公／廠商入營登記卡片不再顯示「已登記／未登記」按鈕，避免顯示了卻沒有值日官會去點",
     ] },
   ] },
   { date: "2026/07/14", groups: [
@@ -9670,6 +9672,10 @@ function campRegRowHtml(r){
         .sort((a,b) => rankWeight(a.title) - rankWeight(b.title))
         .map(x => x.title ? `${x.name} ${x.title}` : x.name)
         .join('、') || '—');
+  // 值日官的查看範圍固定是成功嶺營區（hq/co1，見 CAMP_DUTY_OFFICER_UNITS），
+  // 第二連在嘉義、跟這套「已登記」流程完全無關，這類登記卡片乾脆不顯示
+  // 已登記／未登記按鈕，不是顯示了又不能點、讓人誤以為哪裡壞了。
+  const showTranscribedToggle = CAMP_DUTY_OFFICER_UNITS.includes(r.unit);
   return `
     <div class="camp-reg-card">
       <div class="camp-reg-card-header">
@@ -9677,29 +9683,31 @@ function campRegRowHtml(r){
           <span class="camp-reg-type-tag ${r.type}">${typeLabel}</span>
           <div class="camp-reg-title">${esc(r.reason||'—')}</div>
         </div>
+        ${showTranscribedToggle ? `
         <label class="camp-reg-toggle">
           <input type="checkbox" ${r.transcribed?'checked':''} ${canToggle?'':'disabled'} onchange="window.__toggleCampRegTranscribed('${r.id}', this.checked)">
           <span class="camp-reg-toggle-btn">
             <span class="camp-reg-toggle-icon">${icon('check',12)}</span>${r.transcribed ? '已登記' : '未登記'}
           </span>
-        </label>
+        </label>` : ''}
       </div>
       <div class="camp-reg-card-body">
         <div class="camp-reg-info-grid">
-          <div class="camp-reg-info-item">
+          <div class="camp-reg-info-item"${isVendor ? ' style="grid-column:1 / -1;"' : ''}>
             <span class="camp-reg-info-icon">${icon('car',16)}</span>
             <div class="camp-reg-info-details">
               <span class="camp-reg-info-label">${esc(vehicleTypeLabel)}</span>
               <span class="camp-reg-info-value">${esc(r.plateNumber||'—')}</span>
             </div>
           </div>
+          ${isVendor ? '' : `
           <div class="camp-reg-info-item">
             <span class="camp-reg-info-icon">${icon('pin',16)}</span>
             <div class="camp-reg-info-details">
               <span class="camp-reg-info-label">地點</span>
               <span class="camp-reg-info-value">${esc(r.location||'—')}</span>
             </div>
-          </div>
+          </div>`}
         </div>
         <div class="camp-reg-info-list-item">
           <span class="camp-reg-info-icon">${icon('users',16)}</span>
@@ -9806,11 +9814,11 @@ function viewCampRegModal(){
         <form onsubmit="window.__submitCampRegModal(event, '${type}'${editing?`, '${editing.id}'`:''})">
           <div class="field"><label>日期 *</label><input type="date" name="date" required value="${esc((editing?editing.date:m.date)||isoDate(new Date()))}"></div>
           <div class="field"><label>事由 *</label><textarea name="reason" required placeholder="例如：資料繳交">${esc(editing?.reason||'')}</textarea></div>
-          <div class="field"><label>地點 *</label><input name="location" required value="${esc(editing?.location||'')}" placeholder="例如：指揮部"></div>
+          ${isVendor ? '' : `<div class="field"><label>地點 *</label><input name="location" required value="${esc(editing?.location||'')}" placeholder="例如：指揮部"></div>`}
           <div class="field"><label>車種 *</label>${chipGroup('vehicleType', CAMP_REG_VEHICLE_TYPES, editing?.vehicleType||'汽', false)}</div>
           <div class="field"><label>車號 *</label><input name="plateNumber" required value="${esc(editing?.plateNumber||'')}"></div>
           ${isVendor ? `
-          <div class="field"><label>單位 *</label><input name="vendorUnit" required value="${esc(editing?.vendorUnit||'')}" placeholder="例如：OO工程行"></div>
+          <div class="field"><label>單位或姓名 *</label><input name="vendorUnit" required value="${esc(editing?.vendorUnit||'')}" placeholder="例如：OO工程行 或 王OO"></div>
           ` : `
           <div class="field"><label>人員（可複選）*</label>
             <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openMultiPersonPicker(this)">
@@ -10673,14 +10681,17 @@ window.__submitCampRegModal = (ev, type, id) => {
   const data = {
     type,
     date: f.get("date"),
-    location: f.get("location"),
     vehicleType: f.get("vehicleType"),
     plateNumber: f.get("plateNumber"),
     reason: f.get("reason")
   };
   if (type === "vendor") {
+    // 廠商入營不收地點（見表單），廠商單位欄位改成「單位或姓名」，兩種
+    // 名義（公司行號／個人姓名）都能填。
     data.vendorUnit = f.get("vendorUnit");
+    data.location = "";
   } else {
+    data.location = f.get("location");
     const personnel = f.getAll("personnel");
     if (!personnel.length) { showToast("請至少選擇一位人員"); return; }
     data.personnel = personnel;
