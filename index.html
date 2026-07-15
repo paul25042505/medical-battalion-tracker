@@ -1224,6 +1224,11 @@
   }
   .ios-switch input:checked ~ .track{background:var(--green);}
   .ios-switch input:checked ~ .knob{transform:translateX(20px);}
+  /* iosSwitchRow() 的外層排版：文字靠左、開關貼右邊，取代原本站內到處
+     手刻的「checkbox + 文字」小勾選框（跨單位借車/選人、值日官、常用
+     醫院這幾個布林開關現在都走這個共用元件）。 */
+  .ios-switch-row{display:flex; align-items:center; gap:10px; width:fit-content;}
+  .ios-switch-row-label{font-size:var(--text-sm); color:var(--text); white-space:nowrap;}
   .appearance-auto-row{display:flex; align-items:center; justify-content:space-between; gap:12px;}
   /* 軍品攜帶：展開/收合購物車清單用 grid-template-rows 做滑動動畫（見
      militaryCarrySectionHtml），瞬間 display:none/block 會讓版面看起來
@@ -1826,7 +1831,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-15-401-personnel-card-redesign";
+const BUILD_TAG = "2026-07-15-402-ios-switch-everywhere";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2867,6 +2872,7 @@ const RELEASE_NOTES = [
     ] },
     { category: "介面優化", items: [
       "管理後台「人員與帳號」改成卡片式排版：大頭貼＋姓名＋階級徽章＋信箱一目了然，電話號碼改成獨立的可點撥膠囊列，編輯功能改成右上角的鉛筆圖示按鈕；角色/單位下拉選單、值日官勾選框、刪除鈕維持原本功能不變",
+      "全站的布林開關（值日官、標記為常用醫院、跨單位借車、跨單位選人）統一改成 iOS 風格的綠色 Switch，取代原本的小勾選框＋文字，跟既有的軍品攜帶/推播通知/測試模式開關同一套視覺語言；多選清單（過去病史、複選人員等）維持原本的勾選框/選項卡樣式不受影響",
     ] },
   ] },
   { date: "2026/07/14", groups: [
@@ -5667,6 +5673,27 @@ function chipGroup(name, options, selected, multi, triggers, extraClass){
     </label>`;
   }).join("")}</div>`;
 }
+// 全站單一布林值開關（值日官、常用醫院、跨單位借車/選人等）統一用這顆
+// iOS 風格 Switch（樣式定義見 CSS 的 .ios-switch，開啟時是綠色），不要
+// 再手刻「<input type="checkbox"> + 文字」——這是本站「開/關」設定唯一
+// 的視覺語言，日後新增布林開關預設也要呼叫這個 helper，不要用原生
+// checkbox 外觀。列表式多選（過去病史、複選人員清單、chipGroup 這類
+// 「多選其一」的情境）不適用，那些維持 checkbox/chip 樣式不變。
+function iosSwitchRow(label, checked, onchangeExpr, opts){
+  opts = opts || {};
+  const attrs = opts.attrs ? ` ${opts.attrs}` : "";
+  const onchangeAttr = onchangeExpr ? ` onchange="${onchangeExpr}"` : "";
+  const styleAttr = opts.style ? ` style="${opts.style}"` : "";
+  return `
+    <div class="ios-switch-row"${styleAttr}>
+      <span class="ios-switch-row-label">${esc(label)}</span>
+      <label class="ios-switch">
+        <input type="checkbox" ${checked?'checked':''}${attrs}${onchangeAttr}>
+        <span class="track"></span>
+        <span class="knob"></span>
+      </label>
+    </div>`;
+}
 // 主訴等自由輸入框旁邊的快捷選字下拉選單：選一個選項就把常見用語塞進
 // 輸入框（用「、」分隔多個詞，跟站內其他「可多個」的文字欄位同一套分隔
 // 慣例），選完選單重置回「快速選擇」，可以重複打開再選下一個詞做複選；
@@ -7125,7 +7152,7 @@ function viewCreateTask(){
           <option value="">請選擇車輛</option>
           ${vehicleOptionsByType(vehicleOpts, v => `<option value="${esc(v.plate)}" ${state.route.presetVehicle===v.plate?'selected':''}>${esc(vehicleOptionLabel(v.plate, outSet))}</option>`)}
         </select>
-        <label class="checkbox-inline"><input type="checkbox" onchange="window.__toggleCrossUnitVehicle(this)"> 跨單位借車</label>
+        ${iosSwitchRow('跨單位借車', false, "window.__toggleCrossUnitVehicle(this)")}
         ${!vehicleOpts.length ? `<div style="color:var(--muted);font-size:var(--text-xs);margin-top:6px;">此單位尚未建立車輛資料，請至「基礎資料管理」新增</div>` : ""}
       </div>
       <div class="field"><label>車長</label>
@@ -7211,7 +7238,7 @@ function viewEditTask(taskId){
         <select name="vehicle" data-unit="${unit}">
           ${isCrossUnitVehicle ? vehicleSelectOptionsAllUnits(t.vehicle) : `<option value="">請選擇車輛</option>` + vehicleOptionsByType(vehicleOpts, v => `<option value="${esc(v.plate)}" ${t.vehicle===v.plate?'selected':''}>${esc(vehicleOptionLabel(v.plate, outSet))}</option>`)}
         </select>
-        <label class="checkbox-inline"><input type="checkbox" ${isCrossUnitVehicle?'checked':''} onchange="window.__toggleCrossUnitVehicle(this)"> 跨單位借車</label>
+        ${iosSwitchRow('跨單位借車', isCrossUnitVehicle, "window.__toggleCrossUnitVehicle(this)")}
       </div>
       <div class="field"><label>車長</label>
         <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openPersonPicker('crewLeader', this)">
@@ -9322,7 +9349,7 @@ function viewBaseDataModal(){
         </select>
       </div>
       <div class="field"><label>電話</label><input name="phone" type="tel" inputmode="tel" value="${esc(editing?.phone||'')}" placeholder="總機或急診專線"></div>
-      <label class="checkbox-inline" style="margin-bottom:12px;"><input type="checkbox" name="frequent" ${editing?.frequent?'checked':''}> 標記為常用醫院</label>
+      ${iosSwitchRow('標記為常用醫院', !!(editing?.frequent), "", { attrs: 'name="frequent"', style: 'margin-bottom:12px;' })}
       <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">標記後，這間醫院在「醫院資訊」預設排序跟回報「出勤」的送醫醫院選單都會排在最前面，適合軍中固定後送的那幾間醫院。</div>
       <div class="field"><label>備註（選填）</label><input name="note" value="${esc(editing?.note||'')}" placeholder="例如：電話為總機，急診專線待確認"></div>
       <div class="field"><label>健保特約代號（選填）</label><input name="nhiCode" value="${esc(editing?.nhiCode||'')}" placeholder="例如：0000000000"></div>
@@ -9447,7 +9474,7 @@ function viewAdminUsers(){
           <option value="">未指派單位</option>
           ${UNITS.map(un => `<option value="${un.code}" ${x.unit===un.code?'selected':''}>${un.label}</option>`).join("")}
         </select>
-        <label class="checkbox-inline" style="font-size:var(--text-xs);"><input type="checkbox" ${x.isCampDutyOfficer?'checked':''} onchange="window.__setCampDutyOfficerFlag('${x.id}', this.checked)"> 值日官</label>
+        ${iosSwitchRow('值日官', !!x.isCampDutyOfficer, `window.__setCampDutyOfficerFlag('${x.id}', this.checked)`)}
       </div>` : ''}
       ${x.role==='unclaimed' ? `<div class="personnel-card-controls"><button class="icon-btn danger" type="button" onclick="window.__deleteBaseData('personnel','${x.id}')">${icon('trash',14)} 刪除</button></div>` : ''}
     </div>`;
@@ -10471,7 +10498,7 @@ window.__openPersonPicker = (fieldName, triggerBtn) => {
       <div class="modal-handle"></div>
       <div class="modal-title">${fieldName === "crewLeader" ? "選擇車長" : "選擇駕駛"}</div>
       <input type="text" class="picker-search" placeholder="輸入姓名、階級或單位搜尋" oninput="window.__filterPersonPicker(this.value)">
-      <label class="checkbox-inline" style="margin:8px 0;"><input type="checkbox" ${crossUnit?'checked':''} onchange="window.__togglePersonPickerCrossUnit(this)"> 跨單位選人</label>
+      ${iosSwitchRow('跨單位選人', crossUnit, "window.__togglePersonPickerCrossUnit(this)", { style: 'margin:8px 0;' })}
       <div id="person-picker-list">${personPickerRows(pool, unit, crossUnit, "")}</div>
     </div>`;
   document.body.appendChild(overlay);
@@ -10563,7 +10590,7 @@ window.__openMultiPersonPicker = (triggerBtn) => {
       <div class="modal-handle"></div>
       <div class="modal-title">選擇人員（可複選）</div>
       <input type="text" class="picker-search" placeholder="輸入姓名、階級或單位搜尋" oninput="window.__filterMultiPersonPicker(this.value)">
-      <label class="checkbox-inline" style="margin:8px 0;"><input type="checkbox" ${crossUnit?'checked':''} onchange="window.__toggleMultiPersonCrossUnit(this)"> 跨單位選人</label>
+      ${iosSwitchRow('跨單位選人', crossUnit, "window.__toggleMultiPersonCrossUnit(this)", { style: 'margin:8px 0;' })}
       <div id="multi-person-picker-list">${personMultiPickerRows(pool, unit, crossUnit, "", selected)}</div>
       <button type="button" class="btn-primary" style="margin-top:14px;" onclick="window.__commitMultiPersonPicker()">完成</button>
     </div>`;
