@@ -1831,7 +1831,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-15-402-ios-switch-everywhere";
+const BUILD_TAG = "2026-07-15-403-person-role-preview";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2873,6 +2873,7 @@ const RELEASE_NOTES = [
     { category: "介面優化", items: [
       "管理後台「人員與帳號」改成卡片式排版：大頭貼＋姓名＋階級徽章＋信箱一目了然，電話號碼改成獨立的可點撥膠囊列，編輯功能改成右上角的鉛筆圖示按鈕；角色/單位下拉選單、值日官勾選框、刪除鈕維持原本功能不變",
       "全站的布林開關（值日官、標記為常用醫院、跨單位借車、跨單位選人）統一改成 iOS 風格的綠色 Switch，取代原本的小勾選框＋文字，跟既有的軍品攜帶/推播通知/測試模式開關同一套視覺語言；多選清單（過去病史、複選人員等）維持原本的勾選框/選項卡樣式不受影響",
+      "「權限說明」新增「依人員預覽」：除了原本只換角色/單位（姓名還是自己）的預覽，現在可以直接選一位真實人員，姓名/階級/EMT/電話都會換成該員的資料，才能真正看到「這個人登入後」會看到的畫面內容（例如是不是被指派到某筆勤務、能不能編輯），不再被「角色換了但姓名還是自己」誤導",
     ] },
   ] },
   { date: "2026/07/14", groups: [
@@ -3552,7 +3553,7 @@ const state = {
   emergencyBroadcastResult: null, // 急診待命緊急動員廣播結果彈窗：{ok, message, recipients}|{ok:false, reason} | null
   createTaskUnit: "", // 建立勤務頁面：admin/高勤官可切換的單位
   createTaskType: "duty", // 建立勤務頁面：勤務（車輛派遣）或洽公（無車輛/里程追蹤）
-  previewActive: false, realRoleUnit: null, // 角色權限預覽（僅限 admin）
+  previewActive: false, realProfileSnapshot: null, // 角色/人員權限預覽（僅限 admin）
   weather: null, // 任務頁「天氣」子選單的氣象預報（依單位對應縣市，見 ensureWeatherLoaded）
   hazards: null, // 任務頁「天氣」子選單的天氣特報／陸上警報（依單位對應縣市，見 ensureHazardsLoaded）
   apparentTemp: null, // 任務頁「天氣」子選單的體感溫度（依單位對應鄉鎮，見 ensureApparentTempLoaded）
@@ -3825,9 +3826,16 @@ function canViewTaskDetail(p, t){ return canSeeAllUnits(p) || (t && t.unit === m
 
 /* =========================================================
    5b) 角色權限預覽（僅限 admin）
-   只切換畫面顯示用的 role/unit，讓管理員能檢視「換成別的角色/單位
-   登入後預設會看到什麼」，不會真的變更帳號、也不影響 Firestore
-   實際的讀寫權限（那些永遠依照真實登入帳號的 role/unit 判斷）。
+   只切換畫面顯示用的身分資料，讓管理員能檢視「換成別的角色/單位、或是
+   直接變成某個真實人員登入後預設會看到什麼」，不會真的變更帳號、也不
+   影響 Firestore 實際的讀寫權限（那些永遠依照真實登入帳號的 role/unit
+   判斷）。
+   純角色預覽（PREVIEW_OPTIONS）只換 role/unit，姓名還是自己——很多畫面
+   內容是依「姓名是不是等於這筆任務的車長/駕駛/洽公人員」判斷（例如
+   canEditTask／isCurrentDutyMember），光換角色沒換姓名的話，看到的其實
+   還是自己有沒有被指派，不是那個角色真正會看到的內容。依人員預覽
+   （startPersonPreview）額外把姓名/階級/EMT/電話也換成該員真實資料，
+   才能看到「這個人登入後」實際會看到的畫面。
    ========================================================= */
 const PREVIEW_OPTIONS = [
   { role:"duty_officer", unit:"", label:"高勤官" },
@@ -3838,18 +3846,32 @@ const PREVIEW_OPTIONS = [
   { role:"commander", unit:"co2", label:"第二連主官管" },
   { role:"member", unit:"co2", label:"第二連一般成員" }
 ];
-function startRolePreview(role, unit){
-  if (!state.realRoleUnit) state.realRoleUnit = { role: state.profile.role, unit: state.profile.unit };
-  state.profile.role = role;
-  state.profile.unit = unit || "";
+// 兩種預覽共用的入口：第一次進入預覽時才存一份「真實身分」快照，之後
+// 不管切換幾次預覽對象都不會覆蓋掉這份快照，結束預覽時才整份還原。
+function beginPreview(override){
+  if (!state.realProfileSnapshot) {
+    const p = state.profile;
+    state.realProfileSnapshot = { role: p.role, unit: p.unit, displayName: p.displayName, rank: p.rank, emtLevel: p.emtLevel, phone: p.phone };
+  }
+  state.profile = { ...state.profile, ...state.realProfileSnapshot, ...override };
   state.previewActive = true;
   nav({ name: "home" });
 }
+function startRolePreview(role, unit){
+  beginPreview({ role, unit: unit || "" });
+}
+// 依人員預覽：直接借用該員名冊上的角色/單位/姓名/階級/EMT/電話，畫面上
+// 看到的就是「這個人真的登入」會看到的內容，不是自己換了角色但姓名
+// 還是自己。
+function startPersonPreview(personId){
+  const person = state.personnel.find(x => x.id === personId);
+  if (!person) return;
+  beginPreview({ role: person.role, unit: person.unit || "", displayName: person.name, rank: person.title || "", emtLevel: person.emtLevel || "", phone: person.phone || "" });
+}
 function endRolePreview(){
-  if (state.realRoleUnit) {
-    state.profile.role = state.realRoleUnit.role;
-    state.profile.unit = state.realRoleUnit.unit;
-    state.realRoleUnit = null;
+  if (state.realProfileSnapshot) {
+    state.profile = { ...state.profile, ...state.realProfileSnapshot };
+    state.realProfileSnapshot = null;
   }
   state.previewActive = false;
   nav({ name: "profile" });
@@ -4624,9 +4646,11 @@ onAuthStateChanged(auth, async (user) => {
       const wasPending = state.profile && state.profile.role === "pending";
       const changed = changedSince("profile", p);
       if (state.previewActive) {
-        // 預覽模式進行中：背景保持同步真實角色/單位，但不覆蓋畫面上正在預覽的狀態
-        state.realRoleUnit = { role: p.role, unit: p.unit };
-        state.profile = { ...state.profile, uid: user.uid, displayName: p.displayName, email: p.email, rank: p.rank, createdAt: p.createdAt };
+        // 預覽模式進行中：背景保持同步真實身分快照（供結束預覽時還原），
+        // 但不覆蓋畫面上正在預覽的 role/unit/displayName/rank/emtLevel/phone；
+        // email/createdAt 這兩個欄位跟預覽無關，一律用真實資料。
+        state.realProfileSnapshot = { role: p.role, unit: p.unit, displayName: p.displayName, rank: p.rank, emtLevel: p.emtLevel, phone: p.phone };
+        state.profile = { ...state.profile, uid: user.uid, email: p.email, createdAt: p.createdAt };
       } else {
         state.profile = { uid: user.uid, ...p };
       }
@@ -4856,7 +4880,7 @@ function cleanupListeners(){
   state.hospitals = []; state.vitals = []; state.erStandby = []; state.doctors = []; state.taskTitleTemplates = []; state.webLinks = []; state.militaryItems = []; state.notifications = []; state.pushLog = [];
   state.mciEvents = []; state.mciPatients = []; state.campRegistrations = [];
   state.deepTasks = []; state.deepEvents = []; state.deepVitals = []; state.recordsDeepQuery = null;
-  state.previewActive = false; state.realRoleUnit = null;
+  state.previewActive = false; state.realProfileSnapshot = null;
 }
 // 系統固定為營部／第一連／第二連三個單位；首次啟用時自動補建 units 文件，
 // 供其他集合以 unit_id 建立關聯（不提供 UI 編輯，因為單位編制本身不會變動）。
@@ -8964,6 +8988,12 @@ function viewErStandby(){
 function viewRolePreview(){
   const p = state.profile;
   if (!canManageUsers(p)) return `<div class="empty">您沒有使用此功能的權限</div>`;
+  // 依人員預覽：只列在職帳號（排除 pending/unclaimed/disabled），依單位
+  // 分組、單位內再依階級權重排序，跟人員與帳號頁的排序邏輯一致。
+  const previewablePeople = state.personnel
+    .filter(x => x.unit && !['pending','unclaimed','disabled'].includes(x.role))
+    .slice()
+    .sort((a,b) => unitWeight(a.unit) - unitWeight(b.unit) || rankWeight(a.title) - rankWeight(b.title));
   return `
     <div class="back-row">${backBtn({name:'profile'})}</div>
     <div class="section-label">選擇要預覽的角色</div>
@@ -8975,6 +9005,15 @@ function viewRolePreview(){
         <div><div class="name">${esc(o.label)}</div><div class="sub">${ROLE_LABEL[o.role]}${o.unit ? ' · ' + unitLabel(o.unit) : ''}</div></div>
         <span class="chev" style="color:var(--muted); font-size:20px;">›</span>
       </div>`).join("")}
+    <div class="section-label">依人員預覽</div>
+    <div class="empty" style="text-align:left; padding:16px;">
+      直接以某位真實人員的身分檢視畫面（姓名／階級也會換成該員的資料），適合確認「這個人被指派到某筆勤務時，登入後看到的內容跟能不能編輯」這類跟姓名綁定的畫面，光切換角色但姓名還是您自己看不出來。
+    </div>
+    ${previewablePeople.length ? previewablePeople.map(x => `
+      <div class="admin-row clickable" onclick="window.__startPersonPreview('${x.id}')">
+        <div><div class="name">${esc(x.name)}</div><div class="sub">${esc(x.title||'—')} · ${unitLabel(x.unit)} · ${ROLE_LABEL[x.role]||x.role}</div></div>
+        <span class="chev" style="color:var(--muted); font-size:20px;">›</span>
+      </div>`).join("") : `<div class="empty">尚無可預覽的人員</div>`}
   `;
 }
 
@@ -10021,9 +10060,12 @@ function render(){
       <span class="lbl">危險係數</span>
       <span class="val"><span class="emoji">${risk.emoji}</span><span>${risk.risk.toFixed(1)}</span></span>
     </button>` : '';
+  // 依人員預覽時姓名會換成該員的，跟純角色預覽（姓名還是自己）分開判斷，
+  // 提示文字才會正確標出「現在是以誰的身分在看畫面」。
+  const isPersonPreview = state.previewActive && state.realProfileSnapshot && p.displayName !== state.realProfileSnapshot.displayName;
   const previewBanner = state.previewActive ? `
     <div class="preview-banner">
-      ${icon('alert',16)} 預覽模式：以「${ROLE_LABEL[myRole(p)]||p.role}${p.unit?'・'+unitLabel(p.unit):''}」檢視畫面（僅預覽，實際寫入權限仍以您的真實身份為準）
+      ${icon('alert',16)} 預覽模式：以「${isPersonPreview ? esc(p.displayName)+'・' : ''}${ROLE_LABEL[myRole(p)]||p.role}${p.unit?'・'+unitLabel(p.unit):''}」檢視畫面（僅預覽，實際寫入權限仍以您的真實身份為準）
       <button onclick="window.__endRolePreview()">結束預覽</button>
     </div>` : "";
   app.innerHTML = `
@@ -10165,6 +10207,7 @@ async function triggerEmergencyBroadcast(locationKey, sliderEl){
 }
 window.__nav = nav;
 window.__startRolePreview = (role, unit) => startRolePreview(role, unit);
+window.__startPersonPreview = (personId) => startPersonPreview(personId);
 window.__endRolePreview = () => endRolePreview();
 window.__startReport = (taskId, type) => { state.reportDraft = { taskId, type }; state.reportSubmitting = false; render(); };
 window.__cancelReport = () => { state.reportDraft = null; state.reportSubmitting = false; render(); };
