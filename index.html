@@ -1310,11 +1310,15 @@
      （--radius-md/--panel-2/--blue），不另外開一套視覺風格。 */
   .camp-cal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
   .camp-cal-month{font-size:var(--text-lg); font-weight:700;}
-  .camp-cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:6px;}
+  /* 週與週之間的垂直間距要比欄與欄之間的水平間距寬（row-gap 拉大），
+     格子本身也拉高成長方形（不是正方形），兩者一起才能讓登記筆數的紅色
+     圓點徽章（絕對定位貼在格子底部）跟下一週的日期數字有足夠的視覺距離，
+     不會疊在一起。 */
+  .camp-cal-grid{display:grid; grid-template-columns:repeat(7,1fr); row-gap:16px; column-gap:6px;}
   .camp-cal-weekdays{margin-bottom:6px;}
   .camp-cal-weekday{text-align:center; font-size:var(--text-xs); font-weight:700; color:var(--muted);}
   .camp-cal-cell{
-    position:relative; aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    position:relative; aspect-ratio:4/5; display:flex; flex-direction:column; align-items:center; justify-content:center;
     background:var(--panel-2); border:1px solid transparent; border-radius:var(--radius-sm); color:var(--text);
     font-family:var(--sans); cursor:pointer; padding:0; transition:transform 0.12s ease;
   }
@@ -1742,7 +1746,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-15-394-camp-registration-tweaks";
+const BUILD_TAG = "2026-07-15-396-camp-registration-ui-polish-2";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2772,6 +2776,8 @@ const RELEASE_NOTES = [
       "洽公／廠商入營登記新增「已登記」勾選狀態：值日官謄寫進軍用電腦後可以勾選，讓大家知道名冊已經繕造完成；值日官只能切換這個狀態，不能更動登記內容本身，登記內容仍只有登記人本人與管理員能編輯/刪除",
       "「洽公／廠商入營登記」入口從「更多」頁移到「任務」頁最上面子選單（勤務右邊），改名為「洽公登記」，不用再繞去更多頁才找得到",
       "新增登記表單欄位順序調整：「事由」移到「地點」上面，並把範例文字改成更貼近實際使用情境（事由「例如：資料繳交」、地點「例如：指揮部」）",
+      "拿掉行事曆／列表切換頁籤，只留行事曆（點選日期即顯示當天登記明細），畫面更單純；行事曆每格拉高、每週列的間距也拉大，避免登記筆數紅點跟下一週的日期數字擠在一起",
+      "登記卡片改版：標題改顯示「事由」，明細依序改成「汽車／機車：車號」「地點：地點」「洽公人員：姓名 階級」（依階級權重排序）／「單位：廠商名稱」，一眼看出重點內容",
     ] },
   ] },
   { date: "2026/07/14", groups: [
@@ -3427,7 +3433,6 @@ const state = {
   webLinks: [], // 網網相連：後台管理的常用網址快速切換清單，全營共用
   militaryItems: [], // 軍品攜帶：後台管理的軍品項目名冊（武器裝備／通信裝備），全營共用
   campRegistrations: [], // 洽公／廠商入營登記：獨立於任務系統之外的門禁登記表
-  campRegView: "calendar", // 洽公登記頁目前是行事曆檢視還是列表檢視
   campRegMonth: null, // 行事曆目前顯示的月份 "YYYY-MM"，null 代表預設顯示本月
   campRegSelectedDate: null, // 從行事曆點選的日期 "YYYY-MM-DD"，列表檢視依此篩選；null 代表不篩選（顯示全部）
   campRegModal: null, // 洽公登記新增/編輯彈窗：{ id, type, date } | null（id 為 null 代表新增）
@@ -9595,14 +9600,24 @@ function campRegRowHtml(r){
   const typeLabel = (CAMP_REG_TYPES.find(t => t.key === r.type)||{}).label || r.type;
   const canEdit = canEditCampRegistration(r);
   const canToggle = canToggleCampRegTranscribed(r);
-  const whoLine = r.type === "vendor" ? (esc(r.vendorUnit||'—')) : (esc((r.personnel||[]).join('、')||'—'));
+  const vehicleLabel = r.vehicleType ? `${r.vehicleType}車` : '車輛';
+  // 洽公人員依階級權重排序（跟人員選擇器候選名單同一套排序邏輯），姓名
+  // 後面帶階級方便值日官/登記人一眼確認身分，不用另外點開才知道階級。
+  const whoLine = r.type === "vendor"
+    ? `單位：${esc(r.vendorUnit||'—')}`
+    : `洽公人員：${esc((r.personnel||[])
+        .map(name => ({ name, title: (state.personnel.find(p => p.name === name)||{}).title||'' }))
+        .sort((a,b) => rankWeight(a.title) - rankWeight(b.title))
+        .map(x => x.title ? `${x.name} ${x.title}` : x.name)
+        .join('、') || '—')}`;
   return `
     <div class="admin-row camp-reg-row">
       <div>
-        <div class="name"><span class="camp-reg-type-tag ${r.type}">${typeLabel}</span> ${esc(r.location||'—')}</div>
-        <div class="sub">${whoLine} · ${esc(r.vehicleType||'')}${esc(r.plateNumber||'')} · ${unitLabel(r.unit)}</div>
-        ${r.reason ? `<div class="sub">事由：${esc(r.reason)}</div>` : ''}
-        <div class="sub">登記人：${esc(r.createdByName||'—')}</div>
+        <div class="name"><span class="camp-reg-type-tag ${r.type}">${typeLabel}</span> ${esc(r.reason||'—')}</div>
+        <div class="sub">${vehicleLabel}：${esc(r.plateNumber||'—')}</div>
+        <div class="sub">地點：${esc(r.location||'—')}</div>
+        <div class="sub">${whoLine}</div>
+        <div class="sub">登記人：${esc(r.createdByName||'—')} · ${unitLabel(r.unit)}</div>
       </div>
       <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
         <label class="checkbox-inline" style="font-size:var(--text-xs);">
@@ -9661,29 +9676,14 @@ function viewCampRegCalendar(){
     ${campRegListForDate(activeDate)}
   `;
 }
-function viewCampRegList(){
-  const regs = state.campRegistrations;
-  if (!regs.length) return `<div class="empty">尚無登記資料</div>`;
-  const groups = [];
-  let lastDate = null;
-  regs.forEach(r => {
-    if (r.date !== lastDate) { groups.push({ date: r.date, items: [] }); lastDate = r.date; }
-    groups[groups.length-1].items.push(r);
-  });
-  return groups.map(g => `<div class="section-label" style="margin-top:18px;">${g.date}</div>${g.items.map(campRegRowHtml).join("")}`).join("");
-}
 // 洽公／廠商入營登記：掛在「任務」頁最上面子選單（勤務右邊），不是獨立
 // 路由，所以不用返回鍵／頁面標題，跟 viewTasks() 的天氣／紀錄子頁同一種
-// 只有 mainTabs + 內容的組成方式。
+// 只有 mainTabs + 內容的組成方式。只有行事曆一種檢視（原本另有一個列表
+// 頁籤，跟行事曆下方的「登記明細」重複顯示同一批資料，拿掉了）。
 function viewCampRegBody(){
-  const view = state.campRegView || "calendar";
   return `
-    <div class="tabs2">
-      <div class="tab2 ${view==='calendar'?'active':''}" onclick="window.__setCampRegView('calendar')">行事曆</div>
-      <div class="tab2 ${view==='list'?'active':''}" onclick="window.__setCampRegView('list')">列表</div>
-    </div>
     <button class="icon-btn primary" style="margin-bottom:14px;" onclick="window.__openCampRegModal(null)">${icon('plus',15)} 新增登記</button>
-    ${view === 'calendar' ? viewCampRegCalendar() : viewCampRegList()}
+    ${viewCampRegCalendar()}
   `;
 }
 function viewCampRegModal(){
@@ -10560,7 +10560,6 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
        : addRecorder(unit, f.get("code")));
   action.then(() => { state.baseDataModal = null; render(); }).catch(baseDataErr);
 };
-window.__setCampRegView = (v) => { state.campRegView = v; render(); scrollContentToTop(); };
 window.__campRegShiftMonth = (delta) => {
   const [y, mo] = campRegMonthStr().split('-').map(Number);
   state.campRegMonth = isoDate(new Date(y, mo-1+delta, 1)).slice(0,7);
