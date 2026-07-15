@@ -1676,12 +1676,19 @@
      不是視窗「不夠矮」，是整個外層容器的定位基準本身就沒有跟著鍵盤收縮。 */
   .modal-overlay{
     position:fixed; top:0; left:0; right:0; height:100vh; height:100dvh;
-    background:rgba(10,10,14,0.44); backdrop-filter:blur(1.5px);
+    background:rgba(10,10,14,0.32); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
     display:flex; align-items:flex-end; justify-content:center; z-index:60;
     animation:modalFade 0.18s ease;
   }
+  /* 面板本身改成半透明＋高斯模糊（跟 header／底部導覽列／FAB 同一套
+     液態玻璃語彙：blur(20px) saturate(180%)），底下 .modal-overlay 已經
+     壓暗的頁面內容會透出模糊的痕跡，才是真的「毛玻璃」——原本
+     background 是全不透明的 var(--panel)，.modal-overlay 那層極輕的
+     blur(1.5px) 只會模糊到面板「以外」露出的一小圈背景，面板本身完全
+     看不出玻璃質感。 */
   .modal-sheet{
-    background:var(--panel); width:100%; max-width:520px; border-radius:22px 22px 0 0;
+    background:color-mix(in srgb, var(--panel) 85%, transparent); width:100%; max-width:520px; border-radius:22px 22px 0 0;
+    backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%);
     padding:14px 20px calc(20px + env(safe-area-inset-bottom)) 20px;
     max-height:88vh; max-height:88dvh; overflow-y:auto; overflow-x:hidden;
     overscroll-behavior:contain;
@@ -1833,7 +1840,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-15-408-weatherstats-openmeteo";
+const BUILD_TAG = "2026-07-15-409-modal-glass";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2881,6 +2888,7 @@ const RELEASE_NOTES = [
       "管理後台「人員與帳號」改成卡片式排版：大頭貼＋姓名＋階級徽章＋信箱一目了然，電話號碼改成獨立的可點撥膠囊列，編輯功能改成右上角的鉛筆圖示按鈕；角色/單位下拉選單、值日官勾選框、刪除鈕維持原本功能不變",
       "全站的布林開關（值日官、標記為常用醫院、跨單位借車、跨單位選人）統一改成 iOS 風格的綠色 Switch，取代原本的小勾選框＋文字，跟既有的軍品攜帶/推播通知/測試模式開關同一套視覺語言；多選清單（過去病史、複選人員等）維持原本的勾選框/選項卡樣式不受影響",
       "「權限說明」新增「依人員預覽」：除了原本只換角色/單位（姓名還是自己）的預覽，現在可以直接選一位真實人員，姓名/階級/EMT/電話都會換成該員的資料，才能真正看到「這個人登入後」會看到的畫面內容（例如是不是被指派到某筆勤務、能不能編輯），不再被「角色換了但姓名還是自己」誤導",
+      "全站彈窗（大量傷患事件/回報/基礎資料/洽公登記/緊急動員廣播/人員車輛挑選器等）改成真的毛玻璃質感：面板改成半透明＋高斯模糊，跟 header／底部導覽列／懸浮按鈕同一套液態玻璃語彙，底下頁面內容會透出模糊的痕跡，不再是完全不透明的實心面板",
     ] },
   ] },
   { date: "2026/07/14", groups: [
