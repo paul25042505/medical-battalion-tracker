@@ -1714,7 +1714,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-15-391-task-selfedit-standby-autocomplete";
+const BUILD_TAG = "2026-07-15-392-push-testmode-toggle";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1722,7 +1722,7 @@ const BUILD_TAG = "2026-07-15-391-task-selfedit-standby-autocomplete";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.15";
+const APP_MAJOR_MINOR = "2.16";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -2694,6 +2694,9 @@ const RELEASE_NOTES = [
     ] },
     { category: "急診待命", items: [
       "「完成當前勤務，啟動新勤務」（原「更新勤務」）改成真的會把舊任務標記完成，不會再留著一筆沒有結束的舊勤務；如果舊任務目前還有進行中、尚未結案的患者紀錄，會先擋住並提示「請先結案患者紀錄」",
+    ] },
+    { category: "推播通知", items: [
+      "管理後台「系統設定」新增「測試模式」開關：管理員在測試會觸發推播的功能（例如建立勤務、回報進度）時可以先開啟，新增勤務／進度回報／生命徵象異常／公告／待命車換班提醒／緊急動員廣播這些推播通知會暫停發送、也不會留在任何人的通知中心，1 小時後自動恢復正常，不用真的打擾大家才能測試；「推播控制台」的單人測試推播不受影響",
     ] },
   ] },
   { date: "2026/07/14", groups: [
@@ -5301,6 +5304,7 @@ function nav(route){
   // 意見回饋是進頁籤時現抓一次的簡易快取（見 viewAdminFeedback），不是
   // 輪詢；每次導覽過去都清掉快取強制重抓一次，才看得到剛送出的意見回饋。
   if (route.name === "adminFeedback") state._feedbackCache = null;
+  if (route.name === "adminSettings") state._testModeCache = null;
   render(); scrollContentToTop();
   const polls = { tasks: tasksPoll, events: eventsPoll, personnel: personnelPoll, vehicles: vehiclesPoll, recorders: recordersPoll, hospitals: hospitalsPoll, vitals: vitalsPoll, erStandby: erStandbyPoll, doctors: doctorsPoll, taskTitleTemplates: taskTitleTemplatesPoll, webLinks: webLinksPoll, militaryItems: militaryItemsPoll, notifications: notificationsPoll, pushLog: pushLogPoll, erRealtime: erRealtimePoll, mciEvents: mciEventsPoll, mciPatients: mciPatientsPoll };
   (ROUTE_REFRESH[route.name] || []).forEach(key => { if (polls[key]) polls[key].refreshNow(); });
@@ -9199,8 +9203,51 @@ function pushCatalogSection(){
 function viewAdminMessages(){
   return `<div class="section-label">訊息管理</div>${pushCatalogSection()}${renderNotificationsList(true)}`;
 }
+// 測試模式：管理員在測試某項功能（會觸發推播的操作）時，可以暫時關閉
+// 「發給大家」的推播通知，不用真的打擾所有人才能測試——實際的略過邏輯
+// 在後端 functions/index.js 的 isTestModeActive()／notifyRecipients()，
+// 這裡只負責讀取/寫入 settings/testMode 這份單一設定文件、顯示目前狀態。
+// 比照意見回饋頁籤的做法（見 state._feedbackCache），開啟頁籤時現抓一次，
+// 不建立輪詢——這顆開關很少人在看，不需要即時同步。
 function viewAdminSystemSettings(){
-  return `<div class="section-label">系統設定</div><div class="empty">${icon('check',32)}<div style="margin-top:10px;">系統設定開發中，之後將提供系統層級的參數設定。</div></div>`;
+  if (!state._testModeCache) {
+    state._testModeCache = "loading";
+    fsGetDoc("settings/testMode").then(doc => {
+      state._testModeCache = doc || {};
+      render();
+    }).catch(err => {
+      console.error("讀取測試模式設定失敗", err);
+      showToast(`讀取測試模式設定失敗：[${err.code||'?'}] ${err.message}`);
+      state._testModeCache = {};
+      render();
+    });
+    return `<div class="section-label">系統設定</div><div class="spinner"></div>`;
+  }
+  if (state._testModeCache === "loading") return `<div class="section-label">系統設定</div><div class="spinner"></div>`;
+
+  const tm = state._testModeCache;
+  const expiresAtMs = tm.expiresAt ? new Date(tm.expiresAt).getTime() : 0;
+  const active = !!tm.enabled && expiresAtMs > Date.now();
+  const remainMin = active ? Math.max(1, Math.ceil((expiresAtMs - Date.now()) / 60000)) : 0;
+  return `
+    <div class="section-label">系統設定</div>
+    <div class="detail-head">
+      <div class="appearance-auto-row">
+        <div style="min-width:0;">
+          <div style="font-size:var(--text-base); color:var(--text); font-weight:600;">測試模式（暫停推播通知）</div>
+          <div style="color:var(--muted); font-size:var(--text-xs); margin-top:4px;">
+            ${active ? `已開啟，約 ${remainMin} 分鐘後自動關閉（由 ${esc(tm.enabledBy||'—')} 開啟）` : '目前關閉，所有推播通知正常發送'}
+          </div>
+        </div>
+        <label class="ios-switch">
+          <input type="checkbox" ${active?'checked':''} onchange="window.__toggleTestMode(this.checked)">
+          <span class="track"></span>
+          <span class="knob"></span>
+        </label>
+      </div>
+      <div style="color:var(--muted); font-size:var(--text-xs); margin-top:12px;">開啟後，新增勤務／進度回報／生命徵象異常／公告／待命車換班提醒／緊急動員廣播，這些會發給大家的推播通知都會暫停發送（也不會留在任何人的通知中心），方便測試功能時不打擾其他人；1 小時後自動恢復正常，也可以隨時手動關閉。「推播控制台」的單人測試推播不受影響，仍會照常送出。</div>
+    </div>
+  `;
 }
 // 意見回饋清單僅 admin 可見，比照帳號權限頁籤的做法：開啟頁籤時現抓一次，
 // 不另外建立輪詢（回報頻率低，不需要即時同步）。
@@ -10588,6 +10635,21 @@ window.__toggleThemeAuto = (turnedOn) => {
 window.__editProfile = () => { state.profileEditing = true; render(); };
 window.__cancelEditProfile = () => { state.profileEditing = false; render(); };
 window.__togglePush = (turnedOn) => { if (turnedOn) enablePush(); else disablePush(); };
+// 測試模式開關：開啟固定續 1 小時（跟後端 isTestModeActive() 的判斷基準
+// 一致，過期後自動視為關閉，不需要另外排程清除）；關閉就單純把 enabled
+// 設回 false。寫入成功後清掉快取強制重抓一次，畫面上的剩餘時間才會是
+// 從 Firestore 讀回來的真實值，不是純前端自己算的。
+window.__toggleTestMode = (checked) => {
+  const p = state.profile;
+  const fields = checked
+    ? { enabled: true, enabledAt: new Date(), enabledBy: p.displayName || p.email || "", expiresAt: new Date(Date.now() + 60*60*1000) }
+    : { enabled: false };
+  fsSetDoc("settings/testMode", fields).then(() => {
+    state._testModeCache = null;
+    showToast(checked ? "測試模式已開啟，1 小時後自動恢復正常" : "測試模式已關閉");
+    render();
+  }).catch(baseDataErr);
+};
 window.__saveProfile = (ev) => {
   ev.preventDefault();
   const f = new FormData(ev.target);

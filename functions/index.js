@@ -85,6 +85,35 @@ async function resolveAllTokens() {
 }
 
 /* =========================================================
+   管理員測試模式：管理員在測試某項功能（會觸發推播的操作，例如建立
+   勤務、回報進度）時，可以暫時關閉「發給大家」的推播通知，不用真的
+   打擾所有人才能測試。設定存在單一文件 settings/testMode（見
+   index.html 的「系統設定」頁，__toggleTestMode 負責寫入），開啟時
+   固定 1 小時後自動失效（比對 expiresAt，不需要另外排程清除，過期
+   後這裡直接判定為未開啟）。
+
+   影響範圍：新增勤務／進度回報／生命徵象異常／公告／待命車換班提醒／
+   緊急動員廣播——這些「發給大家」的推播（含個人通知中心紀錄 pushLog）
+   都會略過。「推播控制台」的單人測試推播（sendTestPush）刻意不受
+   影響：那是管理員自己選定單一對象、確認裝置設定是否正常的診斷工具，
+   不是「打擾大家」的通知，測試模式開著時如果連這個都失效，反而讓
+   管理員搞不清楚裝置設定本身到底有沒有問題。
+   ========================================================= */
+async function isTestModeActive() {
+  try {
+    const doc = await db.doc("settings/testMode").get();
+    if (!doc.exists) return false;
+    const d = doc.data();
+    if (!d.enabled) return false;
+    const expiresAtMs = d.expiresAt && d.expiresAt.toMillis ? d.expiresAt.toMillis() : new Date(d.expiresAt || 0).getTime();
+    return Date.now() < expiresAtMs;
+  } catch (e) {
+    logger.error("讀取測試模式設定失敗，視為未開啟（維持正常發送推播，不因為讀取失敗誤把通知擋下來）", e);
+    return false;
+  }
+}
+
+/* =========================================================
    共用：實際送出推播＋清掉失效的 token（使用者解除安裝、清除瀏覽器
    資料、手動關閉通知權限等情況都會讓 token 失效，不清掉的話下次還是
    會白工嘗試送到同一個死掉的 token）
@@ -163,6 +192,10 @@ async function writePushLog(uids, title, body) {
 // 送推播＋順便幫每個收件人在自己的通知中心留一筆紀錄，兩件事綁在一起做，
 // 避免每個觸發點都要各自記得呼叫兩次。
 async function notifyRecipients(recipients, title, body) {
+  if (await isTestModeActive()) {
+    logger.info(`測試模式開啟中，略過推播「${title}」（不送推播、不寫入通知中心）`);
+    return;
+  }
   const tokens = recipients.flatMap((r) => r.tokens);
   await sendPush(tokens, title, body);
   await writePushLog(recipients.map((r) => r.uid), title, body);
@@ -292,6 +325,10 @@ exports.onNotificationCreated = onDocumentCreated("notifications/{id}", async (e
   if (!snap) return;
   const n = snap.data();
   if (!n || !n.title) return;
+  if (await isTestModeActive()) {
+    logger.info(`測試模式開啟中，略過公告推播「${n.title}」`);
+    return;
+  }
   const tokens = await resolveAllTokens();
   await sendPush(tokens, `公告：${n.title}`, n.body || "");
 });
@@ -615,6 +652,11 @@ exports.sendEmergencyBroadcast = onRequest({ cors: true }, async (req, res) => {
     // 單位的所有人，不管當下有沒有裝置能收到即時推播，之後打開系統還是
     // 看得到這則通知。
     const pushable = recipients.filter((r) => r.tokens.length);
+    if (await isTestModeActive()) {
+      logger.info("測試模式開啟中，略過緊急動員廣播實際發送");
+      res.status(200).json({ ok: true, message: body, recipients: [], testMode: true });
+      return;
+    }
     await sendPush(pushable.flatMap((r) => r.tokens), title, body);
     await writePushLog(recipients.map((r) => r.uid), title, body);
     res.status(200).json({ ok: true, message: body, recipients: pushable.map((r) => r.name) });
@@ -627,4 +669,4 @@ exports.sendEmergencyBroadcast = onRequest({ cors: true }, async (req, res) => {
 // 純函式/資料存取邏輯額外匯出一份，方便寫單元測試直接呼叫驗證（不會
 // 影響部署——firebase deploy 只認得用 onDocumentCreated 等 v2 trigger
 // builder 包起來的 exports，這個純物件會被忽略，不會變成多一個雲端函式）。
-exports._internal = { normalizeRole, resolveRecipients, resolveAllTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce, standbyShiftCutoff, resolveEmergencyBroadcastRecipients, isCurrentDutyMember, writePushLog, notifyRecipients };
+exports._internal = { normalizeRole, resolveRecipients, resolveAllTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce, standbyShiftCutoff, resolveEmergencyBroadcastRecipients, isCurrentDutyMember, writePushLog, notifyRecipients, isTestModeActive };

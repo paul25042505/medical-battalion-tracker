@@ -113,6 +113,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // 系統層級參數設定（目前只有 settings/testMode：管理員測試模式，見
+    // functions/index.js 的 isTestModeActive／index.html 的「系統設定」
+    // 頁），只有 admin 能讀寫，不開放給其他角色（含高勤官、主官管）。
+    match /settings/{id} {
+      allow read, write: if isAdmin();
+    }
+
     // 基礎資料：車輛／行車紀錄器，依單位分類（人員已併入 users 集合，
     // 見上方 match /users/{uid} 的說明）。
     // Admin、高勤官可管理所有單位；主官管僅能管理自己單位的資料；
