@@ -4,7 +4,14 @@ name: Deploy to Firebase Hosting preview channel on PR
 # PR 更新會自動重新部署到同一個網址），不動 Firestore rules／Cloud
 # Functions——那兩個是全域共用資源，不該因為某個功能分支的預覽就先套用。
 # 正式上版仍然是 merge 到 main 後由 firebase-hosting-merge.yml 處理。
-on: pull_request
+#
+# types 加上 closed：PR 關閉/合併時觸發同一個 action-hosting-deploy 步驟，
+# 官方 action 偵測到 closed 事件會自動刪除該 PR 的預覽 channel，不然沒人
+# 清理，一段時間後就會把整個 Hosting site 的 preview channel 配額塞滿，
+# 之後每個新 PR 建立 channel 都會 429 channel quota reached 失敗。
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
 
 permissions:
   checks: write
