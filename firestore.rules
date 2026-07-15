@@ -35,6 +35,22 @@ service cloud.firestore {
           : (myUserDoc().displayName == taskData.crewLeader || myUserDoc().displayName == taskData.driver)
       );
     }
+    // 編輯勤務用的「本人是不是這筆任務的車長/駕駛/洽公人員」判斷，故意不
+    // 比照 isAssignedToTaskData() 額外放行 createdBy——編輯權限只給「任務
+    // 裡面的人」本人（使用者的原話），代建立任務的人不算，跟事件/生命徵象
+    // 回報開放建立者代填是不同的情境，這裡不能沿用同一個函式。
+    function isCrewOfTask(taskData) {
+      return taskData.type == 'liaison'
+        ? (myUserDoc().displayName in taskData.personnel)
+        : (myUserDoc().displayName == taskData.crewLeader || myUserDoc().displayName == taskData.driver);
+    }
+    // 判斷某個時間戳記跟現在是不是台灣在地時區（UTC+8）的同一個日曆日：
+    // 兩邊都先加上 8 小時位移量再取「第幾天」比較，才是比較台灣在地的日期，
+    // 不是單純比較 UTC 日期（否則台灣已經跨日、UTC 還沒跨日這種邊界會誤判）。
+    function isSameLocalDayAsNow(ts) {
+      let tzMs = 8 * 60 * 60 * 1000;
+      return math.floor((request.time.toMillis() + tzMs) / 86400000) == math.floor((ts.toMillis() + tzMs) / 86400000);
+    }
 
     // 帳號與人員名冊合併成同一份集合（原本 users／personnel 兩份分開維護，
     // 一份存帳號權限、一份存花名冊，同一個人要對照兩邊資料容易搞混，也曾經
@@ -125,8 +141,13 @@ service cloud.firestore {
       allow read: if isStaff() || sameUnit(resource.data.unit) || ('erStandbyKey' in resource.data);
       // 建立勤務限一般成員（限自己單位）與管理員；高勤官、主官管維持督導/查看角色，不再能自己建立。
       allow create: if isAdmin() || (isSignedIn() && myRole() == 'member' && sameUnit(request.resource.data.unit));
-      // 高勤官、主官管對勤務只有查看權限：不可編輯、不可刪除（含強制結束），僅 admin 可操作。
-      allow update: if isAdmin();
+      // 高勤官、主官管對勤務維持只有查看權限：不可編輯。一般成員只能編輯
+      // 自己被指派（車長/駕駛/洽公人員本人）的勤務，且只限建立當天——過了
+      // 當天 24:00（台灣在地時區）這筆任務就算進了紀錄查詢的歷史資料，
+      // 只剩 admin 能再改，避免本人事後任意竄改已經成為歷史紀錄的內容。
+      allow update: if isAdmin() ||
+                    (isSignedIn() && myRole() == 'member' && isCrewOfTask(resource.data) && isSameLocalDayAsNow(resource.data.createdAt));
+      // 刪除（含強制結束）僅 admin 可操作，不開放給一般成員。
       allow delete: if isAdmin();
     }
 
