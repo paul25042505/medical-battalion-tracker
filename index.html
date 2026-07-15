@@ -1833,7 +1833,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-15-406-prereg-btn-style";
+const BUILD_TAG = "2026-07-15-407-typhoon-expiry-filter";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2873,6 +2873,9 @@ const RELEASE_NOTES = [
       "值日官提示框文字調整為正式提醒用語：完成謄寫至洽公名冊後，請將「未登記」切換為「已登記」，方便相關人員快速確認資料已登記、避免重複或遺漏作業",
       "廠商入營登記拿掉「地點」欄位，「單位」改名「單位或姓名」（例如：OO工程行 或 王OO），廠商跟個人（沒有行號）都能填",
       "第二連（嘉義，不在成功嶺營區範圍）的洽公／廠商入營登記卡片不再顯示「已登記／未登記」按鈕，避免顯示了卻沒有值日官會去點",
+    ] },
+    { category: "天氣資訊", items: [
+      "修正颱風警報卡片沒有隨著警報解除自動消失的問題：氣象署把警報下架的時間點有時會晚於警報實際的效期（expires），現在改成用效期判斷，只要已經過了效期就不再顯示，不用等氣象署資料更新完成",
     ] },
     { category: "介面優化", items: [
       "管理後台「人員與帳號」改成卡片式排版：大頭貼＋姓名＋階級徽章＋信箱一目了然，電話號碼改成獨立的可點撥膠囊列，編輯功能改成右上角的鉛筆圖示按鈕；角色/單位下拉選單、值日官勾選框、刪除鈕維持原本功能不變",
@@ -6351,10 +6354,16 @@ function typhoonTrackBlock(unit, x){
 function renderTyphoonBanner(unit){
   const t = state.typhoon;
   if (!t || t.error || !t.list || !t.list.length) return "";
+  // 颱風警報解除後，氣象署有時不會馬上把舊資料從 W-C0034-001 下架，
+  // 這裡額外檢查 expires（效期），已經過期的警報不顯示，不用等氣象署
+  // 資料更新，也不用使用者手動關閉。
+  const now = Date.now();
+  const activeList = t.list.filter(x => !x.expires || new Date(x.expires).getTime() > now);
+  if (!activeList.length) return "";
   const expanded = state.typhoonExpanded;
   return `
     <div class="hazard-banner">
-      ${t.list.map(x => `
+      ${activeList.map(x => `
         <div class="hazard-card typhoon-card">
           <div class="hazard-card-top">
             <div class="hazard-card-live"><span class="pulse-dot"><span class="ping"></span><span class="dot"></span></span>警報中</div>
