@@ -280,12 +280,23 @@
      分開在 base 與 :active 各自完整列出一次，避免 :active 覆寫整個
      transition 捷徑時不小心把其他屬性的轉場效果也一併蓋掉。 */
   .topbar-icon-btn{
+    position:relative;
     background:var(--glass-btn-bg); border:0.5px solid var(--glass-btn-border); color:var(--text);
     width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;
     backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%);
     box-shadow:0 1px 3px rgba(0,0,0,0.08), inset 0 1px 1px var(--glass-btn-highlight), inset 0 -1px 1px rgba(0,0,0,0.04);
     transition:transform 0.32s cubic-bezier(0.34,1.56,0.64,1), background 0.2s cubic-bezier(0.25,1,0.5,1),
       border-color 0.2s cubic-bezier(0.25,1,0.5,1), box-shadow 0.2s cubic-bezier(0.25,1,0.5,1), filter 0.2s cubic-bezier(0.25,1,0.5,1);
+  }
+  /* 鈴鐺未讀徽章：紅點＋數字（超過 9 顯示 9+），套用既有的 badgePulse
+     呼吸動畫（見「進行中」狀態圓點），讓有未讀時比純靜態小紅點更容易
+     被餘光注意到；已讀完就整顆徽章不渲染，不會維持一個空殼一直閃。 */
+  .notif-badge{
+    position:absolute; top:-2px; right:-2px; min-width:16px; height:16px; padding:0 4px;
+    border-radius:9px; background:var(--red); color:#fff; font-size:10px; font-weight:800;
+    font-family:var(--mono); line-height:1; display:flex; align-items:center; justify-content:center;
+    box-shadow:0 0 0 2px var(--panel);
+    animation:badgePulse 1.6s ease-in-out infinite;
   }
   .topbar-icon-btn:active{
     transform:scale(1.12); background:var(--glass-btn-bg-active); border-color:var(--glass-btn-border-active); filter:brightness(1.15);
@@ -1168,6 +1179,20 @@
   }
   .btn-outline-blue:active{background:color-mix(in srgb, var(--blue) 10%, transparent);}
 
+  /* 液態玻璃藍色按鈕：跟 FAB／header 按鈕同一套毛玻璃語彙，用在需要比
+     .btn-outline-blue 更搶眼、但又不是整頁主要送出鍵的操作（例如通知
+     中心「全部標記為已讀」）。 */
+  .btn-glass-blue{
+    background:color-mix(in srgb, var(--blue) 78%, transparent); color:#fff; font-weight:700;
+    border:0.5px solid rgba(255,255,255,0.35); border-radius:var(--radius-btn);
+    backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%);
+    box-shadow:0 4px 14px color-mix(in srgb, var(--blue) 30%, transparent), inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -1px 1px rgba(0,0,0,0.08);
+    padding:0 16px; min-height:38px; font-size:var(--text-sm); font-family:var(--sans);
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    transition:transform 0.15s cubic-bezier(0.34,1.56,0.64,1), filter 0.15s ease;
+  }
+  .btn-glass-blue:active{transform:scale(0.96); filter:brightness(1.1);}
+
   .tl-edit-btn{background:none; border:none; color:var(--blue); font-size:var(--text-xs); font-weight:600; padding:2px 0; flex-shrink:0;}
 
   /* ---- forms / admin ---- */
@@ -1840,7 +1865,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-15-409-modal-glass";
+const BUILD_TAG = "2026-07-16-410-notif-badge";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2852,6 +2877,12 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/07/16", groups: [
+    { category: "推播通知", items: [
+      "鈴鐺通知圖示新增未讀徽章：有未讀公告或系統推播（合併計算）時，右上角會顯示紅點＋未讀數字（超過 9 顯示「9+」），並套用跟「進行中」狀態圓點同一套呼吸動畫，比純靜態小紅點更容易被注意到；全部已讀時徽章自動消失",
+      "通知中心「全部標記為已讀」按鈕改用液態玻璃藍色樣式（跟懸浮新增按鈕／header 按鈕同一套毛玻璃語彙），比原本的灰色按鈕更醒目",
+    ] },
+  ] },
   { date: "2026/07/15", groups: [
     { category: "任務管理", items: [
       "被指派為車長／駕駛／洽公人員的本人，現在可以編輯自己當天建立的勤務；一旦過了當天 24:00，這筆勤務就算進了紀錄查詢的歷史資料，只剩管理員能再修改",
@@ -8281,7 +8312,7 @@ function renderNotificationsList(editable){
     ? `<button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('notifications', null, '')">${icon('plus',15)} 新增公告</button>`
     : "";
   const markAllBtn = hasUnread
-    ? `<button class="icon-btn" style="margin-bottom:12px;" onclick="window.__markAllNotificationsRead(${!editable})">全部標記為已讀</button>`
+    ? `<button class="btn-glass-blue" style="margin-bottom:12px;" onclick="window.__markAllNotificationsRead(${!editable})">全部標記為已讀</button>`
     : "";
   return `
     ${addBtn}
@@ -10057,6 +10088,11 @@ function render(){
       <span class="lbl">危險係數</span>
       <span class="val"><span class="emoji">${risk.emoji}</span><span>${risk.risk.toFixed(1)}</span></span>
     </button>` : '';
+  // 鈴鐺未讀徽章：跟通知中心鈴鐺入口看到的資料源一致（見
+  // renderNotificationsList 的說明），公告＋個人推播紀錄合併計算未讀數，
+  // 超過 9 顯示「9+」，避免兩位數把圓形徽章撐變形。
+  const unreadNotifCount = mergedPersonalNotifications().filter(n => !n.isRead).length;
+  const notifBadge = unreadNotifCount > 0 ? `<span class="notif-badge">${unreadNotifCount > 9 ? '9+' : unreadNotifCount}</span>` : '';
   // 依人員預覽時姓名會換成該員的，跟純角色預覽（姓名還是自己）分開判斷，
   // 提示文字才會正確標出「現在是以誰的身分在看畫面」。
   const isPersonPreview = state.previewActive && state.realProfileSnapshot && p.displayName !== state.realProfileSnapshot.displayName;
@@ -10075,7 +10111,7 @@ function render(){
           </div>
           <div class="topbar-icons">
             ${weatherBadge}
-            <button class="topbar-icon-btn" onclick="window.__nav({name:'notifications'})">${icon('bell',25)}</button>
+            <button class="topbar-icon-btn" onclick="window.__nav({name:'notifications'})">${icon('bell',25)}${notifBadge}</button>
             <button class="topbar-icon-btn" onclick="window.__confirmLogout()">${icon('logout',25)}</button>
           </div>
         </div>
