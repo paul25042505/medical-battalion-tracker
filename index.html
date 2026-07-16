@@ -1853,19 +1853,27 @@
 <div id="app"></div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+// Firebase SDK 改成自己主機（vendor/firebase/，從 npm firebase@10.13.0
+// 套件裡取出跟 gstatic.com CDN 完全相同的預建 bundle，逐位元組一致，
+// 只是換成同源路徑），不再直接連 gstatic.com——理由見 Service Worker
+// （firebase-messaging-sw.js）開頭的離線快取說明：如果 SDK 本身還是外部
+// CDN 資源，斷網時這幾行 import 會直接失敗，整個 module script 就不會
+// 執行，Service Worker 快取住的 App Shell HTML 也沒有用，畫面只會是一片
+// 空白。改成同源路徑後，這幾支檔案才能被一起列進 Service Worker 的
+// 預先快取清單，離線時才真的載得起來。
+import { initializeApp } from "./vendor/firebase/firebase-app.js";
 import {
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+} from "./vendor/firebase/firebase-auth.js";
 import {
   getMessaging, getToken, deleteToken, onMessage, isSupported as isMessagingSupported
-} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging.js";
+} from "./vendor/firebase/firebase-messaging.js";
 
 /* =========================================================
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-16-410-notif-badge";
+const BUILD_TAG = "2026-07-16-411-pwa-offline-cache";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1873,7 +1881,7 @@ const BUILD_TAG = "2026-07-16-410-notif-badge";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.17";
+const APP_MAJOR_MINOR = "2.18";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -2881,6 +2889,10 @@ const RELEASE_NOTES = [
     { category: "推播通知", items: [
       "鈴鐺通知圖示新增未讀徽章：有未讀公告或系統推播（合併計算）時，右上角會顯示紅點＋未讀數字（超過 9 顯示「9+」），並套用跟「進行中」狀態圓點同一套呼吸動畫，比純靜態小紅點更容易被注意到；全部已讀時徽章自動消失",
       "通知中心「全部標記為已讀」按鈕改用液態玻璃藍色樣式（跟懸浮新增按鈕／header 按鈕同一套毛玻璃語彙），比原本的灰色按鈕更醒目",
+    ] },
+    { category: "系統功能", items: [
+      "新增離線快取（PWA App Shell）：訊號不好或暫時斷網時，App 至少打得開、看得到畫面（不是瀏覽器的離線錯誤頁）；有網路時一律優先讀取最新版本，只有真的離線才會退回快取內容——這不是離線也能寫入資料的完整離線架構，勤務/患者紀錄等即時資料還是需要連線才能讀寫",
+      "Firebase SDK 改成自己主機（不再直接連 gstatic.com CDN）：這是達成上面離線快取的必要條件——SDK 如果還是外部 CDN 資源，斷網時連 SDK 本身都載不起來，快取住的 App Shell 也沒有用",
     ] },
   ] },
   { date: "2026/07/15", groups: [
@@ -11956,6 +11968,15 @@ window.addEventListener("scroll", () => {
     }, 120);
   }, true);
 })();
+
+// 離線快取用的 Service Worker——不管有沒有開通推播通知都要註冊，才能
+// 讓「斷網也打得開 App Shell」對所有人生效，不是只有選擇開通推播的人
+// 才有效果。推播流程（見 enablePush()）本來就會在使用者開通推播時再
+// 註冊一次同一個檔案，register() 對同一個 URL 是 idempotent，重複註冊
+// 不會衝突、也不會建立第二份。
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("firebase-messaging-sw.js").catch(err => console.error("Service Worker 註冊失敗", err));
+}
 
 render();
 </script>
