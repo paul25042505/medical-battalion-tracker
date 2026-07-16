@@ -1873,7 +1873,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-16-411-pwa-offline-cache";
+const BUILD_TAG = "2026-07-16-412-vehicle-stats-tab";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1881,7 +1881,7 @@ const BUILD_TAG = "2026-07-16-411-pwa-offline-cache";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.18";
+const APP_MAJOR_MINOR = "2.19";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -2893,6 +2893,9 @@ const RELEASE_NOTES = [
     { category: "系統功能", items: [
       "新增離線快取（PWA App Shell）：訊號不好或暫時斷網時，App 至少打得開、看得到畫面（不是瀏覽器的離線錯誤頁）；有網路時一律優先讀取最新版本，只有真的離線才會退回快取內容——這不是離線也能寫入資料的完整離線架構，勤務/患者紀錄等即時資料還是需要連線才能讀寫",
       "Firebase SDK 改成自己主機（不再直接連 gstatic.com CDN）：這是達成上面離線快取的必要條件——SDK 如果還是外部 CDN 資源，斷網時連 SDK 本身都載不起來，快取住的 App Shell 也沒有用",
+    ] },
+    { category: "任務管理", items: [
+      "任務頁子選單新增「統計」（紀錄右邊）：今日/本週/本月篩選各車輛出勤次數、各車輛里程（公里，依出發/返營里程相減加總）、車輛使用次數排行、任務狀態比例，一眼看出這段期間哪台車跑最多趟、跑最遠",
     ] },
   ] },
   { date: "2026/07/15", groups: [
@@ -6492,7 +6495,8 @@ const TASKS_MAIN_TABS = [
   { key:"duty", label:"勤務", iconName:"tasks" },
   { key:"campReg", label:"洽公登記", iconName:"calendar" },
   { key:"weather", label:"天氣", iconName:"cloud" },
-  { key:"records", label:"紀錄", iconName:"records" }
+  { key:"records", label:"紀錄", iconName:"records" },
+  { key:"stats", label:"統計", iconName:"chart" }
 ];
 function viewTasks(){
   const p = state.profile;
@@ -6533,6 +6537,13 @@ function viewTasks(){
     return `
       ${mainTabs}
       ${viewRecords()}
+    `;
+  }
+
+  if (state.tasksMainTab === "stats") {
+    return `
+      ${mainTabs}
+      ${viewStatsBody()}
     `;
   }
 
@@ -8227,7 +8238,7 @@ function tasksInPeriod(tasks, period){
     return true;
   });
 }
-function viewStats(){
+function viewStatsBody(){
   const p = state.profile;
   const base = visibleTasks(p, state.tasks);
   const tasks = tasksInPeriod(base, state.statsPeriod);
@@ -8258,6 +8269,35 @@ function viewStats(){
           <div class="bar-val">${count}</div>
         </div>`).join("")}
     </div>` : `<div class="chart-card"><div class="chart-title">各車輛出勤次數</div><div class="empty">此區間尚無出勤紀錄</div></div>`;
+
+  // 各車輛里程（公里）：出發/返營各記一次里程（見「里程簡化」），同一
+  // 台車一個月內可能執行好幾趟勤務，每趟的（返營里程－出發里程）加總。
+  // 只有出發跟返營都確實填了里程的任務才算得出來，缺一個就跳過那一趟
+  // （不當成 0 公里，避免低估或算出負值把總里程拉低）。
+  const vehicleMileage = {};
+  tasks.forEach(t => {
+    const d = eventByType(t.id, "DISPATCH");
+    const c = eventByType(t.id, "COMPLETED");
+    const startMileage = d?.mileage ?? t.startMileage ?? null;
+    const finalMileage = c?.mileage ?? null;
+    if (startMileage == null || finalMileage == null) return;
+    const distance = finalMileage - startMileage;
+    if (!Number.isFinite(distance) || distance < 0) return;
+    const key = t.vehicle || "未填車號";
+    vehicleMileage[key] = (vehicleMileage[key]||0) + distance;
+  });
+  const mileageEntries = Object.entries(vehicleMileage).sort((a,b) => b[1]-a[1]);
+  const maxMileage = Math.max(1, ...mileageEntries.map(e=>e[1]));
+  const mileageChart = mileageEntries.length ? `
+    <div class="chart-card">
+      <div class="chart-title">各車輛里程（公里）</div>
+      ${mileageEntries.map(([veh,km], i) => `
+        <div class="bar-row">
+          <div class="bar-label">${esc(veh)}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${(km/maxMileage*100).toFixed(0)}%; background:${CHART_CAT_COLORS[i % CHART_CAT_COLORS.length]};"></div></div>
+          <div class="bar-val">${km.toFixed(0)} km</div>
+        </div>`).join("")}
+    </div>` : `<div class="chart-card"><div class="chart-title">各車輛里程（公里）</div><div class="empty">此區間尚無完整的出發/返營里程紀錄</div></div>`;
 
   const rankList = vehicleEntries.length ? `
     <div class="chart-card">
@@ -8292,12 +8332,11 @@ function viewStats(){
     </div>`;
 
   return `
-    <div class="back-row">${backBtn({name:'profile'})}</div>
-    <div class="section-label">統計分析</div>
     <div class="tabs2">
       ${periods.map(pd => `<div class="tab2 ${state.statsPeriod===pd.key?'active':''}" onclick="window.__setStatsPeriod('${pd.key}')">${pd.label}</div>`).join("")}
     </div>
     ${barChart}
+    ${mileageChart}
     ${rankList}
     ${statusChart}
   `;
@@ -9998,7 +10037,6 @@ const ROUTE_VIEWS = {
   task: () => viewTaskDetail(state.route.id),
   vitals: () => viewVitalsPage(state.route.taskId, state.route.id, state.route.adding),
   erStandby: viewErStandby,
-  stats: viewStats,
   notifications: viewNotifications,
   profile: viewProfile,
   memberList: viewMemberList,
