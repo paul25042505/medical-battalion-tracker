@@ -1627,13 +1627,6 @@
   .rank-row .rank-num{width:22px; height:22px; border-radius:50%; background:var(--panel-2); color:var(--muted); font-family:var(--mono); font-weight:700; font-size:var(--text-xs); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
   .rank-row .rank-name{flex:1;}
   .rank-row .rank-count{color:var(--text); font-weight:600; font-family:var(--mono); font-size:var(--text-sm);}
-  .stackbar{display:flex; height:20px; border-radius:8px; overflow:hidden; background:var(--panel-2); margin-bottom:14px;}
-  .stackbar .seg{height:100%;}
-  .stack-legend{display:flex; flex-direction:column; gap:8px;}
-  .stack-legend .leg-row{display:flex; align-items:center; gap:9px; font-size:var(--text-sm);}
-  .stack-legend .leg-dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
-  .stack-legend .leg-name{flex:1; color:var(--text);}
-  .stack-legend .leg-val{color:var(--muted); font-weight:600; font-family:var(--mono); font-size:var(--text-xs);}
 
   /* ---- bottom nav ---- */
   .bottomnav{
@@ -1873,7 +1866,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-16-412-vehicle-stats-tab";
+const BUILD_TAG = "2026-07-16-413-remove-status-chart";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2895,7 +2888,7 @@ const RELEASE_NOTES = [
       "Firebase SDK 改成自己主機（不再直接連 gstatic.com CDN）：這是達成上面離線快取的必要條件——SDK 如果還是外部 CDN 資源，斷網時連 SDK 本身都載不起來，快取住的 App Shell 也沒有用",
     ] },
     { category: "任務管理", items: [
-      "任務頁子選單新增「統計」（紀錄右邊）：今日/本週/本月篩選各車輛出勤次數、各車輛里程（公里，依出發/返營里程相減加總）、車輛使用次數排行、任務狀態比例，一眼看出這段期間哪台車跑最多趟、跑最遠",
+      "任務頁子選單新增「統計」（紀錄右邊）：今日/本週/本月篩選各車輛出勤次數、各車輛里程（公里，依出發/返營里程相減加總）、車輛使用次數排行，一眼看出這段期間哪台車跑最多趟、跑最遠",
     ] },
   ] },
   { date: "2026/07/15", groups: [
@@ -8227,7 +8220,6 @@ function viewRecords(){
 /* =========================================================
    15b) 畫面：統計分析
    ========================================================= */
-const STATUS_COLOR = { pending:"#8E8E93", dispatch:"#FF3B30", onscene:"#FF9500", transit:"#6B23C7", returning:"#0066FF", completed:"#34C759" };
 function tasksInPeriod(tasks, period){
   const now = new Date();
   return tasks.filter(t => {
@@ -8310,27 +8302,6 @@ function viewStatsBody(){
         </div>`).join("")}
     </div>` : "";
 
-  // 任務狀態比例（part-to-whole → 橫向堆疊長條，不用圓餅圖）
-  const statusCounts = {};
-  STATUS_ORDER.forEach(s => statusCounts[s] = 0);
-  tasks.forEach(t => { const s = deriveStatus(t.id); statusCounts[s] = (statusCounts[s]||0) + 1; });
-  const totalTasks = tasks.length || 1;
-  const stackSegs = STATUS_ORDER.filter(s => statusCounts[s] > 0).map(s => `
-    <div class="seg" style="width:${(statusCounts[s]/totalTasks*100).toFixed(1)}%; background:${STATUS_COLOR[s]};"></div>`).join("");
-  const legendRows = STATUS_ORDER.map(s => `
-    <div class="leg-row">
-      <span class="leg-dot" style="background:${STATUS_COLOR[s]};"></span>
-      <span class="leg-name">${STATUS_LABEL[s]}</span>
-      <span class="leg-val">${statusCounts[s]}（${Math.round(statusCounts[s]/totalTasks*100)}%）</span>
-    </div>`).join("");
-
-  const statusChart = `
-    <div class="chart-card">
-      <div class="chart-title">任務狀態比例</div>
-      <div class="stackbar">${stackSegs}</div>
-      <div class="stack-legend">${legendRows}</div>
-    </div>`;
-
   return `
     <div class="tabs2">
       ${periods.map(pd => `<div class="tab2 ${state.statsPeriod===pd.key?'active':''}" onclick="window.__setStatsPeriod('${pd.key}')">${pd.label}</div>`).join("")}
@@ -8338,7 +8309,6 @@ function viewStatsBody(){
     ${barChart}
     ${mileageChart}
     ${rankList}
-    ${statusChart}
   `;
 }
 
