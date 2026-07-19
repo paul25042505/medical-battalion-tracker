@@ -1866,7 +1866,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-16-413-remove-status-chart";
+const BUILD_TAG = "2026-07-19-414-tasks-today-only";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2878,6 +2878,11 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/07/19", groups: [
+    { category: "任務管理", items: [
+      "「勤務」頁改成只顯示當日的勤務：已完成的勤務只有今天完成的才會顯示，超過當天的自動收起來（進行中的不受影響，不管建立於哪一天都會一直顯示，直到真的完成為止，避免還在執行中的勤務突然從列表消失）；急診待命的待命車另外沿用既有的 08:00 換班基準，從建立到隔天 08:00 前都算「當日」；要查更早以前的紀錄，請至「任務 → 紀錄」查詢",
+    ] },
+  ] },
   { date: "2026/07/16", groups: [
     { category: "推播通知", items: [
       "鈴鐺通知圖示新增未讀徽章：有未讀公告或系統推播（合併計算）時，右上角會顯示紅點＋未讀數字（超過 9 顯示「9+」），並套用跟「進行中」狀態圓點同一套呼吸動畫，比純靜態小紅點更容易被注意到；全部已讀時徽章自動消失",
@@ -3772,6 +3777,17 @@ function standbyShiftCutoff(now){
 function isStandbyStale(createdAtMs){
   if (!createdAtMs) return false;
   return createdAtMs < standbyShiftCutoff(new Date()).getTime();
+}
+// 「勤務」頁只顯示當日車輛：已完成的勤務超過這個範圍就從列表收起來（進行中
+// 的不受影響，不管建立於哪一天都要一直顯示，直到真的完成/返營為止——見
+// viewTasks 只把這個判斷套用在已完成的勤務上）。一般勤務嚴格當天才算，
+// 急診待命的待命車沿用既有的 08:00 換班基準（isStandbyStale），從建立
+// 到隔天 08:00 前都算「當日」，符合待命車一整班（可能跨過午夜）的實際
+// 使用情境。
+function isTaskWithinTodayWindow(t){
+  const createdMs = new Date(t.createdAt||0).getTime();
+  if (t.erStandbyKey) return !isStandbyStale(createdMs);
+  return isSameDay(createdMs, new Date());
 }
 function durationLabel(ms){
   if (ms == null || ms < 0) return "—";
@@ -6540,9 +6556,10 @@ function viewTasks(){
     `;
   }
 
-  const visible = visibleTasks(p, state.tasks);
-  const active = visible.filter(t => deriveStatus(t.id) !== "completed");
-  const completedTasks = visible.filter(t => deriveStatus(t.id) === "completed");
+  const allVisible = visibleTasks(p, state.tasks);
+  const active = allVisible.filter(t => deriveStatus(t.id) !== "completed");
+  const completedTasks = allVisible.filter(t => deriveStatus(t.id) === "completed" && isTaskWithinTodayWindow(t));
+  const visible = [...active, ...completedTasks];
   const activeTab = TASKS_TABS.find(tb => tb.key === state.tasksTab);
   const shown = state.tasksTab === "all" ? visible
     : state.tasksTab === "completed" ? completedTasks
