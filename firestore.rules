@@ -145,7 +145,15 @@ service cloud.firestore {
       // index.html 的 viewErStandby／canViewTaskDetail）；真正的患者資料
       // （events/vitals）仍然限本單位讀取，就算前端沒鎖住點擊，點進另一個
       // 單位的待命勤務詳情頁也看不到患者資料。
-      allow read: if isStaff() || sameUnit(resource.data.unit) || ('erStandbyKey' in resource.data);
+      //
+      // 跨單位借用資源（跨單位借車／跨單位選人）時，這筆勤務會多記一個
+      // involvedUnits 陣列（借用到的別單位清單，見 index.html 的
+      // computeInvolvedUnits／createTask／updateTask）；只開放該單位的
+      // 主官管讀取（不含一般成員），且看得到完整內容（不像急診待命只給
+      // 摘要）——這是使用者明確選擇的範圍：跨單位可見性只到主官管層級，
+      // 不擴及該單位全體成員。
+      allow read: if isStaff() || sameUnit(resource.data.unit) || ('erStandbyKey' in resource.data)
+                  || (isCommander() && 'involvedUnits' in resource.data && myUnit() in resource.data.involvedUnits);
       // 建立勤務限一般成員（限自己單位）與管理員；高勤官、主官管維持督導/查看角色，不再能自己建立。
       allow create: if isAdmin() || (isSignedIn() && myRole() == 'member' && sameUnit(request.resource.data.unit));
       // 高勤官、主官管對勤務維持只有查看權限：不可編輯。一般成員只能編輯
@@ -173,7 +181,12 @@ service cloud.firestore {
       // 會整批查詢直接被拒絕（跟 pushLog 曾經踩過的坑同一種成因，見
       // fsQueryEquals 的說明）；改成直接比對這筆文件自己的 unit 欄位，前端才
       // 能加上 where unit==自己單位 的查詢條件，讓 Firestore 能夠證明查詢安全。
-      allow read: if isStaff() || sameUnit(resource.data.unit);
+      //
+      // 跨單位借用資源時同樣複製一份 involvedUnits（見 index.html 的
+      // addEvent），只開放該單位主官管讀取，理由跟上面 tasks 的說明一致——
+      // 使用者選擇讓借用單位的主官管看得到完整患者紀錄內容，不是只有摘要。
+      allow read: if isStaff() || sameUnit(resource.data.unit)
+                  || (isCommander() && 'involvedUnits' in resource.data && myUnit() in resource.data.involvedUnits);
       allow create: if isAdmin() ||
                     (isSignedIn() && myRole() == 'member'
                      && isAssignedToTaskData(get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data));
@@ -198,7 +211,9 @@ service cloud.firestore {
       // 刪除，避免病歷紀錄憑空消失。
       // 讀取權限比對這筆 vitals 自己的 unit 欄位（建立時就從所屬勤務複製過來，
       // 見 index.html 的 addVitalsEntry），理由跟上面 events 的說明一致。
-      allow read: if isStaff() || sameUnit(resource.data.unit);
+      // 跨單位借用資源時同樣開放該單位主官管讀取完整內容，理由跟 tasks 一致。
+      allow read: if isStaff() || sameUnit(resource.data.unit)
+                  || (isCommander() && 'involvedUnits' in resource.data && myUnit() in resource.data.involvedUnits);
       allow create: if isAdmin() ||
                     (isSignedIn() && myRole() == 'member'
                      && isAssignedToTaskData(get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data));
