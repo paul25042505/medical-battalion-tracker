@@ -292,10 +292,11 @@ service cloud.firestore {
     // 帳號只開放改這一個欄位）；公告本身（新增/編輯標題內容/刪除）只有
     // admin 能在「訊息管理」操作。
     //
-    // 主官管另外開放「發送單位訊息」（見 index.html 的
-    // window.__sendCommanderBroadcast）：可以新增一則帶 unit 欄位的訊息，
-    // 但只能帶自己的單位（不能替其他單位發送），不開放編輯／刪除（跟
-    // admin 的全體公告一樣，發出去就發出去了）。
+    // 主官管、高勤官另外開放「發送推播訊息」（見 index.html 的
+    // window.__sendCommanderBroadcast）：主官管只能新增帶自己單位的訊息
+    // （不能替其他單位發送）；高勤官不像主官管有固定的單一單位（跟 admin
+    // 一樣不分單位），開放帶任一單位、或完全不帶 unit（等同全體公告）。
+    // 兩者都不開放編輯／刪除（跟 admin 的全體公告一樣，發出去就發出去了）。
     //
     // read 這裡刻意維持 isActive()（不分單位都能讀），沒有比照 tasks 那樣
     // 加上單位限制：notifications 目前是「全體公告＋單位訊息」混合的單一
@@ -310,7 +311,7 @@ service cloud.firestore {
     // 定位為一般性的公告/連絡事項（不含患者個資），權衡後接受這個折衷。
     match /notifications/{id} {
       allow read: if isActive();
-      allow create: if isAdmin() || (isCommander() && request.resource.data.unit == myUnit());
+      allow create: if isAdmin() || isDutyOfficer() || (isCommander() && request.resource.data.unit == myUnit());
       allow delete: if isAdmin();
       allow update: if isAdmin() || (isActive() && onlyChanged(['isRead']));
     }
