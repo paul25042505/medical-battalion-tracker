@@ -1866,7 +1866,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-19-414-tasks-today-only";
+const BUILD_TAG = "2026-07-20-415-cross-unit-task-visibility";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1874,7 +1874,7 @@ const BUILD_TAG = "2026-07-19-414-tasks-today-only";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.19";
+const APP_MAJOR_MINOR = "2.20";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -2174,6 +2174,41 @@ async function fsQueryErStandbyTasks(sinceDate){
       where: { compositeFilter: { op: "AND", filters: [
         { fieldFilter: { field: { fieldPath: "createdAt" }, op: "GREATER_THAN_OR_EQUAL", value: { timestampValue: sinceDate.toISOString() } } },
         { fieldFilter: { field: { fieldPath: "erStandbyKey" }, op: "IN", value: { arrayValue: { values: keys.map(k => ({ stringValue: k })) } } } }
+      ] } },
+      limit: 100
+    }
+  };
+  const res = await fetch(`${FIRESTORE_BASE}:runQuery`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    let msg = res.statusText;
+    try { const j = await res.json(); msg = (Array.isArray(j)?j[0]:j).error?.message || msg; } catch(e){}
+    const err = new Error(msg); err.code = res.status;
+    throw err;
+  }
+  const data = await res.json();
+  return (data||[]).filter(d => d.document).map(d => ({ id: d.document.name.split("/").pop(), ...fromFsFields(d.document.fields) }));
+}
+// 主官管查詢「借用了自己單位資源」的別單位勤務／患者紀錄（involvedUnits
+// 陣列包含自己單位）。跟 fsQueryErStandbyTasks 同樣的原理，只是比對運算子
+// 換成 ARRAY_CONTAINS（單一值比對陣列欄位是否包含該值，語意上跟 IN 不
+// 同——IN 是「欄位值等於清單中任一個」，這裡要的是「欄位這個陣列裡有沒有
+// 這個值」），讓 Firestore 從查詢本身就能證明每一筆結果都符合
+// 「involvedUnits 包含我的單位」這個放行條件，不用整批擋掉（見
+// firestore.rules 的 tasks/events/vitals 讀取規則、firestore.indexes.json
+// 新增的 involvedUnits 複合索引）。tasks 用 createdAt 當範圍欄位，
+// events/vitals 用 timestamp，所以範圍欄位名稱抽成參數。
+async function fsQueryInvolvedUnits(collectionId, rangeField, sinceDate, unit){
+  const idToken = await auth.currentUser.getIdToken();
+  const body = {
+    structuredQuery: {
+      from: [{ collectionId }],
+      where: { compositeFilter: { op: "AND", filters: [
+        { fieldFilter: { field: { fieldPath: rangeField }, op: "GREATER_THAN_OR_EQUAL", value: { timestampValue: sinceDate.toISOString() } } },
+        { fieldFilter: { field: { fieldPath: "involvedUnits" }, op: "ARRAY_CONTAINS", value: { stringValue: unit } } }
       ] } },
       limit: 100
     }
@@ -2878,6 +2913,11 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/07/20", groups: [
+    { category: "任務管理", items: [
+      "跨單位借用資源（跨單位借車／跨單位選人）的勤務，借出單位的主官管現在也看得到這筆勤務的完整內容（含患者紀錄），不用再透過對方單位才能掌握狀況；勤務卡片與詳情頁會標示「外部支援：借用貴單位資源」，一眼看出為什麼別單位的勤務會出現在自己的清單上——這個跨單位可見範圍只開放到主官管本人，不擴及該單位其他成員",
+    ] },
+  ] },
   { date: "2026/07/19", groups: [
     { category: "任務管理", items: [
       "「勤務」頁改成只顯示當日的勤務：已完成的勤務只有今天完成的才會顯示，超過當天的自動收起來（進行中的不受影響，不管建立於哪一天都會一直顯示，直到真的完成為止，避免還在執行中的勤務突然從列表消失）；急診待命的待命車另外沿用既有的 08:00 換班基準，從建立到隔天 08:00 前都算「當日」；要查更早以前的紀錄，請至「任務 → 紀錄」查詢",
@@ -3879,10 +3919,16 @@ function canReport(p, task){ const r = myRole(p); return r === "admin" || (r ===
 // 患者狀況，但督導角色仍需要看得到既有紀錄內容（例如遠端掌握傷病患狀況），
 // 所以查看權限比照 canManageTasks，比 canReport 更寬。
 function canViewVitals(p, task){ return canReport(p, task) || canManageTasks(p); }
+// 主官管除了自己單位的勤務，還能看到「借用了自己單位資源」的別單位勤務
+// （見 involvedUnits，由 createTask／updateTask 依車輛/車長/駕駛/洽公人員
+// 實際歸屬單位算出來）——只開放 commander，一般成員不開放（見設計討論：
+// 跨單位可見範圍只到該單位主官管，不擴及該單位全體成員）。
 function visibleTasks(p, tasks){
   if (!p) return [];
   if (canSeeAllUnits(p)) return tasks;
-  return tasks.filter(t => t.unit === myUnit(p));
+  const unit = myUnit(p);
+  const isCommanderRole = myRole(p) === "commander";
+  return tasks.filter(t => t.unit === unit || (isCommanderRole && Array.isArray(t.involvedUnits) && t.involvedUnits.includes(unit)));
 }
 // 急診待命頁專用：一般勤務維持只看得到自己單位（見 visibleTasks），但
 // 急診待命的醫務所地點是全營共用資源，別單位待命勤務的摘要仍然要顯示
@@ -3891,7 +3937,13 @@ function visibleTasks(p, tasks){
 // firestore.rules 仍然限定同單位，就算前端沒鎖住點擊，點進去也看不到
 // 別單位的患者資料；這裡在前端也鎖住「點進去」這個動作，是為了避免
 // 使用者點了才發現詳情頁空空如也，體驗上更清楚。
-function canViewTaskDetail(p, t){ return canSeeAllUnits(p) || (t && t.unit === myUnit(p)); }
+function canViewTaskDetail(p, t){
+  if (canSeeAllUnits(p)) return true;
+  if (!t) return false;
+  const unit = myUnit(p);
+  if (t.unit === unit) return true;
+  return myRole(p) === "commander" && Array.isArray(t.involvedUnits) && t.involvedUnits.includes(unit);
+}
 
 /* =========================================================
    5b) 角色權限預覽（僅限 admin）
@@ -3953,6 +4005,7 @@ async function addEvent(taskId, type, extra){
   const task = state.tasks.find(t => t.id === taskId);
   await fsAddDoc("events", {
     taskId, type, unit: task ? task.unit : "",
+    ...(task && task.involvedUnits && task.involvedUnits.length ? { involvedUnits: task.involvedUnits } : {}),
     timestamp: new Date(),
     userId: state.user.uid,
     userName: state.profile.displayName || state.user.displayName || state.user.email,
@@ -4003,6 +4056,7 @@ async function silentlyCompleteTask(taskId, note){
   const finalType = task.type === "liaison" ? "RETURNING" : "COMPLETED";
   await fsAddDoc("events", {
     taskId, type: finalType, unit: task.unit,
+    ...(task.involvedUnits && task.involvedUnits.length ? { involvedUnits: task.involvedUnits } : {}),
     timestamp: new Date(), userId: state.user.uid,
     userName: state.profile.displayName || state.user.displayName || state.user.email,
     note, seq: Date.now()
@@ -4024,6 +4078,31 @@ async function deleteEvent(id){
   showToast("已刪除回報紀錄");
   if (eventsPoll) eventsPoll.refreshNow();
 }
+// 跨單位借用資源時（跨單位借車／跨單位選人挑到別單位的車長、駕駛、洽公
+// 人員），把實際借用到的單位記錄成 involvedUnits，讓那些單位的主官管也能
+// 看到這筆任務內容（見 firestore.rules 的 tasks/events/vitals 讀取規則、
+// visibleTasks／canViewTaskDetail）。只看車輛/車長/駕駛/洽公人員——這些
+// 正是既有「跨單位借車」「跨單位選人」開關實際會用到別單位資源的欄位；
+// 行車紀錄器、值班醫官不是「借用」關係，不算在內。
+function computeInvolvedUnits(unit, data){
+  const units = new Set();
+  if (data.vehicle) {
+    const v = state.vehicles.find(x => x.plate === data.vehicle);
+    if (v && v.unit && v.unit !== unit) units.add(v.unit);
+  }
+  [data.crewLeader, data.driver].forEach(name => {
+    if (!name) return;
+    const person = state.personnel.find(x => x.name === name);
+    if (person && person.unit && person.unit !== unit) units.add(person.unit);
+  });
+  if (Array.isArray(data.personnel)) {
+    data.personnel.forEach(name => {
+      const person = state.personnel.find(x => x.name === name);
+      if (person && person.unit && person.unit !== unit) units.add(person.unit);
+    });
+  }
+  return [...units];
+}
 // options.skipDispatch：勤務先建立（車號/車長/駕駛/值班醫官等資料都先填
 // 好），但還沒有真的出勤，所以不能像一般勤務一樣建立當下就自動補一筆
 // DISPATCH 事件——要讓任務留在「待命中」狀態（zero events，見
@@ -4032,10 +4111,12 @@ async function deleteEvent(id){
 // 以及一般建立勤務頁點選「預先登記」時。
 async function createTask(data, options){
   options = options || {};
-  const created = await fsAddDoc("tasks", { ...data, createdAt: new Date(), createdBy: state.user.uid, createdByName: state.profile.displayName || state.user.email });
+  const involvedUnits = computeInvolvedUnits(data.unit, data);
+  const created = await fsAddDoc("tasks", { ...data, involvedUnits, createdAt: new Date(), createdBy: state.user.uid, createdByName: state.profile.displayName || state.user.email });
   if (!options.skipDispatch) {
     await fsAddDoc("events", {
       taskId: created.id, type: "DISPATCH", unit: data.unit,
+      ...(involvedUnits.length ? { involvedUnits } : {}),
       // 跟手動回報的事件一樣只精確到分鐘（見 todayAt），不能用完整精確度的
       // new Date()——建立勤務後緊接著手動回報「抵達現場」，如果兩者剛好
       // 落在同一分鐘內，手動回報的時間欄位一律無條件捨去秒數，只要出勤這
@@ -4055,7 +4136,9 @@ async function createTask(data, options){
   return created;
 }
 async function updateTask(taskId, fields){
-  await fsSetDoc(`tasks/${taskId}`, fields);
+  const t = state.tasks.find(x => x.id === taskId);
+  const involvedUnits = computeInvolvedUnits(t ? t.unit : fields.unit, fields);
+  await fsSetDoc(`tasks/${taskId}`, { ...fields, involvedUnits });
   showToast("勤務已更新");
   if (tasksPoll) tasksPoll.refreshNow();
 }
@@ -4346,6 +4429,7 @@ async function addVitalsEntry(taskId, data){
   const task = state.tasks.find(t => t.id === taskId);
   await fsAddDoc("vitals", {
     taskId, unit: task ? task.unit : "",
+    ...(task && task.involvedUnits && task.involvedUnits.length ? { involvedUnits: task.involvedUnits } : {}),
     timestamp: new Date(),
     userId: state.user.uid,
     userName: state.profile.displayName || state.user.displayName || state.user.email,
@@ -4780,17 +4864,22 @@ function startDataListeners(){
     const unitFilter = myQueryUnitFilter();
     let docs;
     if (unitFilter) {
-      // 用 allSettled 而不是 all：這是兩個各自獨立的查詢，急診待命那支
-      // （erStandbyKey in [...] + createdAt 範圍）需要額外的複合索引，
-      // 索引還沒建好、或這支查詢本身出問題時不能連累自己單位的勤務也
-      // 一起讀不到——那樣反而比只有急診待命看不到還嚴重。
-      const [ownResult, erResult] = await Promise.allSettled([
+      // 用 allSettled 而不是 all：這是各自獨立的查詢，急診待命那支
+      // （erStandbyKey in [...] + createdAt 範圍）跟主官管的跨單位借用
+      // 那支（involvedUnits array-contains + createdAt 範圍）都各自需要
+      // 額外的複合索引，索引還沒建好、或這支查詢本身出問題時不能連累
+      // 自己單位的勤務也一起讀不到——那樣反而比看不到額外的部分還嚴重。
+      const isCommanderRole = myRole(state.profile) === "commander";
+      const [ownResult, erResult, crossUnitResult] = await Promise.allSettled([
         fsQuerySince("tasks", "createdAt", recentCutoffDate(), null, unitFilter),
-        fsQueryErStandbyTasks(recentCutoffDate())
+        fsQueryErStandbyTasks(recentCutoffDate()),
+        isCommanderRole ? fsQueryInvolvedUnits("tasks", "createdAt", recentCutoffDate(), unitFilter) : Promise.resolve([])
       ]);
       if (erResult.status === "rejected") console.error("急診待命跨單位查詢失敗（可能缺少 Firestore 複合索引）", erResult.reason);
+      if (crossUnitResult.status === "rejected") console.error("主官管跨單位借用查詢失敗（可能缺少 Firestore 複合索引）", crossUnitResult.reason);
       if (ownResult.status === "rejected") throw ownResult.reason;
       docs = mergeById(ownResult.value, erResult.status === "fulfilled" ? erResult.value : []);
+      docs = mergeById(docs, crossUnitResult.status === "fulfilled" ? crossUnitResult.value : []);
     } else {
       docs = await fsQuerySince("tasks", "createdAt", recentCutoffDate());
     }
@@ -4801,7 +4890,19 @@ function startDataListeners(){
     if (changed) safeRender();
   });
   eventsPoll = poll(async () => {
-    const docs = await fsQuerySince("events", "timestamp", recentCutoffDate(), null, myQueryUnitFilter());
+    const unitFilter = myQueryUnitFilter();
+    let docs;
+    if (unitFilter && myRole(state.profile) === "commander") {
+      const [ownResult, crossUnitResult] = await Promise.allSettled([
+        fsQuerySince("events", "timestamp", recentCutoffDate(), null, unitFilter),
+        fsQueryInvolvedUnits("events", "timestamp", recentCutoffDate(), unitFilter)
+      ]);
+      if (crossUnitResult.status === "rejected") console.error("主官管跨單位患者紀錄查詢失敗（可能缺少 Firestore 複合索引）", crossUnitResult.reason);
+      if (ownResult.status === "rejected") throw ownResult.reason;
+      docs = mergeById(ownResult.value, crossUnitResult.status === "fulfilled" ? crossUnitResult.value : []);
+    } else {
+      docs = await fsQuerySince("events", "timestamp", recentCutoffDate(), null, unitFilter);
+    }
     const merged = mergeById(docs, state.deepEvents);
     merged.forEach(d => { d.ts = d.timestamp ? new Date(d.timestamp).getTime() : Date.now(); });
     merged.sort(eventOrderCompare);
@@ -4844,7 +4945,19 @@ function startDataListeners(){
     if (changed) safeRender();
   });
   vitalsPoll = poll(async () => {
-    const docs = await fsQuerySince("vitals", "timestamp", recentCutoffDate(), null, myQueryUnitFilter());
+    const unitFilter = myQueryUnitFilter();
+    let docs;
+    if (unitFilter && myRole(state.profile) === "commander") {
+      const [ownResult, crossUnitResult] = await Promise.allSettled([
+        fsQuerySince("vitals", "timestamp", recentCutoffDate(), null, unitFilter),
+        fsQueryInvolvedUnits("vitals", "timestamp", recentCutoffDate(), unitFilter)
+      ]);
+      if (crossUnitResult.status === "rejected") console.error("主官管跨單位患者紀錄查詢失敗（可能缺少 Firestore 複合索引）", crossUnitResult.reason);
+      if (ownResult.status === "rejected") throw ownResult.reason;
+      docs = mergeById(ownResult.value, crossUnitResult.status === "fulfilled" ? crossUnitResult.value : []);
+    } else {
+      docs = await fsQuerySince("vitals", "timestamp", recentCutoffDate(), null, unitFilter);
+    }
     const merged = mergeById(docs, state.deepVitals);
     merged.forEach(d => { d.ts = d.timestamp ? new Date(d.timestamp).getTime() : Date.now(); });
     merged.sort(eventOrderCompare);
@@ -5964,6 +6077,11 @@ function taskCard(t){
   const activeVitalsForCard = activeEpisodeVitals(state.vitals.filter(v => v.taskId === t.id).sort(eventOrderCompare));
   const hasPatient = activeVitalsForCard.length > 0;
   const noTransportMarked = activeVitalsForCard[activeVitalsForCard.length-1]?.disposition === "不送醫";
+  // 主官管看到的別單位勤務（借用了自己單位資源）要標出「外部支援」，讓
+  // 使用者一眼就懂為什麼這筆不是自己單位的勤務會出現在清單上（見
+  // visibleTasks／involvedUnits 的說明）。
+  const viewerUnit = myUnit(state.profile);
+  const isCrossUnitCard = t.unit !== viewerUnit && Array.isArray(t.involvedUnits) && t.involvedUnits.includes(viewerUnit);
   return `
   <div class="task-card spatial-card ${taskCardClass(s)}${hasPatient ? ' has-patient' : ''}" onclick="if(!event.target.closest('a')) window.__nav({name:'task', id:'${t.id}'})">
     <div class="task-top">
@@ -5974,6 +6092,7 @@ function taskCard(t){
         ${statusBadge(s)}
       </div>
     </div>
+    ${isCrossUnitCard ? `<div class="task-meta" style="color:var(--accent);">${icon('users',13)} 外部支援：借用貴單位資源（${esc(unitLabel(t.unit))}主責）</div>` : ""}
     <div class="task-meta">${isLiaison ? '洽公' : `${vehicleLabelHtml(t.vehicle)} · ${taskScope(t)}`} · ${esc(t.location||'—')}</div>
     <div class="task-crew">
       ${locationLine ? `<span>目前位置：${locationLine}</span>` : ""}
@@ -8095,6 +8214,8 @@ function viewTaskDetail(taskId){
         <p class="task-title">${esc(t.title)}</p>
         ${statusBadge(s)}
       </div>
+      ${t.unit !== myUnit(p) && Array.isArray(t.involvedUnits) && t.involvedUnits.includes(myUnit(p)) ? `
+      <div class="task-meta" style="color:var(--accent);">${icon('users',13)} 外部支援：借用貴單位資源（${esc(unitLabel(t.unit))}主責）</div>` : ""}
       <div class="kv">
         ${isLiaison
           ? `<div class="k">人員</div><div class="v">${personnelLine || '—'}</div>`
