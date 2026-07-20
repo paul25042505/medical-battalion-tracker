@@ -315,9 +315,15 @@ exports.onVitalsCreated = onDocumentCreated("vitals/{vitalsId}", async (event) =
 });
 
 /* =========================================================
-   4) 公告新增（訊息管理 → 新增公告）：只有新增才推播，編輯/刪除不重推，
-   避免同一則公告被改個字就再打擾大家一次。isRead 標記已讀是前端另外
-   直接寫 Firestore 的動作，不會新增文件，不會誤觸這個 trigger。
+   4) 公告新增（訊息管理 → 新增公告，或主官管「發送單位訊息」）：只有
+   新增才推播，編輯/刪除不重推，避免同一則公告被改個字就再打擾大家一次。
+   isRead 標記已讀是前端另外直接寫 Firestore 的動作，不會新增文件，不會
+   誤觸這個 trigger。
+   帶 unit 欄位的是主官管發的單位訊息（見 firestore.rules 的 notifications
+   create 規則、index.html 的 window.__sendCommanderBroadcast），只推播
+   給那個單位（沿用 resolveRecipients，跟任務通知同一套「admin/高勤官
+   收全部，該單位主官管/一般成員才收得到」規則）；沒有 unit 欄位的維持
+   原本全體公告行為，推播給所有在職帳號。
    ========================================================= */
 exports.onNotificationCreated = onDocumentCreated("notifications/{id}", async (event) => {
   if (!(await claimEventOnce(event.id))) return;
@@ -327,6 +333,12 @@ exports.onNotificationCreated = onDocumentCreated("notifications/{id}", async (e
   if (!n || !n.title) return;
   if (await isTestModeActive()) {
     logger.info(`測試模式開啟中，略過公告推播「${n.title}」`);
+    return;
+  }
+  if (n.unit) {
+    const recipients = await resolveRecipients(n.unit);
+    const tokens = recipients.flatMap((r) => r.tokens);
+    await sendPush(tokens, n.title, n.body || "");
     return;
   }
   const tokens = await resolveAllTokens();
