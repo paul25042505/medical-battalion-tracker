@@ -1314,6 +1314,15 @@
     font-size:var(--text-xs); font-weight:600; color:var(--blue); background:var(--panel-2);
     font-family:var(--sans);
   }
+  /* 車號／車長／駕駛標籤右側的「外部車輛／外部人員」切換鈕：不在系統花名冊
+     /車輛清單裡的資源（租賃車、外部單位人員）改用純文字輸入，見
+     window.__toggleExternalField。 */
+  .field-toggle-btn{
+    flex-shrink:0; padding:5px 10px; border-radius:999px; border:1.5px solid var(--border);
+    font-size:var(--text-xs); font-weight:600; color:var(--blue); background:var(--panel-2);
+    font-family:var(--sans);
+  }
+  .field-toggle-btn.active{background:var(--blue); border-color:var(--blue); color:#fff;}
   /* iOS Safari 的 time/date 原生控制項有時會忽略外層寬度限制而撐出版面，強制鎖定尺寸 */
   input[type="date"], input[type="time"]{
     font-size:var(--text-base) !important;
@@ -1866,7 +1875,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-20-417-duty-officer-broadcast";
+const BUILD_TAG = "2026-07-21-418-external-vehicle-person";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1874,7 +1883,7 @@ const BUILD_TAG = "2026-07-20-417-duty-officer-broadcast";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.22";
+const APP_MAJOR_MINOR = "2.23";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -2913,6 +2922,11 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/07/21", groups: [
+    { category: "任務管理", items: [
+      "建立／編輯勤務新增「外部車輛」「外部人員」切換鈕（車號/車長/駕駛標籤右邊）：租賃車輛、外部單位（不在本系統帳號名冊裡）的司機也能記錄，打開後改成直接輸入文字，不用一定要選系統裡登記的車輛/人員；這種外部資源不會被算進跨單位借用判斷（見前一天的跨單位可見性功能），因為系統本來就找不到它的所屬單位",
+    ] },
+  ] },
   { date: "2026/07/20", groups: [
     { category: "任務管理", items: [
       "跨單位借用資源（跨單位借車／跨單位選人）的勤務，借出單位的主官管現在也看得到這筆勤務的完整內容（含患者紀錄），不用再透過對方單位才能掌握狀況；勤務卡片與詳情頁會標示「外部支援：借用貴單位資源」，一眼看出為什麼別單位的勤務會出現在自己的清單上——這個跨單位可見範圍只開放到主官管本人，不擴及該單位其他成員",
@@ -5891,6 +5905,14 @@ function taskTitleTemplateSelect(inputId, templates, placeholderLabel){
     ${templates.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("")}
   </select>`;
 }
+// 車號／車長／駕駛標籤右側的「外部車輛／外部人員」切換鈕：現實中偶爾會用
+// 租賃車行的車、或不在本系統帳號名冊裡的外部單位人員，這種資源沒辦法從
+// 花名冊/車輛清單選，開起來後把下面的下拉選單/選人按鈕換成純文字輸入框
+// （見 window.__toggleExternalField）。active=true 時按鈕預設是打開狀態
+// （編輯既有勤務、目前值不在花名冊/車輛清單裡時使用）。
+function externalToggleBtn(fieldName, label, active){
+  return `<button type="button" class="field-toggle-btn${active?' active':''}" onclick="window.__toggleExternalField(this,'${fieldName}')">${esc(label)}</button>`;
+}
 /* =========================================================
    9) 畫面：登入 / 待審核
    ========================================================= */
@@ -7365,25 +7387,37 @@ function viewCreateTask(){
         </button>
         <div class="personnel-hidden-checkboxes"></div>
       </div>` : `
-      <div class="field"><label>車號</label>
-        <select name="vehicle" data-unit="${unit}">
-          <option value="">請選擇車輛</option>
-          ${vehicleOptionsByType(vehicleOpts, v => `<option value="${esc(v.plate)}" ${state.route.presetVehicle===v.plate?'selected':''}>${esc(vehicleOptionLabel(v.plate, outSet))}</option>`)}
-        </select>
-        ${iosSwitchRow('跨單位借車', false, "window.__toggleCrossUnitVehicle(this)")}
-        ${!vehicleOpts.length ? `<div style="color:var(--muted);font-size:var(--text-xs);margin-top:6px;">此單位尚未建立車輛資料，請至「基礎資料管理」新增</div>` : ""}
+      <div class="field">
+        <div class="field-label-row"><label>車號</label>${externalToggleBtn('vehicle', '外部車輛', false)}</div>
+        <div data-mode="normal">
+          <select name="vehicle" data-field-name="vehicle" data-unit="${unit}">
+            <option value="">請選擇車輛</option>
+            ${vehicleOptionsByType(vehicleOpts, v => `<option value="${esc(v.plate)}" ${state.route.presetVehicle===v.plate?'selected':''}>${esc(vehicleOptionLabel(v.plate, outSet))}</option>`)}
+          </select>
+          ${iosSwitchRow('跨單位借車', false, "window.__toggleCrossUnitVehicle(this)")}
+          ${!vehicleOpts.length ? `<div style="color:var(--muted);font-size:var(--text-xs);margin-top:6px;">此單位尚未建立車輛資料，請至「基礎資料管理」新增</div>` : ""}
+        </div>
+        <div data-mode="external" style="display:none;"><input data-field-name="vehicle" placeholder="例如：遊覽車公司 XX-1234"></div>
       </div>
-      <div class="field"><label>車長</label>
-        <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openPersonPicker('crewLeader', this)">
-          <span class="picker-field-text${state.route.presetCrewLeader?'':' placeholder'}">${state.route.presetCrewLeader ? esc(crewDisplayLabel(state.route.presetCrewLeader, unit)) : '請選擇車長'}</span>${icon('chevronDown',16)}
-        </button>
-        <input type="hidden" name="crewLeader" value="${esc(state.route.presetCrewLeader||'')}">
+      <div class="field">
+        <div class="field-label-row"><label>車長</label>${externalToggleBtn('crewLeader', '外部人員', false)}</div>
+        <div data-mode="normal">
+          <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openPersonPicker('crewLeader', this)">
+            <span class="picker-field-text${state.route.presetCrewLeader?'':' placeholder'}">${state.route.presetCrewLeader ? esc(crewDisplayLabel(state.route.presetCrewLeader, unit)) : '請選擇車長'}</span>${icon('chevronDown',16)}
+          </button>
+          <input type="hidden" name="crewLeader" data-field-name="crewLeader" value="${esc(state.route.presetCrewLeader||'')}">
+        </div>
+        <div data-mode="external" style="display:none;"><input data-field-name="crewLeader" placeholder="請輸入姓名"></div>
       </div>
-      <div class="field"><label>駕駛</label>
-        <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openPersonPicker('driver', this)">
-          <span class="picker-field-text${state.route.presetDriver?'':' placeholder'}">${state.route.presetDriver ? esc(crewDisplayLabel(state.route.presetDriver, unit)) : '請選擇駕駛'}</span>${icon('chevronDown',16)}
-        </button>
-        <input type="hidden" name="driver" value="${esc(state.route.presetDriver||'')}">
+      <div class="field">
+        <div class="field-label-row"><label>駕駛</label>${externalToggleBtn('driver', '外部人員', false)}</div>
+        <div data-mode="normal">
+          <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openPersonPicker('driver', this)">
+            <span class="picker-field-text${state.route.presetDriver?'':' placeholder'}">${state.route.presetDriver ? esc(crewDisplayLabel(state.route.presetDriver, unit)) : '請選擇駕駛'}</span>${icon('chevronDown',16)}
+          </button>
+          <input type="hidden" name="driver" data-field-name="driver" value="${esc(state.route.presetDriver||'')}">
+        </div>
+        <div data-mode="external" style="display:none;"><input data-field-name="driver" placeholder="請輸入姓名"></div>
       </div>
       ${isStandbyDispatch ? `
       <div class="field"><label>值班醫官（選填）</label>
@@ -7433,6 +7467,13 @@ function viewEditTask(taskId){
   // 車號下拉也要一開始就展開列出所有單位的車，不然選單裡會找不到它。
   const currentVehicleRecord = t.vehicle ? state.vehicles.find(v => v.plate === t.vehicle) : null;
   const isCrossUnitVehicle = !!(currentVehicleRecord && currentVehicleRecord.unit !== unit);
+  // 外部車輛／外部人員：車號/車長/駕駛目前的值如果在系統的車輛清單/花名冊裡
+  // 都找不到對應紀錄（租賃車、外部單位人員這種既有資料），編輯時預設直接
+  // 打開「外部」模式顯示純文字輸入框，不然使用者會看到空白的下拉選單/選人
+  // 按鈕，誤以為原本的值不見了。
+  const isExternalVehicle = !!t.vehicle && !currentVehicleRecord;
+  const isExternalCrewLeader = !!t.crewLeader && !state.personnel.find(x => x.name === t.crewLeader);
+  const isExternalDriver = !!t.driver && !state.personnel.find(x => x.name === t.driver);
   const currentMilitaryItems = t.militaryItems || [];
   const currentMilitaryQtyByName = {};
   currentMilitaryItems.forEach(x => { currentMilitaryQtyByName[x.name] = x.qty; });
@@ -7455,23 +7496,35 @@ function viewEditTask(taskId){
         </button>
         <div class="personnel-hidden-checkboxes">${currentPersonnel.map(name => `<input type="checkbox" name="personnel" value="${esc(name)}" checked style="display:none">`).join("")}</div>
       </div>` : `
-      <div class="field"><label>車號</label>
-        <select name="vehicle" data-unit="${unit}">
-          ${isCrossUnitVehicle ? vehicleSelectOptionsAllUnits(t.vehicle) : `<option value="">請選擇車輛</option>` + vehicleOptionsByType(vehicleOpts, v => `<option value="${esc(v.plate)}" ${t.vehicle===v.plate?'selected':''}>${esc(vehicleOptionLabel(v.plate, outSet))}</option>`)}
-        </select>
-        ${iosSwitchRow('跨單位借車', isCrossUnitVehicle, "window.__toggleCrossUnitVehicle(this)")}
+      <div class="field">
+        <div class="field-label-row"><label>車號</label>${externalToggleBtn('vehicle', '外部車輛', isExternalVehicle)}</div>
+        <div data-mode="normal" style="${isExternalVehicle?'display:none;':''}">
+          <select ${isExternalVehicle?'':'name="vehicle"'} data-field-name="vehicle" data-unit="${unit}">
+            ${isCrossUnitVehicle ? vehicleSelectOptionsAllUnits(t.vehicle) : `<option value="">請選擇車輛</option>` + vehicleOptionsByType(vehicleOpts, v => `<option value="${esc(v.plate)}" ${t.vehicle===v.plate?'selected':''}>${esc(vehicleOptionLabel(v.plate, outSet))}</option>`)}
+          </select>
+          ${iosSwitchRow('跨單位借車', isCrossUnitVehicle, "window.__toggleCrossUnitVehicle(this)")}
+        </div>
+        <div data-mode="external" style="${isExternalVehicle?'':'display:none;'}"><input ${isExternalVehicle?'name="vehicle"':''} data-field-name="vehicle" value="${esc(t.vehicle||'')}" placeholder="例如：遊覽車公司 XX-1234"></div>
       </div>
-      <div class="field"><label>車長</label>
-        <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openPersonPicker('crewLeader', this)">
-          <span class="picker-field-text${t.crewLeader?'':' placeholder'}">${t.crewLeader ? esc(crewDisplayLabel(t.crewLeader, unit)) : '請選擇車長'}</span>${icon('chevronDown',16)}
-        </button>
-        <input type="hidden" name="crewLeader" value="${esc(t.crewLeader||'')}">
+      <div class="field">
+        <div class="field-label-row"><label>車長</label>${externalToggleBtn('crewLeader', '外部人員', isExternalCrewLeader)}</div>
+        <div data-mode="normal" style="${isExternalCrewLeader?'display:none;':''}">
+          <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openPersonPicker('crewLeader', this)">
+            <span class="picker-field-text${t.crewLeader?'':' placeholder'}">${t.crewLeader ? esc(crewDisplayLabel(t.crewLeader, unit)) : '請選擇車長'}</span>${icon('chevronDown',16)}
+          </button>
+          <input type="hidden" ${isExternalCrewLeader?'':'name="crewLeader"'} data-field-name="crewLeader" value="${esc(t.crewLeader||'')}">
+        </div>
+        <div data-mode="external" style="${isExternalCrewLeader?'':'display:none;'}"><input ${isExternalCrewLeader?'name="crewLeader"':''} data-field-name="crewLeader" value="${esc(isExternalCrewLeader?(t.crewLeader||''):'')}" placeholder="請輸入姓名"></div>
       </div>
-      <div class="field"><label>駕駛</label>
-        <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openPersonPicker('driver', this)">
-          <span class="picker-field-text${t.driver?'':' placeholder'}">${t.driver ? esc(crewDisplayLabel(t.driver, unit)) : '請選擇駕駛'}</span>${icon('chevronDown',16)}
-        </button>
-        <input type="hidden" name="driver" value="${esc(t.driver||'')}">
+      <div class="field">
+        <div class="field-label-row"><label>駕駛</label>${externalToggleBtn('driver', '外部人員', isExternalDriver)}</div>
+        <div data-mode="normal" style="${isExternalDriver?'display:none;':''}">
+          <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openPersonPicker('driver', this)">
+            <span class="picker-field-text${t.driver?'':' placeholder'}">${t.driver ? esc(crewDisplayLabel(t.driver, unit)) : '請選擇駕駛'}</span>${icon('chevronDown',16)}
+          </button>
+          <input type="hidden" ${isExternalDriver?'':'name="driver"'} data-field-name="driver" value="${esc(t.driver||'')}">
+        </div>
+        <div data-mode="external" style="${isExternalDriver?'':'display:none;'}"><input ${isExternalDriver?'name="driver"':''} data-field-name="driver" value="${esc(isExternalDriver?(t.driver||''):'')}" placeholder="請輸入姓名"></div>
       </div>
       ${t.erStandbyKey ? `
       <div class="field"><label>值班醫官（選填）</label>
@@ -10927,6 +10980,25 @@ window.__toggleCrossUnitVehicle = (checkbox) => {
   select.innerHTML = checkbox.checked
     ? vehicleSelectOptionsAllUnits(currentPlate)
     : vehicleSelectOptionsSameUnit(select.dataset.unit, currentPlate);
+};
+// 「外部車輛／外部人員」切換鈕：車號/車長/駕駛旁邊的按鈕，打開後把下面
+// 「系統內」跟「外部」兩個區塊互換顯示狀態。兩個區塊各自都有一個對應的
+// 欄位（用 data-field-name 標記，不是直接靠 name——同一頁如果兩邊都掛著
+// 一樣的 name 屬性，會讓 document.querySelector('[name=...]') 這類「預期
+// 只有一個」的查詢找到錯的那個，這裡改成永遠只有「目前顯示中」的那個
+// 元素才擁有 name 屬性，另一邊拿掉 name，這樣同一時間整頁只會有一個
+// 元素叫這個名字，FormData 送出時也不用另外判斷要用哪一個值）。
+window.__toggleExternalField = (btn, fieldName) => {
+  const field = btn.closest(".field");
+  const active = btn.classList.toggle("active");
+  const normalMode = field.querySelector('[data-mode="normal"]');
+  const externalMode = field.querySelector('[data-mode="external"]');
+  normalMode.style.display = active ? "none" : "";
+  externalMode.style.display = active ? "" : "none";
+  const normalField = normalMode.querySelector(`[data-field-name="${fieldName}"]`);
+  const externalField = externalMode.querySelector(`[data-field-name="${fieldName}"]`);
+  if (active) { normalField.removeAttribute("name"); externalField.setAttribute("name", fieldName); }
+  else { normalField.setAttribute("name", fieldName); externalField.removeAttribute("name"); }
 };
 window.__submitVitals = (taskId, id) => {
   // 手機觸控偶爾會在網路還沒回應前被連點兩下，沒有這個防呆的話會真的
