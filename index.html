@@ -1637,6 +1637,16 @@
     background:none; border:none; color:var(--red); font-size:var(--text-xs); font-weight:600;
     padding:2px 0; font-family:var(--sans); margin-top:2px;
   }
+  /* 顯示模式的車輛列（已經填過、鎖定顯示）：一行摘要文字＋編輯/移除按鈕，
+     跟編輯模式的表單區塊共用 .vehicle-entry 的間距/分隔線設定。 */
+  .vehicle-entry-locked{display:flex; align-items:center; justify-content:space-between; gap:12px;}
+  .vehicle-locked-summary{font-family:var(--mono); font-size:var(--text-sm); color:var(--text);}
+  .vehicle-locked-actions{display:flex; align-items:center; gap:14px; flex-shrink:0;}
+  .vehicle-edit-btn{
+    background:none; border:none; color:var(--blue); font-size:var(--text-xs); font-weight:600;
+    padding:2px 0; font-family:var(--sans);
+  }
+  .vehicle-entry-locked .vehicle-remove-btn{margin-top:0;}
   /* 成員卡片（資訊網格風格，見 memberCardHtml）：成員列表／車號查詢頁共用。 */
   .member-card{
     background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md);
@@ -1910,7 +1920,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-23-422-profile-save-button-fix";
+const BUILD_TAG = "2026-07-23-423-vehicle-entry-lock-view";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2476,7 +2486,26 @@ function vehicleBrandOptions(vehicleType, selected){
 // 所有台車的 radio 都當成同一組，選了第二台車的「汽車」會把第一台車的
 // 選擇也一起清掉。送出表單時不是靠這幾個 name 讀值（見
 // window.__saveProfile），純粹只是要讓每台車的 radio 互相獨立。
-function vehicleEntryRowHtml(v, entryId){
+//
+// 每台車有 locked（顯示模式）／未 locked（編輯模式）兩種畫面：已經存過的
+// 車輛預設用唯讀摘要顯示，按「編輯」才切成表單；新增的車輛則直接是編輯
+// 模式。沒有「儲存」鍵——整台車的資料只是換一種畫面呈現，實際送出仍然
+// 靠外層 profile 表單的儲存鍵一次寫入（見 window.__saveProfile）。
+function vehicleTypeText(type){
+  return type === '機' ? '機車' : type === '汽' ? '汽車' : '';
+}
+function vehicleEntryRowHtml(v, entryId, locked){
+  if (locked){
+    const summary = [vehicleTypeText(v.type), v.brand, v.plate].filter(Boolean).join(' · ') || '（未填寫）';
+    return `
+      <div class="vehicle-entry vehicle-entry-locked" data-entry-id="${entryId}" data-v-type="${esc(v.type||'')}" data-v-brand="${esc(v.brand||'')}" data-v-plate="${esc(v.plate||'')}">
+        <div class="vehicle-locked-summary">${esc(summary)}</div>
+        <div class="vehicle-locked-actions">
+          <button type="button" class="vehicle-edit-btn" onclick="window.__unlockVehicleEntry(this)">編輯</button>
+          <button type="button" class="vehicle-remove-btn" onclick="window.__removeVehicleEntry(this)">移除這台車</button>
+        </div>
+      </div>`;
+  }
   return `
     <div class="vehicle-entry" data-entry-id="${entryId}">
       <div class="field"><label>車輛種類</label>
@@ -3013,6 +3042,7 @@ const RELEASE_NOTES = [
       "成員列表卡片改版為資訊網格風格：電話、EMT 證照獨立成欄位，登記了民車的話每台車各自一整列，沒有登記的項目顯示「未填寫／未登記」而不是整行消失，版面更整齊",
       "新增「車號查詢」頁面（更多 → 車號查詢）：輸入車牌（大小寫、有無破折號都能查）反查車主是誰，跟成員列表看到的範圍一樣（同單位／全單位），只是換一個用車牌反查的入口",
       "個人資料編輯表單「民車」卡片下方多一顆「儲存」按鈕，填完車輛資料不用整頁往下捲到底才能存檔",
+      "民車欄位改成「顯示／編輯」兩種畫面：已經填過的車輛預設顯示一行摘要（車種／廠牌／車牌），按「編輯」才會展開成可以修改的表單，畫面更簡潔，不用一次看到所有欄位",
     ] },
   ] },
   { date: "2026/07/21", groups: [
@@ -8726,7 +8756,7 @@ function viewProfile(){
         <div class="profile-section-card">
           <div class="profile-section-title">民車（選填，可新增多台）</div>
           <div id="vehicle-entries">
-            ${(p.vehicles && p.vehicles.length ? p.vehicles : [{type:'',brand:'',plate:''}]).map((v, i) => vehicleEntryRowHtml(v, i)).join("")}
+            ${(p.vehicles && p.vehicles.length ? p.vehicles.map((v, i) => vehicleEntryRowHtml(v, i, true)) : [vehicleEntryRowHtml({type:'',brand:'',plate:''}, 0, false)]).join("")}
           </div>
           <button type="button" class="btn-outline-blue" style="margin-top:14px;" onclick="window.__addVehicleEntry()">+ 新增一台車</button>
           <button class="btn-primary" type="submit" style="margin-top:14px;">儲存</button>
@@ -11740,14 +11770,24 @@ window.__onVehicleEntryTypeChange = (radio) => {
   select.innerHTML = `<option value="">請選擇廠牌</option>` + vehicleBrandOptions(radio.value, "");
 };
 // 新增/移除一台車：純 DOM 操作（插入新的 .vehicle-entry 區塊／移除自己
-// 所在的區塊），不觸發整頁 render()，理由跟上面一樣。
+// 所在的區塊），不觸發整頁 render()，理由跟上面一樣。新增的車輛還沒填過
+// 資料，直接給編輯模式（locked=false）。
 window.__addVehicleEntry = () => {
   const container = document.getElementById("vehicle-entries");
   const entryId = state.vehicleEntrySeq++;
-  container.insertAdjacentHTML("beforeend", vehicleEntryRowHtml({type:"",brand:"",plate:""}, entryId));
+  container.insertAdjacentHTML("beforeend", vehicleEntryRowHtml({type:"",brand:"",plate:""}, entryId, false));
 };
 window.__removeVehicleEntry = (btn) => {
   btn.closest(".vehicle-entry").remove();
+};
+// 顯示模式的車輛列按「編輯」：讀出摘要列存在 data-v-* 屬性裡的原始資料，
+// 換成同一個 entryId 的編輯模式（沿用 entryId 才不會跟其他列的 radio
+// name 撞號），不觸發整頁 render()。
+window.__unlockVehicleEntry = (btn) => {
+  const row = btn.closest(".vehicle-entry");
+  const entryId = row.dataset.entryId;
+  const v = { type: row.dataset.vType || "", brand: row.dataset.vBrand || "", plate: row.dataset.vPlate || "" };
+  row.outerHTML = vehicleEntryRowHtml(v, entryId, false);
 };
 window.__togglePush = (turnedOn) => { if (turnedOn) enablePush(); else disablePush(); };
 // 測試模式開關：開啟固定續 1 小時（跟後端 isTestModeActive() 的判斷基準
@@ -11770,13 +11810,19 @@ window.__saveProfile = (ev) => {
   const f = new FormData(ev.target);
   // 車輛不是靠 FormData 讀（每台車的欄位沒有固定 name，見
   // vehicleEntryRowHtml 的說明），直接照畫面上目前有幾個 .vehicle-entry
-  // 區塊逐一讀值；完全沒填的空白列（例如按了「新增一台車」但沒填就直接
-  // 送出）就濾掉，不存空物件。
-  const vehicles = [...document.querySelectorAll(".vehicle-entry")].map(row => ({
-    type: row.querySelector('input[type="radio"]:checked')?.value || "",
-    brand: row.querySelector(".vehicle-brand-select")?.value || "",
-    plate: row.querySelector(".vehicle-plate-input")?.value || ""
-  })).filter(v => v.type || v.brand || v.plate);
+  // 區塊逐一讀值；顯示模式（locked）的列資料存在 data-v-* 屬性裡，編輯
+  // 模式的列才去讀表單欄位。完全沒填的空白列（例如按了「新增一台車」但
+  // 沒填就直接送出）就濾掉，不存空物件。
+  const vehicles = [...document.querySelectorAll(".vehicle-entry")].map(row => {
+    if (row.classList.contains("vehicle-entry-locked")){
+      return { type: row.dataset.vType || "", brand: row.dataset.vBrand || "", plate: row.dataset.vPlate || "" };
+    }
+    return {
+      type: row.querySelector('input[type="radio"]:checked')?.value || "",
+      brand: row.querySelector(".vehicle-brand-select")?.value || "",
+      plate: row.querySelector(".vehicle-plate-input")?.value || ""
+    };
+  }).filter(v => v.type || v.brand || v.plate);
   updateOwnProfile(f.get("displayName"), f.get("rank"), f.get("phone"), f.get("emtLevel"), vehicles).then(() => {
     state.profileEditing = false; render();
   }).catch(err => showToast(`個人資料儲存失敗：[${err.code||'?'}] ${err.message||err}`));
