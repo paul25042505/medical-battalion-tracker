@@ -1641,8 +1641,8 @@
   /* 民車卡片標題列：「民車登記」＋副標在左，已登記台數徽章在右
      （沿用 .badge returning 的藍色淡底配色）。 */
   .vehicle-section-header{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px;}
-  .vehicle-section-title{font-size:var(--text-lg); font-weight:800; color:var(--text);}
-  .vehicle-section-subtitle{font-size:var(--text-xs); color:var(--muted); margin-top:2px;}
+  .vehicle-section-header .profile-section-title{margin-bottom:4px;}
+  .vehicle-section-subtitle{font-size:var(--text-xs); color:var(--muted);}
   /* 顯示模式的車輛卡片（已經填過、鎖定顯示）：圖示方塊＋車牌/車種/廠牌
      資訊＋編輯/刪除圖示鈕，各自是一張獨立卡片，彼此用 margin-bottom
      拉開間距（不是分隔線）。 */
@@ -1952,7 +1952,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-23-424-vehicle-card-restyle";
+const BUILD_TAG = "2026-07-23-425-profile-view-page";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2526,19 +2526,31 @@ function vehicleBrandOptions(vehicleType, selected){
 function vehicleTypeText(type){
   return type === '機' ? '機車' : type === '汽' ? '汽車' : '';
 }
+// 車輛卡片的圖示＋車牌／車種／廠牌內容，鎖定顯示模式（表單裡的）跟純
+// 唯讀顯示頁（viewProfileDetail）共用同一份內容，差別只在後者不需要
+// 編輯/移除的圖示鈕。
+function vehicleCardInnerHtml(v){
+  const plateHtml = v.plate
+    ? `<span class="vehicle-plate-tag">${esc(v.plate)}</span>`
+    : `<span class="vehicle-plate-tag vehicle-plate-tag-empty">未填寫車牌</span>`;
+  const typeHtml = v.type ? `<span class="badge muted">${vehicleTypeText(v.type)}</span>` : '';
+  return `
+    <div class="vehicle-card-icon">${icon('car',20)}</div>
+    <div class="vehicle-card-info">
+      <div class="vehicle-card-top">${plateHtml}${typeHtml}</div>
+      <div class="vehicle-card-brand">${v.brand ? esc(v.brand) : '未填寫廠牌'}</div>
+    </div>`;
+}
+// 個人資料唯讀顯示頁用的車輛卡片：跟表單裡的鎖定列同一套卡片樣式，但
+// 沒有編輯/移除按鈕（純顯示，沒有可以操作的動作）。
+function vehicleDisplayCardHtml(v){
+  return `<div class="vehicle-entry-locked">${vehicleCardInnerHtml(v)}</div>`;
+}
 function vehicleEntryRowHtml(v, entryId, locked){
   if (locked){
-    const plateHtml = v.plate
-      ? `<span class="vehicle-plate-tag">${esc(v.plate)}</span>`
-      : `<span class="vehicle-plate-tag vehicle-plate-tag-empty">未填寫車牌</span>`;
-    const typeHtml = v.type ? `<span class="badge muted">${vehicleTypeText(v.type)}</span>` : '';
     return `
       <div class="vehicle-entry vehicle-entry-locked" data-entry-id="${entryId}" data-v-type="${esc(v.type||'')}" data-v-brand="${esc(v.brand||'')}" data-v-plate="${esc(v.plate||'')}">
-        <div class="vehicle-card-icon">${icon('car',20)}</div>
-        <div class="vehicle-card-info">
-          <div class="vehicle-card-top">${plateHtml}${typeHtml}</div>
-          <div class="vehicle-card-brand">${v.brand ? esc(v.brand) : '未填寫廠牌'}</div>
-        </div>
+        ${vehicleCardInnerHtml(v)}
         <div class="vehicle-card-actions">
           <button type="button" class="vehicle-icon-btn" onclick="window.__unlockVehicleEntry(this)" aria-label="編輯這台車">${icon('pencil',17)}</button>
           <button type="button" class="vehicle-icon-btn" onclick="window.__removeVehicleEntry(this)" aria-label="移除這台車">${icon('trash',17)}</button>
@@ -3083,6 +3095,8 @@ const RELEASE_NOTES = [
       "個人資料編輯表單「民車」卡片下方多一顆「儲存」按鈕，填完車輛資料不用整頁往下捲到底才能存檔",
       "民車欄位改成「顯示／編輯」兩種畫面：已經填過的車輛預設顯示成卡片（車牌／車種／廠牌＋編輯／刪除圖示鈕），按「編輯」才會展開成可以修改的表單，畫面更簡潔，不用一次看到所有欄位",
       "「民車登記」卡片改版：標題旁加上「已登記 N 輛」徽章，新增車輛的按鈕改成虛線框樣式",
+      "「民車登記」標題改成跟「基本資料」「帳號資訊」同一種樣式，維持整頁一致",
+      "新增「個人資料」唯讀顯示頁：從「更多」點「個人資料」先看到目前資料的顯示畫面，按「編輯個人資料」才進入可修改的表單；編輯後按「儲存」或「取消」會回到這個顯示頁，不會像之前一樣整個跳回「更多」主選單",
     ] },
   ] },
   { date: "2026/07/21", groups: [
@@ -3828,6 +3842,8 @@ const state = {
   tasksMainTab: "duty", // 任務頁最上面的子選單：duty（勤務，預設）／weather（天氣）／records（紀錄）
   statsPeriod: "today",
   profileEditing: false,
+  profileViewing: false, // 個人資料唯讀顯示頁（見 viewProfileDetail）：從「更多」頁點「個人資料」進來時的預設畫面，跟「更多」主選單是同一個 profile 路由但不同畫面，這樣按「儲存」/「取消」回來時是回到這個顯示頁，不是整個跳回「更多」主選單
+
   baseDataUnit: "", baseDataModal: null, // 基礎資料管理目前選的單位；baseDataModal: {coll, id, unit} | null
   emergencyBroadcastResult: null, // 急診待命緊急動員廣播結果彈窗：{ok, message, recipients}|{ok:false, reason} | null
   createTaskUnit: "", // 建立勤務頁面：admin/高勤官可切換的單位
@@ -8770,6 +8786,51 @@ function settingsSection(title, rows){
   if (!rows.length) return "";
   return `<div class="section-label">${title}</div><div class="settings-group">${rows.join("")}</div>`;
 }
+// 個人資料唯讀顯示頁：從「更多」頁點「個人資料」進來的預設畫面（見
+// window.__openProfileView），跟編輯表單共用 .profile-section-card／
+// .member-card-grid／.member-cell 等既有樣式（member-card-grid 原本是
+// 給有分隔線的卡片內容用，這裡用 inline style 蓋掉分隔線，因為卡片本身
+// 已經有 profile-section-title 當標題，不需要再多一條線）。返回鍵、
+// 「編輯個人資料」按鈕都只是切換 state 旗標（profileViewing／
+// profileEditing），不是換路由，這樣「儲存」/「取消」後才會回到這個
+// 顯示頁，不會整個跳回「更多」主選單。
+function viewProfileDetail(p){
+  const vehicles = (p.vehicles||[]).filter(v => v.type || v.brand || v.plate);
+  return `
+    <div class="back-row">
+      <button class="back-btn" onclick="window.__closeProfileView()"><span class="back-btn-circle"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></span></button>
+    </div>
+    <div class="section-label">個人資料</div>
+    <div class="profile-section-card">
+      <div class="profile-section-title">基本資料</div>
+      <div class="member-card-grid" style="border-top:none; padding-top:0;">
+        <div class="member-cell"><div class="member-label">姓名</div><div class="member-val">${esc(p.displayName||'未填寫')}</div></div>
+        <div class="member-cell"><div class="member-label">階級</div><div class="member-val${p.rank?'':' member-val-empty'}">${p.rank?esc(p.rank):'未填寫'}</div></div>
+        <div class="member-cell"><div class="member-label">電話</div><div class="member-val${p.phone?'':' member-val-empty'}">${p.phone?esc(p.phone):'未填寫'}</div></div>
+        <div class="member-cell"><div class="member-label">EMT 證照</div><div class="member-val${p.emtLevel?'':' member-val-empty'}">${p.emtLevel?esc(p.emtLevel):'未登記'}</div></div>
+      </div>
+    </div>
+    <div class="profile-section-card">
+      <div class="vehicle-section-header">
+        <div>
+          <div class="profile-section-title">民車登記</div>
+          <div class="vehicle-section-subtitle">選填，可新增多台車輛</div>
+        </div>
+        <span class="badge returning">已登記 ${vehicles.length} 輛</span>
+      </div>
+      ${vehicles.length ? vehicles.map(vehicleDisplayCardHtml).join("") : `<div class="member-val member-val-empty">尚未登記車輛</div>`}
+    </div>
+    <div class="profile-section-card">
+      <div class="profile-section-title">帳號資訊</div>
+      <div class="member-card-grid" style="border-top:none; padding-top:0;">
+        <div class="member-cell"><div class="member-label">單位</div><div class="member-val">${esc(unitLabel(p.unit))}</div></div>
+        <div class="member-cell"><div class="member-label">Email</div><div class="member-val">${esc(p.email||'—')}</div></div>
+        <div class="member-cell"><div class="member-label">角色</div><div class="member-val">${esc(ROLE_LABEL[myRole(p)]||p.role)}</div></div>
+      </div>
+    </div>
+    <button class="btn-primary" style="width:100%;" onclick="window.__editProfile()">編輯個人資料</button>
+  `;
+}
 function viewProfile(){
   const p = state.profile;
   if (state.profileEditing) {
@@ -8796,7 +8857,7 @@ function viewProfile(){
         <div class="profile-section-card">
           <div class="vehicle-section-header">
             <div>
-              <div class="vehicle-section-title">民車登記</div>
+              <div class="profile-section-title">民車登記</div>
               <div class="vehicle-section-subtitle">選填，可新增多台車輛</div>
             </div>
             <span class="badge returning">已登記 ${(p.vehicles||[]).length} 輛</span>
@@ -8819,12 +8880,15 @@ function viewProfile(){
       </form>
     `;
   }
+  if (state.profileViewing) {
+    return viewProfileDetail(p);
+  }
   const surname = (p.displayName || p.email || '?').trim().charAt(0) || '?';
   const avatar = `<div class="hub-avatar" style="background:var(--blue); color:#fff; font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:36px; font-weight:700;">${esc(surname)}</div>`;
 
   // Section 1：使用者功能，所有登入使用者皆可見。
   const userRows = [
-    settingsRow({icon:'user', bg:'#E8F1FF', fg:'#0056C7', title:'個人資料', onclick:"window.__editProfile()"}),
+    settingsRow({icon:'user', bg:'#E8F1FF', fg:'#0056C7', title:'個人資料', onclick:"window.__openProfileView()"}),
     settingsRow({icon:'user', bg:'#E9F9EF', fg:'#177A34', title:'成員列表', subtitle:'各單位人員姓名/階級/電話/證照/民車', onclick:"window.__nav({name:'memberList'})"}),
     settingsRow({icon:'car', bg:'#FFF2E0', fg:'#B45F00', title:'車號查詢', subtitle:'輸入車牌反查車主', onclick:"window.__nav({name:'plateSearch'})"}),
     settingsRow({icon:'link', bg:'#EAF1FF', fg:'#0052E0', title:'網網相連', subtitle:'常用網址快速切換', onclick:"window.__nav({name:'webLinks'})"}),
@@ -11807,6 +11871,8 @@ window.__editProfile = () => {
   render();
 };
 window.__cancelEditProfile = () => { state.profileEditing = false; render(); };
+window.__openProfileView = () => { state.profileViewing = true; render(); };
+window.__closeProfileView = () => { state.profileViewing = false; render(); };
 // 民車登記表單「車輛種類」切換時，重新產生「廠牌」下拉選單的選項（汽車/
 // 機車廠牌是分開的兩份清單，見 vehicleBrandOptions）；純 DOM 換選單內容，
 // 不觸發整頁 render()，避免其他還沒送出的欄位被清空。
