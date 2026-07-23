@@ -1629,24 +1629,56 @@
     letter-spacing:0.09em; text-transform:uppercase; margin-bottom:14px;
   }
   .profile-section-card .field:last-child{margin-bottom:0;}
-  /* 民車登記：一台車一個區塊，第二台起用一條分隔線隔開，避免看起來像
-     同一份表單裡不小心重複了兩次車輛欄位。 */
-  .vehicle-entry{margin-top:16px; padding-top:16px; border-top:1px solid var(--border);}
-  #vehicle-entries .vehicle-entry:first-child{margin-top:0; padding-top:0; border-top:none;}
+  /* 民車登記表單（編輯模式）：一台車一個區塊，第二台起用一條分隔線隔開，
+     避免看起來像同一份表單裡不小心重複了兩次車輛欄位。鎖定顯示模式
+     （.vehicle-entry-locked）是獨立的卡片樣式，不套用這條分隔線。 */
+  .vehicle-entry.vehicle-entry-form{margin-top:16px; padding-top:16px; border-top:1px solid var(--border);}
+  #vehicle-entries .vehicle-entry-form:first-child{margin-top:0; padding-top:0; border-top:none;}
   .vehicle-remove-btn{
     background:none; border:none; color:var(--red); font-size:var(--text-xs); font-weight:600;
     padding:2px 0; font-family:var(--sans); margin-top:2px;
   }
-  /* 顯示模式的車輛列（已經填過、鎖定顯示）：一行摘要文字＋編輯/移除按鈕，
-     跟編輯模式的表單區塊共用 .vehicle-entry 的間距/分隔線設定。 */
-  .vehicle-entry-locked{display:flex; align-items:center; justify-content:space-between; gap:12px;}
-  .vehicle-locked-summary{font-family:var(--mono); font-size:var(--text-sm); color:var(--text);}
-  .vehicle-locked-actions{display:flex; align-items:center; gap:14px; flex-shrink:0;}
-  .vehicle-edit-btn{
-    background:none; border:none; color:var(--blue); font-size:var(--text-xs); font-weight:600;
-    padding:2px 0; font-family:var(--sans);
+  /* 民車卡片標題列：「民車登記」＋副標在左，已登記台數徽章在右
+     （沿用 .badge returning 的藍色淡底配色）。 */
+  .vehicle-section-header{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px;}
+  .vehicle-section-title{font-size:var(--text-lg); font-weight:800; color:var(--text);}
+  .vehicle-section-subtitle{font-size:var(--text-xs); color:var(--muted); margin-top:2px;}
+  /* 顯示模式的車輛卡片（已經填過、鎖定顯示）：圖示方塊＋車牌/車種/廠牌
+     資訊＋編輯/刪除圖示鈕，各自是一張獨立卡片，彼此用 margin-bottom
+     拉開間距（不是分隔線）。 */
+  .vehicle-entry-locked{
+    display:flex; align-items:center; gap:12px; padding:12px 14px; margin-bottom:10px;
+    background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-md);
   }
-  .vehicle-entry-locked .vehicle-remove-btn{margin-top:0;}
+  #vehicle-entries .vehicle-entry-locked:last-child{margin-bottom:0;}
+  .vehicle-card-icon{
+    flex-shrink:0; width:40px; height:40px; border-radius:var(--radius-sm);
+    display:flex; align-items:center; justify-content:center;
+    background:color-mix(in srgb, var(--blue) 12%, transparent); color:var(--blue);
+  }
+  .vehicle-card-info{flex:1; min-width:0;}
+  .vehicle-card-top{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .vehicle-plate-tag{
+    font-family:var(--mono); font-weight:800; font-size:var(--text-sm); letter-spacing:0.02em;
+    border:1.5px solid var(--border-strong); border-radius:var(--radius-sm); padding:3px 9px;
+  }
+  .vehicle-plate-tag-empty{color:var(--muted); font-weight:600; border-style:dashed;}
+  .vehicle-card-brand{font-size:var(--text-xs); color:var(--muted); margin-top:4px;}
+  .vehicle-card-actions{display:flex; align-items:center; gap:2px; flex-shrink:0;}
+  .vehicle-icon-btn{
+    background:none; border:none; color:var(--muted); padding:6px; border-radius:var(--radius-sm);
+    display:inline-flex; align-items:center; justify-content:center;
+    transition:transform 0.12s ease, opacity 0.12s ease;
+  }
+  .vehicle-icon-btn:active{transform:scale(0.9); opacity:0.7;}
+  /* 新增一台車輛：虛線框按鈕，跟 .no-permission 等既有的虛線框樣式同一套語彙。 */
+  .vehicle-add-btn{
+    display:flex; align-items:center; justify-content:center; gap:6px; width:100%;
+    padding:12px; border:1.5px dashed var(--border-strong); border-radius:var(--radius-md);
+    background:none; color:var(--blue); font-weight:700; font-size:var(--text-sm); font-family:var(--sans);
+    transition:transform 0.12s ease, opacity 0.12s ease;
+  }
+  .vehicle-add-btn:active{transform:scale(0.98); opacity:0.85;}
   /* 成員卡片（資訊網格風格，見 memberCardHtml）：成員列表／車號查詢頁共用。 */
   .member-card{
     background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md);
@@ -1920,7 +1952,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-23-423-vehicle-entry-lock-view";
+const BUILD_TAG = "2026-07-23-424-vehicle-card-restyle";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2496,18 +2528,25 @@ function vehicleTypeText(type){
 }
 function vehicleEntryRowHtml(v, entryId, locked){
   if (locked){
-    const summary = [vehicleTypeText(v.type), v.brand, v.plate].filter(Boolean).join(' · ') || '（未填寫）';
+    const plateHtml = v.plate
+      ? `<span class="vehicle-plate-tag">${esc(v.plate)}</span>`
+      : `<span class="vehicle-plate-tag vehicle-plate-tag-empty">未填寫車牌</span>`;
+    const typeHtml = v.type ? `<span class="badge muted">${vehicleTypeText(v.type)}</span>` : '';
     return `
       <div class="vehicle-entry vehicle-entry-locked" data-entry-id="${entryId}" data-v-type="${esc(v.type||'')}" data-v-brand="${esc(v.brand||'')}" data-v-plate="${esc(v.plate||'')}">
-        <div class="vehicle-locked-summary">${esc(summary)}</div>
-        <div class="vehicle-locked-actions">
-          <button type="button" class="vehicle-edit-btn" onclick="window.__unlockVehicleEntry(this)">編輯</button>
-          <button type="button" class="vehicle-remove-btn" onclick="window.__removeVehicleEntry(this)">移除這台車</button>
+        <div class="vehicle-card-icon">${icon('car',20)}</div>
+        <div class="vehicle-card-info">
+          <div class="vehicle-card-top">${plateHtml}${typeHtml}</div>
+          <div class="vehicle-card-brand">${v.brand ? esc(v.brand) : '未填寫廠牌'}</div>
+        </div>
+        <div class="vehicle-card-actions">
+          <button type="button" class="vehicle-icon-btn" onclick="window.__unlockVehicleEntry(this)" aria-label="編輯這台車">${icon('pencil',17)}</button>
+          <button type="button" class="vehicle-icon-btn" onclick="window.__removeVehicleEntry(this)" aria-label="移除這台車">${icon('trash',17)}</button>
         </div>
       </div>`;
   }
   return `
-    <div class="vehicle-entry" data-entry-id="${entryId}">
+    <div class="vehicle-entry vehicle-entry-form" data-entry-id="${entryId}">
       <div class="field"><label>車輛種類</label>
         <div class="chip-select">
           <label class="chip-option"><input type="radio" name="vType_${entryId}" value="汽" ${v.type==='汽'?'checked':''} onchange="window.__onVehicleEntryTypeChange(this)"><span>汽車</span></label>
@@ -3042,7 +3081,8 @@ const RELEASE_NOTES = [
       "成員列表卡片改版為資訊網格風格：電話、EMT 證照獨立成欄位，登記了民車的話每台車各自一整列，沒有登記的項目顯示「未填寫／未登記」而不是整行消失，版面更整齊",
       "新增「車號查詢」頁面（更多 → 車號查詢）：輸入車牌（大小寫、有無破折號都能查）反查車主是誰，跟成員列表看到的範圍一樣（同單位／全單位），只是換一個用車牌反查的入口",
       "個人資料編輯表單「民車」卡片下方多一顆「儲存」按鈕，填完車輛資料不用整頁往下捲到底才能存檔",
-      "民車欄位改成「顯示／編輯」兩種畫面：已經填過的車輛預設顯示一行摘要（車種／廠牌／車牌），按「編輯」才會展開成可以修改的表單，畫面更簡潔，不用一次看到所有欄位",
+      "民車欄位改成「顯示／編輯」兩種畫面：已經填過的車輛預設顯示成卡片（車牌／車種／廠牌＋編輯／刪除圖示鈕），按「編輯」才會展開成可以修改的表單，畫面更簡潔，不用一次看到所有欄位",
+      "「民車登記」卡片改版：標題旁加上「已登記 N 輛」徽章，新增車輛的按鈕改成虛線框樣式",
     ] },
   ] },
   { date: "2026/07/21", groups: [
@@ -8754,11 +8794,17 @@ function viewProfile(){
           </div>
         </div>
         <div class="profile-section-card">
-          <div class="profile-section-title">民車（選填，可新增多台）</div>
+          <div class="vehicle-section-header">
+            <div>
+              <div class="vehicle-section-title">民車登記</div>
+              <div class="vehicle-section-subtitle">選填，可新增多台車輛</div>
+            </div>
+            <span class="badge returning">已登記 ${(p.vehicles||[]).length} 輛</span>
+          </div>
           <div id="vehicle-entries">
             ${(p.vehicles && p.vehicles.length ? p.vehicles.map((v, i) => vehicleEntryRowHtml(v, i, true)) : [vehicleEntryRowHtml({type:'',brand:'',plate:''}, 0, false)]).join("")}
           </div>
-          <button type="button" class="btn-outline-blue" style="margin-top:14px;" onclick="window.__addVehicleEntry()">+ 新增一台車</button>
+          <button type="button" class="vehicle-add-btn" style="margin-top:14px;" onclick="window.__addVehicleEntry()">${icon('plus',16)} 新增一台車輛</button>
           <button class="btn-primary" type="submit" style="margin-top:14px;">儲存</button>
         </div>
         <div class="profile-section-card">
