@@ -1952,7 +1952,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-23-431-crossunit-btn-placeholder";
+const BUILD_TAG = "2026-07-23-432-fcm-token-refresh";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3106,6 +3106,9 @@ const RELEASE_NOTES = [
     { category: "任務管理", items: [
       "建立/編輯勤務「跨單位借車」開關移到車號標籤旁邊、「外部車輛」左邊，樣式改成跟「外部車輛」一樣的切換鈕（原本是獨立一排的 iOS Switch）",
       "建立勤務「任務名稱」「地點」欄位的範例提示文字更新",
+    ] },
+    { category: "推播通知", items: [
+      "已經允許通知權限的裝置，登入時會自動重新跟 Firebase 要一次目前的權杖並跟資料庫同步：FCM 權杖偶爾會在背景悄悄輪替，過去只有第一次開通推播時才會存一次，之後都不會更新，導致資料庫裡的權杖可能默默過期、要等到推播失敗才會被清掉並顯示「已過期失效」；現在只要定期打開 App 就會自動同步，降低發生的機率",
     ] },
   ] },
   { date: "2026/07/21", groups: [
@@ -4862,6 +4865,37 @@ function pushStatusLabel(){
   if (state.pushPermission === "denied") return "已被瀏覽器封鎖";
   return (state.profile && state.profile.fcmTokens && state.profile.fcmTokens.length) ? "已開啟" : "已關閉";
 }
+// 已經允許通知權限的裝置，每次登入都重新跟 Firebase 要一次目前的權杖，
+// 跟資料庫裡存的比對，不一樣就更新——FCM 的權杖偶爾會在背景悄悄輪替，
+// 如果都不重新要，資料庫裡存的那組可能變成孤兒，要等到哪天真的推播
+// 失敗才會被後端（removeInvalidTokens）清掉，顯示成推播控制台的
+// 「已過期失效」。這裡主動同步，減少發生的機率；只在權限已經是
+// granted 時做（getToken 不會跳出權限請求視窗，純粹是靜默取得目前
+// 有效的權杖），不影響尚未開通推播的人。
+async function refreshFcmTokenIfNeeded(){
+  try {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    if (!(await checkPushSupport())) return;
+    // register() 對同一個 URL 是 idempotent（見檔案底部 SW 註冊的說明），
+    // 這裡直接再註冊一次拿回現有的 registration，不用等外面那個開機時
+    // 就註冊好的 promise resolve，避免時序上的競爭。
+    const reg = await navigator.serviceWorker.register("firebase-messaging-sw.js");
+    const messaging = getMessaging(app);
+    const token = await getToken(messaging, { vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: reg });
+    if (!token) return;
+    const previousDeviceToken = localStorage.getItem(FCM_TOKEN_STORAGE_KEY);
+    const existing = state.profile.fcmTokens || [];
+    if (previousDeviceToken === token && existing.includes(token)) return;
+    let updated = existing;
+    if (previousDeviceToken && previousDeviceToken !== token) {
+      updated = updated.filter(t => t !== previousDeviceToken);
+    }
+    if (!updated.includes(token)) updated = [...updated, token];
+    await fsSetDoc(`users/${state.user.uid}`, { fcmTokens: updated });
+    state.profile.fcmTokens = updated;
+    localStorage.setItem(FCM_TOKEN_STORAGE_KEY, token);
+  } catch(e) { console.error("重新整理推播權杖失敗", e); }
+}
 // 推播控制台（後台儀表板）需要知道「這支裝置的瀏覽器通知權限」「裝置/
 // 瀏覽器種類」，但這些資訊只有使用者自己的裝置當下才讀得到，其他人的帳號
 // 沒辦法遠端查詢——所以由每個人自己的裝置在登入、以及每次守門員判斷式
@@ -5013,6 +5047,7 @@ onAuthStateChanged(auth, async (user) => {
     checkPushSupport().then(() => safeRender());
     setupForegroundMessaging();
     reportPushPermissionStatus().then(() => renderPushGatekeeper());
+    refreshFcmTokenIfNeeded();
     render();
 
     profilePoll = poll(async () => {
