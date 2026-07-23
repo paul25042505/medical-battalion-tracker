@@ -1629,6 +1629,27 @@
     letter-spacing:0.09em; text-transform:uppercase; margin-bottom:14px;
   }
   .profile-section-card .field:last-child{margin-bottom:0;}
+  /* 民車登記：一台車一個區塊，第二台起用一條分隔線隔開，避免看起來像
+     同一份表單裡不小心重複了兩次車輛欄位。 */
+  .vehicle-entry{margin-top:16px; padding-top:16px; border-top:1px solid var(--border);}
+  #vehicle-entries .vehicle-entry:first-child{margin-top:0; padding-top:0; border-top:none;}
+  .vehicle-remove-btn{
+    background:none; border:none; color:var(--red); font-size:var(--text-xs); font-weight:600;
+    padding:2px 0; font-family:var(--sans); margin-top:2px;
+  }
+  /* 成員卡片（資訊網格風格，見 memberCardHtml）：成員列表／車號查詢頁共用。 */
+  .member-card{
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md);
+    padding:14px 16px; margin-bottom:10px; box-shadow:var(--shadow-xs);
+  }
+  .member-card-top{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px;}
+  .member-name{font-size:var(--text-sm); font-weight:600;}
+  .member-rank{font-size:var(--text-xs); color:var(--muted); font-weight:500; margin-left:6px;}
+  .member-card-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px 14px; border-top:1px solid var(--border); padding-top:10px;}
+  .member-cell{min-width:0;}
+  .member-label{font-size:10px; color:var(--muted); font-family:var(--mono); letter-spacing:0.06em; text-transform:uppercase;}
+  .member-val{font-size:var(--text-xs); margin-top:2px; word-break:break-word;}
+  .member-val.member-val-empty{color:var(--muted);}
   .service-row{display:flex; align-items:center; gap:14px; padding:14px 16px; cursor:pointer; border-bottom:1px solid var(--border);}
   .settings-group .service-row:last-child{border-bottom:none;}
   .service-row .icon-wrap{width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
@@ -1889,7 +1910,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-23-420-profile-form-grouping";
+const BUILD_TAG = "2026-07-23-421-multi-vehicle-plate-search";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1897,7 +1918,7 @@ const BUILD_TAG = "2026-07-23-420-profile-form-grouping";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.24";
+const APP_MAJOR_MINOR = "2.25";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -2426,11 +2447,13 @@ function eligibleForCrewLeader(x){ return eligibleForDriver(x) && !CREW_LEADER_E
 const VEHICLE_TYPES = ["城市型救護車","野戰型救護車","悍馬型救護車","輕型戰術輪車","中型戰術輪車","1.75貨車"];
 function vehicleTypeWeight(type){ const i = VEHICLE_TYPES.indexOf(type); return i === -1 ? VEHICLE_TYPES.length : i; }
 
-// 個人資料的私人車輛登記（見 viewProfile／updateOwnProfile）：車種沿用
+// 個人資料的「民車」登記（見 viewProfile／updateOwnProfile）：車種沿用
 // 洽公登記已經有的「汽／機」分類（CAMP_REG_VEHICLE_TYPES），廠牌依車種
 // 分開兩份清單（台灣市場常見廠牌，依英文字母排序，「英文 中文」並列），
 // 選了車種才會出現對應的廠牌選項，避免汽車廠牌出現在機車欄位裡（見
-// vehicleBrandOptions／window.__onProfileVehicleTypeChange）。
+// vehicleBrandOptions／window.__onProfileVehicleTypeChange）。一個人可以
+// 登記多台車（vehicles 陣列），見 vehicleEntryRowHtml／
+// window.__addVehicleEntry／window.__removeVehicleEntry。
 const CAR_BRANDS = [
   "Alfa Romeo 愛快羅密歐","Audi 奧迪","BMW 寶馬","Chevrolet 雪佛蘭","Citroën 雪鐵龍","CMC 中華",
   "Ford 福特","Honda 本田","Hyundai 現代","Infiniti 英菲尼迪","Isuzu 五十鈴","Jaguar 捷豹","Jeep 吉普",
@@ -2447,6 +2470,30 @@ const MOTORCYCLE_BRANDS = [
 function vehicleBrandOptions(vehicleType, selected){
   const list = vehicleType === "機" ? MOTORCYCLE_BRANDS : vehicleType === "汽" ? CAR_BRANDS : [];
   return list.map(b => `<option value="${esc(b)}" ${selected===b?'selected':''}>${esc(b)}</option>`).join("");
+}
+// 民車登記表單裡的單一台車區塊：每台車的「車輛種類」radio group 要用
+// entryId 做出獨立的 name（例如 vType_0、vType_1），不然瀏覽器會把整頁
+// 所有台車的 radio 都當成同一組，選了第二台車的「汽車」會把第一台車的
+// 選擇也一起清掉。送出表單時不是靠這幾個 name 讀值（見
+// window.__saveProfile），純粹只是要讓每台車的 radio 互相獨立。
+function vehicleEntryRowHtml(v, entryId){
+  return `
+    <div class="vehicle-entry" data-entry-id="${entryId}">
+      <div class="field"><label>車輛種類</label>
+        <div class="chip-select">
+          <label class="chip-option"><input type="radio" name="vType_${entryId}" value="汽" ${v.type==='汽'?'checked':''} onchange="window.__onVehicleEntryTypeChange(this)"><span>汽車</span></label>
+          <label class="chip-option"><input type="radio" name="vType_${entryId}" value="機" ${v.type==='機'?'checked':''} onchange="window.__onVehicleEntryTypeChange(this)"><span>機車</span></label>
+        </div>
+      </div>
+      <div class="field"><label>廠牌</label>
+        <select class="vehicle-brand-select">
+          <option value="">請選擇廠牌</option>
+          ${vehicleBrandOptions(v.type, v.brand)}
+        </select>
+      </div>
+      <div class="field"><label>車牌</label><input class="vehicle-plate-input" value="${esc(v.plate||'')}" style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()" placeholder="例如：ABC-1234"></div>
+      <button type="button" class="vehicle-remove-btn" onclick="window.__removeVehicleEntry(this)">移除這台車</button>
+    </div>`;
 }
 // 「營內車／營外車」是勤務本身的屬性（建立勤務時填的 scope 欄位：這趟勤務
 // 車輛會不會離開營區），不是車輛的忙碌狀態，兩者是不同概念，不要混用。
@@ -2961,8 +3008,10 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 const RELEASE_NOTES = [
   { date: "2026/07/23", groups: [
     { category: "個人資料", items: [
-      "個人資料新增「私人車輛」登記（車種／廠牌／車牌）：車子都是自己申請的，直接掛在自己帳號底下就好，不用另外建車主檔案；車種選汽車或機車後，廠牌下拉會換成對應清單（台灣市場常見廠牌，依英文字母排序），車牌自由輸入；成員列表會顯示同單位成員的車輛資訊，方便知道某台車是誰的，沒有登記的人不會多顯示這一行",
-      "個人資料編輯表單改成分組卡片排版（基本資料／私人車輛／帳號資訊各自一張卡片），欄位一多就不會擠成一長串分不清類別",
+      "個人資料「私人車輛」改名為「民車」，並開放新增多台（不再限一人一台）：每台車各自填車種／廠牌／車牌，可以個別新增/移除；車牌輸入框固定轉大寫，不用自己切換輸入法大小寫",
+      "個人資料編輯表單改成分組卡片排版（基本資料／民車／帳號資訊各自一張卡片），欄位一多就不會擠成一長串分不清類別",
+      "成員列表卡片改版為資訊網格風格：電話、EMT 證照獨立成欄位，登記了民車的話每台車各自一整列，沒有登記的項目顯示「未填寫／未登記」而不是整行消失，版面更整齊",
+      "新增「車號查詢」頁面（更多 → 車號查詢）：輸入車牌（大小寫、有無破折號都能查）反查車主是誰，跟成員列表看到的範圍一樣（同單位／全單位），只是換一個用車牌反查的入口",
     ] },
   ] },
   { date: "2026/07/21", groups: [
@@ -4262,8 +4311,8 @@ async function setCampRegistrationTranscribed(id, transcribed){
     : { transcribed: false, transcribedBy: "", transcribedByName: "", transcribedAt: null });
   if (campRegistrationsPoll) campRegistrationsPoll.refreshNow();
 }
-async function updateOwnProfile(displayName, rank, phone, emtLevel, vehicleType, vehicleBrand, vehiclePlate){
-  const fields = { displayName, rank, phone, emtLevel: emtLevel||"", vehicleType: vehicleType||"", vehicleBrand: vehicleBrand||"", vehiclePlate: vehiclePlate||"" };
+async function updateOwnProfile(displayName, rank, phone, emtLevel, vehicles){
+  const fields = { displayName, rank, phone, emtLevel: emtLevel||"", vehicles: vehicles||[] };
   await fsSetDoc(`users/${state.user.uid}`, fields);
   state.profile = { ...state.profile, ...fields };
   if (personnelPoll) personnelPoll.refreshNow();
@@ -4915,11 +4964,12 @@ function mapUserToPersonnel(u){
     phone: u.phone || "", emtLevel: u.emtLevel || "",
     active: role !== "disabled" && role !== "pending",
     email: u.email || "", role,
-    // 個人私人車輛登記（見 viewProfile／updateOwnProfile），自己申請、
+    // 個人「民車」登記（見 viewProfile／updateOwnProfile），自己申請、
     // 沒有眷屬車輛的情境，資料直接掛在自己帳號底下，不用另外開一個
-    // 車主名冊；成員列表顯示這幾項讓大家知道誰的車是哪一台（見
-    // viewMemberList）。
-    vehicleType: u.vehicleType || "", vehicleBrand: u.vehicleBrand || "", vehiclePlate: u.vehiclePlate || "",
+    // 車主名冊；一個人可以登記多台車（陣列）。成員列表／車號查詢頁都會
+    // 顯示這幾項，讓大家知道某台車是誰的（見 viewMemberList／
+    // viewPlateSearch／memberCardHtml）。
+    vehicles: Array.isArray(u.vehicles) ? u.vehicles : [],
     // 推播控制台需要的欄位：fcmTokens 原本就有（推播系統既有功能）；
     // pushPermission/pushDevice/pushSubscribedAt 是使用者自己的裝置在
     // 通過【前台】推播守門員時自我回報寫回 Firestore 的（見
@@ -8673,20 +8723,11 @@ function viewProfile(){
           </div>
         </div>
         <div class="profile-section-card">
-          <div class="profile-section-title">私人車輛（選填）</div>
-          <div class="field"><label>車輛種類</label>
-            <div class="chip-select">
-              <label class="chip-option"><input type="radio" name="vehicleType" value="汽" ${p.vehicleType==='汽'?'checked':''} onchange="window.__onProfileVehicleTypeChange(this)"><span>汽車</span></label>
-              <label class="chip-option"><input type="radio" name="vehicleType" value="機" ${p.vehicleType==='機'?'checked':''} onchange="window.__onProfileVehicleTypeChange(this)"><span>機車</span></label>
-            </div>
+          <div class="profile-section-title">民車（選填，可新增多台）</div>
+          <div id="vehicle-entries">
+            ${(p.vehicles && p.vehicles.length ? p.vehicles : [{type:'',brand:'',plate:''}]).map((v, i) => vehicleEntryRowHtml(v, i)).join("")}
           </div>
-          <div class="field"><label>廠牌</label>
-            <select name="vehicleBrand" id="pf-vehicle-brand">
-              <option value="">請選擇廠牌</option>
-              ${vehicleBrandOptions(p.vehicleType, p.vehicleBrand)}
-            </select>
-          </div>
-          <div class="field"><label>車牌</label><input name="vehiclePlate" value="${esc(p.vehiclePlate||'')}" placeholder="例如：ABC-1234"></div>
+          <button type="button" class="btn-outline-blue" style="margin-top:14px;" onclick="window.__addVehicleEntry()">+ 新增一台車</button>
         </div>
         <div class="profile-section-card">
           <div class="profile-section-title">帳號資訊</div>
@@ -8706,7 +8747,8 @@ function viewProfile(){
   // Section 1：使用者功能，所有登入使用者皆可見。
   const userRows = [
     settingsRow({icon:'user', bg:'#E8F1FF', fg:'#0056C7', title:'個人資料', onclick:"window.__editProfile()"}),
-    settingsRow({icon:'user', bg:'#E9F9EF', fg:'#177A34', title:'成員列表', subtitle:'各單位人員姓名/階級/電話/證照/私人車輛', onclick:"window.__nav({name:'memberList'})"}),
+    settingsRow({icon:'user', bg:'#E9F9EF', fg:'#177A34', title:'成員列表', subtitle:'各單位人員姓名/階級/電話/證照/民車', onclick:"window.__nav({name:'memberList'})"}),
+    settingsRow({icon:'car', bg:'#FFF2E0', fg:'#B45F00', title:'車號查詢', subtitle:'輸入車牌反查車主', onclick:"window.__nav({name:'plateSearch'})"}),
     settingsRow({icon:'link', bg:'#EAF1FF', fg:'#0052E0', title:'網網相連', subtitle:'常用網址快速切換', onclick:"window.__nav({name:'webLinks'})"}),
     settingsRow({icon:'alert', bg:'#FFEAEA', fg:'#C7233B', title:'大量傷患演練模組（建構中）', subtitle:'開事件、傷患檢傷分類與車輛/醫院指派', onclick:"window.__nav({name:'mciList'})", disabled: myRole(p) !== 'admin'}),
     settingsRow({icon:'records', bg:'#F2E9FE', fg:'#6B23C7', title:'教學園地（建構中）', subtitle:'救護技術教學文章，圖文解說', onclick:"window.__nav({name:'tutorials'})", disabled: myRole(p) !== 'admin'}),
@@ -8759,6 +8801,29 @@ function viewProfile(){
    Firestore 規則限制只到自己單位，跟其他頁面（人員與帳號、車輛/行車
    紀錄器）共用同一顆 baseDataUnit 頁籤狀態。
    ========================================================= */
+// 成員卡片（資訊網格風格）：姓名/階級列之後用小網格把電話／EMT 證照
+// 攤開成獨立欄位，登記了民車的話每台車各自佔一整列（车輛可能不只一台，
+// 見 viewProfile 的民車多台登記）。成員列表、車號查詢頁共用這個 render
+// function，資料形狀完全一樣（都是 state.personnel 裡的一筆）。
+function memberCardHtml(x){
+  const vehicles = Array.isArray(x.vehicles) ? x.vehicles.filter(v => v.type || v.brand || v.plate) : [];
+  return `
+    <div class="member-card">
+      <div class="member-card-top">
+        <div><span class="member-name">${esc(x.name)}</span>${x.title ? `<span class="member-rank">${esc(x.title)}</span>` : ''}</div>
+        ${x.emtLevel ? emtBadgeHtml(x.emtLevel) : ''}
+      </div>
+      <div class="member-card-grid">
+        <div class="member-cell"><div class="member-label">電話</div><div class="member-val${x.phone?'':' member-val-empty'}">${x.phone ? esc(x.phone) : '未填寫'}</div></div>
+        <div class="member-cell"><div class="member-label">EMT 證照</div><div class="member-val${x.emtLevel?'':' member-val-empty'}">${x.emtLevel ? esc(x.emtLevel) : '未登記'}</div></div>
+        ${vehicles.map(v => `
+        <div class="member-cell" style="grid-column:1 / -1;">
+          <div class="member-label">民車</div>
+          <div class="member-val">${esc([v.type==='機'?'機車':v.type==='汽'?'汽車':'', v.brand, v.plate].filter(Boolean).join(' · '))}</div>
+        </div>`).join("")}
+      </div>
+    </div>`;
+}
 function viewMemberList(){
   const p = state.profile;
   const canSwitch = canSeeAllUnits(p);
@@ -8773,16 +8838,45 @@ function viewMemberList(){
     <div class="section-label">成員列表</div>
     ${unit ? `
       ${unitTabs}
-      ${rows.length ? rows.map(x => `
-        <div class="admin-row">
-          <div>
-            <div class="name">${esc(x.name)}${x.title ? ` <span style="font-weight:600; color:var(--muted);">${esc(x.title)}</span>` : ''}</div>
-            <div class="sub">${x.phone ? `📞 ${esc(x.phone)}` : '未填寫電話'}</div>
-            ${x.vehiclePlate || x.vehicleBrand ? `<div class="sub">🚗 ${esc([x.vehicleType==='機'?'機車':x.vehicleType==='汽'?'汽車':'', x.vehicleBrand, x.vehiclePlate].filter(Boolean).join(' · '))}</div>` : ''}
-          </div>
-          ${x.emtLevel ? emtBadgeHtml(x.emtLevel) : ''}
-        </div>`).join("") : `<div class="empty">尚無成員資料</div>`}
+      ${rows.length ? rows.map(memberCardHtml).join("") : `<div class="empty">尚無成員資料</div>`}
     ` : `<div class="empty">您尚未被指派單位，請聯繫管理員。</div>`}
+  `;
+}
+
+/* =========================================================
+   17a-0b) 畫面：車號查詢（輸入車牌反查車主，所有登入使用者皆可見；
+   跟成員列表同一份 state.personnel、同樣受單位範圍限制——一般成員/
+   主官管只查得到自己單位，admin/高勤官不分單位；不是額外開放更大的
+   查詢範圍，車輛資訊本來就已經在成員列表攤開給這個範圍的人看了，
+   這裡只是換一個「用車牌反查」的入口，方便好記，不是新的權限）。
+   ========================================================= */
+// 車牌比對時把破折號/空白都拿掉、轉大寫再比對，這樣「ABC-1234」跟
+// 「abc1234」都能查到同一台車，不用要求輸入格式跟登記時一模一樣。
+function normalizePlateForSearch(s){
+  return (s||"").toUpperCase().replace(/[-\s]/g, "");
+}
+function plateSearchResultsHtml(query){
+  const q = normalizePlateForSearch(query);
+  if (!q) return `<div class="empty">請輸入車牌號碼查詢車主</div>`;
+  const pool = state.personnel.filter(x => x.active !== false);
+  const matches = pool.filter(x => (x.vehicles||[]).some(v => normalizePlateForSearch(v.plate).includes(q)));
+  if (!matches.length) return `<div class="empty">查無符合的車輛</div>`;
+  return matches.map(memberCardHtml).join("");
+}
+window.__filterPlateSearch = (value) => {
+  state.plateSearchQuery = value;
+  const results = document.getElementById("plate-search-results");
+  if (results) results.innerHTML = plateSearchResultsHtml(value);
+};
+function viewPlateSearch(){
+  return `
+    <div class="back-row">${backBtn({name:'profile'})}</div>
+    <div class="section-label">車號查詢</div>
+    <div class="field">
+      <input id="plate-search-input" value="${esc(state.plateSearchQuery||'')}" style="text-transform:uppercase;"
+        oninput="this.value=this.value.toUpperCase(); window.__filterPlateSearch(this.value)" placeholder="輸入車牌號碼查詢車主">
+    </div>
+    <div id="plate-search-results">${plateSearchResultsHtml(state.plateSearchQuery||'')}</div>
   `;
 }
 
@@ -10327,6 +10421,7 @@ const ROUTE_VIEWS = {
   notifications: viewNotifications,
   profile: viewProfile,
   memberList: viewMemberList,
+  plateSearch: viewPlateSearch,
   displayAppearance: viewDisplayAppearance,
   pushSettings: viewPushSettings,
   about: viewAbout,
@@ -11624,14 +11719,33 @@ window.__toggleThemeAuto = (turnedOn) => {
   const systemPrefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
   window.__setThemeMode(systemPrefersDark ? "dark" : "light");
 };
-window.__editProfile = () => { state.profileEditing = true; render(); };
+window.__editProfile = () => {
+  state.profileEditing = true;
+  // 新增一台車時要給每一列獨立的 radio name（見 vehicleEntryRowHtml 的
+  // 說明），從目前畫面上已經佔用的 entryId 數量繼續往上編號，不會跟既有
+  // 列撞號——就算完全沒登記過車輛，初始畫面也會渲染一列空白列（entryId
+  // 0），所以起始編號至少要是 1，不能直接用車輛數量 0。
+  state.vehicleEntrySeq = Math.max(1, (state.profile.vehicles || []).length);
+  render();
+};
 window.__cancelEditProfile = () => { state.profileEditing = false; render(); };
-// 個人資料編輯表單「私人車輛種類」切換時，重新產生「私人車輛廠牌」下拉
-// 選單的選項（汽車/機車廠牌是分開的兩份清單，見 vehicleBrandOptions）；
-// 純 DOM 換選單內容，不觸發整頁 render()，避免其他還沒送出的欄位被清空。
-window.__onProfileVehicleTypeChange = (radio) => {
-  const select = document.getElementById("pf-vehicle-brand");
+// 民車登記表單「車輛種類」切換時，重新產生「廠牌」下拉選單的選項（汽車/
+// 機車廠牌是分開的兩份清單，見 vehicleBrandOptions）；純 DOM 換選單內容，
+// 不觸發整頁 render()，避免其他還沒送出的欄位被清空。
+window.__onVehicleEntryTypeChange = (radio) => {
+  const row = radio.closest(".vehicle-entry");
+  const select = row.querySelector(".vehicle-brand-select");
   select.innerHTML = `<option value="">請選擇廠牌</option>` + vehicleBrandOptions(radio.value, "");
+};
+// 新增/移除一台車：純 DOM 操作（插入新的 .vehicle-entry 區塊／移除自己
+// 所在的區塊），不觸發整頁 render()，理由跟上面一樣。
+window.__addVehicleEntry = () => {
+  const container = document.getElementById("vehicle-entries");
+  const entryId = state.vehicleEntrySeq++;
+  container.insertAdjacentHTML("beforeend", vehicleEntryRowHtml({type:"",brand:"",plate:""}, entryId));
+};
+window.__removeVehicleEntry = (btn) => {
+  btn.closest(".vehicle-entry").remove();
 };
 window.__togglePush = (turnedOn) => { if (turnedOn) enablePush(); else disablePush(); };
 // 測試模式開關：開啟固定續 1 小時（跟後端 isTestModeActive() 的判斷基準
@@ -11652,7 +11766,16 @@ window.__toggleTestMode = (checked) => {
 window.__saveProfile = (ev) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
-  updateOwnProfile(f.get("displayName"), f.get("rank"), f.get("phone"), f.get("emtLevel"), f.get("vehicleType")||"", f.get("vehicleBrand")||"", f.get("vehiclePlate")||"").then(() => {
+  // 車輛不是靠 FormData 讀（每台車的欄位沒有固定 name，見
+  // vehicleEntryRowHtml 的說明），直接照畫面上目前有幾個 .vehicle-entry
+  // 區塊逐一讀值；完全沒填的空白列（例如按了「新增一台車」但沒填就直接
+  // 送出）就濾掉，不存空物件。
+  const vehicles = [...document.querySelectorAll(".vehicle-entry")].map(row => ({
+    type: row.querySelector('input[type="radio"]:checked')?.value || "",
+    brand: row.querySelector(".vehicle-brand-select")?.value || "",
+    plate: row.querySelector(".vehicle-plate-input")?.value || ""
+  })).filter(v => v.type || v.brand || v.plate);
+  updateOwnProfile(f.get("displayName"), f.get("rank"), f.get("phone"), f.get("emtLevel"), vehicles).then(() => {
     state.profileEditing = false; render();
   }).catch(err => showToast(`個人資料儲存失敗：[${err.code||'?'}] ${err.message||err}`));
 };
