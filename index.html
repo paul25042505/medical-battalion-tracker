@@ -1952,7 +1952,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-23-430-platesearch-namesearch-accountinfo";
+const BUILD_TAG = "2026-07-23-431-crossunit-btn-placeholder";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3102,6 +3102,10 @@ const RELEASE_NOTES = [
       "民車卡片移除前多一道確認提示，避免手滑誤刪",
       "民車卡片的圖示改成依車種顯示：機車顯示機車圖示，不再跟汽車共用同一個汽車圖示",
       "個人資料顯示頁「帳號資訊」卡片：角色跟 Email 位置互調（角色跟單位同一列），Email 改成單獨一整行，避免信箱太長被截斷",
+    ] },
+    { category: "任務管理", items: [
+      "建立/編輯勤務「跨單位借車」開關移到車號標籤旁邊、「外部車輛」左邊，樣式改成跟「外部車輛」一樣的切換鈕（原本是獨立一排的 iOS Switch）",
+      "建立勤務「任務名稱」「地點」欄位的範例提示文字更新",
     ] },
   ] },
   { date: "2026/07/21", groups: [
@@ -6057,12 +6061,15 @@ function chipGroup(name, options, selected, multi, triggers, extraClass){
     </label>`;
   }).join("")}</div>`;
 }
-// 全站單一布林值開關（值日官、常用醫院、跨單位借車/選人等）統一用這顆
+// 全站單一布林值開關（值日官、常用醫院、跨單位選人等）統一用這顆
 // iOS 風格 Switch（樣式定義見 CSS 的 .ios-switch，開啟時是綠色），不要
 // 再手刻「<input type="checkbox"> + 文字」——這是本站「開/關」設定唯一
 // 的視覺語言，日後新增布林開關預設也要呼叫這個 helper，不要用原生
 // checkbox 外觀。列表式多選（過去病史、複選人員清單、chipGroup 這類
-// 「多選其一」的情境）不適用，那些維持 checkbox/chip 樣式不變。
+// 「多選其一」的情境）不適用，那些維持 checkbox/chip 樣式不變。「跨單位
+// 借車」是例外：它跟車號旁邊的「外部車輛」同屬「切換這個欄位怎麼選」
+// 的按鈕語意，改用 .field-toggle-btn（見 crossUnitVehicleToggleBtn），
+// 不套用這裡的 Switch 樣式。
 function iosSwitchRow(label, checked, onchangeExpr, opts){
   opts = opts || {};
   const attrs = opts.attrs ? ` ${opts.attrs}` : "";
@@ -6104,6 +6111,14 @@ function taskTitleTemplateSelect(inputId, templates, placeholderLabel){
 // （編輯既有勤務、目前值不在花名冊/車輛清單裡時使用）。
 function externalToggleBtn(fieldName, label, active){
   return `<button type="button" class="field-toggle-btn${active?' active':''}" onclick="window.__toggleExternalField(this,'${fieldName}')">${esc(label)}</button>`;
+}
+// 「跨單位借車」切換鈕：跟「外部車輛」共用同一套 .field-toggle-btn 樣式，
+// 放在同一個 field-label-row（車號標籤右側、外部車輛左邊），視覺上是同
+// 一組「切換車號欄位行為」的按鈕，不要再用 iOS Switch（那是給值日官/
+// 常用醫院這類「設定」語意的開關，這裡其實跟外部車輛一樣是「切換這個
+// 欄位怎麼選」，按鈕比開關更貼切）。
+function crossUnitVehicleToggleBtn(active){
+  return `<button type="button" class="field-toggle-btn${active?' active':''}" onclick="window.__toggleCrossUnitVehicle(this)">跨單位借車</button>`;
 }
 /* =========================================================
    9) 畫面：登入 / 待審核
@@ -7565,13 +7580,13 @@ function viewCreateTask(){
       <div class="field"><div class="field-label-row"><label>任務名稱 *</label><div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">${!isLiaison ? (() => {
         const todaysTitles = todaysTaskTitles(unit);
         return `${todaysTitles.length ? taskTitleTemplateSelect('tf-title', todaysTitles, '今天已建立') : ''}${state.taskTitleTemplates.length ? taskTitleTemplateSelect('tf-title', state.taskTitleTemplates.map(t => t.text), '快速選擇範本') : ''}`;
-      })() : ''}</div></div><input id="tf-title" name="title" required placeholder="${isLiaison?'例如：軍公民任務現勘':'例如：OHCA 患者搶救'}"></div>
+      })() : ''}</div></div><input id="tf-title" name="title" required placeholder="${isLiaison?'例如：軍公民任務現勘':'例如：〇〇射擊救護待命'}"></div>
       ${isStandbyDispatch ? `
       <div class="field"><label>醫務所</label>
         <input value="${esc(state.route.presetLocation)}" disabled>
         <input type="hidden" name="location" value="${esc(state.route.presetLocation)}">
       </div>` : `
-      <div class="field"><label>地點${isLiaison?'（可多個，用頓號分隔）':''}</label><input name="location" placeholder="${isLiaison?'例如：烏日高鐵站、福田水資源回收中心、天后宮':'例如：潭子區豐興路一段'}"></div>`}
+      <div class="field"><label>地點${isLiaison?'（可多個，用頓號分隔）':''}</label><input name="location" placeholder="${isLiaison?'例如：烏日高鐵站、福田水資源回收中心、天后宮':'例如：〇〇靶場'}"></div>`}
       ${isLiaison ? `
       <div class="field"><label>人員（可複選）*</label>
         <button type="button" class="picker-field" data-unit="${unit}" onclick="window.__openMultiPersonPicker(this)">
@@ -7580,13 +7595,12 @@ function viewCreateTask(){
         <div class="personnel-hidden-checkboxes"></div>
       </div>` : `
       <div class="field">
-        <div class="field-label-row"><label>車號</label>${externalToggleBtn('vehicle', '外部車輛', false)}</div>
+        <div class="field-label-row"><label>車號</label><div style="display:flex; gap:8px;">${crossUnitVehicleToggleBtn(false)}${externalToggleBtn('vehicle', '外部車輛', false)}</div></div>
         <div data-mode="normal">
           <select name="vehicle" data-field-name="vehicle" data-unit="${unit}">
             <option value="">請選擇車輛</option>
             ${vehicleOptionsByType(vehicleOpts, v => `<option value="${esc(v.plate)}" ${state.route.presetVehicle===v.plate?'selected':''}>${esc(vehicleOptionLabel(v.plate, outSet))}</option>`)}
           </select>
-          ${iosSwitchRow('跨單位借車', false, "window.__toggleCrossUnitVehicle(this)")}
           ${!vehicleOpts.length ? `<div style="color:var(--muted);font-size:var(--text-xs);margin-top:6px;">此單位尚未建立車輛資料，請至「基礎資料管理」新增</div>` : ""}
         </div>
         <div data-mode="external" style="display:none;"><input data-field-name="vehicle" placeholder="例如：遊覽車公司 XX-1234"></div>
@@ -7689,12 +7703,11 @@ function viewEditTask(taskId){
         <div class="personnel-hidden-checkboxes">${currentPersonnel.map(name => `<input type="checkbox" name="personnel" value="${esc(name)}" checked style="display:none">`).join("")}</div>
       </div>` : `
       <div class="field">
-        <div class="field-label-row"><label>車號</label>${externalToggleBtn('vehicle', '外部車輛', isExternalVehicle)}</div>
+        <div class="field-label-row"><label>車號</label><div style="display:flex; gap:8px;">${crossUnitVehicleToggleBtn(isCrossUnitVehicle)}${externalToggleBtn('vehicle', '外部車輛', isExternalVehicle)}</div></div>
         <div data-mode="normal" style="${isExternalVehicle?'display:none;':''}">
           <select ${isExternalVehicle?'':'name="vehicle"'} data-field-name="vehicle" data-unit="${unit}">
             ${isCrossUnitVehicle ? vehicleSelectOptionsAllUnits(t.vehicle) : `<option value="">請選擇車輛</option>` + vehicleOptionsByType(vehicleOpts, v => `<option value="${esc(v.plate)}" ${t.vehicle===v.plate?'selected':''}>${esc(vehicleOptionLabel(v.plate, outSet))}</option>`)}
           </select>
-          ${iosSwitchRow('跨單位借車', isCrossUnitVehicle, "window.__toggleCrossUnitVehicle(this)")}
         </div>
         <div data-mode="external" style="${isExternalVehicle?'':'display:none;'}"><input ${isExternalVehicle?'name="vehicle"':''} data-field-name="vehicle" value="${esc(t.vehicle||'')}" placeholder="例如：遊覽車公司 XX-1234"></div>
       </div>
@@ -11310,13 +11323,17 @@ window.__commitMultiPersonPicker = () => {
   }
   closeMultiPersonPicker();
 };
-// 「跨單位借車」勾選框：純 DOM 換掉車號 <select> 的內容，不觸發整頁
-// render()，理由跟人員選擇器一樣——避免把其他還沒送出的欄位清空。
-window.__toggleCrossUnitVehicle = (checkbox) => {
-  const field = checkbox.closest(".field");
-  const select = field.querySelector('select[name="vehicle"]');
+// 「跨單位借車」切換鈕：純 DOM 換掉車號 <select> 的內容，不觸發整頁
+// render()，理由跟人員選擇器一樣——避免把其他還沒送出的欄位清空。查 select
+// 要用 data-field-name（不是 name），因為「外部車輛」開啟時 name 屬性會被
+// window.__toggleExternalField 拿掉，這顆鈕現在跟外部車輛同一列，不管
+// 外部車輛是否開啟都可能被點到。
+window.__toggleCrossUnitVehicle = (btn) => {
+  const field = btn.closest(".field");
+  const select = field.querySelector('select[data-field-name="vehicle"]');
+  const active = btn.classList.toggle("active");
   const currentPlate = select.value;
-  select.innerHTML = checkbox.checked
+  select.innerHTML = active
     ? vehicleSelectOptionsAllUnits(currentPlate)
     : vehicleSelectOptionsSameUnit(select.dataset.unit, currentPlate);
 };
