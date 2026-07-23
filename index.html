@@ -1910,7 +1910,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-23-421-multi-vehicle-plate-search";
+const BUILD_TAG = "2026-07-23-422-profile-save-button-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3012,6 +3012,7 @@ const RELEASE_NOTES = [
       "個人資料編輯表單改成分組卡片排版（基本資料／民車／帳號資訊各自一張卡片），欄位一多就不會擠成一長串分不清類別",
       "成員列表卡片改版為資訊網格風格：電話、EMT 證照獨立成欄位，登記了民車的話每台車各自一整列，沒有登記的項目顯示「未填寫／未登記」而不是整行消失，版面更整齊",
       "新增「車號查詢」頁面（更多 → 車號查詢）：輸入車牌（大小寫、有無破折號都能查）反查車主是誰，跟成員列表看到的範圍一樣（同單位／全單位），只是換一個用車牌反查的入口",
+      "個人資料編輯表單「民車」卡片下方多一顆「儲存」按鈕，填完車輛資料不用整頁往下捲到底才能存檔",
     ] },
   ] },
   { date: "2026/07/21", groups: [
@@ -8728,6 +8729,7 @@ function viewProfile(){
             ${(p.vehicles && p.vehicles.length ? p.vehicles : [{type:'',brand:'',plate:''}]).map((v, i) => vehicleEntryRowHtml(v, i)).join("")}
           </div>
           <button type="button" class="btn-outline-blue" style="margin-top:14px;" onclick="window.__addVehicleEntry()">+ 新增一台車</button>
+          <button class="btn-primary" type="submit" style="margin-top:14px;">儲存</button>
         </div>
         <div class="profile-section-card">
           <div class="profile-section-title">帳號資訊</div>
