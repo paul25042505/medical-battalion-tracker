@@ -1952,7 +1952,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-23-429-vehicle-remove-confirm-moto-icon";
+const BUILD_TAG = "2026-07-23-430-platesearch-namesearch-accountinfo";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3092,7 +3092,7 @@ const RELEASE_NOTES = [
       "個人資料「私人車輛」改名為「民車」，並開放新增多台（不再限一人一台）：每台車各自填車種／廠牌／車牌，可以個別新增/移除；車牌輸入框固定轉大寫，不用自己切換輸入法大小寫",
       "個人資料編輯表單改成分組卡片排版（基本資料／民車／帳號資訊各自一張卡片），欄位一多就不會擠成一長串分不清類別",
       "成員列表卡片改版為資訊網格風格：電話、EMT 證照獨立成欄位，登記了民車的話每台車各自一整列，沒有登記的項目顯示「未填寫／未登記」而不是整行消失，版面更整齊",
-      "新增「車號查詢」頁面（更多 → 車號查詢）：輸入車牌（大小寫、有無破折號都能查）反查車主是誰，跟成員列表看到的範圍一樣（同單位／全單位），只是換一個用車牌反查的入口",
+      "新增「車號查詢」頁面（更多 → 車號查詢）：輸入車牌（大小寫、有無破折號都能查）反查車主是誰，跟成員列表看到的範圍一樣（同單位／全單位），只是換一個用車牌反查的入口；後續調整為沒輸入查詢字串時預設列出所有已登記車輛的人，查詢框也可以直接輸入姓名查詢，不用只能輸入車牌；卡片改成精簡版，只顯示姓名跟車牌／車種，不顯示電話、EMT 證照",
       "個人資料編輯表單「民車」卡片下方多一顆「新增車號」按鈕：把填完的車輛欄位收合成卡片（例如車牌欄位還在打字、還沒跳出欄位），不會送出整個表單也不會離開編輯畫面，真正存檔還是靠整頁最下面的「儲存」鍵",
       "民車欄位改成「顯示／編輯」兩種畫面：已經填過的車輛預設顯示成卡片（車牌／車種／廠牌＋編輯／刪除圖示鈕），按「編輯」才會展開成可以修改的表單，畫面更簡潔，不用一次看到所有欄位；新增一台車時，車種／廠牌／車牌三個欄位都填完的當下就會自動收合成卡片，不用另外按儲存鍵",
       "「民車登記」卡片改版：標題旁加上「已登記 N 輛」徽章，新增車輛的按鈕改成虛線框樣式",
@@ -3101,6 +3101,7 @@ const RELEASE_NOTES = [
       "修正民車欄位新增/移除/收合/展開時畫面會跟著跳動的問題：這幾個動作都會讓車輛列表突然變矮或變高，捲動位置沒有跟著補償，導致下方內容（含剛按的按鈕本身）瞬間跳一段距離；現在會自動校正捲動位置，維持畫面穩定",
       "民車卡片移除前多一道確認提示，避免手滑誤刪",
       "民車卡片的圖示改成依車種顯示：機車顯示機車圖示，不再跟汽車共用同一個汽車圖示",
+      "個人資料顯示頁「帳號資訊」卡片：角色跟 Email 位置互調（角色跟單位同一列），Email 改成單獨一整行，避免信箱太長被截斷",
     ] },
   ] },
   { date: "2026/07/21", groups: [
@@ -8829,8 +8830,8 @@ function viewProfileDetail(p){
       <div class="profile-section-title">帳號資訊</div>
       <div class="member-card-grid" style="border-top:none; padding-top:0;">
         <div class="member-cell"><div class="member-label">單位</div><div class="member-val">${esc(unitLabel(p.unit))}</div></div>
-        <div class="member-cell"><div class="member-label">Email</div><div class="member-val">${esc(p.email||'—')}</div></div>
         <div class="member-cell"><div class="member-label">角色</div><div class="member-val">${esc(ROLE_LABEL[myRole(p)]||p.role)}</div></div>
+        <div class="member-cell" style="grid-column:1 / -1;"><div class="member-label">Email</div><div class="member-val">${esc(p.email||'—')}</div></div>
       </div>
     </div>
     <button class="btn-primary" style="width:100%;" onclick="window.__editProfile()">編輯個人資料</button>
@@ -8991,24 +8992,48 @@ function viewMemberList(){
 }
 
 /* =========================================================
-   17a-0b) 畫面：車號查詢（輸入車牌反查車主，所有登入使用者皆可見；
+   17a-0b) 畫面：車號查詢（輸入車牌或姓名反查車主，所有登入使用者皆可見；
    跟成員列表同一份 state.personnel、同樣受單位範圍限制——一般成員/
    主官管只查得到自己單位，admin/高勤官不分單位；不是額外開放更大的
    查詢範圍，車輛資訊本來就已經在成員列表攤開給這個範圍的人看了，
    這裡只是換一個「用車牌反查」的入口，方便好記，不是新的權限）。
+   沒輸入查詢字串時預設列出這個範圍內所有已登記車輛的人（不用先打字
+   才看得到東西），輸入框則同時比對車牌（忽略大小寫/破折號）跟姓名
+   （原文比對，中文姓名沒有大小寫問題）。卡片刻意做得很精簡（只有姓名
+   跟車牌/車種），跟成員列表的完整卡片（電話/EMT/廠牌）是不同用途、
+   不同資訊密度，不要共用同一份 memberCardHtml。
    ========================================================= */
 // 車牌比對時把破折號/空白都拿掉、轉大寫再比對，這樣「ABC-1234」跟
 // 「abc1234」都能查到同一台車，不用要求輸入格式跟登記時一模一樣。
 function normalizePlateForSearch(s){
   return (s||"").toUpperCase().replace(/[-\s]/g, "");
 }
+// 車號查詢頁專用的精簡卡片：只有姓名＋每台車的車牌/車種，不顯示電話、
+// EMT 證照、廠牌——這頁的用途單純是「這個車牌/這個人有哪些車」，資訊
+// 密度比成員列表低很多，共用 memberCardHtml 會顯示太多不相關欄位。
+function platePersonCardHtml(x){
+  const vehicles = Array.isArray(x.vehicles) ? x.vehicles.filter(v => v.plate) : [];
+  return `
+    <div class="member-card">
+      <div class="member-card-top"><span class="member-name">${esc(x.name)}</span></div>
+      ${vehicles.map((v, i) => `
+      <div class="vehicle-card-top" ${i>0?'style="margin-top:8px;"':''}>
+        <span class="vehicle-plate-tag">${esc(v.plate)}</span>
+        ${v.type ? `<span class="badge muted">${vehicleTypeText(v.type)}</span>` : ''}
+      </div>`).join("")}
+    </div>`;
+}
 function plateSearchResultsHtml(query){
-  const q = normalizePlateForSearch(query);
-  if (!q) return `<div class="empty">請輸入車牌號碼查詢車主</div>`;
-  const pool = state.personnel.filter(x => x.active !== false);
-  const matches = pool.filter(x => (x.vehicles||[]).some(v => normalizePlateForSearch(v.plate).includes(q)));
-  if (!matches.length) return `<div class="empty">查無符合的車輛</div>`;
-  return matches.map(memberCardHtml).join("");
+  const q = (query||"").trim();
+  const nq = normalizePlateForSearch(q);
+  const pool = state.personnel.filter(x => x.active !== false && (x.vehicles||[]).some(v => v.plate));
+  const matches = pool.filter(x => {
+    if (!q) return true;
+    if (x.name && x.name.includes(q)) return true;
+    return (x.vehicles||[]).some(v => normalizePlateForSearch(v.plate).includes(nq));
+  });
+  if (!matches.length) return `<div class="empty">查無符合的人員或車輛</div>`;
+  return matches.map(platePersonCardHtml).join("");
 }
 window.__filterPlateSearch = (value) => {
   state.plateSearchQuery = value;
@@ -9020,8 +9045,8 @@ function viewPlateSearch(){
     <div class="back-row">${backBtn({name:'profile'})}</div>
     <div class="section-label">車號查詢</div>
     <div class="field">
-      <input id="plate-search-input" value="${esc(state.plateSearchQuery||'')}" style="text-transform:uppercase;"
-        oninput="this.value=this.value.toUpperCase(); window.__filterPlateSearch(this.value)" placeholder="輸入車牌號碼查詢車主">
+      <input id="plate-search-input" value="${esc(state.plateSearchQuery||'')}"
+        oninput="window.__filterPlateSearch(this.value)" placeholder="輸入車牌號碼或姓名查詢">
     </div>
     <div id="plate-search-results">${plateSearchResultsHtml(state.plateSearchQuery||'')}</div>
   `;
