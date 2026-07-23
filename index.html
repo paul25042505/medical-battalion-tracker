@@ -1952,7 +1952,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-23-427-confirm-vehicle-btn";
+const BUILD_TAG = "2026-07-23-428-vehicle-scroll-jump-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3097,6 +3097,7 @@ const RELEASE_NOTES = [
       "「民車登記」卡片改版：標題旁加上「已登記 N 輛」徽章，新增車輛的按鈕改成虛線框樣式",
       "「民車登記」標題改成跟「基本資料」「帳號資訊」同一種樣式，維持整頁一致",
       "新增「個人資料」唯讀顯示頁：從「更多」點「個人資料」先看到目前資料的顯示畫面，按「編輯個人資料」才進入可修改的表單；編輯後按「儲存」或「取消」會回到這個顯示頁，不會像之前一樣整個跳回「更多」主選單",
+      "修正民車欄位新增/移除/收合/展開時畫面會跟著跳動的問題：這幾個動作都會讓車輛列表突然變矮或變高，捲動位置沒有跟著補償，導致下方內容（含剛按的按鈕本身）瞬間跳一段距離；現在會自動校正捲動位置，維持畫面穩定",
     ] },
   ] },
   { date: "2026/07/21", groups: [
@@ -11881,25 +11882,44 @@ window.__onVehicleEntryTypeChange = (radio) => {
   const select = row.querySelector(".vehicle-brand-select");
   select.innerHTML = `<option value="">請選擇廠牌</option>` + vehicleBrandOptions(radio.value, "");
 };
+// 車輛列的表單/卡片互換（新增、移除、鎖定、解鎖）都會讓 #vehicle-entries
+// 的總高度突然變矮或變高，如果不處理，App Shell 真正的捲動容器（<main>，
+// 見檔案開頭 #app 的說明）的 scrollTop 沒變，但畫面上這個區塊「以下」的
+// 內容會瞬間跳一段距離（使用者反應「按下去畫面會跑掉」）。做法是在
+// DOM 異動前後量 main 的 scrollHeight 差，用差值反向修正 scrollTop，讓
+// 「以下」的內容維持在原本螢幕位置，不會因為上面某一列變矮/變高而跳動。
+function withVehicleEntriesScrollAnchor(mutate){
+  const main = document.querySelector("main");
+  const beforeScrollTop = main ? main.scrollTop : 0;
+  const beforeHeight = main ? main.scrollHeight : 0;
+  mutate();
+  if (main) main.scrollTop = beforeScrollTop - (beforeHeight - main.scrollHeight);
+}
 // 新增/移除一台車：純 DOM 操作（插入新的 .vehicle-entry 區塊／移除自己
 // 所在的區塊），不觸發整頁 render()，理由跟上面一樣。新增的車輛還沒填過
 // 資料，直接給編輯模式（locked=false）。
 window.__addVehicleEntry = () => {
-  const container = document.getElementById("vehicle-entries");
-  const entryId = state.vehicleEntrySeq++;
-  container.insertAdjacentHTML("beforeend", vehicleEntryRowHtml({type:"",brand:"",plate:""}, entryId, false));
+  withVehicleEntriesScrollAnchor(() => {
+    const container = document.getElementById("vehicle-entries");
+    const entryId = state.vehicleEntrySeq++;
+    container.insertAdjacentHTML("beforeend", vehicleEntryRowHtml({type:"",brand:"",plate:""}, entryId, false));
+  });
 };
 window.__removeVehicleEntry = (btn) => {
-  btn.closest(".vehicle-entry").remove();
+  withVehicleEntriesScrollAnchor(() => {
+    btn.closest(".vehicle-entry").remove();
+  });
 };
 // 顯示模式的車輛列按「編輯」：讀出摘要列存在 data-v-* 屬性裡的原始資料，
 // 換成同一個 entryId 的編輯模式（沿用 entryId 才不會跟其他列的 radio
 // name 撞號），不觸發整頁 render()。
 window.__unlockVehicleEntry = (btn) => {
-  const row = btn.closest(".vehicle-entry");
-  const entryId = row.dataset.entryId;
-  const v = { type: row.dataset.vType || "", brand: row.dataset.vBrand || "", plate: row.dataset.vPlate || "" };
-  row.outerHTML = vehicleEntryRowHtml(v, entryId, false);
+  withVehicleEntriesScrollAnchor(() => {
+    const row = btn.closest(".vehicle-entry");
+    const entryId = row.dataset.entryId;
+    const v = { type: row.dataset.vType || "", brand: row.dataset.vBrand || "", plate: row.dataset.vPlate || "" };
+    row.outerHTML = vehicleEntryRowHtml(v, entryId, false);
+  });
 };
 // 編輯模式的車輛列（車種/廠牌/車牌）三個欄位都填完的當下，自動切換成
 // 鎖定顯示模式，不需要另外按儲存鍵——車種改變時廠牌會被
@@ -11913,8 +11933,10 @@ window.__maybeLockVehicleEntry = (el) => {
   const brand = row.querySelector(".vehicle-brand-select")?.value || "";
   const plate = row.querySelector(".vehicle-plate-input")?.value || "";
   if (!type || !brand || !plate) return;
-  const entryId = row.dataset.entryId;
-  row.outerHTML = vehicleEntryRowHtml({type, brand, plate}, entryId, true);
+  withVehicleEntriesScrollAnchor(() => {
+    const entryId = row.dataset.entryId;
+    row.outerHTML = vehicleEntryRowHtml({type, brand, plate}, entryId, true);
+  });
 };
 // 「民車登記」卡片下方的「新增車號」鈕：把目前已經填完三個欄位、還沒被
 // window.__maybeLockVehicleEntry 自動收合的編輯列收合成卡片（例如車牌
@@ -11924,15 +11946,17 @@ window.__maybeLockVehicleEntry = (el) => {
 window.__confirmVehicleEntries = () => {
   const rows = [...document.querySelectorAll(".vehicle-entry:not(.vehicle-entry-locked)")];
   let lockedAny = false;
-  rows.forEach(row => {
-    const type = row.querySelector('input[type="radio"]:checked')?.value || "";
-    const brand = row.querySelector(".vehicle-brand-select")?.value || "";
-    const plate = row.querySelector(".vehicle-plate-input")?.value || "";
-    if (type && brand && plate) {
-      const entryId = row.dataset.entryId;
-      row.outerHTML = vehicleEntryRowHtml({type, brand, plate}, entryId, true);
-      lockedAny = true;
-    }
+  withVehicleEntriesScrollAnchor(() => {
+    rows.forEach(row => {
+      const type = row.querySelector('input[type="radio"]:checked')?.value || "";
+      const brand = row.querySelector(".vehicle-brand-select")?.value || "";
+      const plate = row.querySelector(".vehicle-plate-input")?.value || "";
+      if (type && brand && plate) {
+        const entryId = row.dataset.entryId;
+        row.outerHTML = vehicleEntryRowHtml({type, brand, plate}, entryId, true);
+        lockedAny = true;
+      }
+    });
   });
   if (!lockedAny) showToast("請先填完車輛種類／廠牌／車牌");
 };
