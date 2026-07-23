@@ -1952,7 +1952,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-23-425-profile-view-page";
+const BUILD_TAG = "2026-07-23-426-vehicle-autolock";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2566,12 +2566,12 @@ function vehicleEntryRowHtml(v, entryId, locked){
         </div>
       </div>
       <div class="field"><label>廠牌</label>
-        <select class="vehicle-brand-select">
+        <select class="vehicle-brand-select" onchange="window.__maybeLockVehicleEntry(this)">
           <option value="">請選擇廠牌</option>
           ${vehicleBrandOptions(v.type, v.brand)}
         </select>
       </div>
-      <div class="field"><label>車牌</label><input class="vehicle-plate-input" value="${esc(v.plate||'')}" style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()" placeholder="例如：ABC-1234"></div>
+      <div class="field"><label>車牌</label><input class="vehicle-plate-input" value="${esc(v.plate||'')}" style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()" onblur="window.__maybeLockVehicleEntry(this)" placeholder="例如：ABC-1234"></div>
       <button type="button" class="vehicle-remove-btn" onclick="window.__removeVehicleEntry(this)">移除這台車</button>
     </div>`;
 }
@@ -3093,7 +3093,7 @@ const RELEASE_NOTES = [
       "成員列表卡片改版為資訊網格風格：電話、EMT 證照獨立成欄位，登記了民車的話每台車各自一整列，沒有登記的項目顯示「未填寫／未登記」而不是整行消失，版面更整齊",
       "新增「車號查詢」頁面（更多 → 車號查詢）：輸入車牌（大小寫、有無破折號都能查）反查車主是誰，跟成員列表看到的範圍一樣（同單位／全單位），只是換一個用車牌反查的入口",
       "個人資料編輯表單「民車」卡片下方多一顆「儲存」按鈕，填完車輛資料不用整頁往下捲到底才能存檔",
-      "民車欄位改成「顯示／編輯」兩種畫面：已經填過的車輛預設顯示成卡片（車牌／車種／廠牌＋編輯／刪除圖示鈕），按「編輯」才會展開成可以修改的表單，畫面更簡潔，不用一次看到所有欄位",
+      "民車欄位改成「顯示／編輯」兩種畫面：已經填過的車輛預設顯示成卡片（車牌／車種／廠牌＋編輯／刪除圖示鈕），按「編輯」才會展開成可以修改的表單，畫面更簡潔，不用一次看到所有欄位；新增一台車時，車種／廠牌／車牌三個欄位都填完的當下就會自動收合成卡片，不用另外按儲存鍵",
       "「民車登記」卡片改版：標題旁加上「已登記 N 輛」徽章，新增車輛的按鈕改成虛線框樣式",
       "「民車登記」標題改成跟「基本資料」「帳號資訊」同一種樣式，維持整頁一致",
       "新增「個人資料」唯讀顯示頁：從「更多」點「個人資料」先看到目前資料的顯示畫面，按「編輯個人資料」才進入可修改的表單；編輯後按「儲存」或「取消」會回到這個顯示頁，不會像之前一樣整個跳回「更多」主選單",
@@ -11900,6 +11900,21 @@ window.__unlockVehicleEntry = (btn) => {
   const entryId = row.dataset.entryId;
   const v = { type: row.dataset.vType || "", brand: row.dataset.vBrand || "", plate: row.dataset.vPlate || "" };
   row.outerHTML = vehicleEntryRowHtml(v, entryId, false);
+};
+// 編輯模式的車輛列（車種/廠牌/車牌）三個欄位都填完的當下，自動切換成
+// 鎖定顯示模式，不需要另外按儲存鍵——車種改變時廠牌會被
+// window.__onVehicleEntryTypeChange 清空，所以不會在還沒選廠牌時就誤判
+// 成「填完了」。掛在廠牌下拉的 onchange 跟車牌輸入框的 onblur 上（車牌
+// 用 onblur 而不是 oninput，才不會打字打到一半、車牌只打一半就被鎖住）。
+window.__maybeLockVehicleEntry = (el) => {
+  const row = el.closest(".vehicle-entry");
+  if (!row || row.classList.contains("vehicle-entry-locked")) return;
+  const type = row.querySelector('input[type="radio"]:checked')?.value || "";
+  const brand = row.querySelector(".vehicle-brand-select")?.value || "";
+  const plate = row.querySelector(".vehicle-plate-input")?.value || "";
+  if (!type || !brand || !plate) return;
+  const entryId = row.dataset.entryId;
+  row.outerHTML = vehicleEntryRowHtml({type, brand, plate}, entryId, true);
 };
 window.__togglePush = (turnedOn) => { if (turnedOn) enablePush(); else disablePush(); };
 // 測試模式開關：開啟固定續 1 小時（跟後端 isTestModeActive() 的判斷基準
