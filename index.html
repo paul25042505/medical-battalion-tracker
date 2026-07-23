@@ -1875,7 +1875,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-21-418-external-vehicle-person";
+const BUILD_TAG = "2026-07-23-419-personal-vehicle-registration";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1883,7 +1883,7 @@ const BUILD_TAG = "2026-07-21-418-external-vehicle-person";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.23";
+const APP_MAJOR_MINOR = "2.24";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -2411,6 +2411,29 @@ function eligibleForCrewLeader(x){ return eligibleForDriver(x) && !CREW_LEADER_E
 
 const VEHICLE_TYPES = ["城市型救護車","野戰型救護車","悍馬型救護車","輕型戰術輪車","中型戰術輪車","1.75貨車"];
 function vehicleTypeWeight(type){ const i = VEHICLE_TYPES.indexOf(type); return i === -1 ? VEHICLE_TYPES.length : i; }
+
+// 個人資料的私人車輛登記（見 viewProfile／updateOwnProfile）：車種沿用
+// 洽公登記已經有的「汽／機」分類（CAMP_REG_VEHICLE_TYPES），廠牌依車種
+// 分開兩份清單（台灣市場常見廠牌，依英文字母排序，「英文 中文」並列），
+// 選了車種才會出現對應的廠牌選項，避免汽車廠牌出現在機車欄位裡（見
+// vehicleBrandOptions／window.__onProfileVehicleTypeChange）。
+const CAR_BRANDS = [
+  "Alfa Romeo 愛快羅密歐","Audi 奧迪","BMW 寶馬","Chevrolet 雪佛蘭","Citroën 雪鐵龍","CMC 中華",
+  "Ford 福特","Honda 本田","Hyundai 現代","Infiniti 英菲尼迪","Isuzu 五十鈴","Jaguar 捷豹","Jeep 吉普",
+  "Kia 起亞","Land Rover 荒原路華","Lexus 凌志","Luxgen 納智捷","Mazda 馬自達","Mercedes-Benz 賓士",
+  "MG 名爵","MINI 迷你","Mitsubishi 三菱","Nissan 日產","Peugeot 標緻","Porsche 保時捷","Renault 雷諾",
+  "Škoda 斯柯達","Subaru 速霸陸","Suzuki 鈴木","Tesla 特斯拉","Toyota 豐田","Volkswagen 福斯","Volvo 富豪",
+  "其他"
+];
+const MOTORCYCLE_BRANDS = [
+  "Aeon 宏佳騰","Gogoro 睿能創意","Honda 本田","Kawasaki 川崎","Kymco 光陽","PGO 摩特動力",
+  "Suzuki 鈴木","SYM 三陽","Vespa 偉士牌","Yamaha 山葉",
+  "其他"
+];
+function vehicleBrandOptions(vehicleType, selected){
+  const list = vehicleType === "機" ? MOTORCYCLE_BRANDS : vehicleType === "汽" ? CAR_BRANDS : [];
+  return list.map(b => `<option value="${esc(b)}" ${selected===b?'selected':''}>${esc(b)}</option>`).join("");
+}
 // 「營內車／營外車」是勤務本身的屬性（建立勤務時填的 scope 欄位：這趟勤務
 // 車輛會不會離開營區），不是車輛的忙碌狀態，兩者是不同概念，不要混用。
 // 這裡是車輛目前忙碌狀態（是否已經掛在其他進行中的勤務上），只用來提醒
@@ -2922,6 +2945,11 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/07/23", groups: [
+    { category: "個人資料", items: [
+      "個人資料新增「私人車輛」登記（車種／廠牌／車牌）：車子都是自己申請的，直接掛在自己帳號底下就好，不用另外建車主檔案；車種選汽車或機車後，廠牌下拉會換成對應清單（台灣市場常見廠牌，依英文字母排序），車牌自由輸入；成員列表會顯示同單位成員的車輛資訊，方便知道某台車是誰的，沒有登記的人不會多顯示這一行",
+    ] },
+  ] },
   { date: "2026/07/21", groups: [
     { category: "任務管理", items: [
       "建立／編輯勤務新增「外部車輛」「外部人員」切換鈕（車號/車長/駕駛標籤右邊）：租賃車輛、外部單位（不在本系統帳號名冊裡）的司機也能記錄，打開後改成直接輸入文字，不用一定要選系統裡登記的車輛/人員；這種外部資源不會被算進跨單位借用判斷（見前一天的跨單位可見性功能），因為系統本來就找不到它的所屬單位",
@@ -4219,9 +4247,10 @@ async function setCampRegistrationTranscribed(id, transcribed){
     : { transcribed: false, transcribedBy: "", transcribedByName: "", transcribedAt: null });
   if (campRegistrationsPoll) campRegistrationsPoll.refreshNow();
 }
-async function updateOwnProfile(displayName, rank, phone, emtLevel){
-  await fsSetDoc(`users/${state.user.uid}`, { displayName, rank, phone, emtLevel: emtLevel||"" });
-  state.profile = { ...state.profile, displayName, rank, phone, emtLevel: emtLevel||"" };
+async function updateOwnProfile(displayName, rank, phone, emtLevel, vehicleType, vehicleBrand, vehiclePlate){
+  const fields = { displayName, rank, phone, emtLevel: emtLevel||"", vehicleType: vehicleType||"", vehicleBrand: vehicleBrand||"", vehiclePlate: vehiclePlate||"" };
+  await fsSetDoc(`users/${state.user.uid}`, fields);
+  state.profile = { ...state.profile, ...fields };
   if (personnelPoll) personnelPoll.refreshNow();
   showToast("個人資料已更新");
 }
@@ -4871,6 +4900,11 @@ function mapUserToPersonnel(u){
     phone: u.phone || "", emtLevel: u.emtLevel || "",
     active: role !== "disabled" && role !== "pending",
     email: u.email || "", role,
+    // 個人私人車輛登記（見 viewProfile／updateOwnProfile），自己申請、
+    // 沒有眷屬車輛的情境，資料直接掛在自己帳號底下，不用另外開一個
+    // 車主名冊；成員列表顯示這幾項讓大家知道誰的車是哪一台（見
+    // viewMemberList）。
+    vehicleType: u.vehicleType || "", vehicleBrand: u.vehicleBrand || "", vehiclePlate: u.vehiclePlate || "",
     // 推播控制台需要的欄位：fcmTokens 原本就有（推播系統既有功能）；
     // pushPermission/pushDevice/pushSubscribedAt 是使用者自己的裝置在
     // 通過【前台】推播守門員時自我回報寫回 Firestore 的（見
@@ -8620,6 +8654,19 @@ function viewProfile(){
             ${EMT_LEVELS.map(l => `<option value="${l}" ${p.emtLevel===l?'selected':''}>${l}</option>`).join("")}
           </select>
         </div>
+        <div class="field"><label>私人車輛種類（選填）</label>
+          <div class="chip-select">
+            <label class="chip-option"><input type="radio" name="vehicleType" value="汽" ${p.vehicleType==='汽'?'checked':''} onchange="window.__onProfileVehicleTypeChange(this)"><span>汽車</span></label>
+            <label class="chip-option"><input type="radio" name="vehicleType" value="機" ${p.vehicleType==='機'?'checked':''} onchange="window.__onProfileVehicleTypeChange(this)"><span>機車</span></label>
+          </div>
+        </div>
+        <div class="field"><label>私人車輛廠牌（選填）</label>
+          <select name="vehicleBrand" id="pf-vehicle-brand">
+            <option value="">請選擇廠牌</option>
+            ${vehicleBrandOptions(p.vehicleType, p.vehicleBrand)}
+          </select>
+        </div>
+        <div class="field"><label>私人車輛車牌（選填）</label><input name="vehiclePlate" value="${esc(p.vehiclePlate||'')}" placeholder="例如：ABC-1234"></div>
         <div class="field"><label>單位</label><input value="${unitLabel(p.unit)}" disabled></div>
         <div class="field"><label>Email</label><input value="${esc(p.email||'—')}" disabled></div>
         <div class="field"><label>角色</label><input value="${ROLE_LABEL[myRole(p)]||p.role}" disabled></div>
@@ -8635,7 +8682,7 @@ function viewProfile(){
   // Section 1：使用者功能，所有登入使用者皆可見。
   const userRows = [
     settingsRow({icon:'user', bg:'#E8F1FF', fg:'#0056C7', title:'個人資料', onclick:"window.__editProfile()"}),
-    settingsRow({icon:'user', bg:'#E9F9EF', fg:'#177A34', title:'成員列表', subtitle:'各單位人員姓名/階級/電話/證照', onclick:"window.__nav({name:'memberList'})"}),
+    settingsRow({icon:'user', bg:'#E9F9EF', fg:'#177A34', title:'成員列表', subtitle:'各單位人員姓名/階級/電話/證照/私人車輛', onclick:"window.__nav({name:'memberList'})"}),
     settingsRow({icon:'link', bg:'#EAF1FF', fg:'#0052E0', title:'網網相連', subtitle:'常用網址快速切換', onclick:"window.__nav({name:'webLinks'})"}),
     settingsRow({icon:'alert', bg:'#FFEAEA', fg:'#C7233B', title:'大量傷患演練模組（建構中）', subtitle:'開事件、傷患檢傷分類與車輛/醫院指派', onclick:"window.__nav({name:'mciList'})", disabled: myRole(p) !== 'admin'}),
     settingsRow({icon:'records', bg:'#F2E9FE', fg:'#6B23C7', title:'教學園地（建構中）', subtitle:'救護技術教學文章，圖文解說', onclick:"window.__nav({name:'tutorials'})", disabled: myRole(p) !== 'admin'}),
@@ -8707,6 +8754,7 @@ function viewMemberList(){
           <div>
             <div class="name">${esc(x.name)}${x.title ? ` <span style="font-weight:600; color:var(--muted);">${esc(x.title)}</span>` : ''}</div>
             <div class="sub">${x.phone ? `📞 ${esc(x.phone)}` : '未填寫電話'}</div>
+            ${x.vehiclePlate || x.vehicleBrand ? `<div class="sub">🚗 ${esc([x.vehicleType==='機'?'機車':x.vehicleType==='汽'?'汽車':'', x.vehicleBrand, x.vehiclePlate].filter(Boolean).join(' · '))}</div>` : ''}
           </div>
           ${x.emtLevel ? emtBadgeHtml(x.emtLevel) : ''}
         </div>`).join("") : `<div class="empty">尚無成員資料</div>`}
@@ -11554,6 +11602,13 @@ window.__toggleThemeAuto = (turnedOn) => {
 };
 window.__editProfile = () => { state.profileEditing = true; render(); };
 window.__cancelEditProfile = () => { state.profileEditing = false; render(); };
+// 個人資料編輯表單「私人車輛種類」切換時，重新產生「私人車輛廠牌」下拉
+// 選單的選項（汽車/機車廠牌是分開的兩份清單，見 vehicleBrandOptions）；
+// 純 DOM 換選單內容，不觸發整頁 render()，避免其他還沒送出的欄位被清空。
+window.__onProfileVehicleTypeChange = (radio) => {
+  const select = document.getElementById("pf-vehicle-brand");
+  select.innerHTML = `<option value="">請選擇廠牌</option>` + vehicleBrandOptions(radio.value, "");
+};
 window.__togglePush = (turnedOn) => { if (turnedOn) enablePush(); else disablePush(); };
 // 測試模式開關：開啟固定續 1 小時（跟後端 isTestModeActive() 的判斷基準
 // 一致，過期後自動視為關閉，不需要另外排程清除）；關閉就單純把 enabled
@@ -11573,7 +11628,7 @@ window.__toggleTestMode = (checked) => {
 window.__saveProfile = (ev) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
-  updateOwnProfile(f.get("displayName"), f.get("rank"), f.get("phone"), f.get("emtLevel")).then(() => {
+  updateOwnProfile(f.get("displayName"), f.get("rank"), f.get("phone"), f.get("emtLevel"), f.get("vehicleType")||"", f.get("vehicleBrand")||"", f.get("vehiclePlate")||"").then(() => {
     state.profileEditing = false; render();
   }).catch(err => showToast(`個人資料儲存失敗：[${err.code||'?'}] ${err.message||err}`));
 };
