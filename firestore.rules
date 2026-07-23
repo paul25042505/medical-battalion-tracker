@@ -96,9 +96,9 @@ service cloud.firestore {
                     // 方便管理員審核（見 index.html 的 updatePendingProfile）；
                     // 一旦通過審核就不再適用這條，不能自己再改單位逃去別的單位。
                     || (isSignedIn() && request.auth.uid == uid && resource.data.role == 'pending'
-                        && onlyChanged(['unit','displayName','rank','phone','emtLevel','vehicleType','vehicleBrand','vehiclePlate','fcmTokens','pushPermission','pushDevice','pushSubscribedAt']))
+                        && onlyChanged(['unit','displayName','rank','phone','emtLevel','vehicles','fcmTokens','pushPermission','pushDevice','pushSubscribedAt']))
                     || (isSignedIn() && request.auth.uid == uid
-                        && onlyChanged(['displayName','rank','phone','emtLevel','vehicleType','vehicleBrand','vehiclePlate','fcmTokens','pushPermission','pushDevice','pushSubscribedAt']))
+                        && onlyChanged(['displayName','rank','phone','emtLevel','vehicles','fcmTokens','pushPermission','pushDevice','pushSubscribedAt']))
                     || ((isDutyOfficer() || (isCommander() && sameUnit(resource.data.unit) && sameUnit(request.resource.data.unit)))
                         && onlyChanged(['displayName','rank','phone','emtLevel']));
       // 只能刪除還沒被登入認領過的預建資料（role 'unclaimed'）；已經是
