@@ -1952,7 +1952,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-24-433-daily-weather-report";
+const BUILD_TAG = "2026-07-24-434-weather-report-recipient-count-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3091,6 +3091,7 @@ const RELEASE_NOTES = [
     { category: "推播通知", items: [
       "新增「每日天氣摘要」推播：每天早上 7 點依各單位所在縣市自動發送當天天氣（天氣描述、溫度區間、降雨機率），如果有生效中的天氣特報（例如強風、大雨）或颱風警報也會一併附加提醒",
       "「推播控制台」新增「立即測試每日天氣摘要」按鈕，方便管理員部署後隨時手動確認一次內容是否正確，不用等到隔天早上 7 點",
+      "修正「立即測試每日天氣摘要」顯示的人數：原本顯示的是「這個縣市所有在職帳號」的人數，即使這些人一支裝置都沒有註冊過推播、實際上完全沒有發送出去，也會顯示成功並附上人數，容易誤以為真的送達；現在會分別顯示在職人數跟「實際有裝置能收到」的人數，兩者不同時特別標示出來",
     ] },
   ] },
   { date: "2026/07/23", groups: [
@@ -10887,7 +10888,14 @@ window.__testDailyWeatherReport = async (btn) => {
     if (res.ok && data.ok && data.skipped) {
       showToast("測試模式開啟中，未實際發送");
     } else if (res.ok && data.ok) {
-      const counties = (data.sent || []).map(x => `${x.county}（${x.recipientCount}人）`).join("、");
+      // recipientCount 是「真的有裝置 token 可以收到推播」的人數，
+      // matchedCount 是「這個縣市所有在職帳號」的人數——兩者不同時特別
+      // 顯示出來，才看得出是「這批人根本沒開通推播」還是函式真的沒送到。
+      const counties = (data.sent || []).map(x => {
+        return x.recipientCount === x.matchedCount
+          ? `${x.county}（${x.recipientCount}人）`
+          : `${x.county}（${x.matchedCount}人在職，僅${x.recipientCount}人有裝置可收）`;
+      }).join("、");
       showToast(counties ? `已發送每日天氣摘要：${counties}` : "已執行，但沒有符合資格的收件人");
     } else {
       showToast(`發送失敗：${data.reason || res.status}`);

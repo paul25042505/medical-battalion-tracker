@@ -665,7 +665,15 @@ async function runDailyWeatherReport() {
     const title = `${county} 今日天氣`;
     const body = buildDailyWeatherBody(weather, [...typhoonTexts, ...hazardTexts]);
     await notifyRecipients(recipients, title, body);
-    sent.push({ county, title, body, recipientCount: recipients.length });
+    // recipients 涵蓋「這個縣市所有在職帳號」，不管當下有沒有裝置 token
+    // （這是 pushLog 個人通知中心紀錄要用到的完整名單，見 resolveRecipients
+    // 的說明）；如果直接拿 recipients.length 當「已發送」人數回報，會出現
+    // 「顯示成功、還附上人數」但這些人其實一個都沒有註冊裝置 token、
+    // 實際上沒有任何一支手機收到推播的情況，看起來像成功了但其實沒送出
+    // 真正的推播。這裡另外算出真正「有裝置可收」的人數，回報給管理員看
+    // 才能判斷到底是「這個人沒開推播權限」還是「這支函式真的沒送到」。
+    const pushableCount = recipients.filter((r) => r.tokens.length > 0).length;
+    sent.push({ county, title, body, matchedCount: recipients.length, recipientCount: pushableCount });
   }
   return { skipped: false, sent };
 }
