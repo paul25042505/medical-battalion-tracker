@@ -1952,7 +1952,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-23-432-fcm-token-refresh";
+const BUILD_TAG = "2026-07-24-433-daily-weather-report";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1960,7 +1960,7 @@ const BUILD_TAG = "2026-07-23-432-fcm-token-refresh";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.25";
+const APP_MAJOR_MINOR = "2.26";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -3087,6 +3087,12 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/07/24", groups: [
+    { category: "推播通知", items: [
+      "新增「每日天氣摘要」推播：每天早上 7 點依各單位所在縣市自動發送當天天氣（天氣描述、溫度區間、降雨機率），如果有生效中的天氣特報（例如強風、大雨）或颱風警報也會一併附加提醒",
+      "「推播控制台」新增「立即測試每日天氣摘要」按鈕，方便管理員部署後隨時手動確認一次內容是否正確，不用等到隔天早上 7 點",
+    ] },
+  ] },
   { date: "2026/07/23", groups: [
     { category: "個人資料", items: [
       "個人資料「私人車輛」改名為「民車」，並開放新增多台（不再限一人一台）：每台車各自填車種／廠牌／車牌，可以個別新增/移除；車牌輸入框固定轉大寫，不用自己切換輸入法大小寫",
@@ -10417,6 +10423,7 @@ function viewPushConsole(){
         <div class="push-metric-sub">${m.granted} / ${m.total} 人已允許</div>
       </div>
     </div>
+    <button class="icon-btn" style="margin-bottom:14px;" onclick="window.__testDailyWeatherReport(this)">立即測試每日天氣摘要</button>
     <div class="push-filter-row">
       <input type="search" class="picker-search" placeholder="搜尋姓名" value="${esc(f.keyword)}" oninput="window.__setPushConsoleFilter('keyword', this.value)">
       <div class="push-select-wrap">
@@ -10861,6 +10868,34 @@ window.__testPushToUser = async (id, btn) => {
     showToast(`測試推播失敗：${e.message || e}`);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = originalLabel || "測試推播"; }
+  }
+};
+// 每天早上 07:00 自動排程送出的「每日天氣摘要」（見 functions/index.js
+// sendDailyWeatherReport），部署後不用等到隔天才能確認訊息內容跟單位
+// 對應的縣市是不是正確，呼叫同樣是 admin-only 的 sendDailyWeatherReportNow
+// 立即跑一次；呼叫慣例跟上面的 __testPushToUser 一致。
+window.__testDailyWeatherReport = async (btn) => {
+  const originalLabel = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.textContent = "發送中…"; }
+  try {
+    const idToken = await state.user.getIdToken();
+    const res = await fetch(`${CLOUD_FUNCTIONS_BASE}/sendDailyWeatherReportNow`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${idToken}` },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok && data.skipped) {
+      showToast("測試模式開啟中，未實際發送");
+    } else if (res.ok && data.ok) {
+      const counties = (data.sent || []).map(x => `${x.county}（${x.recipientCount}人）`).join("、");
+      showToast(counties ? `已發送每日天氣摘要：${counties}` : "已執行，但沒有符合資格的收件人");
+    } else {
+      showToast(`發送失敗：${data.reason || res.status}`);
+    }
+  } catch (e) {
+    showToast(`發送失敗：${e.message || e}`);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = originalLabel || "立即測試每日天氣摘要"; }
   }
 };
 window.__closeEmergencyBroadcastModal = () => { state.emergencyBroadcastResult = null; render(); };

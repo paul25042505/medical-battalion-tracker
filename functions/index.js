@@ -14,10 +14,14 @@
       （cleanupExpiredNotifications）
    6) 排程（每天一次，08:10）→ 待命車超過每日 08:00 換班還沒續約提醒
       （checkStaleErStandby）
+   7) 排程（每天一次，07:00）→ 每日天氣摘要，依各單位所在縣市附上當天
+      天氣與生效中的強風/大雨等特報、颱風警報（sendDailyWeatherReport）
 
    收件人規則：前三個觸發＋待命車換班提醒依單位隔離，跟前端 RBAC 一致——
    高勤官／admin 收全單位的通知，主官管／一般成員只收自己單位的；公告是
-   全體公告，沒有單位隔離，不分單位推給所有在職帳號（見 resolveAllTokens）。
+   全體公告，沒有單位隔離，不分單位推給所有在職帳號（見 resolveAllTokens）；
+   每日天氣摘要依「單位對應縣市」分組（見 UNIT_WEATHER_LOCATION），同縣市
+   的單位收到同一份內容，不分角色，在職帳號都收得到。
 
    個人通知中心（鈴鐺）紀錄：除了公告本身（notifications 集合，全體共用）
    之外，上面每一次「實際推播給誰」都會額外在 pushLog 集合幫每個收件人
@@ -93,11 +97,11 @@ async function resolveAllTokens() {
    後這裡直接判定為未開啟）。
 
    影響範圍：新增勤務／進度回報／生命徵象異常／公告／待命車換班提醒／
-   緊急動員廣播——這些「發給大家」的推播（含個人通知中心紀錄 pushLog）
-   都會略過。「推播控制台」的單人測試推播（sendTestPush）刻意不受
-   影響：那是管理員自己選定單一對象、確認裝置設定是否正常的診斷工具，
-   不是「打擾大家」的通知，測試模式開著時如果連這個都失效，反而讓
-   管理員搞不清楚裝置設定本身到底有沒有問題。
+   緊急動員廣播／每日天氣摘要——這些「發給大家」的推播（含個人通知中心
+   紀錄 pushLog）都會略過。「推播控制台」的單人測試推播（sendTestPush）
+   刻意不受影響：那是管理員自己選定單一對象、確認裝置設定是否正常的
+   診斷工具，不是「打擾大家」的通知，測試模式開著時如果連這個都失效，
+   反而讓管理員搞不清楚裝置設定本身到底有沒有問題。
    ========================================================= */
 async function isTestModeActive() {
   try {
@@ -556,7 +560,146 @@ exports.checkStaleErStandby = onSchedule({ schedule: "10 8 * * *", timeZone: "As
 });
 
 /* =========================================================
-   10) 推播控制台：管理員手動測試推播
+   10) 每日天氣摘要（排程，每天 07:00 Asia/Taipei）
+   跟前端 index.html 天氣頁「今日」卡片同一組資料集：F-C0032-001（今明
+   36 小時預報，取第一個時段）＋W-C0033-001（天氣特報，強風/大雨等）；
+   颱風警報 W-C0034-001 全國只有一份，不分縣市，只要生效中就一併附加。
+   CWA_API_KEY／UNIT_WEATHER_LOCATION 跟前端是同一份設定值，這裡沒有共用
+   模組可以 import，手動複製一份（本來就是內嵌在前端原始碼裡的公開金鑰，
+   不是密鑰，重複並不會有安全疑慮，做法跟 ER_STANDBY_LOCATIONS 一致）；
+   之後前端如果調整單位對應的縣市，記得同步改這裡。
+
+   只對「有人在」的縣市各打一次天氣/特報 API（實務上目前只有臺中市／
+   嘉義縣兩份），同縣市的所有在職帳號共用同一份查詢結果，不用每個人各自
+   查一次；颱風警報全國共用同一份，也只查一次。
+   ========================================================= */
+const CWA_API_KEY = "CWA-C471B712-733E-4115-9AD2-0E1D96D3A10E";
+const UNIT_WEATHER_LOCATION = { hq: "臺中市", co1: "臺中市", co2: "嘉義縣" };
+
+async function fetchDailyWeather(county) {
+  const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-001?Authorization=${CWA_API_KEY}&locationName=${encodeURIComponent(county)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  const loc = json?.records?.location?.[0];
+  if (!loc) throw new Error("查無天氣資料");
+  const els = {};
+  loc.weatherElement.forEach((e) => { els[e.elementName] = e.time; });
+  return {
+    wx: els.Wx?.[0]?.parameter?.parameterName || "—",
+    pop: els.PoP?.[0]?.parameter?.parameterName ?? null,
+    minT: els.MinT?.[0]?.parameter?.parameterName ?? null,
+    maxT: els.MaxT?.[0]?.parameter?.parameterName ?? null,
+  };
+}
+async function fetchDailyHazards(county) {
+  const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0033-001?Authorization=${CWA_API_KEY}&locationName=${encodeURIComponent(county)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  const locs = json?.records?.location || [];
+  const loc = locs.find((l) => l.locationName === county) || locs[0];
+  const hazards = loc?.hazardConditions?.hazards || [];
+  return hazards.map((h) => `${h.info?.phenomena || "天氣特報"}${h.info?.significance || ""}`);
+}
+async function fetchActiveTyphoonHeadlines() {
+  const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0034-001?Authorization=${CWA_API_KEY}&format=JSON`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  const infos = json?.records?.info || [];
+  return infos.map((info) => info.headline || "颱風警報");
+}
+function buildDailyWeatherBody(weather, alertTexts) {
+  const range = (weather.minT != null && weather.maxT != null) ? `${weather.minT}°/${weather.maxT}°` : "";
+  const pop = weather.pop != null ? `，降雨機率 ${weather.pop}%` : "";
+  let body = `${weather.wx}${range ? "，" + range : ""}${pop}`;
+  if (alertTexts.length) body += `\n⚠️ ${alertTexts.join("；")}`;
+  return body;
+}
+// 核心邏輯獨立成一個函式，排程觸發跟下面的手動測試端點都呼叫同一份，
+// 避免兩邊的查詢/組字/收件人邏輯各寫一套、之後改一邊忘了改另一邊。
+async function runDailyWeatherReport() {
+  if (await isTestModeActive()) {
+    logger.info("測試模式開啟中，略過每日天氣摘要推播");
+    return { skipped: true, testMode: true };
+  }
+  const counties = [...new Set(Object.values(UNIT_WEATHER_LOCATION))];
+  const typhoonTexts = await fetchActiveTyphoonHeadlines().catch((e) => {
+    logger.error("每日天氣摘要：颱風警報載入失敗", e);
+    return [];
+  });
+  const dataByCounty = {};
+  for (const county of counties) {
+    try {
+      const [weather, hazardTexts] = await Promise.all([
+        fetchDailyWeather(county),
+        fetchDailyHazards(county).catch((e) => {
+          logger.error(`每日天氣摘要：${county} 特報載入失敗`, e);
+          return [];
+        }),
+      ]);
+      dataByCounty[county] = { weather, hazardTexts };
+    } catch (e) {
+      logger.error(`每日天氣摘要：${county} 天氣載入失敗，這個縣市今天不推播`, e);
+    }
+  }
+
+  const snap = await db.collection("users").get();
+  const activeRoles = ["admin", "duty_officer", "commander", "member"];
+  const recipientsByCounty = {};
+  snap.forEach((doc) => {
+    const u = doc.data();
+    if (!activeRoles.includes(normalizeRole(u.role))) return;
+    const county = UNIT_WEATHER_LOCATION[u.unit] || UNIT_WEATHER_LOCATION.hq;
+    if (!dataByCounty[county]) return;
+    (recipientsByCounty[county] = recipientsByCounty[county] || []).push({
+      uid: doc.id,
+      tokens: Array.isArray(u.fcmTokens) ? u.fcmTokens : [],
+    });
+  });
+
+  const sent = [];
+  for (const [county, recipients] of Object.entries(recipientsByCounty)) {
+    const { weather, hazardTexts } = dataByCounty[county];
+    const title = `${county} 今日天氣`;
+    const body = buildDailyWeatherBody(weather, [...typhoonTexts, ...hazardTexts]);
+    await notifyRecipients(recipients, title, body);
+    sent.push({ county, title, body, recipientCount: recipients.length });
+  }
+  return { skipped: false, sent };
+}
+exports.sendDailyWeatherReport = onSchedule({ schedule: "0 7 * * *", timeZone: "Asia/Taipei" }, async () => {
+  await runDailyWeatherReport();
+});
+
+/* =========================================================
+   10b) 每日天氣摘要：管理員手動立即觸發一次（測試用）
+   跟排程呼叫同一份 runDailyWeatherReport()，方便部署後不用等到隔天
+   07:00 才能確認訊息內容、單位對應的縣市是否正確；呼叫慣例跟其他手動
+   測試端點（sendTestPush／migratePersonnelToUsers）一致。
+   ========================================================= */
+exports.sendDailyWeatherReportNow = onRequest({ cors: true }, async (req, res) => {
+  try {
+    const authHeader = req.get("Authorization") || "";
+    const m = /^Bearer (.+)$/.exec(authHeader);
+    if (!m) { res.status(401).json({ ok: false, reason: "missing bearer token" }); return; }
+    const decoded = await getAuth().verifyIdToken(m[1]);
+    const callerDoc = await db.collection("users").doc(decoded.uid).get();
+    if (!callerDoc.exists || callerDoc.data().role !== "admin") {
+      res.status(403).json({ ok: false, reason: "admin only" });
+      return;
+    }
+    const result = await runDailyWeatherReport();
+    res.status(200).json({ ok: true, ...result });
+  } catch (e) {
+    logger.error("手動觸發每日天氣摘要失敗", e);
+    res.status(500).json({ ok: false, reason: String(e && e.message || e) });
+  }
+});
+
+/* =========================================================
+   11) 推播控制台：管理員手動測試推播
    前端「推播控制台」名冊每一列的「測試推播」按鈕呼叫這支函式，直接對
    指定的單一使用者送一則真的推播（跟 sendPush() 共用同一套發送/清除
    失效 token 邏輯），方便管理員現場確認某個人到底收不收得到通知，不用
@@ -598,7 +741,7 @@ exports.sendTestPush = onRequest({ cors: true }, async (req, res) => {
 });
 
 /* =========================================================
-   11) 急診待命：一鍵緊急動員廣播
+   12) 急診待命：一鍵緊急動員廣播
    卡片上「右滑發送」滑動條滑到底時呼叫。依醫務所地點自動篩選收件人——
    跟前端 index.html 的 ER_STANDBY_LOCATIONS 是同一份地點清單，這裡另外
    維護一份「這個地點要通知誰」對照表，因為這條規則只有這支函式在用，
@@ -681,4 +824,4 @@ exports.sendEmergencyBroadcast = onRequest({ cors: true }, async (req, res) => {
 // 純函式/資料存取邏輯額外匯出一份，方便寫單元測試直接呼叫驗證（不會
 // 影響部署——firebase deploy 只認得用 onDocumentCreated 等 v2 trigger
 // builder 包起來的 exports，這個純物件會被忽略，不會變成多一個雲端函式）。
-exports._internal = { normalizeRole, resolveRecipients, resolveAllTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce, standbyShiftCutoff, resolveEmergencyBroadcastRecipients, isCurrentDutyMember, writePushLog, notifyRecipients, isTestModeActive };
+exports._internal = { normalizeRole, resolveRecipients, resolveAllTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce, standbyShiftCutoff, resolveEmergencyBroadcastRecipients, isCurrentDutyMember, writePushLog, notifyRecipients, isTestModeActive, buildDailyWeatherBody, runDailyWeatherReport };
