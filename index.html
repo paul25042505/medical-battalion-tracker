@@ -1952,7 +1952,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-24-435-push-catalog-weather-entry";
+const BUILD_TAG = "2026-07-24-436-liaison-skip-to-returning";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3095,6 +3095,9 @@ const RELEASE_NOTES = [
       "修正「立即測試每日天氣摘要」顯示的人數：原本顯示的是「這個縣市所有在職帳號」的人數，即使這些人一支裝置都沒有註冊過推播、實際上完全沒有發送出去，也會顯示成功並附上人數，容易誤以為真的送達；現在會分別顯示在職人數跟「實際有裝置能收到」的人數，兩者不同時特別標示出來",
       "「訊息管理」的「系統推播內容一覽」補上每日天氣摘要這個推播類型，跟其他觸發點一樣列出觸發時機、標題／內容格式、收件人範圍",
     ] },
+    { category: "任務管理", items: [
+      "洽公任務「出發」後新增可以直接回報「返營」，跳過「抵達」「離開」：長期受訓、長期外派這種情況通常只有出發跟返營兩個真正有意義的時間點，不強制照原本出發→抵達→離開→返營的順序走完整四步；一般短天期洽公還是可以照原順序逐步回報",
+    ] },
   ] },
   { date: "2026/07/23", groups: [
     { category: "個人資料", items: [
@@ -3995,13 +3998,17 @@ function reportableTypes(taskId){
   const t = state.tasks.find(x => x.id === taskId);
   const evs = taskEvents(taskId);
   const lastType = evs.length ? evs[evs.length - 1].type : null;
-  // 洽公任務地點在建立時就一次填完，回報流程沒有分岔，單純出發→抵達→離開→返營。
+  // 洽公任務地點在建立時就一次填完，回報流程原則上是出發→抵達→離開→返營。
   // !lastType（還沒有任何事件）＝待出勤，跟「已出勤、下一步抵達現場」是
   // 兩件不同的事，急診待命的待命勤務建立時不會自動補 DISPATCH 事件，會
   // 真的停在待出勤狀態，所以這裡要分開處理，不能再假設 !lastType 不會發生。
+  // 出發後唯一的分岔點：長期受訓／長期外派這種情況只有「出發」跟「返營」
+  // 兩個真正有意義的時間點（可能隔一兩個月才從別的地方回報返營，中間沒有
+  // 單一、固定的「現場」可以回報抵達/離開），所以允許直接跳過抵達／離開，
+  // 出發後可以直接回報返營；一般短天期的洽公還是可以照原本順序走完整四步。
   if (t && t.type === "liaison") {
     if (!lastType) return ["DISPATCH"];
-    if (lastType === "DISPATCH") return ["ARRIVED_SCENE"];
+    if (lastType === "DISPATCH") return ["ARRIVED_SCENE", "RETURNING"];
     if (lastType === "ARRIVED_SCENE") return ["DEPART_SCENE"];
     if (lastType === "DEPART_SCENE") return ["RETURNING"];
     return [];
@@ -8470,14 +8477,24 @@ function viewTaskDetail(taskId){
         <button class="btn-primary" style="width:100%;" onclick="window.__startReport('${t.id}','${rTypes[0]}')">${icon(def.icon,20)} ${btnLabel}</button>
       </div>
       <div class="sticky-bar-spacer" style="${showNavAboveBtn ? 'height:128px;' : ''}"></div>`;
-  } else if (canDoReport && !draft && rTypes.length === 2) {
-    // 唯一的分岔點（僅勤務類任務才會出現）：抵達現場之後，離開前往下一個地點
+  } else if (canDoReport && !draft && rTypes.length === 2 && rTypes.includes("DEPART_SCENE")) {
+    // 分岔點一（僅勤務類任務才會出現）：抵達現場之後，離開前往下一個地點
     // （這裡回報的是「離開現場」本身，抵達下一站要等真的到了才另外回報，
     // 兩者是不同時刻，不能混在同一次動作裡）或直接返回營區。
     stickyBar = `
       <div class="sticky-action-bar">
         <button class="btn-primary" onclick="window.__startReport('${t.id}','DEPART_SCENE')">${icon('depart',20)} 前往下一個地點</button>
         <button class="btn-primary green" onclick="window.__startReport('${t.id}','RETURNING')">${icon('home',20)} 返回營區</button>
+      </div>
+      <div class="sticky-bar-spacer"></div>`;
+  } else if (canDoReport && !draft && rTypes.length === 2 && isLiaison) {
+    // 分岔點二（僅洽公任務才會出現）：出發之後，短天期洽公可以照原本順序
+    // 先回報抵達；長期受訓／長期外派沒有單一固定的「現場」可以回報抵達/
+    // 離開，可以直接跳過這兩步，出發後直接回報返營。
+    stickyBar = `
+      <div class="sticky-action-bar">
+        <button class="btn-primary" onclick="window.__startReport('${t.id}','ARRIVED_SCENE')">${icon('pin',20)} 抵達</button>
+        <button class="btn-primary green" onclick="window.__startReport('${t.id}','RETURNING')">${icon('home',20)} 返營</button>
       </div>
       <div class="sticky-bar-spacer"></div>`;
   }
