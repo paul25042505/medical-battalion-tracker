@@ -1952,7 +1952,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-24-436-liaison-skip-to-returning";
+const BUILD_TAG = "2026-07-24-437-liaison-label-clarity";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2394,12 +2394,15 @@ const EVENT_TYPES = [
 ];
 // 洽公任務（現勘、開會等非車輛派遣性質的外出）：不追蹤里程/油量，流程也比較
 // 單純，沒有「前往下一個地點」的分岔——地點在建立任務時就一次填完，回報只
-// 是單純的出發→抵達→離開→返營四個時間點，返營即代表任務結束。
+// 是單純的出發→抵達目的地→離開目的地→抵達營區四個時間點，抵達營區即代表
+// 任務結束。標籤刻意都講清楚「去哪裡」（目的地／營區），不用「返營」這種
+// 需要前後文才看得懂在講哪一段的講法，單獨出現在通知標題、時間軸裡也能
+// 一眼看懂。
 const LIAISON_EVENT_TYPES = [
-  { type: "DISPATCH",      label: "出發", icon: "alert",       statusKey: "dispatch",   hint: "從營區出發" },
-  { type: "ARRIVED_SCENE", label: "抵達", icon: "pin",         statusKey: "onscene",    hint: "抵達洽公地點" },
-  { type: "DEPART_SCENE",  label: "離開", icon: "depart",      statusKey: "transit",    hint: "離開洽公地點，準備返營" },
-  { type: "RETURNING",     label: "返營", icon: "returnArrow", statusKey: "completed",  hint: "返回營區，洽公完成" }
+  { type: "DISPATCH",      label: "出發",     icon: "alert",       statusKey: "dispatch",   hint: "從營區出發" },
+  { type: "ARRIVED_SCENE", label: "抵達目的地", icon: "pin",         statusKey: "onscene",    hint: "抵達洽公目的地" },
+  { type: "DEPART_SCENE",  label: "離開目的地", icon: "depart",      statusKey: "transit",    hint: "離開目的地，準備返回營區" },
+  { type: "RETURNING",     label: "抵達營區",  icon: "returnArrow", statusKey: "completed",  hint: "返回營區，洽公完成" }
 ];
 function eventTypesFor(t){ return (t && t.type === "liaison") ? LIAISON_EVENT_TYPES : EVENT_TYPES; }
 const STATUS_LABEL = {
@@ -3097,6 +3100,7 @@ const RELEASE_NOTES = [
     ] },
     { category: "任務管理", items: [
       "洽公任務「出發」後新增可以直接回報「返營」，跳過「抵達」「離開」：長期受訓、長期外派這種情況通常只有出發跟返營兩個真正有意義的時間點，不強制照原本出發→抵達→離開→返營的順序走完整四步；一般短天期洽公還是可以照原順序逐步回報",
+      "洽公任務的回報字樣調整得更明確：「抵達」改成「抵達目的地」、「離開」改成「離開目的地」、「返營」改成「抵達營區」，單獨出現在通知標題或時間軸裡也能一眼看懂是哪一步，不用再靠前後文猜",
     ] },
   ] },
   { date: "2026/07/23", groups: [
@@ -4373,7 +4377,8 @@ async function deleteTask(taskId){
 }
 async function forceEndTask(taskId){
   const t = state.tasks.find(x => x.id === taskId);
-  // 洽公任務沒有 COMPLETED 事件，結束點是「返營」（statusKey completed）。
+  // 洽公任務沒有 COMPLETED 事件，結束點是「抵達營區」（type 仍是
+  // RETURNING，statusKey completed，只是顯示標籤改了）。
   const finalType = (t && t.type === "liaison") ? "RETURNING" : "COMPLETED";
   await addEvent(taskId, finalType, { note: "管理員強制結束" });
   showToast("已強制結束勤務");
@@ -8286,7 +8291,8 @@ function viewTaskDetail(taskId){
   const startMileage = dispatchEv?.mileage ?? t.startMileage ?? null;
   const finalMileage = completedEv?.mileage ?? null;
   const distance = (startMileage != null && finalMileage != null) ? (finalMileage - startMileage) : null;
-  // 洽公任務沒有 COMPLETED 事件，返營本身（statusKey completed）就是結束點。
+  // 洽公任務沒有 COMPLETED 事件，「抵達營區」（type 仍是 RETURNING，
+  // statusKey completed，只是顯示標籤改了）本身就是結束點。
   const finalEv = isLiaison ? returningEv : completedEv;
   const duration = finalEv ? (finalEv.ts - (dispatchEv?.ts ?? new Date(t.createdAt||0).getTime())) : null;
 
@@ -8489,12 +8495,12 @@ function viewTaskDetail(taskId){
       <div class="sticky-bar-spacer"></div>`;
   } else if (canDoReport && !draft && rTypes.length === 2 && isLiaison) {
     // 分岔點二（僅洽公任務才會出現）：出發之後，短天期洽公可以照原本順序
-    // 先回報抵達；長期受訓／長期外派沒有單一固定的「現場」可以回報抵達/
-    // 離開，可以直接跳過這兩步，出發後直接回報返營。
+    // 先回報抵達目的地；長期受訓／長期外派沒有單一固定的「現場」可以回報
+    // 抵達/離開目的地，可以直接跳過這兩步，出發後直接回報抵達營區。
     stickyBar = `
       <div class="sticky-action-bar">
-        <button class="btn-primary" onclick="window.__startReport('${t.id}','ARRIVED_SCENE')">${icon('pin',20)} 抵達</button>
-        <button class="btn-primary green" onclick="window.__startReport('${t.id}','RETURNING')">${icon('home',20)} 返營</button>
+        <button class="btn-primary" onclick="window.__startReport('${t.id}','ARRIVED_SCENE')">${icon('pin',20)} 抵達目的地</button>
+        <button class="btn-primary green" onclick="window.__startReport('${t.id}','RETURNING')">${icon('home',20)} 抵達營區</button>
       </div>
       <div class="sticky-bar-spacer"></div>`;
   }
