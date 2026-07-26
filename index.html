@@ -244,6 +244,13 @@
      姓名文字水平置中對齊，不能只靠 SVG 的 vertical-align:middle——那個
      只會對齊到文字的 x-height 中線，姓名字級一大就會看起來偏低）---- */
   .rank-icon-name{display:inline-flex; align-items:center; gap:4px; vertical-align:middle;}
+  /* Noto Serif TC 粗襯線大字級（頂部列姓名／個人資料首頁姓名）專用：
+     這種字重＋字級組合，中文字本身的墨色重心比圖示幾何中心低，外框
+     置中後肉眼看圖示仍偏高，這裡額外用圖示自身高度的百分比往下補一點
+     （用 % 而非固定 px，才會隨圖示大小等比例縮放）。全站其他用預設
+     sans-serif、字級也小很多的姓名顯示處（成員列表／意見回饋等）沒有
+     這個落差，不要套用，套了反而會變成偏低。 */
+  .rank-icon-name-serif svg{transform:translateY(14%);}
 
   /* ---- EMT 證照等級徽章 ---- */
   /* 比照真實 EMT 臂章繡片的樣子：紅字＋紅色四角形邊框，字體用 Bitter
@@ -1959,7 +1966,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-26-441-rank-icon-align-cjk";
+const BUILD_TAG = "2026-07-26-442-rank-icon-align-scope";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3113,6 +3120,7 @@ const RELEASE_NOTES = [
       "「士官長」拆成三等／二等／一等士官長三個獨立階級選項（原本只有單一「士官長」），對應到正確的槓數彷章；既有資料裡的舊版「士官長」文字不受影響，但下次編輯個人資料時需要重新選擇對應的等級",
       "修正階級彷章圖示跟姓名沒有水平置中對齊的問題：圖示原本靠文字基準線對齊，字級一大看起來會偏低，現在改成跟姓名文字置中對齊",
       "階級彷章圖示對齊再修一次：改成 inline-flex 置中後，中文字（尤其林/霖這類下半部筆畫較多的字）本身的墨色重心比圖示的幾何中心低，兩者外框對齊了、視覺上圖示還是偏高，這次額外加上跟圖示尺寸成比例的微調，讓圖示的視覺重心跟文字對齊，不只是外框對齊",
+      "修正上一版微調矯枉過正的問題：那個向下微調只有頂部列／個人資料首頁這種用粗襯線大字姓名的地方才需要，成員列表、意見回饋等用一般字體、字級也小很多的地方套用同一個微調反而會把圖示往下推過頭；現在改成只在真的需要的兩處套用，其餘地方維持單純置中",
     ] },
   ] },
   { date: "2026/07/24", groups: [
@@ -6216,11 +6224,14 @@ function rankBadgeIcon(rank, size){
   } else if (data.shape === "blossom"){
     inner = data.count === 1 ? rankBlossomPath(14, 11, 8.5) : rankBlossomPath(7.5, 11, 6.2) + rankBlossomPath(20.5, 11, 6.2);
   }
-  // 中文字（尤其帶下半部部件的字，如林/霖）的墨色重心比純幾何置中的圖示
-  // 略低，兩者用 flexbox 對齊外框中心時，肉眼看圖示會偏高；這裡用跟
-  // size 成正比的位移把圖示往下挪一點，實測抵消掉這個視覺落差。
-  const nudge = (size * 0.16).toFixed(1);
-  return `<svg width="${size}" height="${(size * viewH / W).toFixed(1)}" viewBox="0 0 ${W} ${viewH.toFixed(1)}" style="vertical-align:middle;flex-shrink:0;transform:translateY(${nudge}px);">${inner}</svg>`;
+  // 這裡刻意不內建任何垂直位移：字重心跟圖示幾何中心的落差只出現在
+  // Noto Serif TC 那種粗襯線大字級的姓名（頂部列／個人資料首頁），
+  // 其餘沿用全站預設 sans-serif 字體、字級也小很多的地方（成員列表、
+  // 意見回饋等）本來就沒有這個落差，套用同一個位移只會把圖示往下推
+  // 過頭（實測會比對齊前更明顯偏低）。序襯線字級的補償改用
+  // .rank-icon-name-serif 這個修飾 class（見 CSS），只加在真的用
+  // Noto Serif TC 大字的那兩處。
+  return `<svg width="${size}" height="${(size * viewH / W).toFixed(1)}" viewBox="0 0 ${W} ${viewH.toFixed(1)}" style="vertical-align:middle;flex-shrink:0;">${inner}</svg>`;
 }
 // 階級文字前面加彷章圖示，找不到對應圖示（例如舊資料還存著已拆分掉的
 // 舊版「士官長」字串、或本來就是空值）時退回純文字，不擋顯示。
@@ -9148,7 +9159,7 @@ function viewProfile(){
   return `
     <div class="hub-head">
       ${avatar}
-      <div class="hub-name">${p.rank ? `<span class="rank-icon-name">${rankBadgeIcon(p.rank,18)}${esc(p.displayName||p.email)}</span>` : esc(p.displayName||p.email)}</div>
+      <div class="hub-name">${p.rank ? `<span class="rank-icon-name rank-icon-name-serif">${rankBadgeIcon(p.rank,18)}${esc(p.displayName||p.email)}</span>` : esc(p.displayName||p.email)}</div>
       <div class="hub-sub">${p.rank ? esc(p.rank)+' · ' : ''}${unitLabel(p.unit)} · ${ROLE_LABEL[myRole(p)]||p.role}${p.emtLevel ? ' ' + emtBadgeHtml(p.emtLevel) : ''}</div>
     </div>
     ${settingsSection('使用者功能', userRows)}
@@ -10932,7 +10943,7 @@ function render(){
       <div class="topbar">
         <div class="topbar-bottom-row">
           <div class="topbar-sub">
-            ${p.rank ? `<span class="rank-icon-name">${rankBadgeIcon(p.rank,16)}<span class="name">${esc(p.displayName||p.email).split(' ')[0]}</span></span>` : `<span class="name">${esc(p.displayName||p.email).split(' ')[0]}</span>`}${p.rank ? `<span class="rank">${esc(p.rank)}</span>` : ''}
+            ${p.rank ? `<span class="rank-icon-name rank-icon-name-serif">${rankBadgeIcon(p.rank,16)}<span class="name">${esc(p.displayName||p.email).split(' ')[0]}</span></span>` : `<span class="name">${esc(p.displayName||p.email).split(' ')[0]}</span>`}${p.rank ? `<span class="rank">${esc(p.rank)}</span>` : ''}
           </div>
           <div class="topbar-icons">
             ${weatherBadge}
