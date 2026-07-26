@@ -1723,6 +1723,7 @@
   .plate-row-avatar.moto{background:color-mix(in srgb, var(--amber) 16%, var(--panel-2)); color:var(--amber-text);}
   .plate-row-mid{flex:1; min-width:0;}
   .plate-row-name{font-size:var(--text-sm); font-weight:600;}
+  .plate-row-sub{font-size:var(--text-xs); color:var(--muted); margin-top:2px;}
   .plate-row-chip{
     font-family:var(--mono); font-weight:700; font-size:var(--text-xs); color:var(--text);
     background:var(--panel-2); border-radius:7px; padding:4px 9px; flex-shrink:0; letter-spacing:0.01em;
@@ -1987,7 +1988,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-26-445-platesearch-type-icon";
+const BUILD_TAG = "2026-07-26-446-platesearch-brand";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3145,6 +3146,7 @@ const RELEASE_NOTES = [
       "成員列表卡片移除民車（車牌/車種）欄位，只保留電話跟 EMT 證照；要查車牌改用「車號查詢」頁面",
       "「車號查詢」頁面改版：頂部新增「全部／汽車／機車」分類，清單改成一列一台車的緊湊列表（大頭貼縮寫圓圈＋姓名／階級＋車牌），同一人有兩台不同車種的車，篩選其中一種只留下對應那一列，不會整個人一起消失或一起出現",
       "「車號查詢」清單的頭貼改顯示車種圖示（汽車／機車，各自不同顏色），不放姓氏縮寫：同一人有兩台不同車種的車時，兩列的姓氏縮寫長得一模一樣看不出差異，車種圖示才分得出哪一列是哪台車",
+      "「車號查詢」清單補上廠牌／型號（例如「Toyota 豐田」），顯示在姓名下方",
     ] },
   ] },
   { date: "2026/07/24", groups: [
@@ -9270,7 +9272,8 @@ function plateRowHtml(person, vehicle){
     <div class="plate-row">
       <div class="plate-row-avatar ${isMoto?'moto':'car'}">${isMoto ? icon('motorcycle',18) : icon('car',18)}</div>
       <div class="plate-row-mid">
-        <span class="plate-row-name">${esc(person.name)}</span>${person.title ? `<span class="muted-suffix">${esc(person.title)}</span>` : ''}
+        <div><span class="plate-row-name">${esc(person.name)}</span>${person.title ? `<span class="muted-suffix">${esc(person.title)}</span>` : ''}</div>
+        ${vehicle.brand ? `<div class="plate-row-sub">${esc(vehicle.brand)}</div>` : ''}
       </div>
       <span class="plate-row-chip">${esc(vehicle.plate)}</span>
     </div>`;
