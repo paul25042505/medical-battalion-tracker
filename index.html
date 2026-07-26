@@ -282,11 +282,17 @@
     color:var(--text); min-width:0;
     display:flex; align-items:center; gap:9px;
   }
-  .topbar-sub .name{font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:var(--text-xl); font-weight:700;}
+  /* 姓名絕對不換行——姓名旁邊的階級徽章（例如「一等士官長」五個字，比其他
+     階級都長很多）擠壓版面時，flexbox 預設會先讓文字換行而不是先讓徽章
+     縮小，姓名反而會被擠成兩行；固定 nowrap 之後改用 .rank.long 縮小
+     徽章字級來讓出空間，姓名不受影響。 */
+  .topbar-sub .name{font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif; font-size:var(--text-xl); font-weight:700; white-space:nowrap;}
   .topbar-sub .rank{
     font-family:var(--sans); font-size:var(--text-xs); font-weight:700; color:var(--muted);
     background:var(--panel); border:1px solid var(--border); padding:2px 9px; border-radius:999px; letter-spacing:0.02em;
+    white-space:nowrap; flex-shrink:0;
   }
+  .topbar-sub .rank.long{font-size:11px; padding:2px 7px;}
   /* 右上角通知／登出按鈕改成跟返回鍵一樣的液態玻璃質感：backdrop-filter
      毛玻璃＋inset 高光/陰影模擬玻璃厚度，按下去放大＋提亮＋外圍柔光，
      跟全站返回鍵的觸覺回饋一致。這裡是單一元素（沒有像返回鍵拆外層/內層），
@@ -1988,7 +1994,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-26-446-platesearch-brand";
+const BUILD_TAG = "2026-07-26-447-topbar-longrank-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3147,6 +3153,7 @@ const RELEASE_NOTES = [
       "「車號查詢」頁面改版：頂部新增「全部／汽車／機車」分類，清單改成一列一台車的緊湊列表（大頭貼縮寫圓圈＋姓名／階級＋車牌），同一人有兩台不同車種的車，篩選其中一種只留下對應那一列，不會整個人一起消失或一起出現",
       "「車號查詢」清單的頭貼改顯示車種圖示（汽車／機車，各自不同顏色），不放姓氏縮寫：同一人有兩台不同車種的車時，兩列的姓氏縮寫長得一模一樣看不出差異，車種圖示才分得出哪一列是哪台車",
       "「車號查詢」清單補上廠牌／型號（例如「Toyota 豐田」），顯示在姓名下方",
+      "修正頂部列姓名被擠成兩行的問題：階級是「一等士官長」這種五個字的長階級時，旁邊的階級徽章變寬會擠壓姓名的空間，姓名反而被換行擠成兩行；改成姓名固定不換行，五個字的長階級改用縮小字級塞進同一行的徽章",
     ] },
   ] },
   { date: "2026/07/24", groups: [
@@ -10981,7 +10988,7 @@ function render(){
       <div class="topbar">
         <div class="topbar-bottom-row">
           <div class="topbar-sub">
-            ${p.rank ? `<span class="rank-icon-name rank-icon-name-serif">${rankBadgeIcon(p.rank,16)}<span class="name">${esc(p.displayName||p.email).split(' ')[0]}</span></span>` : `<span class="name">${esc(p.displayName||p.email).split(' ')[0]}</span>`}${p.rank ? `<span class="rank">${esc(p.rank)}</span>` : ''}
+            ${p.rank ? `<span class="rank-icon-name rank-icon-name-serif">${rankBadgeIcon(p.rank,16)}<span class="name">${esc(p.displayName||p.email).split(' ')[0]}</span></span>` : `<span class="name">${esc(p.displayName||p.email).split(' ')[0]}</span>`}${p.rank ? `<span class="rank${p.rank.length>=5?' long':''}">${esc(p.rank)}</span>` : ''}
           </div>
           <div class="topbar-icons">
             ${weatherBadge}
