@@ -1994,7 +1994,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-26-447-topbar-longrank-fix";
+const BUILD_TAG = "2026-07-26-448-memberlist-emt-dedup";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3154,6 +3154,7 @@ const RELEASE_NOTES = [
       "「車號查詢」清單的頭貼改顯示車種圖示（汽車／機車，各自不同顏色），不放姓氏縮寫：同一人有兩台不同車種的車時，兩列的姓氏縮寫長得一模一樣看不出差異，車種圖示才分得出哪一列是哪台車",
       "「車號查詢」清單補上廠牌／型號（例如「Toyota 豐田」），顯示在姓名下方",
       "修正頂部列姓名被擠成兩行的問題：階級是「一等士官長」這種五個字的長階級時，旁邊的階級徽章變寬會擠壓姓名的空間，姓名反而被換行擠成兩行；改成姓名固定不換行，五個字的長階級改用縮小字級塞進同一行的徽章",
+      "修正成員列表卡片 EMT 等級重複顯示的問題：右上角徽章跟「EMT 證照」欄位以前會顯示同一個值兩次，現在改成只在「EMT 證照」欄位用臂章樣式顯示一次",
     ] },
   ] },
   { date: "2026/07/24", groups: [
@@ -9221,11 +9222,10 @@ function memberCardHtml(x){
     <div class="member-card">
       <div class="member-card-top">
         <div>${x.title ? `<span class="rank-icon-name">${rankBadgeIcon(x.title,13)}<span class="member-name">${esc(x.name)}</span></span>` : `<span class="member-name">${esc(x.name)}</span>`}${x.title ? `<span class="member-rank">${esc(x.title)}</span>` : ''}</div>
-        ${x.emtLevel ? emtBadgeHtml(x.emtLevel) : ''}
       </div>
       <div class="member-card-grid">
         <div class="member-cell"><div class="member-label">電話</div><div class="member-val${x.phone?'':' member-val-empty'}">${x.phone ? esc(x.phone) : '未填寫'}</div></div>
-        <div class="member-cell"><div class="member-label">EMT 證照</div><div class="member-val${x.emtLevel?'':' member-val-empty'}">${x.emtLevel ? esc(x.emtLevel) : '未登記'}</div></div>
+        <div class="member-cell"><div class="member-label">EMT 證照</div><div class="member-val${x.emtLevel?'':' member-val-empty'}">${x.emtLevel ? emtBadgeHtml(x.emtLevel) : '未登記'}</div></div>
       </div>
     </div>`;
 }
