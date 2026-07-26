@@ -1706,6 +1706,24 @@
   .member-label{font-size:10px; color:var(--muted); font-family:var(--mono); letter-spacing:0.06em; text-transform:uppercase;}
   .member-val{font-size:var(--text-xs); margin-top:2px; word-break:break-word;}
   .member-val.member-val-empty{color:var(--muted);}
+  /* ---- 車號查詢（viewPlateSearch）：分類清單風格 ---- */
+  /* 一列一台車（不是一列一人）：同一人有兩台車就是兩列，車種篩選才篩得動；
+     跟成員列表的 memberCardHtml（一人一張卡、車輛是卡片內的子項目）是
+     刻意不同的資訊結構，不要共用同一份 render。 */
+  .plate-list{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md); overflow:hidden;}
+  .plate-row{display:flex; align-items:center; gap:11px; padding:11px 14px; border-bottom:1px solid var(--border);}
+  .plate-list .plate-row:last-child{border-bottom:none;}
+  .plate-row-avatar{
+    width:34px; height:34px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:var(--text-xs); background:color-mix(in srgb, var(--blue) 12%, var(--panel-2)); color:var(--blue);
+    font-family:'Noto Serif TC','Songti TC','Songti SC','PMingLiU','STSong',serif;
+  }
+  .plate-row-mid{flex:1; min-width:0;}
+  .plate-row-name{font-size:var(--text-sm); font-weight:600;}
+  .plate-row-chip{
+    font-family:var(--mono); font-weight:700; font-size:var(--text-xs); color:var(--text);
+    background:var(--panel-2); border-radius:7px; padding:4px 9px; flex-shrink:0; letter-spacing:0.01em;
+  }
   .service-row{display:flex; align-items:center; gap:14px; padding:14px 16px; cursor:pointer; border-bottom:1px solid var(--border);}
   .settings-group .service-row:last-child{border-bottom:none;}
   .service-row .icon-wrap{width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
@@ -1966,7 +1984,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-26-443-memberlist-drop-plate";
+const BUILD_TAG = "2026-07-26-444-platesearch-segmented-list";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3122,6 +3140,7 @@ const RELEASE_NOTES = [
       "階級彷章圖示對齊再修一次：改成 inline-flex 置中後，中文字（尤其林/霖這類下半部筆畫較多的字）本身的墨色重心比圖示的幾何中心低，兩者外框對齊了、視覺上圖示還是偏高，這次額外加上跟圖示尺寸成比例的微調，讓圖示的視覺重心跟文字對齊，不只是外框對齊",
       "修正上一版微調矯枉過正的問題：那個向下微調只有頂部列／個人資料首頁這種用粗襯線大字姓名的地方才需要，成員列表、意見回饋等用一般字體、字級也小很多的地方套用同一個微調反而會把圖示往下推過頭；現在改成只在真的需要的兩處套用，其餘地方維持單純置中",
       "成員列表卡片移除民車（車牌/車種）欄位，只保留電話跟 EMT 證照；要查車牌改用「車號查詢」頁面",
+      "「車號查詢」頁面改版：頂部新增「全部／汽車／機車」分類，清單改成一列一台車的緊湊列表（大頭貼縮寫圓圈＋姓名／階級＋車牌），同一人有兩台不同車種的車，篩選其中一種只留下對應那一列，不會整個人一起消失或一起出現",
     ] },
   ] },
   { date: "2026/07/24", groups: [
@@ -9222,50 +9241,61 @@ function viewMemberList(){
    主官管只查得到自己單位，admin/高勤官不分單位；不是額外開放更大的
    查詢範圍，車輛資訊本來就已經在成員列表攤開給這個範圍的人看了，
    這裡只是換一個「用車牌反查」的入口，方便好記，不是新的權限）。
-   沒輸入查詢字串時預設列出這個範圍內所有已登記車輛的人（不用先打字
-   才看得到東西），輸入框則同時比對車牌（忽略大小寫/破折號）跟姓名
-   （原文比對，中文姓名沒有大小寫問題）。卡片刻意做得很精簡（只有姓名
-   跟車牌/車種），跟成員列表的完整卡片（電話/EMT/廠牌）是不同用途、
-   不同資訊密度，不要共用同一份 memberCardHtml。
+   沒輸入查詢字串時預設列出這個範圍內所有已登記車輛（不用先打字才看
+   得到東西），輸入框同時比對車牌（忽略大小寫/破折號）跟姓名（原文
+   比對，中文姓名沒有大小寫問題）。頂部「全部／汽車／機車」分類 +
+   一列一台車的緊湊清單，車種篩選才篩得動——同一人有兩台不同車種的車，
+   篩選其中一種只會留下對應那一列，不是整個人一起消失或一起出現；跟
+   成員列表的完整卡片（電話/EMT/廠牌，一人一張卡）是不同用途、不同
+   資訊密度，不要共用同一份 memberCardHtml。
    ========================================================= */
 // 車牌比對時把破折號/空白都拿掉、轉大寫再比對，這樣「ABC-1234」跟
 // 「abc1234」都能查到同一台車，不用要求輸入格式跟登記時一模一樣。
 function normalizePlateForSearch(s){
   return (s||"").toUpperCase().replace(/[-\s]/g, "");
 }
-// 車號查詢頁專用的精簡卡片：只有姓名＋每台車的車牌/車種，不顯示電話、
-// EMT 證照、廠牌——這頁的用途單純是「這個車牌/這個人有哪些車」，資訊
-// 密度比成員列表低很多，共用 memberCardHtml 會顯示太多不相關欄位。
-function platePersonCardHtml(x){
-  const vehicles = Array.isArray(x.vehicles) ? x.vehicles.filter(v => v.plate) : [];
+const PLATE_SEARCH_TYPE_TABS = [{ key: "", label: "全部" }, { key: "汽", label: "汽車" }, { key: "機", label: "機車" }];
+// 車號查詢頁專用的緊湊列：姓名圓形縮寫 + 姓名/階級 + 車牌，一列一台車，
+// 不顯示電話、EMT 證照、廠牌——這頁的用途單純是「這台車是誰的」，資訊
+// 密度比成員列表低很多。
+function plateRowHtml(person, vehicle){
   return `
-    <div class="member-card">
-      <div class="member-card-top"><span class="member-name">${esc(x.name)}</span></div>
-      ${vehicles.map((v, i) => `
-      <div class="vehicle-card-top" ${i>0?'style="margin-top:8px;"':''}>
-        <span class="vehicle-plate-tag">${esc(v.plate)}</span>
-        ${v.type ? `<span class="badge muted">${vehicleTypeText(v.type)}</span>` : ''}
-      </div>`).join("")}
+    <div class="plate-row">
+      <div class="plate-row-avatar">${esc((person.name||'?').trim().charAt(0)||'?')}</div>
+      <div class="plate-row-mid">
+        <span class="plate-row-name">${esc(person.name)}</span>${person.title ? `<span class="muted-suffix">${esc(person.title)}</span>` : ''}
+      </div>
+      <span class="plate-row-chip">${esc(vehicle.plate)}</span>
     </div>`;
 }
-function plateSearchResultsHtml(query){
+function plateSearchResultsHtml(query, typeFilter){
   const q = (query||"").trim();
   const nq = normalizePlateForSearch(q);
-  const pool = state.personnel.filter(x => x.active !== false && (x.vehicles||[]).some(v => v.plate));
-  const matches = pool.filter(x => {
-    if (!q) return true;
-    if (x.name && x.name.includes(q)) return true;
-    return (x.vehicles||[]).some(v => normalizePlateForSearch(v.plate).includes(nq));
+  const pool = state.personnel.filter(x => x.active !== false);
+  const rows = [];
+  pool.forEach(x => {
+    (x.vehicles||[]).filter(v => v.plate).forEach(v => {
+      if (typeFilter && v.type !== typeFilter) return;
+      const matchesQuery = !q || (x.name && x.name.includes(q)) || normalizePlateForSearch(v.plate).includes(nq);
+      if (!matchesQuery) return;
+      rows.push({ person: x, vehicle: v });
+    });
   });
-  if (!matches.length) return `<div class="empty">查無符合的人員或車輛</div>`;
-  return matches.map(platePersonCardHtml).join("");
+  if (!rows.length) return `<div class="empty">查無符合的人員或車輛</div>`;
+  rows.sort((a,b) => rankWeight(a.person.title) - rankWeight(b.person.title));
+  return `<div class="plate-list">${rows.map(r => plateRowHtml(r.person, r.vehicle)).join("")}</div>`;
 }
 window.__filterPlateSearch = (value) => {
   state.plateSearchQuery = value;
   const results = document.getElementById("plate-search-results");
-  if (results) results.innerHTML = plateSearchResultsHtml(value);
+  if (results) results.innerHTML = plateSearchResultsHtml(value, state.plateSearchTypeFilter||"");
+};
+window.__setPlateSearchType = (typeKey) => {
+  state.plateSearchTypeFilter = typeKey;
+  render();
 };
 function viewPlateSearch(){
+  const typeFilter = state.plateSearchTypeFilter || "";
   return `
     <div class="back-row">${backBtn({name:'profile'})}</div>
     <div class="section-label">車號查詢</div>
@@ -9273,7 +9303,10 @@ function viewPlateSearch(){
       <input id="plate-search-input" value="${esc(state.plateSearchQuery||'')}"
         oninput="window.__filterPlateSearch(this.value)" placeholder="輸入車牌號碼或姓名查詢">
     </div>
-    <div id="plate-search-results">${plateSearchResultsHtml(state.plateSearchQuery||'')}</div>
+    <div class="tabs2">
+      ${PLATE_SEARCH_TYPE_TABS.map(t => `<div class="tab2 ${typeFilter===t.key?'active':''}" onclick="window.__setPlateSearchType('${t.key}')">${t.label}</div>`).join("")}
+    </div>
+    <div id="plate-search-results">${plateSearchResultsHtml(state.plateSearchQuery||'', typeFilter)}</div>
   `;
 }
 
