@@ -1966,7 +1966,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-26-442-rank-icon-align-scope";
+const BUILD_TAG = "2026-07-26-443-memberlist-drop-plate";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3121,6 +3121,7 @@ const RELEASE_NOTES = [
       "修正階級彷章圖示跟姓名沒有水平置中對齊的問題：圖示原本靠文字基準線對齊，字級一大看起來會偏低，現在改成跟姓名文字置中對齊",
       "階級彷章圖示對齊再修一次：改成 inline-flex 置中後，中文字（尤其林/霖這類下半部筆畫較多的字）本身的墨色重心比圖示的幾何中心低，兩者外框對齊了、視覺上圖示還是偏高，這次額外加上跟圖示尺寸成比例的微調，讓圖示的視覺重心跟文字對齊，不只是外框對齊",
       "修正上一版微調矯枉過正的問題：那個向下微調只有頂部列／個人資料首頁這種用粗襯線大字姓名的地方才需要，成員列表、意見回饋等用一般字體、字級也小很多的地方套用同一個微調反而會把圖示往下推過頭；現在改成只在真的需要的兩處套用，其餘地方維持單純置中",
+      "成員列表卡片移除民車（車牌/車種）欄位，只保留電話跟 EMT 證照；要查車牌改用「車號查詢」頁面",
     ] },
   ] },
   { date: "2026/07/24", groups: [
@@ -9184,7 +9185,6 @@ function viewProfile(){
 // 見 viewProfile 的民車多台登記）。成員列表、車號查詢頁共用這個 render
 // function，資料形狀完全一樣（都是 state.personnel 裡的一筆）。
 function memberCardHtml(x){
-  const vehicles = Array.isArray(x.vehicles) ? x.vehicles.filter(v => v.type || v.brand || v.plate) : [];
   return `
     <div class="member-card">
       <div class="member-card-top">
@@ -9194,11 +9194,6 @@ function memberCardHtml(x){
       <div class="member-card-grid">
         <div class="member-cell"><div class="member-label">電話</div><div class="member-val${x.phone?'':' member-val-empty'}">${x.phone ? esc(x.phone) : '未填寫'}</div></div>
         <div class="member-cell"><div class="member-label">EMT 證照</div><div class="member-val${x.emtLevel?'':' member-val-empty'}">${x.emtLevel ? esc(x.emtLevel) : '未登記'}</div></div>
-        ${vehicles.map(v => `
-        <div class="member-cell" style="grid-column:1 / -1;">
-          <div class="member-label">民車</div>
-          <div class="member-val">${esc([v.type==='機'?'機車':v.type==='汽'?'汽車':'', v.brand, v.plate].filter(Boolean).join(' · '))}</div>
-        </div>`).join("")}
       </div>
     </div>`;
 }
