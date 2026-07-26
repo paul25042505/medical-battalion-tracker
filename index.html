@@ -1942,7 +1942,7 @@
 // 預先快取清單，離線時才真的載得起來。
 import { initializeApp } from "./vendor/firebase/firebase-app.js";
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+  getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged
 } from "./vendor/firebase/firebase-auth.js";
 import {
   getMessaging, getToken, deleteToken, onMessage, isSupported as isMessagingSupported
@@ -1952,7 +1952,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-24-437-liaison-label-clarity";
+const BUILD_TAG = "2026-07-26-438-standalone-login-redirect";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1995,6 +1995,12 @@ const FCM_VAPID_KEY = "BP0uwpNgyOr3TDnqxI_bLRuI28DH9Q4SCH_ocG5nfvgBMeJmSv0TX41L3
 // 清除」邏輯捕捉到，導致同一支裝置收到重複推播）。
 const FCM_TOKEN_STORAGE_KEY = "medtrack_fcm_token";
 const googleProvider = new GoogleAuthProvider();
+// 已加入主畫面、以獨立模式（standalone）開啟時，登入改走 signInWithRedirect
+// （見 doLogin()），這裡負責接住轉址回來後的結果——redirect 流程本身沒有
+// 回呼函式可以掛，登入失敗（例如使用者中途取消）只有這裡撈得到，不然會
+// 靜悄悄地失敗、直接被導回登入畫面卻沒有任何錯誤提示。登入成功時
+// onAuthStateChanged 本來就會收到，這裡不用重複處理成功的情況。
+getRedirectResult(auth).catch(e => showToast("登入失敗：" + e.message));
 // Cloud Functions（推播通知後端，見 functions/index.js）的 HTTP 呼叫端點
 // 前綴，第 2 代（v2）函式預設部署在 us-central1，跟 setGlobalOptions()
 // 沒有另外指定其他區域的設定一致。這個專案沒有引入 Firebase Functions
@@ -3091,6 +3097,11 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/07/26", groups: [
+    { category: "登入", items: [
+      "修正已加入主畫面、以獨立模式（standalone）開啟時登入偶爾跳出「登入失敗：auth/cancelled-popup-request」的問題：這種模式下改用轉址流程登入，不再用彈出視窗，避免視窗管理不穩定導致明明只點一次登入卻跳出錯誤提示（登入本身通常還是會成功，但這則錯誤容易讓人誤以為真的失敗了）；一般瀏覽器分頁的登入方式不受影響",
+    ] },
+  ] },
   { date: "2026/07/24", groups: [
     { category: "推播通知", items: [
       "新增「每日天氣摘要」推播：每天早上 7 點依各單位所在縣市自動發送當天天氣（天氣描述、溫度區間、降雨機率），如果有生效中的天氣特報（例如強風、大雨）或颱風警報也會一併附加提醒",
@@ -4693,12 +4704,31 @@ async function updateVitalsEntry(id, fields){
 /* =========================================================
    7) Auth 流程
    ========================================================= */
+// 是否已加入主畫面、以獨立模式（standalone）開啟——跟 pushGatekeeperState()
+// 判斷「有沒有加入主畫面」用同一套偵測方式，抽成共用函式避免兩處各自維護
+// 一份一樣的判斷邏輯。
+function isStandalonePwa(){
+  return !!(window.matchMedia && (window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true));
+}
 function doLogin(){
   // 手動按登入視為新的操作，要先把閒置計時戳記重置，不然剛被判定閒置
   // 登出、localStorage 裡的舊時間戳沒人清掉，重新登入成功後
   // onAuthStateChanged 又會用同一個過期時間戳判定閒置逾時，當場再登出
   // 一次、跳出同一個提示——使用者會卡在「一直登入一直被踢出」的迴圈。
   try { localStorage.setItem(IDLE_STORAGE_KEY, String(Date.now())); } catch (e) {}
+  // 已加入主畫面、以獨立模式開啟時改用轉址流程，不用彈出視窗：
+  // signInWithPopup 在 iOS/Android 的 standalone PWA 環境下不穩定——
+  // window.open() 開出來的驗證視窗跟這個獨立模式的 App 之間沒有正常的
+  // opener 關係，系統在兩個畫面間切換（開窗、跳轉回來）時，Firebase SDK
+  // 有時會誤判成「這是第二個登入請求」，把原本那個判定成
+  // cancelled-popup-request 而丟出錯誤——即使使用者真的只點了一次也會
+  // 跳出這個看起來像「登入失敗」的錯誤提示，但實際上登入流程通常還是
+  // 會正常完成。轉址流程整頁跳轉、跳轉回來才繼續，沒有這種視窗管理的
+  // 競態問題，見上面的 getRedirectResult(auth) 負責接住結果。
+  if (isStandalonePwa()) {
+    signInWithRedirect(auth, googleProvider).catch(e => showToast("登入失敗：" + e.message));
+    return;
+  }
   signInWithPopup(auth, googleProvider).catch(e => showToast("登入失敗：" + e.message));
 }
 function doLogout(){ signOut(auth); }
@@ -4960,8 +4990,7 @@ function pushGatekeeperState(){
   if (!state.user || !state.profile) return null;
   if (state.profile.role === "pending" || state.profile.role === "disabled") return null;
   if (state.gatekeeperDismissed) return null;
-  const isStandalone = window.matchMedia && (window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true);
-  if (!isStandalone) return "installPwa";
+  if (!isStandalonePwa()) return "installPwa";
   if (typeof Notification === "undefined") return null; // 裝置/瀏覽器完全不支援通知 API，沒有可以引導的動作
   if (Notification.permission !== "granted") return Notification.permission === "denied" ? "notifDenied" : "notifDefault";
   return null;
