@@ -237,6 +237,9 @@
   /* 姓名/車號才是主要資訊，階級（上士/下士/中尉）、車輛所屬單位（第一連）
      這類附加說明縮小＋灰階，降低視覺份量，不跟主要資訊搶焦點。 */
   .muted-suffix{font-size:var(--text-sm); font-weight:400; color:var(--muted);}
+  /* ---- 階級彷章＋文字（rankTagHtml） ---- */
+  .rank-tag{display:inline-flex; align-items:center; gap:3px;}
+  .rank-tag svg{position:relative; top:-0.5px;}
 
   /* ---- EMT 證照等級徽章 ---- */
   /* 比照真實 EMT 臂章繡片的樣子：紅字＋紅色四角形邊框，字體用 Bitter
@@ -1952,7 +1955,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-26-438-standalone-login-redirect";
+const BUILD_TAG = "2026-07-26-439-rank-insignia-icons";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -1960,7 +1963,7 @@ const BUILD_TAG = "2026-07-26-438-standalone-login-redirect";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.26";
+const APP_MAJOR_MINOR = "2.27";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -2475,7 +2478,7 @@ const TOWNSHIP_LATLNG = { "烏日區": { lat: 24.1064, lon: 120.6255 }, "大林�
 /* =========================================================
    2c) 階級（依權重排序，數字越小階級越高）
    ========================================================= */
-const RANKS = ["中校","少校","上尉","中尉","少尉","士官長","上士","中士","下士","上等兵","一等兵","二等兵"];
+const RANKS = ["中校","少校","上尉","中尉","少尉","一等士官長","二等士官長","三等士官長","上士","中士","下士","上等兵","一等兵","二等兵"];
 function rankWeight(rank){ const i = RANKS.indexOf(rank); return i === -1 ? RANKS.length : i; }
 
 // EMT（緊急救護技術員）證照等級，跟階級一樣是人員的固有資料，帳號審核
@@ -3100,6 +3103,10 @@ const RELEASE_NOTES = [
   { date: "2026/07/26", groups: [
     { category: "登入", items: [
       "修正已加入主畫面、以獨立模式（standalone）開啟時登入偶爾跳出「登入失敗：auth/cancelled-popup-request」的問題：這種模式下改用轉址流程登入，不再用彈出視窗，避免視窗管理不穩定導致明明只點一次登入卻跳出錯誤提示（登入本身通常還是會成功，但這則錯誤容易讓人誤以為真的失敗了）；一般瀏覽器分頁的登入方式不受影響",
+    ] },
+    { category: "介面優化", items: [
+      "姓名前面加上階級彷章圖示（金色人字紋／橫槓／梅花，依階級不同），套用在頂部列、個人資料、成員列表、洽公人員、意見回饋等會顯示「姓名＋階級」的地方，一眼就能認出階級不用只看文字；下拉選單、逗號分隔的純文字名單維持原樣不受影響",
+      "「士官長」拆成三等／二等／一等士官長三個獨立階級選項（原本只有單一「士官長」），對應到正確的槓數彷章；既有資料裡的舊版「士官長」文字不受影響，但下次編輯個人資料時需要重新選擇對應的等級",
     ] },
   ] },
   { date: "2026/07/24", groups: [
@@ -6120,6 +6127,98 @@ function icon(name, size){
   size = size || 20;
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;flex-shrink:0;">${ICON_PATHS[name]||''}</svg>`;
 }
+// 階級彷章：依使用者提供的階級章參考圖（左臂章樣式）簡化成扁平單色金色
+// 圖示，形狀/槓數/排列忠於參考圖，但拿掉原圖的立體漸層/高光，因為這裡
+// 只在小尺寸（跟一般文字同高）當「階級文字」前面的圖示用，套用在
+// nameWithRank／頂部列／個人資料／成員管理列表等「姓名+階級」的標籤上，
+// 不用在下拉選單（<option> 塞不進圖）或逗號分隔的純文字名單裡。
+// 兵是純細線條 chevron；士／士官長是細線＋實心粗槓的組合（粗槓在下面
+// 當底，細線疊在上面分等級：下/中/上士固定 1 條粗槓＋1~3 條細線，
+// 士官長固定 2 條粗槓＋1~3 條細線，三等/二等/一等依序疊多一條細線）；
+// 尉官是橫槓；校官是梅花（用五個小圓弧排成一圈簡化畫法，不逐瓣描邊）。
+// 彼此之間沒有共用視覺元素是刻意的，跟參考圖幾種階級的章別本來就長得
+// 完全不一樣一致。
+const RANK_ICON_GOLD = "#C79A2E";
+const RANK_ICON_DATA = {
+  "二等兵": { shape: "chevron", thin: 1, thick: 0 },
+  "一等兵": { shape: "chevron", thin: 2, thick: 0 },
+  "上等兵": { shape: "chevron", thin: 3, thick: 0 },
+  "下士": { shape: "chevron", thin: 1, thick: 1 },
+  "中士": { shape: "chevron", thin: 2, thick: 1 },
+  "上士": { shape: "chevron", thin: 3, thick: 1 },
+  "三等士官長": { shape: "chevron", thin: 1, thick: 2 },
+  "二等士官長": { shape: "chevron", thin: 2, thick: 2 },
+  "一等士官長": { shape: "chevron", thin: 3, thick: 2 },
+  "少尉": { shape: "bar", count: 1 },
+  "中尉": { shape: "bar", count: 2 },
+  "上尉": { shape: "bar", count: 3 },
+  "少校": { shape: "blossom", count: 1 },
+  "中校": { shape: "blossom", count: 2 }
+};
+// 五瓣分開的小圓點簇（不互相重疊、瓣與瓣之間留白），簡化畫法的梅花，
+// 不逐瓣描邊也不用漸層，維持全站扁平單色圖示風格。
+function rankBlossomPath(cx, cy, r){
+  let out = '';
+  const petalR = r * 0.34, dist = r * 0.74;
+  for (let i = 0; i < 5; i++){
+    const a = (Math.PI * 2 / 5) * i - Math.PI / 2;
+    const px = cx + Math.cos(a) * dist;
+    const py = cy + Math.sin(a) * dist;
+    out += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${petalR.toFixed(1)}" fill="${RANK_ICON_GOLD}"/>`;
+  }
+  out += `<circle cx="${cx}" cy="${cy}" r="${(r * 0.24).toFixed(1)}" fill="${RANK_ICON_GOLD}"/>`;
+  return out;
+}
+// 人字紋（chevron）疊層的垂直間距/圖示總高固定按層數等比例增加，不是
+// 硬塞進固定高度——士官長槓數多達 5～7 層，硬壓進跟兩三層一樣的高度會
+// 疊到彼此的凹口都填滿，整塊變成一片沒有層次的實心色塊，完全看不出
+// 槓數，跟參考圖裡「階級越高、章越高」的比例反而是一致的做法。
+function rankBadgeIcon(rank, size){
+  const data = RANK_ICON_DATA[rank];
+  if (!data) return '';
+  size = size || 16;
+  const W = 28;
+  let inner = '', viewH = 22;
+  if (data.shape === "chevron"){
+    // 細線在上、粗槓在下：依序疊層，y 逐一往下累加，粗細各自的間距/幅度
+    // 不同，用同一個累加游標接續排列，不是各自獨立起算。
+    const thinGap = 4.6, thickGap = 5.6;
+    const seq = Array(data.thin || 0).fill(false).concat(Array(data.thick || 0).fill(true));
+    let y = 0;
+    const rows = [];
+    seq.forEach((isThick, i) => {
+      if (i === 0) y = isThick ? 6.5 : 5;
+      else y += isThick ? thickGap : thinGap;
+      rows.push({ y, isThick });
+    });
+    const last = rows[rows.length - 1];
+    viewH = (last ? last.y : 5) + (last && last.isThick ? 8.5 : 5) + 2;
+    rows.forEach(({ y, isThick }) => {
+      if (isThick){
+        inner += `<path d="M2 ${(y - 4.5).toFixed(1)} L14 ${(y + 3.3).toFixed(1)} L26 ${(y - 4.5).toFixed(1)} L26 ${(y - 0.6).toFixed(1)} L14 ${(y + 7.2).toFixed(1)} L2 ${(y - 0.6).toFixed(1)} Z" fill="${RANK_ICON_GOLD}"/>`;
+      } else {
+        inner += `<path d="M2 ${(y - 3.4).toFixed(1)} L14 ${(y + 3.4).toFixed(1)} L26 ${(y - 3.4).toFixed(1)}" fill="none" stroke="${RANK_ICON_GOLD}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+      }
+    });
+  } else if (data.shape === "bar"){
+    const n = data.count, barH = 3.6, gap = 5.4;
+    const totalH = n * barH + (n - 1) * (gap - barH);
+    const start = (22 - totalH) / 2;
+    for (let i = 0; i < n; i++){
+      inner += `<rect x="3" y="${(start + i * gap).toFixed(1)}" width="22" height="${barH}" rx="1" fill="${RANK_ICON_GOLD}"/>`;
+    }
+  } else if (data.shape === "blossom"){
+    inner = data.count === 1 ? rankBlossomPath(14, 11, 8.5) : rankBlossomPath(7.5, 11, 6.2) + rankBlossomPath(20.5, 11, 6.2);
+  }
+  return `<svg width="${size}" height="${(size * viewH / W).toFixed(1)}" viewBox="0 0 ${W} ${viewH.toFixed(1)}" style="vertical-align:middle;flex-shrink:0;">${inner}</svg>`;
+}
+// 階級文字前面加彷章圖示，找不到對應圖示（例如舊資料還存著已拆分掉的
+// 舊版「士官長」字串、或本來就是空值）時退回純文字，不擋顯示。
+function rankTagHtml(rank, extraClass){
+  if (!rank) return '';
+  const ic = rankBadgeIcon(rank, 15);
+  return `<span class="rank-tag${extraClass ? ' ' + extraClass : ''}">${ic}${esc(rank)}</span>`;
+}
 // 全站共用的返回鍵：純圖示的液態玻璃圓圈＋chevron SVG（不接文字、右邊不接
 // 標題），不管目的地是哪裡都一樣，不要再依頁面各自寫「返回列表」「返回
 // 更多」等。onclick 屬性務必用單引號包起來，因為裡面的 JSON.stringify(route)
@@ -6306,7 +6405,7 @@ function nameWithRank(name, unit){
   if (!name) return esc('—');
   const match = findPersonnel(name, unit);
   const rank = (match && match.title && !name.includes(match.title)) ? match.title : '';
-  return esc(name) + (rank ? ` <span class="muted-suffix">${esc(rank)}</span>` : '');
+  return (rank ? rankBadgeIcon(rank,14) : '') + esc(name) + (rank ? ` <span class="muted-suffix">${esc(rank)}</span>` : '');
 }
 // 編輯勤務頁面「車長／駕駛」欄位目前已指派人選的顯示文字：姓名＋階級，
 // 用空格分隔（例如「林伯霖 上士」），不加點號、不顯示單位。
@@ -6320,7 +6419,7 @@ function crewDisplayLabel(name, taskUnit){
 function doctorLabel(name){
   if (!name) return "";
   const match = state.doctors.find(d => d.name === name);
-  return match && match.title ? `${esc(name)} <span class="muted-suffix">${esc(match.title)}</span>` : esc(name);
+  return match && match.title ? `${rankBadgeIcon(match.title,14)}${esc(name)} <span class="muted-suffix">${esc(match.title)}</span>` : esc(name);
 }
 // 跟 personCardLine 同樣的「主要姓名/次要電話」兩段式呈現，給值班醫官這種
 // 要把姓名階級跟聯絡方式分兩行顯示的版面用（例如急診待命卡片）。
@@ -8920,7 +9019,7 @@ function viewProfileDetail(p){
       <div class="profile-section-title">基本資料</div>
       <div class="member-card-grid" style="border-top:none; padding-top:0;">
         <div class="member-cell"><div class="member-label">姓名</div><div class="member-val">${esc(p.displayName||'未填寫')}</div></div>
-        <div class="member-cell"><div class="member-label">階級</div><div class="member-val${p.rank?'':' member-val-empty'}">${p.rank?esc(p.rank):'未填寫'}</div></div>
+        <div class="member-cell"><div class="member-label">階級</div><div class="member-val${p.rank?'':' member-val-empty'}">${p.rank?rankTagHtml(p.rank):'未填寫'}</div></div>
         <div class="member-cell"><div class="member-label">電話</div><div class="member-val${p.phone?'':' member-val-empty'}">${p.phone?esc(p.phone):'未填寫'}</div></div>
         <div class="member-cell"><div class="member-label">EMT 證照</div><div class="member-val${p.emtLevel?'':' member-val-empty'}">${p.emtLevel?esc(p.emtLevel):'未登記'}</div></div>
       </div>
@@ -9038,7 +9137,7 @@ function viewProfile(){
   return `
     <div class="hub-head">
       ${avatar}
-      <div class="hub-name">${esc(p.displayName||p.email)}</div>
+      <div class="hub-name">${p.rank ? rankBadgeIcon(p.rank,18) : ''}${esc(p.displayName||p.email)}</div>
       <div class="hub-sub">${p.rank ? esc(p.rank)+' · ' : ''}${unitLabel(p.unit)} · ${ROLE_LABEL[myRole(p)]||p.role}${p.emtLevel ? ' ' + emtBadgeHtml(p.emtLevel) : ''}</div>
     </div>
     ${settingsSection('使用者功能', userRows)}
@@ -9067,7 +9166,7 @@ function memberCardHtml(x){
   return `
     <div class="member-card">
       <div class="member-card-top">
-        <div><span class="member-name">${esc(x.name)}</span>${x.title ? `<span class="member-rank">${esc(x.title)}</span>` : ''}</div>
+        <div>${x.title ? rankBadgeIcon(x.title,13) : ''}<span class="member-name">${esc(x.name)}</span>${x.title ? `<span class="member-rank">${esc(x.title)}</span>` : ''}</div>
         ${x.emtLevel ? emtBadgeHtml(x.emtLevel) : ''}
       </div>
       <div class="member-card-grid">
@@ -9441,7 +9540,7 @@ function viewFeedbackForm(){
         <div class="settings-group">
           <div class="service-row" style="cursor:default;">
             <span class="icon-wrap" style="background:#E8F1FF; color:#0056C7;">${icon('user',18)}</span>
-            <div class="txt"><div class="t1">${esc(p.displayName||p.email)}</div><div class="t2">${p.rank?esc(p.rank)+' · ':''}${esc(unitLabel(p.unit))}</div></div>
+            <div class="txt"><div class="t1">${p.rank?rankBadgeIcon(p.rank,13):''}${esc(p.displayName||p.email)}</div><div class="t2">${p.rank?esc(p.rank)+' · ':''}${esc(unitLabel(p.unit))}</div></div>
           </div>
         </div>
       </div>
@@ -10233,7 +10332,7 @@ function viewAdminUsers(){
           <div class="personnel-avatar">${esc(surname)}</div>
           <div>
             <div class="personnel-name-row">
-              <span class="personnel-name">${esc(x.name)}</span>
+              ${x.title ? rankBadgeIcon(x.title,12) : ''}<span class="personnel-name">${esc(x.name)}</span>
               ${x.title ? `<span class="personnel-rank-badge">${esc(x.title)}</span>` : ''}
             </div>
             <div class="personnel-email">${esc(x.email||'—')}</div>
@@ -10378,7 +10477,7 @@ function viewAdminFeedback(){
         <div style="flex:1; min-width:0;">
           <div class="name">
             <span class="vitals-stage-tag">${esc(FEEDBACK_CATEGORY_LABEL[f.category]||f.category||'—')}</span>
-            ${esc(f.userName||'—')}${f.rank?' '+esc(f.rank):''}${f.unit?' · '+esc(unitLabel(f.unit)):''}
+            ${f.rank?rankBadgeIcon(f.rank,14):''}${esc(f.userName||'—')}${f.rank?' '+esc(f.rank):''}${f.unit?' · '+esc(unitLabel(f.unit)):''}
           </div>
           <div class="sub" style="margin-top:6px; color:var(--text); white-space:pre-wrap;">${esc(f.message||'')}</div>
           <div class="sub" style="margin-top:6px;">${f.createdAt ? fmtTime(new Date(f.createdAt).getTime()) : ''}</div>
@@ -10822,7 +10921,7 @@ function render(){
       <div class="topbar">
         <div class="topbar-bottom-row">
           <div class="topbar-sub">
-            <span class="name">${esc(p.displayName||p.email).split(' ')[0]}</span>${p.rank ? `<span class="rank">${esc(p.rank)}</span>` : ''}
+            ${p.rank ? rankBadgeIcon(p.rank,16) : ''}<span class="name">${esc(p.displayName||p.email).split(' ')[0]}</span>${p.rank ? `<span class="rank">${esc(p.rank)}</span>` : ''}
           </div>
           <div class="topbar-icons">
             ${weatherBadge}
