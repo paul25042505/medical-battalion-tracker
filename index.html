@@ -240,6 +240,10 @@
   /* ---- 階級彷章＋文字（rankTagHtml） ---- */
   .rank-tag{display:inline-flex; align-items:center; gap:3px;}
   .rank-tag svg{position:relative; top:-0.5px;}
+  /* ---- 階級彷章＋姓名（圖示放姓名左邊時用，靠 inline-flex 讓圖示跟
+     姓名文字水平置中對齊，不能只靠 SVG 的 vertical-align:middle——那個
+     只會對齊到文字的 x-height 中線，姓名字級一大就會看起來偏低）---- */
+  .rank-icon-name{display:inline-flex; align-items:center; gap:4px; vertical-align:middle;}
 
   /* ---- EMT 證照等級徽章 ---- */
   /* 比照真實 EMT 臂章繡片的樣子：紅字＋紅色四角形邊框，字體用 Bitter
@@ -1955,7 +1959,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-26-439-rank-insignia-icons";
+const BUILD_TAG = "2026-07-26-440-rank-icon-align";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3107,6 +3111,7 @@ const RELEASE_NOTES = [
     { category: "介面優化", items: [
       "姓名前面加上階級彷章圖示（金色人字紋／橫槓／梅花，依階級不同），套用在頂部列、個人資料、成員列表、洽公人員、意見回饋等會顯示「姓名＋階級」的地方，一眼就能認出階級不用只看文字；下拉選單、逗號分隔的純文字名單維持原樣不受影響",
       "「士官長」拆成三等／二等／一等士官長三個獨立階級選項（原本只有單一「士官長」），對應到正確的槓數彷章；既有資料裡的舊版「士官長」文字不受影響，但下次編輯個人資料時需要重新選擇對應的等級",
+      "修正階級彷章圖示跟姓名沒有水平置中對齊的問題：圖示原本靠文字基準線對齊，字級一大看起來會偏低，現在改成跟姓名文字置中對齊",
     ] },
   ] },
   { date: "2026/07/24", groups: [
@@ -6405,7 +6410,8 @@ function nameWithRank(name, unit){
   if (!name) return esc('—');
   const match = findPersonnel(name, unit);
   const rank = (match && match.title && !name.includes(match.title)) ? match.title : '';
-  return (rank ? rankBadgeIcon(rank,14) : '') + esc(name) + (rank ? ` <span class="muted-suffix">${esc(rank)}</span>` : '');
+  const nameHtml = rank ? `<span class="rank-icon-name">${rankBadgeIcon(rank,14)}${esc(name)}</span>` : esc(name);
+  return nameHtml + (rank ? ` <span class="muted-suffix">${esc(rank)}</span>` : '');
 }
 // 編輯勤務頁面「車長／駕駛」欄位目前已指派人選的顯示文字：姓名＋階級，
 // 用空格分隔（例如「林伯霖 上士」），不加點號、不顯示單位。
@@ -6419,7 +6425,7 @@ function crewDisplayLabel(name, taskUnit){
 function doctorLabel(name){
   if (!name) return "";
   const match = state.doctors.find(d => d.name === name);
-  return match && match.title ? `${rankBadgeIcon(match.title,14)}${esc(name)} <span class="muted-suffix">${esc(match.title)}</span>` : esc(name);
+  return match && match.title ? `<span class="rank-icon-name">${rankBadgeIcon(match.title,14)}${esc(name)}</span> <span class="muted-suffix">${esc(match.title)}</span>` : esc(name);
 }
 // 跟 personCardLine 同樣的「主要姓名/次要電話」兩段式呈現，給值班醫官這種
 // 要把姓名階級跟聯絡方式分兩行顯示的版面用（例如急診待命卡片）。
@@ -9137,7 +9143,7 @@ function viewProfile(){
   return `
     <div class="hub-head">
       ${avatar}
-      <div class="hub-name">${p.rank ? rankBadgeIcon(p.rank,18) : ''}${esc(p.displayName||p.email)}</div>
+      <div class="hub-name">${p.rank ? `<span class="rank-icon-name">${rankBadgeIcon(p.rank,18)}${esc(p.displayName||p.email)}</span>` : esc(p.displayName||p.email)}</div>
       <div class="hub-sub">${p.rank ? esc(p.rank)+' · ' : ''}${unitLabel(p.unit)} · ${ROLE_LABEL[myRole(p)]||p.role}${p.emtLevel ? ' ' + emtBadgeHtml(p.emtLevel) : ''}</div>
     </div>
     ${settingsSection('使用者功能', userRows)}
@@ -9166,7 +9172,7 @@ function memberCardHtml(x){
   return `
     <div class="member-card">
       <div class="member-card-top">
-        <div>${x.title ? rankBadgeIcon(x.title,13) : ''}<span class="member-name">${esc(x.name)}</span>${x.title ? `<span class="member-rank">${esc(x.title)}</span>` : ''}</div>
+        <div>${x.title ? `<span class="rank-icon-name">${rankBadgeIcon(x.title,13)}<span class="member-name">${esc(x.name)}</span></span>` : `<span class="member-name">${esc(x.name)}</span>`}${x.title ? `<span class="member-rank">${esc(x.title)}</span>` : ''}</div>
         ${x.emtLevel ? emtBadgeHtml(x.emtLevel) : ''}
       </div>
       <div class="member-card-grid">
@@ -9540,7 +9546,7 @@ function viewFeedbackForm(){
         <div class="settings-group">
           <div class="service-row" style="cursor:default;">
             <span class="icon-wrap" style="background:#E8F1FF; color:#0056C7;">${icon('user',18)}</span>
-            <div class="txt"><div class="t1">${p.rank?rankBadgeIcon(p.rank,13):''}${esc(p.displayName||p.email)}</div><div class="t2">${p.rank?esc(p.rank)+' · ':''}${esc(unitLabel(p.unit))}</div></div>
+            <div class="txt"><div class="t1">${p.rank?`<span class="rank-icon-name">${rankBadgeIcon(p.rank,13)}${esc(p.displayName||p.email)}</span>`:esc(p.displayName||p.email)}</div><div class="t2">${p.rank?esc(p.rank)+' · ':''}${esc(unitLabel(p.unit))}</div></div>
           </div>
         </div>
       </div>
@@ -10477,7 +10483,7 @@ function viewAdminFeedback(){
         <div style="flex:1; min-width:0;">
           <div class="name">
             <span class="vitals-stage-tag">${esc(FEEDBACK_CATEGORY_LABEL[f.category]||f.category||'—')}</span>
-            ${f.rank?rankBadgeIcon(f.rank,14):''}${esc(f.userName||'—')}${f.rank?' '+esc(f.rank):''}${f.unit?' · '+esc(unitLabel(f.unit)):''}
+            ${f.rank?`<span class="rank-icon-name">${rankBadgeIcon(f.rank,14)}${esc(f.userName||'—')}</span>`:esc(f.userName||'—')}${f.rank?' '+esc(f.rank):''}${f.unit?' · '+esc(unitLabel(f.unit)):''}
           </div>
           <div class="sub" style="margin-top:6px; color:var(--text); white-space:pre-wrap;">${esc(f.message||'')}</div>
           <div class="sub" style="margin-top:6px;">${f.createdAt ? fmtTime(new Date(f.createdAt).getTime()) : ''}</div>
@@ -10921,7 +10927,7 @@ function render(){
       <div class="topbar">
         <div class="topbar-bottom-row">
           <div class="topbar-sub">
-            ${p.rank ? rankBadgeIcon(p.rank,16) : ''}<span class="name">${esc(p.displayName||p.email).split(' ')[0]}</span>${p.rank ? `<span class="rank">${esc(p.rank)}</span>` : ''}
+            ${p.rank ? `<span class="rank-icon-name">${rankBadgeIcon(p.rank,16)}<span class="name">${esc(p.displayName||p.email).split(' ')[0]}</span></span>` : `<span class="name">${esc(p.displayName||p.email).split(' ')[0]}</span>`}${p.rank ? `<span class="rank">${esc(p.rank)}</span>` : ''}
           </div>
           <div class="topbar-icons">
             ${weatherBadge}
