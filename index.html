@@ -2045,7 +2045,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-27-457-profile-gender-field";
+const BUILD_TAG = "2026-07-27-458-admin-personnel-full-fields";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3211,6 +3211,9 @@ const RELEASE_NOTES = [
     ] },
     { category: "個人資料", items: [
       "個人資料新增性別欄位（選填），編輯表單跟唯讀顯示頁都看得到",
+    ] },
+    { category: "人員與帳號", items: [
+      "後台「編輯人員」／「預先建立人員」表單補齊性別、民車登記欄位，跟本人自助編輯個人資料的欄位一致，管理員／主官管可以直接代為補登，不用等本人自己登入才能填",
     ] },
   ] },
   { date: "2026/07/26", groups: [
@@ -4603,9 +4606,9 @@ async function updatePendingProfile(unit, displayName, rank, phone, emtLevel){
 // 見 functions/index.js）會自動比對、把這裡填好的單位/階級/電話/EMT 證照
 // 指派給他的新帳號、角色改成一般成員，不用再等管理員手動審核；比對前先
 // 轉小寫、去頭尾空白，避免大小寫或多打空格對不起來。
-async function addPersonnel(unit, name, title, phone, emtLevel, email){
+async function addPersonnel(unit, name, title, phone, emtLevel, email, gender, vehicles){
   await fsAddDoc("users", {
-    unit, displayName: name, rank: title||"", phone: phone||"", emtLevel: emtLevel||"",
+    unit, displayName: name, rank: title||"", phone: phone||"", emtLevel: emtLevel||"", gender: gender||"", vehicles: vehicles||[],
     email: email ? email.trim().toLowerCase() : "", role: "unclaimed", fcmTokens: [], createdAt: new Date()
   });
   showToast("已新增人員"); if (personnelPoll) personnelPoll.refreshNow();
@@ -5278,7 +5281,7 @@ function mapUserToPersonnel(u){
     id: u.id, unit: u.unit || "",
     name: u.displayName || u.email || u.id,
     title: u.rank || ROLE_LABEL[role] || "",
-    phone: u.phone || "", emtLevel: u.emtLevel || "",
+    phone: u.phone || "", emtLevel: u.emtLevel || "", gender: u.gender || "",
     active: role !== "disabled" && role !== "pending",
     email: u.email || "", role,
     // 個人「民車」登記（見 viewProfile／updateOwnProfile），自己申請、
@@ -10390,8 +10393,20 @@ function viewBaseDataModal(){
   let title, fields;
   if (coll === "personnel") {
     title = editing ? "編輯人員" : "預先建立人員";
+    // 這裡的欄位要跟個人資料自助編輯（viewProfile 的 profileEditing 分支）
+    // 對齊：管理員後台編輯人員資料是代替本人填寫/補登，本人自己填得到的
+    // 欄位（性別、民車）後台也要能填得到，不然某些資料就只能等本人自己
+    // 登入才能補，管理員沒辦法代為處理。民車登記沿用同一組
+    // vehicleEntryRowHtml／__addVehicleEntry／__confirmVehicleEntries，
+    // 這幾個都是純 DOM 操作、不依賴 profile 專屬的 state，可以直接共用。
     fields = `
       <div class="field"><label>姓名</label><input name="name" required value="${esc(editing?.name||'')}"></div>
+      <div class="field"><label>性別（選填）</label>
+        <select name="gender">
+          <option value="">請選擇性別</option>
+          ${GENDER_OPTIONS.map(g => `<option value="${g}" ${editing?.gender===g?'selected':''}>${g}</option>`).join("")}
+        </select>
+      </div>
       <div class="field"><label>階級</label>
         <select name="title">
           <option value="">請選擇階級</option>
@@ -10406,7 +10421,19 @@ function viewBaseDataModal(){
         </select>
       </div>
       <div class="field"><label>信箱（選填，用於預先建立帳號）</label><input name="email" type="email" inputmode="email" value="${esc(editing?.email||'')}" placeholder="例如：example@gmail.com"></div>
-      <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">填了信箱，這個人第一次用同一個 Google 帳號登入時，會直接套用這裡設定的單位/階級/電話/EMT 證照，不用再等管理員審核。</div>`;
+      <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">填了信箱，這個人第一次用同一個 Google 帳號登入時，會直接套用這裡設定的單位/階級/電話/EMT 證照，不用再等管理員審核。</div>
+      <div class="vehicle-section-header">
+        <div>
+          <div class="profile-section-title">民車登記</div>
+          <div class="vehicle-section-subtitle">選填，可新增多台車輛</div>
+        </div>
+        <span class="badge returning">已登記 ${(editing?.vehicles||[]).length} 輛</span>
+      </div>
+      <div id="vehicle-entries">
+        ${(editing?.vehicles && editing.vehicles.length ? editing.vehicles.map((v, i) => vehicleEntryRowHtml(v, i, true)) : [vehicleEntryRowHtml({type:'',brand:'',plate:''}, 0, false)]).join("")}
+      </div>
+      <button type="button" class="vehicle-add-btn" style="margin-top:14px;" onclick="window.__addVehicleEntry()">${icon('plus',16)} 新增一台車輛</button>
+      <button type="button" class="btn-ghost" style="width:100%;margin-top:14px;" onclick="window.__confirmVehicleEntries()">確認車輛資料</button>`;
   } else if (coll === "vehicles") {
     title = editing ? "編輯車輛" : "新增車輛";
     fields = `
@@ -11950,7 +11977,7 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
   const action = id
-    ? (coll === "personnel" ? updateBaseData(coll, id, { displayName: f.get("name"), rank: f.get("title"), phone: f.get("phone")||"", emtLevel: f.get("emtLevel")||"", email: (f.get("email")||"").trim().toLowerCase() })
+    ? (coll === "personnel" ? updateBaseData(coll, id, { displayName: f.get("name"), rank: f.get("title"), phone: f.get("phone")||"", emtLevel: f.get("emtLevel")||"", email: (f.get("email")||"").trim().toLowerCase(), gender: f.get("gender")||"", vehicles: readVehicleEntriesFromDom() })
        : coll === "vehicles" ? updateBaseData(coll, id, { plate: f.get("plate"), type: f.get("type") })
        : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return updateBaseData(coll, id, { name: f.get("name"), tier: f.get("tier"), level: f.get("level"), phone: f.get("phone")||"", note: f.get("note")||"", address: f.get("address")||"", nhiCode: f.get("nhiCode")||"", frequent: f.get("frequent")==="on", lat: c ? c.lat : null, lng: c ? c.lng : null }); })()
        : coll === "doctors" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"" })
@@ -11959,7 +11986,7 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
        : coll === "webLinks" ? updateBaseData(coll, id, { name: f.get("name"), url: f.get("url") })
        : coll === "militaryItems" ? updateBaseData(coll, id, { category: f.get("category"), name: f.get("name") })
        : updateBaseData(coll, id, { code: f.get("code") }))
-    : (coll === "personnel" ? addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone"), f.get("emtLevel"), f.get("email"))
+    : (coll === "personnel" ? addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone"), f.get("emtLevel"), f.get("email"), f.get("gender"), readVehicleEntriesFromDom())
        : coll === "vehicles" ? addVehicle(unit, f.get("plate"), f.get("type"))
        : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return addHospital(f.get("name"), f.get("tier"), f.get("level"), f.get("phone"), f.get("note"), f.get("address"), f.get("nhiCode"), c ? c.lat : null, c ? c.lng : null, f.get("frequent")==="on"); })()
        : coll === "doctors" ? addDoctor(f.get("name"), f.get("title"), f.get("phone"))
@@ -12522,15 +12549,16 @@ window.__toggleTestMode = (checked) => {
     render();
   }).catch(baseDataErr);
 };
-window.__saveProfile = (ev) => {
-  ev.preventDefault();
-  const f = new FormData(ev.target);
-  // 車輛不是靠 FormData 讀（每台車的欄位沒有固定 name，見
-  // vehicleEntryRowHtml 的說明），直接照畫面上目前有幾個 .vehicle-entry
-  // 區塊逐一讀值；顯示模式（locked）的列資料存在 data-v-* 屬性裡，編輯
-  // 模式的列才去讀表單欄位。完全沒填的空白列（例如按了「新增一台車」但
-  // 沒填就直接送出）就濾掉，不存空物件。
-  const vehicles = [...document.querySelectorAll(".vehicle-entry")].map(row => {
+// 車輛不是靠 FormData 讀（每台車的欄位沒有固定 name，見 vehicleEntryRowHtml
+// 的說明），直接照畫面上目前有幾個 .vehicle-entry 區塊逐一讀值；顯示模式
+// （locked）的列資料存在 data-v-* 屬性裡，編輯模式的列才去讀表單欄位。
+// 完全沒填的空白列（例如按了「新增一台車」但沒填就直接送出）就濾掉，
+// 不存空物件。個人資料自助編輯（__saveProfile）跟後台編輯人員
+// （__submitBaseDataModal 的 personnel 分支）共用同一套民車登記元件
+// （vehicleEntryRowHtml／__addVehicleEntry／__confirmVehicleEntries），
+// 讀值邏輯也共用這個函式，避免兩邊各寫一份、之後改一邊忘了改另一邊。
+function readVehicleEntriesFromDom(){
+  return [...document.querySelectorAll(".vehicle-entry")].map(row => {
     if (row.classList.contains("vehicle-entry-locked")){
       return { type: row.dataset.vType || "", brand: row.dataset.vBrand || "", plate: row.dataset.vPlate || "" };
     }
@@ -12540,6 +12568,11 @@ window.__saveProfile = (ev) => {
       plate: row.querySelector(".vehicle-plate-input")?.value || ""
     };
   }).filter(v => v.type || v.brand || v.plate);
+}
+window.__saveProfile = (ev) => {
+  ev.preventDefault();
+  const f = new FormData(ev.target);
+  const vehicles = readVehicleEntriesFromDom();
   updateOwnProfile(f.get("displayName"), f.get("rank"), f.get("phone"), f.get("emtLevel"), vehicles, f.get("gender")).then(() => {
     state.profileEditing = false; render();
   }).catch(err => showToast(`個人資料儲存失敗：[${err.code||'?'}] ${err.message||err}`));
