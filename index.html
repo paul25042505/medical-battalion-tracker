@@ -1742,9 +1742,13 @@
   }
   .member-stats-unit-chip{
     display:flex; align-items:baseline; gap:5px; background:var(--panel-2); border-radius:999px;
-    padding:5px 12px; font-size:var(--text-xs); color:var(--muted); font-weight:600;
+    padding:5px 12px; font-size:var(--text-xs); color:var(--muted); font-weight:600; cursor:pointer;
+    transition:background 0.12s ease, color 0.12s ease;
   }
+  .member-stats-unit-chip:active{transform:scale(0.96);}
   .member-stats-unit-chip .v{font-family:var(--mono); font-weight:700; color:var(--text); font-variant-numeric:tabular-nums;}
+  .member-stats-unit-chip.active{background:color-mix(in srgb, var(--blue) 14%, var(--panel-2)); color:var(--blue);}
+  .member-stats-unit-chip.active .v{color:var(--blue);}
   /* 成員卡片（資訊網格風格，見 memberCardHtml）：成員列表／車號查詢頁共用。 */
   .member-card{
     background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md);
@@ -2041,7 +2045,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-27-455-member-stats-chart";
+const BUILD_TAG = "2026-07-27-456-member-stats-unit-filter";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3203,6 +3207,7 @@ const RELEASE_NOTES = [
       "修正任務頁最上面圖示子選單（勤務／洽公登記／天氣／紀錄／統計）滑到最右邊點選項目後，畫面會自動跳回最左邊的問題：改成記住點選當下的橫向捲動位置，切換後停在原本滑到的地方，不會被重置",
       "圖示子選單補上 iOS 慣性捲動效果，左右滑動的手感更跟手，跟 app 裡其他可左右滑動的區塊（例如天氣預報）一致",
       "成員列表最上面新增人員編成統計圖：甜甜圈圖顯示軍官（黃）／士官（藍）／士兵（綠）人數與總計，admin／高勤官看得到跨單位資料時，圖下方會再列出各單位（營部／第一連／第二連）各自的人數",
+      "人員編成統計圖的單位標籤改成可以點：新增「全部」可以看跨單位加總，點營部／第一連／第二連可以只看該單位自己的軍官／士官／士兵人數分布，跟下面成員卡片清單目前選的單位是各自獨立的篩選",
     ] },
   ] },
   { date: "2026/07/26", groups: [
@@ -4010,6 +4015,8 @@ const state = {
   profileViewing: false, // 個人資料唯讀顯示頁（見 viewProfileDetail）：從「更多」頁點「個人資料」進來時的預設畫面，跟「更多」主選單是同一個 profile 路由但不同畫面，這樣按「儲存」/「取消」回來時是回到這個顯示頁，不是整個跳回「更多」主選單
 
   baseDataUnit: "", baseDataModal: null, // 基礎資料管理目前選的單位；baseDataModal: {coll, id, unit} | null
+  memberStatsUnitFilter: "", // 成員列表統計圖目前看的範圍："" 代表全部單位加總，否則是單一單位代碼；跟下面成員卡片清單的 baseDataUnit 是各自獨立的篩選，不是同一顆狀態
+
   emergencyBroadcastResult: null, // 急診待命緊急動員廣播結果彈窗：{ok, message, recipients}|{ok:false, reason} | null
   createTaskUnit: "", // 建立勤務頁面：admin/高勤官可切換的單位
   createTaskType: "duty", // 建立勤務頁面：勤務（車輛派遣）或洽公（無車輛/里程追蹤）
@@ -9306,13 +9313,23 @@ function memberCardHtml(x){
 // 查得到自己單位（Firestore 規則限制），所以他們看到的甜甜圖跟總計自動
 // 就等於自己單位的數字，底下的單位標籤也會因為只有一個單位而不顯示，
 // 不用另外寫權限判斷。
+// 下方單位標籤（全部／營部／第一連／第二連）點下去可以切換甜甜圖跟總計
+// 看的範圍：state.memberStatsUnitFilter 存目前選到的單位代碼，空字串代表
+// 「全部」（跨單位加總）。只有看得到一個以上單位的人（admin／高勤官）才
+// 會有這排可以點的標籤；一般成員/主官管本來就只查得到自己單位
+// （Firestore 規則限制），永遠只有一個單位可看，不需要切換也切換不了。
 function memberStatsCardHtml(){
   const pool = state.personnel.filter(x => x.active !== false);
+  if (!pool.some(x => rankCategory(x.title))) return '';
+  const unitCounts = {};
+  pool.forEach(x => { unitCounts[x.unit] = (unitCounts[x.unit] || 0) + 1; });
+  const showUnitFilter = Object.keys(unitCounts).length > 1;
+  const filterUnit = showUnitFilter && unitCounts[state.memberStatsUnitFilter] ? state.memberStatsUnitFilter : "";
+  const scoped = filterUnit ? pool.filter(x => x.unit === filterUnit) : pool;
   const counts = { officer: 0, nco: 0, enlisted: 0 };
-  pool.forEach(x => { const c = rankCategory(x.title); if (c) counts[c]++; });
+  scoped.forEach(x => { const c = rankCategory(x.title); if (c) counts[c]++; });
   const total = counts.officer + counts.nco + counts.enlisted;
-  if (!total) return '';
-  const pct = (n) => n / total * 100;
+  const pct = (n) => total ? n / total * 100 : 0;
   const segs = [
     { key: "officer", label: "軍官", color: "var(--amber)", count: counts.officer },
     { key: "nco", label: "士官", color: "var(--blue)", count: counts.nco },
@@ -9325,10 +9342,11 @@ function memberStatsCardHtml(){
     cursor += len;
     return arc;
   }).join("");
-  const unitCounts = {};
-  pool.forEach(x => { unitCounts[x.unit] = (unitCounts[x.unit] || 0) + 1; });
-  const unitsHtml = Object.keys(unitCounts).length > 1
-    ? `<div class="member-stats-units">${UNITS.filter(u => unitCounts[u.code]).map(u => `<span class="member-stats-unit-chip">${esc(u.label)}<span class="v">${unitCounts[u.code]}</span></span>`).join("")}</div>`
+  const unitsHtml = showUnitFilter
+    ? `<div class="member-stats-units">
+        <div class="member-stats-unit-chip ${filterUnit===''?'active':''}" onclick="window.__setMemberStatsUnitFilter('')">全部<span class="v">${pool.length}</span></div>
+        ${UNITS.filter(u => unitCounts[u.code]).map(u => `<div class="member-stats-unit-chip ${filterUnit===u.code?'active':''}" onclick="window.__setMemberStatsUnitFilter('${u.code}')">${esc(u.label)}<span class="v">${unitCounts[u.code]}</span></div>`).join("")}
+      </div>`
     : '';
   return `
     <div class="member-stats-card">
@@ -11894,6 +11912,7 @@ window.__setRole = (uid) => {
 };
 window.__setCampDutyOfficerFlag = (uid, checked) => setCampDutyOfficerFlag(uid, checked).catch(baseDataErr);
 window.__setBaseDataUnit = (code) => { state.baseDataUnit = code; state.baseDataModal = null; render(); scrollContentToTop(); };
+window.__setMemberStatsUnitFilter = (code) => { state.memberStatsUnitFilter = code; render(); };
 function baseDataErr(err){ showToast(`操作失敗：[${err.code||'?'}] ${err.message||err}`); console.error("基礎資料操作失敗", err); }
 window.__toggleBaseData = (coll, id, active) => toggleBaseDataActive(coll, id, active).catch(baseDataErr);
 window.__deleteBaseData = (coll, id) => { if (confirm("確定刪除此筆資料？此動作無法復原。")) deleteBaseData(coll, id).catch(baseDataErr); };
