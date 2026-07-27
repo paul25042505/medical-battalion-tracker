@@ -780,6 +780,31 @@
   }
 
   /* ---- home ---- */
+  /* 首頁最上面的「政令宣導」小區塊：只列最新幾筆標題（見
+     policyNoticeHomeCardHtml），點一列進去才看得到詳情，不在首頁佔太多
+     版面；卡片語言比照其他基礎資料的 admin-row，但字級/留白縮小一階，
+     強調「小區塊」的定位，不要搶今日概況的版面焦點。 */
+  .policy-notice-home-card{
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md);
+    box-shadow:var(--shadow-xs); padding:12px 14px; margin-bottom:16px;
+  }
+  .policy-notice-home-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;}
+  .policy-notice-home-title{display:flex; align-items:center; gap:6px; font-size:var(--text-sm); font-weight:700; color:var(--text);}
+  .policy-notice-home-more{
+    display:flex; align-items:center; gap:2px; background:none; border:none; font-family:var(--sans);
+    font-size:11px; font-weight:600; color:var(--blue);
+  }
+  .policy-notice-home-row{
+    display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px solid var(--border); cursor:pointer;
+  }
+  .policy-notice-home-row:active{opacity:0.7;}
+  .policy-notice-home-cat{
+    flex-shrink:0; font-size:10px; font-weight:700; color:var(--blue); background:color-mix(in srgb, var(--blue) 12%, transparent);
+    padding:2px 7px; border-radius:999px;
+  }
+  .policy-notice-home-row-title{
+    font-size:var(--text-xs); color:var(--text); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;
+  }
   .home-date{font-size:var(--text-sm); color:var(--muted); font-weight:600; font-family:var(--mono); margin-bottom:16px;}
   /* 天氣卡片改成跟任務卡片／急診待命卡片共用的 .spatial-card 語言——
      不再用高飽和度的純色漸層（原本晴天橘、雨天灰藍那種），改用低飽和度
@@ -2045,7 +2070,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-27-458-admin-personnel-full-fields";
+const BUILD_TAG = "2026-07-27-459-policy-notices";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2053,7 +2078,7 @@ const BUILD_TAG = "2026-07-27-458-admin-personnel-full-fields";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.29";
+const APP_MAJOR_MINOR = "2.30";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -3215,6 +3240,11 @@ const RELEASE_NOTES = [
     { category: "人員與帳號", items: [
       "後台「編輯人員」／「預先建立人員」表單補齊性別、民車登記欄位，跟本人自助編輯個人資料的欄位一致，管理員／主官管可以直接代為補登，不用等本人自己登入才能填",
     ] },
+    { category: "政令宣導", items: [
+      "新增「政令宣導」專區：發布軍中運輸通報／軍醫通報等公告存檔，有分類、標題、發文字號、發布日期、內容；首頁最上面新增小區塊列出最新幾筆標題，點進去才看得到詳細內容，「查看全部」可以看完整列表並依分類篩選",
+      "政令宣導純粹供查閱，不會推播通知、也不會過期自動刪除，跟「訊息管理」的全體公告（固定一個月效期、發布會推播）是完全獨立的兩件事",
+      "管理員、高勤官、主官管都可以在後台「基礎資料 → 政令宣導」發布/編輯/刪除",
+    ] },
   ] },
   { date: "2026/07/26", groups: [
     { category: "登入", items: [
@@ -3997,6 +4027,8 @@ const state = {
   taskTitleTemplates: [], // 建立勤務頁「任務名稱」快速選擇範本，全營共用
   webLinks: [], // 網網相連：後台管理的常用網址快速切換清單，全營共用
   militaryItems: [], // 軍品攜帶：後台管理的軍品項目名冊（武器裝備／通信裝備），全營共用
+  policyNotices: [], // 政令宣導：軍中運輸通報／軍醫通報等公告存檔，全營共用，純被動查閱（不推播）
+  policyNoticeCategoryFilter: "", // 政令宣導列表頁的分類篩選："" 代表全部
   campRegistrations: [], // 洽公／廠商入營登記：獨立於任務系統之外的門禁登記表
   campRegMonth: null, // 行事曆目前顯示的月份 "YYYY-MM"，null 代表預設顯示本月
   campRegSelectedDate: null, // 從行事曆點選的日期 "YYYY-MM-DD"，列表檢視依此篩選；null 代表不篩選（顯示全部）
@@ -4078,7 +4110,7 @@ const state = {
 applyThemeMode(state.themeMode); // 在第一次 render() 之前就套用，避免畫面先閃一次錯的模式再跳回正確的
 let tasksPoll = null, eventsPoll = null, profilePoll = null;
 let personnelPoll = null, vehiclesPoll = null, recordersPoll = null;
-let hospitalsPoll = null, vitalsPoll = null, erStandbyPoll = null, doctorsPoll = null, taskTitleTemplatesPoll = null, webLinksPoll = null, militaryItemsPoll = null;
+let hospitalsPoll = null, vitalsPoll = null, erStandbyPoll = null, doctorsPoll = null, taskTitleTemplatesPoll = null, webLinksPoll = null, militaryItemsPoll = null, policyNoticesPoll = null;
 let notificationsPoll = null;
 let pushLogPoll = null;
 let erRealtimePoll = null;
@@ -4654,6 +4686,20 @@ async function addMilitaryItem(category, name){
   await fsAddDoc("militaryItems", { category, name });
   showToast("已新增軍品項目"); if (militaryItemsPoll) militaryItemsPoll.refreshNow();
 }
+// 政令宣導：軍中運輸通報／軍醫通報這類正式文件的存檔查閱區，跟「訊息
+// 管理」的公告不一樣——公告是綁在通知中心、固定一個月效期到期自動砍掉、
+// 發布會推播全體；這裡是長期查閱用的法規/通報存檔，不推播、不設效期，
+// 管理員/高勤官/主官管都能發布（跟基礎資料管理同一組權限，見
+// canManageBaseData），內容不分單位，全營共用。
+const POLICY_NOTICE_CATEGORIES = ["運輸通報", "軍醫通報", "其他"];
+async function addPolicyNotice(category, title, docNumber, publishDate, content){
+  const p = state.profile;
+  await fsAddDoc("policyNotices", {
+    category, title, docNumber: docNumber||"", publishDate: publishDate||"", content: content||"",
+    createdAt: new Date(), createdByName: p.displayName || p.email || ""
+  });
+  showToast("已發布政令宣導"); if (policyNoticesPoll) policyNoticesPoll.refreshNow();
+}
 // 意見回饋：任何在職帳號都能送出，一律具名（顯示送出者姓名），只有
 // admin 能在管理後台「意見回饋」頁籤檢視，不提供列表輪詢（很少人會
 // 用到，開啟該頁籤時現抓一次就好，見下方 state._feedbackCache）。
@@ -4737,6 +4783,7 @@ function refreshBaseDataPoll(coll){
   if (coll === "webLinks" && webLinksPoll) webLinksPoll.refreshNow();
   if (coll === "militaryItems" && militaryItemsPoll) militaryItemsPoll.refreshNow();
   if (coll === "notifications" && notificationsPoll) notificationsPoll.refreshNow();
+  if (coll === "policyNotices" && policyNoticesPoll) policyNoticesPoll.refreshNow();
 }
 // coll 是畫面上用的內部識別字串（沿用「personnel」這個名字，跟建立勤務下拉
 // 選單、基礎資料彈窗共用同一套邏輯），實際 Firestore 集合已經併入 users。
@@ -5446,6 +5493,13 @@ function startDataListeners(){
     state.militaryItems = docs;
     if (changed) safeRender();
   });
+  policyNoticesPoll = poll(async () => {
+    const docs = await fsListCollection("policyNotices");
+    docs.sort((a,b) => (b.publishDate||"").localeCompare(a.publishDate||""));
+    const changed = changedSince("policyNotices", docs);
+    state.policyNotices = docs;
+    if (changed) safeRender();
+  });
   notificationsPoll = poll(async () => {
     const docs = await fsListCollection("notifications");
     docs.sort((a,b) => new Date(b.timestamp||0) - new Date(a.timestamp||0));
@@ -5507,11 +5561,11 @@ function startDataListeners(){
   ensureMilitaryItemsSeeded();
 }
 function cleanupListeners(){
-  [tasksPoll, eventsPoll, profilePoll, personnelPoll, vehiclesPoll, recordersPoll, hospitalsPoll, vitalsPoll, erStandbyPoll, doctorsPoll, taskTitleTemplatesPoll, webLinksPoll, militaryItemsPoll, notificationsPoll, pushLogPoll, mciEventsPoll, mciPatientsPoll, campRegistrationsPoll].forEach(p => p && p.stop());
+  [tasksPoll, eventsPoll, profilePoll, personnelPoll, vehiclesPoll, recordersPoll, hospitalsPoll, vitalsPoll, erStandbyPoll, doctorsPoll, taskTitleTemplatesPoll, webLinksPoll, militaryItemsPoll, policyNoticesPoll, notificationsPoll, pushLogPoll, mciEventsPoll, mciPatientsPoll, campRegistrationsPoll].forEach(p => p && p.stop());
   for (const k in lastJson) delete lastJson[k];
-  tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = hospitalsPoll = vitalsPoll = erStandbyPoll = doctorsPoll = taskTitleTemplatesPoll = webLinksPoll = militaryItemsPoll = notificationsPoll = pushLogPoll = erRealtimePoll = mciEventsPoll = mciPatientsPoll = campRegistrationsPoll = null;
+  tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = hospitalsPoll = vitalsPoll = erStandbyPoll = doctorsPoll = taskTitleTemplatesPoll = webLinksPoll = militaryItemsPoll = policyNoticesPoll = notificationsPoll = pushLogPoll = erRealtimePoll = mciEventsPoll = mciPatientsPoll = campRegistrationsPoll = null;
   state.tasks = []; state.events = []; state.personnel = []; state.vehicles = []; state.recorders = [];
-  state.hospitals = []; state.vitals = []; state.erStandby = []; state.doctors = []; state.taskTitleTemplates = []; state.webLinks = []; state.militaryItems = []; state.notifications = []; state.pushLog = [];
+  state.hospitals = []; state.vitals = []; state.erStandby = []; state.doctors = []; state.taskTitleTemplates = []; state.webLinks = []; state.militaryItems = []; state.policyNotices = []; state.notifications = []; state.pushLog = [];
   state.mciEvents = []; state.mciPatients = []; state.campRegistrations = [];
   state.deepTasks = []; state.deepEvents = []; state.deepVitals = []; state.recordsDeepQuery = null;
   state.previewActive = false; state.realProfileSnapshot = null;
@@ -7143,6 +7197,7 @@ function viewHome(){
   const liaisonPeopleCount = new Set(liaisonActive.flatMap(t => Array.isArray(t.personnel) ? t.personnel : [])).size;
 
   return `
+    ${policyNoticeHomeCardHtml()}
     <div class="home-date">${fmtDate(today)}</div>
     <div class="section-label">今日概況</div>
     <div class="stat-grid stat-grid-2">
@@ -9500,6 +9555,67 @@ function viewWebLinks(){
 }
 
 /* =========================================================
+   17a-0c) 畫面：政令宣導（軍中運輸通報／軍醫通報等公告存檔，全營共用，
+   所有登入使用者皆可唯讀查閱；純被動查閱，不推播、不設效期，跟「訊息
+   管理」的公告是完全獨立的兩件事，見 addPolicyNotice 的說明）
+   ========================================================= */
+window.__setPolicyNoticeFilter = (cat) => { state.policyNoticeCategoryFilter = cat; render(); };
+function viewPolicyNotices(){
+  const filter = state.policyNoticeCategoryFilter || "";
+  const rows = state.policyNotices.filter(x => !filter || x.category === filter).slice().sort((a,b) => (b.publishDate||"").localeCompare(a.publishDate||""));
+  return `
+    <div class="back-row">${backBtn({name:'home'})}</div>
+    <div class="section-label">政令宣導</div>
+    <div class="tabs2">
+      <div class="tab2 ${filter===''?'active':''}" onclick="window.__setPolicyNoticeFilter('')">全部</div>
+      ${POLICY_NOTICE_CATEGORIES.map(c => `<div class="tab2 ${filter===c?'active':''}" onclick="window.__setPolicyNoticeFilter('${c}')">${esc(c)}</div>`).join("")}
+    </div>
+    ${rows.length ? rows.map(x => `
+      <div class="admin-row clickable" onclick="window.__nav({name:'policyNoticeDetail', id:'${x.id}'})">
+        <div><div class="name">${esc(x.title)}</div><div class="sub">${esc(x.category)} · ${esc(x.publishDate||'—')}</div></div>
+        ${icon('chevronRight',18)}
+      </div>`).join("") : `<div class="empty">目前沒有政令宣導</div>`}
+  `;
+}
+// 內容是後台管理員填的長文字，換行要保留（白話文常常是逐條列點），
+// 用 esc() 之後把換行字元轉成 <br>，避免直接塞進 innerHTML 被當成 HTML
+// 解析（esc 已經處理跳脫，這裡只是額外把純文字的換行轉成看得到的斷行）。
+function viewPolicyNoticeDetail(id){
+  const x = state.policyNotices.find(n => n.id === id);
+  if (!x) return `<div class="back-row">${backBtn({name:'policyNotices'})}</div><div class="empty">找不到這筆政令宣導，可能已被刪除</div>`;
+  return `
+    <div class="back-row">${backBtn({name:'policyNotices'})}</div>
+    <div class="section-label">${esc(x.category)}</div>
+    <div class="profile-section-card">
+      <div class="profile-section-title">${esc(x.title)}</div>
+      <div class="member-card-grid" style="border-top:none; padding-top:0; margin-top:10px;">
+        <div class="member-cell"><div class="member-label">發布日期</div><div class="member-val">${esc(x.publishDate||'—')}</div></div>
+        <div class="member-cell"><div class="member-label">發文字號</div><div class="member-val${x.docNumber?'':' member-val-empty'}">${x.docNumber?esc(x.docNumber):'—'}</div></div>
+      </div>
+      <div style="margin-top:14px; font-size:var(--text-base); line-height:1.7; white-space:pre-wrap;">${esc(x.content)}</div>
+    </div>
+  `;
+}
+// 首頁最上面的小區塊：只顯示標題，最新幾筆，點進去才看得到詳情；沒有
+// 任何政令宣導時整塊不顯示，不佔首頁版面。
+function policyNoticeHomeCardHtml(){
+  const rows = state.policyNotices.slice().sort((a,b) => (b.publishDate||"").localeCompare(a.publishDate||"")).slice(0,5);
+  if (!rows.length) return '';
+  return `
+    <div class="policy-notice-home-card">
+      <div class="policy-notice-home-head">
+        <div class="policy-notice-home-title">${icon('flag',18)} 政令宣導</div>
+        <button type="button" class="policy-notice-home-more" onclick="window.__nav({name:'policyNotices'})">查看全部${icon('chevronRight',13)}</button>
+      </div>
+      ${rows.map(x => `
+        <div class="policy-notice-home-row" onclick="window.__nav({name:'policyNoticeDetail', id:'${x.id}'})">
+          <span class="policy-notice-home-cat">${esc(x.category)}</span>
+          <span class="policy-notice-home-row-title">${esc(x.title)}</span>
+        </div>`).join("")}
+    </div>`;
+}
+
+/* =========================================================
    17a-1a2) 畫面：推播通知
    ========================================================= */
 function viewPushSettings(){
@@ -10161,6 +10277,11 @@ function viewBaseDataMilitaryItemsPage(){
   if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
   return viewBaseDataMilitaryItems();
 }
+function viewBaseDataPolicyNoticesPage(){
+  const p = state.profile;
+  if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
+  return viewBaseDataPolicyNotices();
+}
 function viewAdminUsersPage(){
   const p = state.profile;
   if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
@@ -10250,6 +10371,7 @@ function viewBaseDataHub(){
     settingsRow({icon:'tasks', bg:'#EAF1FF', fg:'#0052E0', title:'任務名稱範本', subtitle:'建立勤務頁「任務名稱」快速選擇，全營共用', onclick:"window.__nav({name:'baseDataTaskTitleTemplates'})"}),
     settingsRow({icon:'link', bg:'#E9F9EF', fg:'#177A34', title:'網網相連', subtitle:'常用網址快速切換清單，全營共用', onclick:"window.__nav({name:'baseDataWebLinks'})"}),
     settingsRow({icon:'wrench', bg:'#FFEAEA', fg:'#C7233B', title:'軍品項目', subtitle:'武器裝備／通信裝備品項，供建立勤務「軍品攜帶」選用', onclick:"window.__nav({name:'baseDataMilitaryItems'})"}),
+    settingsRow({icon:'flag', bg:'#EAF1FF', fg:'#0052E0', title:'政令宣導', subtitle:'軍中運輸通報／軍醫通報等公告存檔，全營共用', onclick:"window.__nav({name:'baseDataPolicyNotices'})"}),
   ];
   return `
     ${settingsSection('單位資料', unitRows)}
@@ -10379,6 +10501,20 @@ function viewBaseDataMilitaryItems(){
           </div>
         </div>`).join("") : `<div class="empty">尚無「${g.cat}」品項</div>`}`).join("")}`;
   return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">軍品項目</div>${body}`;
+}
+function viewBaseDataPolicyNotices(){
+  const rows = state.policyNotices.slice().sort((a,b) => (b.publishDate||"").localeCompare(a.publishDate||""));
+  const body = `
+    <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('policyNotices', null, '')">${icon('plus',15)} 新增政令宣導</button>
+    ${rows.length ? rows.map(x => `
+      <div class="admin-row">
+        <div><div class="name">${esc(x.title)}</div><div class="sub">${esc(x.category)} · ${esc(x.publishDate||'—')}${x.docNumber ? ' · ' + esc(x.docNumber) : ''}</div></div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="icon-btn" onclick="window.__openBaseDataModal('policyNotices','${x.id}','')">編輯</button>
+          <button class="icon-btn danger" onclick="window.__deleteBaseData('policyNotices','${x.id}')">刪除</button>
+        </div>
+      </div>`).join("") : `<div class="empty">尚無政令宣導，首頁與「政令宣導」頁不會顯示任何項目</div>`}`;
+  return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">政令宣導</div>${body}`;
 }
 
 /* =========================================================
@@ -10515,6 +10651,20 @@ function viewBaseDataModal(){
         </select>
       </div>
       <div class="field"><label>名稱</label><input name="name" required value="${esc(editing?.name||'')}" placeholder="例如：T91步槍"></div>`;
+  } else if (coll === "policyNotices") {
+    title = editing ? "編輯政令宣導" : "新增政令宣導";
+    fields = `
+      <div class="field"><label>分類</label>
+        <select name="category" required>
+          <option value="">請選擇分類</option>
+          ${POLICY_NOTICE_CATEGORIES.map(c => `<option value="${c}" ${editing?.category===c?'selected':''}>${c}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field"><label>標題</label><input name="title" required value="${esc(editing?.title||'')}"></div>
+      <div class="field"><label>發文字號（選填）</label><input name="docNumber" value="${esc(editing?.docNumber||'')}" placeholder="例如：陸軍後勤字第1130001234號"></div>
+      <div class="field"><label>發布日期</label><input name="publishDate" type="date" required value="${esc(editing?.publishDate||isoDate(new Date()))}"></div>
+      <div class="field"><label>內容</label><textarea name="content" required rows="8">${esc(editing?.content||'')}</textarea></div>
+      <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">政令宣導不會推播通知，純粹放在首頁／「政令宣導」頁供大家查閱，發布/編輯後不會主動提醒大家。</div>`;
   } else {
     title = editing ? "編輯行車紀錄器" : "新增行車紀錄器";
     fields = `<div class="field"><label>編號</label><input name="code" required value="${esc(editing?.code||'')}"></div>`;
@@ -11071,6 +11221,9 @@ const ROUTE_VIEWS = {
   baseDataWebLinks: viewBaseDataWebLinksPage,
   webLinks: viewWebLinks,
   baseDataMilitaryItems: viewBaseDataMilitaryItemsPage,
+  baseDataPolicyNotices: viewBaseDataPolicyNoticesPage,
+  policyNotices: viewPolicyNotices,
+  policyNoticeDetail: () => viewPolicyNoticeDetail(state.route.id),
   adminUsers: viewAdminUsersPage,
   adminMessages: viewAdminMessagesPage,
   adminSettings: viewAdminSettingsPage,
@@ -11985,6 +12138,7 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
        : coll === "taskTitleTemplates" ? updateBaseData(coll, id, { text: f.get("text") })
        : coll === "webLinks" ? updateBaseData(coll, id, { name: f.get("name"), url: f.get("url") })
        : coll === "militaryItems" ? updateBaseData(coll, id, { category: f.get("category"), name: f.get("name") })
+       : coll === "policyNotices" ? updateBaseData(coll, id, { category: f.get("category"), title: f.get("title"), docNumber: f.get("docNumber")||"", publishDate: f.get("publishDate"), content: f.get("content") })
        : updateBaseData(coll, id, { code: f.get("code") }))
     : (coll === "personnel" ? addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone"), f.get("emtLevel"), f.get("email"), f.get("gender"), readVehicleEntriesFromDom())
        : coll === "vehicles" ? addVehicle(unit, f.get("plate"), f.get("type"))
@@ -11994,6 +12148,7 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
        : coll === "taskTitleTemplates" ? addTaskTitleTemplate(f.get("text"))
        : coll === "webLinks" ? addWebLink(f.get("name"), f.get("url"))
        : coll === "militaryItems" ? addMilitaryItem(f.get("category"), f.get("name"))
+       : coll === "policyNotices" ? addPolicyNotice(f.get("category"), f.get("title"), f.get("docNumber"), f.get("publishDate"), f.get("content"))
        : addRecorder(unit, f.get("code")));
   action.then(() => { state.baseDataModal = null; render(); }).catch(baseDataErr);
 };

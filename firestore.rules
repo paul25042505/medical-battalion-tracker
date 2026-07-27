@@ -261,6 +261,13 @@ service cloud.firestore {
       allow create, update, delete: if isStaff() || isCommander();
     }
 
+    // 政令宣導：軍中運輸通報／軍醫通報等公告存檔，是全營共用的查閱資料，
+    // 不綁定特定單位；純被動查閱、不推播，維護權限比照基礎資料管理。
+    match /policyNotices/{id} {
+      allow read: if isActive();
+      allow create, update, delete: if isStaff() || isCommander();
+    }
+
     // 健保署急診即時資訊快取（見 functions/index.js 的 syncErRealtime，每
     // 15 分鐘排程呼叫一次），只有這支排程函式（Admin SDK，本來就不受安全
     // 規則限制）會寫入，一般使用者/前端一律唯讀，不開放任何人直接寫入。
