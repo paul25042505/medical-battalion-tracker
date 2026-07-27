@@ -2013,7 +2013,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-27-451-watermark-bounds-and-size";
+const BUILD_TAG = "2026-07-27-452-watermark-density";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3162,6 +3162,7 @@ const RELEASE_NOTES = [
     { category: "介面優化", items: [
       "全站畫面新增機敏資訊浮水印：斜向、低透明度顯示「機敏資訊・請勿翻拍」＋登入者姓名／階級＋時間戳記，供日後若有截圖外流時能追溯當下是誰在檢視畫面；一律顯示真實登入者身分，就算開著角色/人員預覽模式看別人的畫面，浮水印還是標示真正登入的人，不會被預覽身分蓋掉",
       "調整機敏資訊浮水印：改成只蓋住中間內容區，不會蓋到頂部列跟底部導覽列；文字整體放大，更容易辨識",
+      "機敏資訊浮水印調整重複密度：上一版放大文字後同一畫面只剩兩組完整資訊，改成縮小重複單位讓畫面上能看到更多組，同時維持放大後的字級",
     ] },
   ] },
   { date: "2026/07/26", groups: [
@@ -10984,8 +10985,8 @@ function updateScreenWatermark(p){
   if (cacheKey === _wmCacheKey) return;
   _wmCacheKey = cacheKey;
   const build = (color, opacity) => {
-    const tile = 320, angle = -28;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${tile}" height="${tile}"><g transform="rotate(${angle} ${tile/2} ${tile/2})" font-family="-apple-system,BlinkMacSystemFont,'Inter',sans-serif" fill="${color}" fill-opacity="${opacity}"><text x="${tile/2}" y="${tile/2-36}" text-anchor="middle" font-size="22" font-weight="700">機敏資訊・請勿翻拍</text><text x="${tile/2}" y="${tile/2-6}" text-anchor="middle" font-size="18">${esc(who)}</text><text x="${tile/2}" y="${tile/2+22}" text-anchor="middle" font-size="18">${stamp}</text></g></svg>`;
+    const tile = 190, angle = -28;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${tile}" height="${tile}"><g transform="rotate(${angle} ${tile/2} ${tile/2})" font-family="-apple-system,BlinkMacSystemFont,'Inter',sans-serif" fill="${color}" fill-opacity="${opacity}"><text x="${tile/2}" y="${tile/2-22}" text-anchor="middle" font-size="17" font-weight="700">機敏資訊・請勿翻拍</text><text x="${tile/2}" y="${tile/2-3}" text-anchor="middle" font-size="13">${esc(who)}</text><text x="${tile/2}" y="${tile/2+14}" text-anchor="middle" font-size="13">${stamp}</text></g></svg>`;
     return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
   };
   el.style.setProperty("--wm-img-light", build("#15161B", 0.08));
