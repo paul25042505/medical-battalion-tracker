@@ -608,13 +608,30 @@ async function fetchActiveTyphoonHeadlines() {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const json = await res.json();
   const infos = json?.records?.info || [];
-  return infos.map((info) => info.headline || "颱風警報");
+  // 氣象署解除警報時會先發一則「警報解除」公告，這則公告本身也會出現在
+  // 「目前生效中」的清單裡一兩天，如果照樣當成警報顯示，解除後還是會
+  // 每天提醒，所以標題含「解除」的直接濾掉，不算進生效中的警報。
+  return infos.map((info) => info.headline || "颱風警報").filter((h) => !h.includes("解除"));
 }
-function buildDailyWeatherBody(weather, alertTexts) {
-  const range = (weather.minT != null && weather.maxT != null) ? `${weather.minT}°/${weather.maxT}°` : "";
-  const pop = weather.pop != null ? `，降雨機率 ${weather.pop}%` : "";
-  let body = `${weather.wx}${range ? "，" + range : ""}${pop}`;
-  if (alertTexts.length) body += `\n⚠️ ${alertTexts.join("；")}`;
+// 出車勤務提醒依實際天氣狀況擇一顯示（不是每天固定一句）：颱風警報 >
+// 天氣特報 > 降雨機率高／預報描述有雨，同時符合多項時只顯示最嚴重的
+// 那一種，避免同一天疊好幾句意思重複的提醒。降雨機率的門檻（50%）是
+// 跟人一起討論後定案的，不要沒討論就調整。
+const DAILY_WEATHER_RAIN_POP_THRESHOLD = 50;
+function buildDailyWeatherReminder(weather, hazardTexts, typhoonTexts) {
+  if (typhoonTexts.length) return `颱風警報生效中（${typhoonTexts[0]}），出車勤務請特別注意`;
+  if (hazardTexts.length) return `目前有${hazardTexts.join("、")}，出車請提高警覺`;
+  const highRainChance = weather.pop != null && weather.pop >= DAILY_WEATHER_RAIN_POP_THRESHOLD;
+  const rainyForecast = weather.wx && weather.wx.includes("雨");
+  if (highRainChance || rainyForecast) return "出車勤務請注意路滑，保持安全車距";
+  return "";
+}
+function buildDailyWeatherBody(county, weather, hazardTexts, typhoonTexts) {
+  const range = (weather.minT != null && weather.maxT != null) ? `${weather.minT}到${weather.maxT}度` : "";
+  const pop = weather.pop != null ? `，降雨機率${weather.pop}%` : "";
+  let body = `今天${county}${weather.wx}${range ? "，氣溫" + range : ""}${pop}`;
+  const reminder = buildDailyWeatherReminder(weather, hazardTexts, typhoonTexts);
+  if (reminder) body += `\n⚠️ ${reminder}`;
   return body;
 }
 // 核心邏輯獨立成一個函式，排程觸發跟下面的手動測試端點都呼叫同一份，
@@ -663,7 +680,7 @@ async function runDailyWeatherReport() {
   for (const [county, recipients] of Object.entries(recipientsByCounty)) {
     const { weather, hazardTexts } = dataByCounty[county];
     const title = `${county} 今日天氣`;
-    const body = buildDailyWeatherBody(weather, [...typhoonTexts, ...hazardTexts]);
+    const body = buildDailyWeatherBody(county, weather, hazardTexts, typhoonTexts);
     await notifyRecipients(recipients, title, body);
     // recipients 涵蓋「這個縣市所有在職帳號」，不管當下有沒有裝置 token
     // （這是 pushLog 個人通知中心紀錄要用到的完整名單，見 resolveRecipients
