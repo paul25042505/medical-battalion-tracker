@@ -2013,7 +2013,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-27-452-watermark-density";
+const BUILD_TAG = "2026-07-27-453-subtabs-scroll-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3163,6 +3163,7 @@ const RELEASE_NOTES = [
       "全站畫面新增機敏資訊浮水印：斜向、低透明度顯示「機敏資訊・請勿翻拍」＋登入者姓名／階級＋時間戳記，供日後若有截圖外流時能追溯當下是誰在檢視畫面；一律顯示真實登入者身分，就算開著角色/人員預覽模式看別人的畫面，浮水印還是標示真正登入的人，不會被預覽身分蓋掉",
       "調整機敏資訊浮水印：改成只蓋住中間內容區，不會蓋到頂部列跟底部導覽列；文字整體放大，更容易辨識",
       "機敏資訊浮水印調整重複密度：上一版放大文字後同一畫面只剩兩組完整資訊，改成縮小重複單位讓畫面上能看到更多組，同時維持放大後的字級",
+      "修正任務頁最上面圖示子選單（勤務／洽公登記／天氣／紀錄／統計）滑到最右邊點選項目後，畫面會自動跳回最左邊的問題：改成記住點選當下的橫向捲動位置，切換後停在原本滑到的地方，不會被重置",
     ] },
   ] },
   { date: "2026/07/26", groups: [
@@ -11006,6 +11007,12 @@ function render(){
   // 行為不受影響。
   const prevMain = document.querySelector("main");
   const prevScrollTop = prevMain ? prevMain.scrollTop : 0;
+  // 任務頁最上面那排圖示子選單（.icon-subtabs，勤務/洽公登記/天氣/紀錄/
+  // 統計）點下去也是呼叫 render()，同一個道理：新節點的 scrollLeft 永遠
+  // 從 0 開始，滑到最右邊點「統計」之後畫面會被拉回最左邊，跟上面 main
+  // 垂直捲動被重置是同一種問題，這裡也記住、換完再設回去。
+  const prevSubtabs = document.querySelector(".icon-subtabs");
+  const prevSubtabsScrollLeft = prevSubtabs ? prevSubtabs.scrollLeft : 0;
   // 這幾個提前 return 的畫面（登入前／待審核／已停用）本來就沒有
   // <main>，跟下面正式畫面「window/document 永遠不捲動，只有 main 自己
   // 捲動」的 App Shell 前提不一致：#app 本身是 overflow:hidden，內容一旦
@@ -11090,6 +11097,10 @@ function render(){
   if (prevScrollTop > 0) {
     const newMain = document.querySelector("main");
     if (newMain) newMain.scrollTop = prevScrollTop;
+  }
+  if (prevSubtabsScrollLeft > 0) {
+    const newSubtabs = document.querySelector(".icon-subtabs");
+    if (newSubtabs) newSubtabs.scrollLeft = prevSubtabsScrollLeft;
   }
   updateScreenWatermark(p);
 }
