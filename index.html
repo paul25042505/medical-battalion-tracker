@@ -2093,7 +2093,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-27-460-policy-notices-outline";
+const BUILD_TAG = "2026-07-28-461-keyboard-position-guard";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3247,6 +3247,11 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/07/28", groups: [
+    { category: "介面優化", items: [
+      "修正輸入框偶爾聚焦後游標卡在畫面最上面、下面留一大片空白的問題：鍵盤（尤其注音輸入法的候選字列）動畫有時候會在既有的 1 秒校正保護期結束後才真正彈完，導致最後一次版面變動沒有被校正到；改成只要偵測到還在修正版面就延長保護期，直到連續 1 秒都不需要再修正才停止（最多延長到 3 秒，避免無止盡卡住手動捲動）",
+    ] },
+  ] },
   { date: "2026/07/27", groups: [
     { category: "介面優化", items: [
       "全站畫面新增機敏資訊浮水印：斜向、低透明度顯示「機敏資訊・請勿翻拍」＋登入者姓名／階級＋時間戳記，供日後若有截圖外流時能追溯當下是誰在檢視畫面；一律顯示真實登入者身分，就算開著角色/人員預覽模式看別人的畫面，浮水印還是標示真正登入的人，不會被預覽身分蓋掉",
@@ -13487,15 +13492,31 @@ window.addEventListener("scroll", () => {
   // 是鍵盤還在動畫、還是快捷列讓可視範圍又變小了）就立刻捲回可視範圍，
   // 不用再猜某個特定時間點鍵盤到底彈完了沒。這段時間過後就停止，之後
   // 使用者自己手動捲動瀏覽表單不會再被強制拉回。
+  //
+  // 固定 1 秒的保護期本身還是一種「猜時間」——只是猜得比原本單次延遲更
+  // 保守。實機回報「政令宣導」分段編輯（.modal-sheet 裡疊了好幾個
+  // textarea，可以捲很深）偶爾還是會發生欄位卡在最上面、下面留一大片
+  // 空白：注音鍵盤的候選字列有時候會在 1 秒保護期過後才彈出/收合，
+  // visualViewport 那次遲來的 resize 讓 syncAppHeight() 把 .modal-sheet
+  // 的 max-height 又收縮一次，但這時候 positionLoop 已經停止了，沒有人
+  // 再重新校正欄位位置，就會卡在收縮前算出來的（已經不對的）位置。
+  // 改成「只要這一輪真的觸發了修正（代表版面還在變動），就重新給滿一段
+  // 保護期」，而不是从一開始就給固定 1 秒不管——版面已經穩定就正常在 1
+  // 秒後停止，版面還在跳動（不管是鍵盤動畫還是候選字列）就持續保護，
+  // 直到連續 1 秒都不需要修正為止；額外設一個總時長上限，避免極端情況
+  // （例如某個欄位位置卡在邊界值反覆觸發）無止盡保護、使用者想手動捲動
+  // 瀏覽表單時一直被拉回去。
   const POSITION_GUARD_MS = 1000;
-  const positionLoop = (deadline) => {
+  const POSITION_GUARD_MAX_MS = 3000;
+  const positionLoop = (deadline, hardDeadline) => {
     if (!activeField) return;
     syncAppHeight();
     const rect = activeField.getBoundingClientRect();
     const visibleHeight = window.visualViewport.height;
     const margin = 12;
+    const now = performance.now();
     if (rect.top < margin || rect.bottom > visibleHeight - margin) {
-      suppressScrollLockUntil = performance.now() + 60;
+      suppressScrollLockUntil = now + 60;
       // <html> 全域設了 scroll-behavior:smooth（見 resetRogueWindowScroll()
       // 的說明，給一般頁面內錨點導覽用）。scrollIntoView() 為了把欄位捲進
       // 可視範圍，可能連帶捲動到 document/html 這層（不只是 main 自己），
@@ -13509,9 +13530,10 @@ window.addEventListener("scroll", () => {
       document.documentElement.style.scrollBehavior = "auto";
       activeField.scrollIntoView({ block: "center", behavior: "auto" });
       document.documentElement.style.scrollBehavior = prevBehavior;
+      deadline = Math.min(now + POSITION_GUARD_MS, hardDeadline);
     }
-    if (performance.now() < deadline) {
-      rafId = requestAnimationFrame(() => positionLoop(deadline));
+    if (now < deadline) {
+      rafId = requestAnimationFrame(() => positionLoop(deadline, hardDeadline));
     }
   };
   // 鍵盤彈起壓縮 visualViewport 的過程中，底部導覽列（flex-shrink:0 貼齊
@@ -13527,7 +13549,8 @@ window.addEventListener("scroll", () => {
     const nav = document.querySelector(".bottomnav");
     if (nav) nav.style.display = "none";
     cancelAnimationFrame(rafId);
-    rafId = requestAnimationFrame(() => positionLoop(performance.now() + POSITION_GUARD_MS));
+    const focusTime = performance.now();
+    rafId = requestAnimationFrame(() => positionLoop(focusTime + POSITION_GUARD_MS, focusTime + POSITION_GUARD_MAX_MS));
   }, true);
   // 保險機制：輸入框失焦（鍵盤開始收起）時，延遲一小段時間讓鍵盤收合
   // 動畫跑完，先讓導覽列恢復顯示，再強制校正版面。這裡不能只靠
