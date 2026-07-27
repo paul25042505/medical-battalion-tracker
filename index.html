@@ -212,6 +212,20 @@
   html,body{height:100%; overflow:hidden;}
   body{ padding-bottom:env(safe-area-inset-bottom); }
   #app{height:100vh; height:100dvh; display:flex; flex-direction:column; overflow:hidden;}
+  /* 螢幕浮水印：獨立於 #app 之外（#app 每次 render 都會整個重新 innerHTML，
+     浮水印要跨畫面持續存在，不能放在裡面），滿版固定、不擋互動、蓋在最上層。
+     淺/深色圖案分開存成 CSS 變數（updateScreenWatermark() 用 JS 寫入），
+     實際顯示哪張交給 CSS 的 media query／data-theme 選擇器決定，跟全站
+     既有的深色模式覆寫邏輯（見上方 :root[data-theme] 區塊）同一套模式。 */
+  #screen-watermark{
+    position:fixed; inset:0; pointer-events:none; z-index:9999;
+    background-repeat:repeat; background-image:var(--wm-img-light);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]) #screen-watermark{ background-image:var(--wm-img-dark); }
+  }
+  :root[data-theme="dark"] #screen-watermark{ background-image:var(--wm-img-dark); }
+  :root[data-theme="light"] #screen-watermark{ background-image:var(--wm-img-light); }
   button{font-family:var(--sans); cursor:pointer; transition:transform 0.12s ease, opacity 0.12s ease;}
   button:active{transform:scale(0.96);}
   button:disabled{cursor:default;}
@@ -1972,6 +1986,7 @@
 </head>
 <body>
 <div id="app"></div>
+<div id="screen-watermark"></div>
 
 <script type="module">
 // Firebase SDK 改成自己主機（vendor/firebase/，從 npm firebase@10.13.0
@@ -1994,7 +2009,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-26-449-weather-push-conversational";
+const BUILD_TAG = "2026-07-27-450-screen-watermark";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2002,7 +2017,7 @@ const BUILD_TAG = "2026-07-26-449-weather-push-conversational";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.27";
+const APP_MAJOR_MINOR = "2.28";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -3139,6 +3154,11 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/07/27", groups: [
+    { category: "介面優化", items: [
+      "全站畫面新增機敏資訊浮水印：斜向、低透明度顯示「機敏資訊・請勿翻拍」＋登入者姓名／階級＋時間戳記，供日後若有截圖外流時能追溯當下是誰在檢視畫面；一律顯示真實登入者身分，就算開著角色/人員預覽模式看別人的畫面，浮水印還是標示真正登入的人，不會被預覽身分蓋掉",
+    ] },
+  ] },
   { date: "2026/07/26", groups: [
     { category: "登入", items: [
       "修正已加入主畫面、以獨立模式（standalone）開啟時登入偶爾跳出「登入失敗：auth/cancelled-popup-request」的問題：這種模式下改用轉址流程登入，不再用彈出視窗，避免視窗管理不穩定導致明明只點一次登入卻跳出錯誤提示（登入本身通常還是會成功，但這則錯誤容易讓人誤以為真的失敗了）；一般瀏覽器分頁的登入方式不受影響",
@@ -10933,6 +10953,33 @@ function safeRender(){
   render();
 }
 
+// 螢幕浮水印：畫面上永遠疊一層「機敏資訊・請勿翻拍」+ 姓名職階 + 時間戳記的
+// 低透明度斜紋浮水印，供事後追溯外流照片時比對是誰在場——沒辦法即時偵測
+// 手機作業系統層級的截圖動作（iOS/Android 的 web/PWA 都沒有這種 API），
+// 只能做到「如果照片流出，看得出當時是誰在看畫面」這種事後歸屬效果。
+// 一律用 state.realProfileSnapshot（角色/人員預覽時的真實登入者）而非畫面上
+// 顯示的 p，預覽模式下浮水印仍要標示真正登入的人，不能被預覽身分蓋掉。
+let _wmCacheKey = null;
+function updateScreenWatermark(p){
+  const el = document.getElementById("screen-watermark");
+  if (!el) return;
+  const identity = state.realProfileSnapshot || p;
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2,"0");
+  const stamp = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const who = identity.rank ? `${identity.displayName||identity.email}・${identity.rank}` : (identity.displayName||identity.email||"");
+  const cacheKey = `${who}|${stamp}`;
+  if (cacheKey === _wmCacheKey) return;
+  _wmCacheKey = cacheKey;
+  const build = (color, opacity) => {
+    const tile = 220, angle = -28;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${tile}" height="${tile}"><g transform="rotate(${angle} ${tile/2} ${tile/2})" font-family="-apple-system,BlinkMacSystemFont,'Inter',sans-serif" fill="${color}" fill-opacity="${opacity}"><text x="${tile/2}" y="${tile/2-26}" text-anchor="middle" font-size="15" font-weight="700">機敏資訊・請勿翻拍</text><text x="${tile/2}" y="${tile/2-4}" text-anchor="middle" font-size="12">${esc(who)}</text><text x="${tile/2}" y="${tile/2+16}" text-anchor="middle" font-size="12">${stamp}</text></g></svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  };
+  el.style.setProperty("--wm-img-light", build("#15161B", 0.08));
+  el.style.setProperty("--wm-img-dark", build("#FFFFFF", 0.09));
+}
+
 function render(){
   renderPushGatekeeper();
   const app = document.getElementById("app");
@@ -11031,6 +11078,7 @@ function render(){
     const newMain = document.querySelector("main");
     if (newMain) newMain.scrollTop = prevScrollTop;
   }
+  updateScreenWatermark(p);
 }
 
 /* =========================================================
