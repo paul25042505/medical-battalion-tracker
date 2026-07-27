@@ -1697,6 +1697,29 @@
      （.vehicle-entry-locked）是獨立的卡片樣式，不套用這條分隔線。 */
   .vehicle-entry.vehicle-entry-form{margin-top:16px; padding-top:16px; border-top:1px solid var(--border);}
   #vehicle-entries .vehicle-entry-form:first-child{margin-top:0; padding-top:0; border-top:none;}
+  /* 政令宣導後台編輯：公文式分段（見 policyNoticeParaRowHtml／
+     renumberPolicyNoticeParas）。每列左邊是縮排/刪除控制列，右邊是段落
+     文字；padding-left 依層級（0/20/40px）由 JS 動態設定，達成「縮排」
+     視覺效果，編號（一、／（一）／1.）也是 JS 算完塞進 .notice-para-label。 */
+  .notice-para-row{margin-bottom:12px; transition:padding-left 0.12s ease;}
+  .notice-para-controls{display:flex; align-items:center; gap:6px; margin-bottom:6px;}
+  .notice-para-label{font-family:var(--mono); font-weight:700; font-size:var(--text-sm); color:var(--text); min-width:32px; text-align:center;}
+  .notice-para-btn{
+    width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+  }
+  .notice-para-btn:disabled{opacity:0.3; cursor:default;}
+  .notice-para-btn.danger{color:var(--red); margin-left:auto;}
+  .notice-para-text{
+    width:100%; background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+    padding:10px 12px; border-radius:var(--radius-sm); font-size:var(--text-sm); font-family:var(--sans);
+    resize:vertical; min-height:52px;
+  }
+  .notice-para-text:focus{outline:none; border-color:var(--blue); box-shadow:0 0 0 3px color-mix(in srgb, var(--blue) 14%, transparent);}
+  /* 政令宣導詳情頁的公文式分段顯示：跟編輯表單一樣用 padding-left 縮排，
+     但這裡是唯讀顯示，編號直接跟文字同一行、不需要控制按鈕。 */
+  .policy-notice-para{display:flex; gap:6px; margin-bottom:10px; transition:padding-left 0.12s ease;}
+  .policy-notice-para-label{font-weight:700; flex-shrink:0;}
   .vehicle-remove-btn{
     background:none; border:none; color:var(--red); font-size:var(--text-xs); font-weight:600;
     padding:2px 0; font-family:var(--sans); margin-top:2px;
@@ -2070,7 +2093,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-27-459-policy-notices";
+const BUILD_TAG = "2026-07-27-460-policy-notices-outline";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3244,6 +3267,7 @@ const RELEASE_NOTES = [
       "新增「政令宣導」專區：發布軍中運輸通報／軍醫通報等公告存檔，有分類、標題、發文字號、發布日期、內容；首頁最上面新增小區塊列出最新幾筆標題，點進去才看得到詳細內容，「查看全部」可以看完整列表並依分類篩選",
       "政令宣導純粹供查閱，不會推播通知、也不會過期自動刪除，跟「訊息管理」的全體公告（固定一個月效期、發布會推播）是完全獨立的兩件事",
       "管理員、高勤官、主官管都可以在後台「基礎資料 → 政令宣導」發布/編輯/刪除",
+      "政令宣導內容改成公文式分段編輯：每段可以調整縮排層級（一、／（一）／1.），編號跟縮排自動計算不用手動打數字；改版前已發布的舊內容仍會正常顯示，編輯時也會自動拆成一段一段方便補上正確層級",
     ] },
   ] },
   { date: "2026/07/26", groups: [
@@ -4692,10 +4716,56 @@ async function addMilitaryItem(category, name){
 // 管理員/高勤官/主官管都能發布（跟基礎資料管理同一組權限，見
 // canManageBaseData），內容不分單位，全營共用。
 const POLICY_NOTICE_CATEGORIES = ["運輸通報", "軍醫通報", "其他"];
-async function addPolicyNotice(category, title, docNumber, publishDate, content){
+// 內容改成公文式編號階層：每一段落存 { level, text }，level 0～2 對應
+// 「一、」「（一）」「1.」三層縮排／編號，跟公文常見的條列格式一致（見
+// policyNoticeParaRowHtml／__indentPolicyNoticePara 等後台編輯用的函式）。
+// 舊資料（改版前只存一整段 content 字串）仍然保留 content 欄位不動，
+// viewPolicyNoticeDetail 顯示時優先看 paragraphs、沒有才退回顯示
+// content，不會讓已發布的舊內容變成空白。
+function toChineseNumeral(n){
+  const digits = ["","一","二","三","四","五","六","七","八","九"];
+  if (n <= 0) return String(n);
+  if (n <= 10) return n === 10 ? "十" : digits[n];
+  if (n < 20) return "十" + digits[n%10];
+  const tens = Math.floor(n/10), ones = n%10;
+  return digits[tens] + "十" + (ones ? digits[ones] : "");
+}
+// 依段落順序算出每段的階層編號標籤：同一層的計數器逐段累加，遇到更淺的
+// 層級（例如從「（二）」跳回「二、」）就把比它更深的層級計數器歸零，
+// 是標準大綱編號的邏輯（子項目換了上一層母項目就該重新從 1 開始編號）。
+function policyNoticeOutlineLabels(paragraphs){
+  const counters = [0,0,0];
+  return paragraphs.map(p => {
+    const lvl = Math.min(Math.max(p.level||0, 0), 2);
+    counters[lvl]++;
+    for (let i = lvl+1; i < 3; i++) counters[i] = 0;
+    const label = lvl === 0 ? `${toChineseNumeral(counters[0])}、`
+      : lvl === 1 ? `（${toChineseNumeral(counters[1])}）`
+      : `${counters[2]}.`;
+    return { ...p, level: lvl, label };
+  });
+}
+// 後台編輯用的單一段落列：控制列（縮排/取消縮排/刪除）＋段落文字。跟
+// vehicleEntryRowHtml 一樣是純 DOM 操作（見 __addPolicyNoticePara 等），
+// 不用 name 屬性也不用 entryId，讀值/重新編號時直接照 DOM 順序
+// querySelectorAll 抓，不需要每列有獨立識別。
+function policyNoticeParaRowHtml(text, level){
+  return `
+    <div class="notice-para-row" data-para-level="${level||0}">
+      <div class="notice-para-controls">
+        <button type="button" class="notice-para-btn" onclick="window.__outdentPolicyNoticePara(this)">${icon('chevronLeft',13)}</button>
+        <span class="notice-para-label"></span>
+        <button type="button" class="notice-para-btn" onclick="window.__indentPolicyNoticePara(this)">${icon('chevronRight',13)}</button>
+        <button type="button" class="notice-para-btn danger" onclick="window.__removePolicyNoticePara(this)">${icon('trash',13)}</button>
+      </div>
+      <textarea class="notice-para-text" rows="2" placeholder="輸入這段內容">${esc(text||'')}</textarea>
+    </div>`;
+}
+async function addPolicyNotice(category, title, docNumber, publishDate, paragraphs){
   const p = state.profile;
   await fsAddDoc("policyNotices", {
-    category, title, docNumber: docNumber||"", publishDate: publishDate||"", content: content||"",
+    category, title, docNumber: docNumber||"", publishDate: publishDate||"",
+    paragraphs: paragraphs||[], content: (paragraphs||[]).map(x => x.text).join("\n"),
     createdAt: new Date(), createdByName: p.displayName || p.email || ""
   });
   showToast("已發布政令宣導"); if (policyNoticesPoll) policyNoticesPoll.refreshNow();
@@ -9577,12 +9647,19 @@ function viewPolicyNotices(){
       </div>`).join("") : `<div class="empty">目前沒有政令宣導</div>`}
   `;
 }
-// 內容是後台管理員填的長文字，換行要保留（白話文常常是逐條列點），
-// 用 esc() 之後把換行字元轉成 <br>，避免直接塞進 innerHTML 被當成 HTML
-// 解析（esc 已經處理跳脫，這裡只是額外把純文字的換行轉成看得到的斷行）。
+// 內容優先顯示公文式分段（paragraphs，見 policyNoticeOutlineLabels）：
+// 每段依層級縮排、自動編號（一、／（一）／1.）；只有改版前的舊資料
+// 才會沒有 paragraphs，退回顯示整段 content 純文字（white-space:pre-wrap
+// 保留原本換行）。
 function viewPolicyNoticeDetail(id){
   const x = state.policyNotices.find(n => n.id === id);
   if (!x) return `<div class="back-row">${backBtn({name:'policyNotices'})}</div><div class="empty">找不到這筆政令宣導，可能已被刪除</div>`;
+  const bodyHtml = (x.paragraphs && x.paragraphs.length)
+    ? policyNoticeOutlineLabels(x.paragraphs).map(p => `
+        <div class="policy-notice-para" style="padding-left:${p.level*20}px;">
+          <span class="policy-notice-para-label">${esc(p.label)}</span><span>${esc(p.text)}</span>
+        </div>`).join("")
+    : `<div style="white-space:pre-wrap;">${esc(x.content||'')}</div>`;
   return `
     <div class="back-row">${backBtn({name:'policyNotices'})}</div>
     <div class="section-label">${esc(x.category)}</div>
@@ -9592,7 +9669,7 @@ function viewPolicyNoticeDetail(id){
         <div class="member-cell"><div class="member-label">發布日期</div><div class="member-val">${esc(x.publishDate||'—')}</div></div>
         <div class="member-cell"><div class="member-label">發文字號</div><div class="member-val${x.docNumber?'':' member-val-empty'}">${x.docNumber?esc(x.docNumber):'—'}</div></div>
       </div>
-      <div style="margin-top:14px; font-size:var(--text-base); line-height:1.7; white-space:pre-wrap;">${esc(x.content)}</div>
+      <div style="margin-top:14px; font-size:var(--text-base); line-height:1.7;">${bodyHtml}</div>
     </div>
   `;
 }
@@ -10524,7 +10601,7 @@ function viewBaseDataModal(){
   const m = state.baseDataModal;
   if (!m) return "";
   const { coll, id, unit } = m;
-  const pool = coll === "personnel" ? state.personnel : coll === "vehicles" ? state.vehicles : coll === "hospitals" ? state.hospitals : coll === "doctors" ? state.doctors : coll === "notifications" ? state.notifications : coll === "taskTitleTemplates" ? state.taskTitleTemplates : coll === "webLinks" ? state.webLinks : coll === "militaryItems" ? state.militaryItems : state.recorders;
+  const pool = coll === "personnel" ? state.personnel : coll === "vehicles" ? state.vehicles : coll === "hospitals" ? state.hospitals : coll === "doctors" ? state.doctors : coll === "notifications" ? state.notifications : coll === "taskTitleTemplates" ? state.taskTitleTemplates : coll === "webLinks" ? state.webLinks : coll === "militaryItems" ? state.militaryItems : coll === "policyNotices" ? state.policyNotices : state.recorders;
   const editing = id ? pool.find(x => x.id === id) : null;
   let title, fields;
   if (coll === "personnel") {
@@ -10653,6 +10730,13 @@ function viewBaseDataModal(){
       <div class="field"><label>名稱</label><input name="name" required value="${esc(editing?.name||'')}" placeholder="例如：T91步槍"></div>`;
   } else if (coll === "policyNotices") {
     title = editing ? "編輯政令宣導" : "新增政令宣導";
+    // 內容改成公文式分段編輯（見 policyNoticeParaRowHtml）：既有的
+    // paragraphs 資料直接帶入；只有舊版 content 純文字的記錄（改版前
+    // 發布的），退回用換行切段落、全部當第 0 層，讓管理員編輯時能逐步
+    // 補上正確的縮排層級，不會讓舊內容變成空白重打。
+    const initialParas = (editing?.paragraphs && editing.paragraphs.length)
+      ? editing.paragraphs
+      : (editing?.content ? editing.content.split("\n").filter(t => t.trim()).map(t => ({level:0, text:t})) : [{level:0, text:""}]);
     fields = `
       <div class="field"><label>分類</label>
         <select name="category" required>
@@ -10663,7 +10747,10 @@ function viewBaseDataModal(){
       <div class="field"><label>標題</label><input name="title" required value="${esc(editing?.title||'')}"></div>
       <div class="field"><label>發文字號（選填）</label><input name="docNumber" value="${esc(editing?.docNumber||'')}" placeholder="例如：陸軍後勤字第1130001234號"></div>
       <div class="field"><label>發布日期</label><input name="publishDate" type="date" required value="${esc(editing?.publishDate||isoDate(new Date()))}"></div>
-      <div class="field"><label>內容</label><textarea name="content" required rows="8">${esc(editing?.content||'')}</textarea></div>
+      <div class="field"><label>內容</label></div>
+      <div id="policy-notice-paras">${initialParas.map(p => policyNoticeParaRowHtml(p.text, p.level||0)).join("")}</div>
+      <button type="button" class="vehicle-add-btn" style="margin-top:2px;" onclick="window.__addPolicyNoticePara()">${icon('plus',16)} 新增一段</button>
+      <div style="color:var(--muted); font-size:var(--text-xs); margin:12px 0;">用左右箭頭調整這段的縮排層級（一、／（一）／1.），編號會自動計算，不用自己打數字。</div>
       <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">政令宣導不會推播通知，純粹放在首頁／「政令宣導」頁供大家查閱，發布/編輯後不會主動提醒大家。</div>`;
   } else {
     title = editing ? "編輯行車紀錄器" : "新增行車紀錄器";
@@ -12106,7 +12193,11 @@ window.__setMemberStatsUnitFilter = (code) => { state.memberStatsUnitFilter = co
 function baseDataErr(err){ showToast(`操作失敗：[${err.code||'?'}] ${err.message||err}`); console.error("基礎資料操作失敗", err); }
 window.__toggleBaseData = (coll, id, active) => toggleBaseDataActive(coll, id, active).catch(baseDataErr);
 window.__deleteBaseData = (coll, id) => { if (confirm("確定刪除此筆資料？此動作無法復原。")) deleteBaseData(coll, id).catch(baseDataErr); };
-window.__openBaseDataModal = (coll, id, unit) => { state.baseDataModal = { coll, id: id||null, unit }; render(); };
+window.__openBaseDataModal = (coll, id, unit) => {
+  state.baseDataModal = { coll, id: id||null, unit };
+  render();
+  if (coll === "policyNotices") renumberPolicyNoticeParas();
+};
 window.__markNotificationRead = (id, coll) => markNotificationRead(id, coll).catch(baseDataErr);
 window.__markAllNotificationsRead = (includePushLog) => markAllNotificationsRead(includePushLog).catch(baseDataErr);
 // 「發送推播訊息」：跟 admin 的全體公告共用 addNotification。主官管一律
@@ -12138,7 +12229,7 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
        : coll === "taskTitleTemplates" ? updateBaseData(coll, id, { text: f.get("text") })
        : coll === "webLinks" ? updateBaseData(coll, id, { name: f.get("name"), url: f.get("url") })
        : coll === "militaryItems" ? updateBaseData(coll, id, { category: f.get("category"), name: f.get("name") })
-       : coll === "policyNotices" ? updateBaseData(coll, id, { category: f.get("category"), title: f.get("title"), docNumber: f.get("docNumber")||"", publishDate: f.get("publishDate"), content: f.get("content") })
+       : coll === "policyNotices" ? (() => { const paras = readPolicyNoticeParasFromDom(); return updateBaseData(coll, id, { category: f.get("category"), title: f.get("title"), docNumber: f.get("docNumber")||"", publishDate: f.get("publishDate"), paragraphs: paras, content: paras.map(x => x.text).join("\n") }); })()
        : updateBaseData(coll, id, { code: f.get("code") }))
     : (coll === "personnel" ? addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone"), f.get("emtLevel"), f.get("email"), f.get("gender"), readVehicleEntriesFromDom())
        : coll === "vehicles" ? addVehicle(unit, f.get("plate"), f.get("type"))
@@ -12148,7 +12239,7 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
        : coll === "taskTitleTemplates" ? addTaskTitleTemplate(f.get("text"))
        : coll === "webLinks" ? addWebLink(f.get("name"), f.get("url"))
        : coll === "militaryItems" ? addMilitaryItem(f.get("category"), f.get("name"))
-       : coll === "policyNotices" ? addPolicyNotice(f.get("category"), f.get("title"), f.get("docNumber"), f.get("publishDate"), f.get("content"))
+       : coll === "policyNotices" ? addPolicyNotice(f.get("category"), f.get("title"), f.get("docNumber"), f.get("publishDate"), readPolicyNoticeParasFromDom())
        : addRecorder(unit, f.get("code")));
   action.then(() => { state.baseDataModal = null; render(); }).catch(baseDataErr);
 };
@@ -12723,6 +12814,51 @@ function readVehicleEntriesFromDom(){
       plate: row.querySelector(".vehicle-plate-input")?.value || ""
     };
   }).filter(v => v.type || v.brand || v.plate);
+}
+// 政令宣導後台編輯：每段的縮排層級存在該列的 data-para-level 屬性上，
+// 增/刪/縮排都只是純 DOM 操作（不觸發整頁 render()，理由跟民車登記
+// 一樣——避免打字打到一半被背景輪詢的重繪蓋掉），改完都呼叫這個函式
+// 重新計算所有列的編號（一、／（一）／1.）跟縮排寬度，因為編號是看
+// 「前面所有段落的層級」算出來的，改一列就要重算全部。
+function renumberPolicyNoticeParas(){
+  const container = document.getElementById("policy-notice-paras");
+  if (!container) return;
+  const rows = [...container.querySelectorAll(".notice-para-row")];
+  const labeled = policyNoticeOutlineLabels(rows.map(r => ({ level: parseInt(r.dataset.paraLevel, 10) || 0 })));
+  rows.forEach((r, i) => {
+    r.dataset.paraLevel = String(labeled[i].level);
+    r.style.paddingLeft = `${labeled[i].level * 20}px`;
+    r.querySelector(".notice-para-label").textContent = labeled[i].label;
+    const btns = r.querySelectorAll(".notice-para-btn");
+    btns[0].disabled = labeled[i].level === 0;
+    btns[1].disabled = labeled[i].level === 2;
+  });
+}
+window.__addPolicyNoticePara = () => {
+  const container = document.getElementById("policy-notice-paras");
+  container.insertAdjacentHTML("beforeend", policyNoticeParaRowHtml("", 0));
+  renumberPolicyNoticeParas();
+};
+window.__removePolicyNoticePara = (btn) => {
+  const container = document.getElementById("policy-notice-paras");
+  if (container.querySelectorAll(".notice-para-row").length <= 1) { showToast("至少要保留一段內容"); return; }
+  btn.closest(".notice-para-row").remove();
+  renumberPolicyNoticeParas();
+};
+window.__indentPolicyNoticePara = (btn) => {
+  const row = btn.closest(".notice-para-row");
+  row.dataset.paraLevel = String(Math.min(2, (parseInt(row.dataset.paraLevel, 10) || 0) + 1));
+  renumberPolicyNoticeParas();
+};
+window.__outdentPolicyNoticePara = (btn) => {
+  const row = btn.closest(".notice-para-row");
+  row.dataset.paraLevel = String(Math.max(0, (parseInt(row.dataset.paraLevel, 10) || 0) - 1));
+  renumberPolicyNoticeParas();
+};
+function readPolicyNoticeParasFromDom(){
+  return [...document.querySelectorAll("#policy-notice-paras .notice-para-row")]
+    .map(r => ({ level: parseInt(r.dataset.paraLevel, 10) || 0, text: r.querySelector(".notice-para-text").value.trim() }))
+    .filter(p => p.text);
 }
 window.__saveProfile = (ev) => {
   ev.preventDefault();
