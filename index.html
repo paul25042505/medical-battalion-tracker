@@ -213,12 +213,16 @@
   body{ padding-bottom:env(safe-area-inset-bottom); }
   #app{height:100vh; height:100dvh; display:flex; flex-direction:column; overflow:hidden;}
   /* 螢幕浮水印：獨立於 #app 之外（#app 每次 render 都會整個重新 innerHTML，
-     浮水印要跨畫面持續存在，不能放在裡面），滿版固定、不擋互動、蓋在最上層。
-     淺/深色圖案分開存成 CSS 變數（updateScreenWatermark() 用 JS 寫入），
+     浮水印要跨畫面持續存在，不能放在裡面），固定、不擋互動、蓋在內容層之上。
+     上下範圍故意不用 inset:0 蓋滿整個視窗——頂部列跟底部導覽列不該被蓋到，
+     上下邊界改用 --wm-top/--wm-bottom 兩個變數，由 updateScreenWatermark()
+     量測實際的 .sticky-head／.bottomnav 高度後寫入，只蓋住中間的內容區。
+     淺/深色圖案分開存成 CSS 變數（同樣由 updateScreenWatermark() 寫入），
      實際顯示哪張交給 CSS 的 media query／data-theme 選擇器決定，跟全站
      既有的深色模式覆寫邏輯（見上方 :root[data-theme] 區塊）同一套模式。 */
   #screen-watermark{
-    position:fixed; inset:0; pointer-events:none; z-index:9999;
+    position:fixed; left:0; right:0; pointer-events:none; z-index:9999;
+    top:var(--wm-top, 0px); bottom:var(--wm-bottom, 0px);
     background-repeat:repeat; background-image:var(--wm-img-light);
   }
   @media (prefers-color-scheme: dark){
@@ -2009,7 +2013,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-27-450-screen-watermark";
+const BUILD_TAG = "2026-07-27-451-watermark-bounds-and-size";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3157,6 +3161,7 @@ const RELEASE_NOTES = [
   { date: "2026/07/27", groups: [
     { category: "介面優化", items: [
       "全站畫面新增機敏資訊浮水印：斜向、低透明度顯示「機敏資訊・請勿翻拍」＋登入者姓名／階級＋時間戳記，供日後若有截圖外流時能追溯當下是誰在檢視畫面；一律顯示真實登入者身分，就算開著角色/人員預覽模式看別人的畫面，浮水印還是標示真正登入的人，不會被預覽身分蓋掉",
+      "調整機敏資訊浮水印：改成只蓋住中間內容區，不會蓋到頂部列跟底部導覽列；文字整體放大，更容易辨識",
     ] },
   ] },
   { date: "2026/07/26", groups: [
@@ -10963,6 +10968,13 @@ let _wmCacheKey = null;
 function updateScreenWatermark(p){
   const el = document.getElementById("screen-watermark");
   if (!el) return;
+  // 上下邊界每次 render 都要重新量測（不能跟下面的圖案快取共用同一個
+  // 「身分沒變就跳過」判斷）：頂部列高度會因為預覽 banner 顯示/隱藏、
+  // 長階級縮字級等情況逐次不同，就算登入者跟時間戳記沒變，版面也可能變了。
+  const stickyHead = document.querySelector(".sticky-head");
+  const bottomNav = document.querySelector(".bottomnav");
+  el.style.setProperty("--wm-top", `${stickyHead ? stickyHead.offsetHeight : 0}px`);
+  el.style.setProperty("--wm-bottom", `${bottomNav ? bottomNav.offsetHeight : 0}px`);
   const identity = state.realProfileSnapshot || p;
   const now = new Date();
   const pad = (n) => String(n).padStart(2,"0");
@@ -10972,8 +10984,8 @@ function updateScreenWatermark(p){
   if (cacheKey === _wmCacheKey) return;
   _wmCacheKey = cacheKey;
   const build = (color, opacity) => {
-    const tile = 220, angle = -28;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${tile}" height="${tile}"><g transform="rotate(${angle} ${tile/2} ${tile/2})" font-family="-apple-system,BlinkMacSystemFont,'Inter',sans-serif" fill="${color}" fill-opacity="${opacity}"><text x="${tile/2}" y="${tile/2-26}" text-anchor="middle" font-size="15" font-weight="700">機敏資訊・請勿翻拍</text><text x="${tile/2}" y="${tile/2-4}" text-anchor="middle" font-size="12">${esc(who)}</text><text x="${tile/2}" y="${tile/2+16}" text-anchor="middle" font-size="12">${stamp}</text></g></svg>`;
+    const tile = 320, angle = -28;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${tile}" height="${tile}"><g transform="rotate(${angle} ${tile/2} ${tile/2})" font-family="-apple-system,BlinkMacSystemFont,'Inter',sans-serif" fill="${color}" fill-opacity="${opacity}"><text x="${tile/2}" y="${tile/2-36}" text-anchor="middle" font-size="22" font-weight="700">機敏資訊・請勿翻拍</text><text x="${tile/2}" y="${tile/2-6}" text-anchor="middle" font-size="18">${esc(who)}</text><text x="${tile/2}" y="${tile/2+22}" text-anchor="middle" font-size="18">${stamp}</text></g></svg>`;
     return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
   };
   el.style.setProperty("--wm-img-light", build("#15161B", 0.08));
