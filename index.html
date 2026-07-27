@@ -1717,6 +1717,34 @@
     transition:transform 0.12s ease, opacity 0.12s ease;
   }
   .vehicle-add-btn:active{transform:scale(0.98); opacity:0.85;}
+  /* 成員列表最上面的統計卡（軍官／士官／士兵人數分布，見
+     memberStatsCardHtml）：甜甜圈圖＋圖例，圖例右側再放一列各單位人數的
+     小標籤——只有看得到跨單位資料的人（admin／高勤官）才會有一個以上的
+     單位，一般成員/主官管本來查得到的 state.personnel 就只有自己單位，
+     這排標籤只會剩一個、資訊量等於沒有，見 memberStatsCardHtml 的判斷。 */
+  .member-stats-card{
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md);
+    box-shadow:var(--shadow-xs); padding:16px; margin-bottom:var(--space-section);
+  }
+  .member-stats-donut-row{display:flex; align-items:center; gap:18px;}
+  .member-stats-donut-wrap{position:relative; width:96px; height:96px; flex-shrink:0;}
+  .member-stats-donut-wrap svg{transform:rotate(-90deg);}
+  .member-stats-donut-center{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;}
+  .member-stats-donut-center .n{font-family:var(--mono); font-weight:800; font-size:22px; letter-spacing:-0.02em; color:var(--text); font-variant-numeric:tabular-nums;}
+  .member-stats-donut-center .l{font-size:10px; color:var(--muted); font-weight:600; margin-top:1px;}
+  .member-stats-legend{flex:1; display:flex; flex-direction:column; gap:8px; min-width:0;}
+  .member-stats-legend-row{display:flex; align-items:center; gap:8px; font-size:var(--text-sm);}
+  .member-stats-legend-dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
+  .member-stats-legend-label{color:var(--text); font-weight:600; flex:1;}
+  .member-stats-legend-num{font-family:var(--mono); font-weight:700; color:var(--text); font-variant-numeric:tabular-nums;}
+  .member-stats-units{
+    display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; padding-top:14px; border-top:1px solid var(--border);
+  }
+  .member-stats-unit-chip{
+    display:flex; align-items:baseline; gap:5px; background:var(--panel-2); border-radius:999px;
+    padding:5px 12px; font-size:var(--text-xs); color:var(--muted); font-weight:600;
+  }
+  .member-stats-unit-chip .v{font-family:var(--mono); font-weight:700; color:var(--text); font-variant-numeric:tabular-nums;}
   /* 成員卡片（資訊網格風格，見 memberCardHtml）：成員列表／車號查詢頁共用。 */
   .member-card{
     background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-md);
@@ -2013,7 +2041,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-27-454-subtabs-momentum-scroll";
+const BUILD_TAG = "2026-07-27-455-member-stats-chart";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2021,7 +2049,7 @@ const BUILD_TAG = "2026-07-27-454-subtabs-momentum-scroll";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.28";
+const APP_MAJOR_MINOR = "2.29";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -2538,6 +2566,15 @@ const TOWNSHIP_LATLNG = { "烏日區": { lat: 24.1064, lon: 120.6255 }, "大林�
    ========================================================= */
 const RANKS = ["中校","少校","上尉","中尉","少尉","一等士官長","二等士官長","三等士官長","上士","中士","下士","上等兵","一等兵","二等兵"];
 function rankWeight(rank){ const i = RANKS.indexOf(rank); return i === -1 ? RANKS.length : i; }
+// 成員列表統計圖（軍官／士官／士兵人數分布）用的階級分類，跟 RANKS
+// 陣列本身分開維護：RANKS 是選單順序＋排序權重，這裡純粹是三大類的
+// 歸屬，未來階級選項調整時兩邊都要記得一起改。
+const RANK_CATEGORY = {
+  "中校":"officer", "少校":"officer", "上尉":"officer", "中尉":"officer", "少尉":"officer",
+  "一等士官長":"nco", "二等士官長":"nco", "三等士官長":"nco", "上士":"nco", "中士":"nco", "下士":"nco",
+  "上等兵":"enlisted", "一等兵":"enlisted", "二等兵":"enlisted",
+};
+function rankCategory(rank){ return RANK_CATEGORY[rank] || null; }
 
 // EMT（緊急救護技術員）證照等級，跟階級一樣是人員的固有資料，帳號審核
 // 通過前就能先登記，車長/駕駛顯示時一併帶出，方便調度時知道現場救護量能。
@@ -3165,6 +3202,7 @@ const RELEASE_NOTES = [
       "機敏資訊浮水印調整重複密度：上一版放大文字後同一畫面只剩兩組完整資訊，改成縮小重複單位讓畫面上能看到更多組，同時維持放大後的字級",
       "修正任務頁最上面圖示子選單（勤務／洽公登記／天氣／紀錄／統計）滑到最右邊點選項目後，畫面會自動跳回最左邊的問題：改成記住點選當下的橫向捲動位置，切換後停在原本滑到的地方，不會被重置",
       "圖示子選單補上 iOS 慣性捲動效果，左右滑動的手感更跟手，跟 app 裡其他可左右滑動的區塊（例如天氣預報）一致",
+      "成員列表最上面新增人員編成統計圖：甜甜圈圖顯示軍官（黃）／士官（藍）／士兵（綠）人數與總計，admin／高勤官看得到跨單位資料時，圖下方會再列出各單位（營部／第一連／第二連）各自的人數",
     ] },
   ] },
   { date: "2026/07/26", groups: [
@@ -9262,6 +9300,58 @@ function memberCardHtml(x){
       </div>
     </div>`;
 }
+// 成員列表最上面的統計卡：軍官／士官／士兵人數分布（甜甜圈圖＋圖例），
+// 底下再加一排各單位人數的小標籤。範圍是 state.personnel 裡目前查得到的
+// 全部在職成員，不是只算目前選到的單位分頁——一般成員/主官管本來就只
+// 查得到自己單位（Firestore 規則限制），所以他們看到的甜甜圖跟總計自動
+// 就等於自己單位的數字，底下的單位標籤也會因為只有一個單位而不顯示，
+// 不用另外寫權限判斷。
+function memberStatsCardHtml(){
+  const pool = state.personnel.filter(x => x.active !== false);
+  const counts = { officer: 0, nco: 0, enlisted: 0 };
+  pool.forEach(x => { const c = rankCategory(x.title); if (c) counts[c]++; });
+  const total = counts.officer + counts.nco + counts.enlisted;
+  if (!total) return '';
+  const pct = (n) => n / total * 100;
+  const segs = [
+    { key: "officer", label: "軍官", color: "var(--amber)", count: counts.officer },
+    { key: "nco", label: "士官", color: "var(--blue)", count: counts.nco },
+    { key: "enlisted", label: "士兵", color: "var(--green)", count: counts.enlisted },
+  ];
+  let cursor = 0;
+  const arcs = segs.filter(s => s.count > 0).map(s => {
+    const len = pct(s.count);
+    const arc = `<circle cx="48" cy="48" r="38" fill="none" stroke="${s.color}" stroke-width="13" pathLength="100" stroke-dasharray="${len.toFixed(2)} ${(100-len).toFixed(2)}" stroke-dashoffset="${(-cursor).toFixed(2)}" stroke-linecap="butt"/>`;
+    cursor += len;
+    return arc;
+  }).join("");
+  const unitCounts = {};
+  pool.forEach(x => { unitCounts[x.unit] = (unitCounts[x.unit] || 0) + 1; });
+  const unitsHtml = Object.keys(unitCounts).length > 1
+    ? `<div class="member-stats-units">${UNITS.filter(u => unitCounts[u.code]).map(u => `<span class="member-stats-unit-chip">${esc(u.label)}<span class="v">${unitCounts[u.code]}</span></span>`).join("")}</div>`
+    : '';
+  return `
+    <div class="member-stats-card">
+      <div class="member-stats-donut-row">
+        <div class="member-stats-donut-wrap">
+          <svg width="96" height="96" viewBox="0 0 96 96">
+            <circle cx="48" cy="48" r="38" fill="none" stroke="var(--panel-2)" stroke-width="13"/>
+            ${arcs}
+          </svg>
+          <div class="member-stats-donut-center"><span class="n">${total}</span><span class="l">總計</span></div>
+        </div>
+        <div class="member-stats-legend">
+          ${segs.map(s => `
+            <div class="member-stats-legend-row">
+              <span class="member-stats-legend-dot" style="background:${s.color}"></span>
+              <span class="member-stats-legend-label">${s.label}</span>
+              <span class="member-stats-legend-num">${s.count}</span>
+            </div>`).join("")}
+        </div>
+      </div>
+      ${unitsHtml}
+    </div>`;
+}
 function viewMemberList(){
   const p = state.profile;
   const canSwitch = canSeeAllUnits(p);
@@ -9274,6 +9364,7 @@ function viewMemberList(){
   return `
     <div class="back-row">${backBtn({name:'profile'})}</div>
     <div class="section-label">成員列表</div>
+    ${memberStatsCardHtml()}
     ${unit ? `
       ${unitTabs}
       ${rows.length ? rows.map(memberCardHtml).join("") : `<div class="empty">尚無成員資料</div>`}
