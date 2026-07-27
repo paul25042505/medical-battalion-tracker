@@ -2045,7 +2045,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-27-456-member-stats-unit-filter";
+const BUILD_TAG = "2026-07-27-457-profile-gender-field";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3208,6 +3208,9 @@ const RELEASE_NOTES = [
       "圖示子選單補上 iOS 慣性捲動效果，左右滑動的手感更跟手，跟 app 裡其他可左右滑動的區塊（例如天氣預報）一致",
       "成員列表最上面新增人員編成統計圖：甜甜圈圖顯示軍官（黃）／士官（藍）／士兵（綠）人數與總計，admin／高勤官看得到跨單位資料時，圖下方會再列出各單位（營部／第一連／第二連）各自的人數",
       "人員編成統計圖的單位標籤改成可以點：新增「全部」可以看跨單位加總，點營部／第一連／第二連可以只看該單位自己的軍官／士官／士兵人數分布，跟下面成員卡片清單目前選的單位是各自獨立的篩選",
+    ] },
+    { category: "個人資料", items: [
+      "個人資料新增性別欄位（選填），編輯表單跟唯讀顯示頁都看得到",
     ] },
   ] },
   { date: "2026/07/26", groups: [
@@ -4575,8 +4578,8 @@ async function setCampRegistrationTranscribed(id, transcribed){
     : { transcribed: false, transcribedBy: "", transcribedByName: "", transcribedAt: null });
   if (campRegistrationsPoll) campRegistrationsPoll.refreshNow();
 }
-async function updateOwnProfile(displayName, rank, phone, emtLevel, vehicles){
-  const fields = { displayName, rank, phone, emtLevel: emtLevel||"", vehicles: vehicles||[] };
+async function updateOwnProfile(displayName, rank, phone, emtLevel, vehicles, gender){
+  const fields = { displayName, rank, phone, emtLevel: emtLevel||"", vehicles: vehicles||[], gender: gender||"" };
   await fsSetDoc(`users/${state.user.uid}`, fields);
   state.profile = { ...state.profile, ...fields };
   if (personnelPoll) personnelPoll.refreshNow();
@@ -9153,6 +9156,7 @@ function viewProfileDetail(p){
       <div class="profile-section-title">基本資料</div>
       <div class="member-card-grid" style="border-top:none; padding-top:0;">
         <div class="member-cell"><div class="member-label">姓名</div><div class="member-val">${esc(p.displayName||'未填寫')}</div></div>
+        <div class="member-cell"><div class="member-label">性別</div><div class="member-val${p.gender?'':' member-val-empty'}">${p.gender?esc(p.gender):'未填寫'}</div></div>
         <div class="member-cell"><div class="member-label">階級</div><div class="member-val${p.rank?'':' member-val-empty'}">${p.rank?rankTagHtml(p.rank):'未填寫'}</div></div>
         <div class="member-cell"><div class="member-label">電話</div><div class="member-val${p.phone?'':' member-val-empty'}">${p.phone?esc(p.phone):'未填寫'}</div></div>
         <div class="member-cell"><div class="member-label">EMT 證照</div><div class="member-val${p.emtLevel?'':' member-val-empty'}">${p.emtLevel?esc(p.emtLevel):'未登記'}</div></div>
@@ -9188,6 +9192,12 @@ function viewProfile(){
         <div class="profile-section-card">
           <div class="profile-section-title">基本資料</div>
           <div class="field"><label>姓名</label><input name="displayName" value="${esc(p.displayName||'')}"></div>
+          <div class="field"><label>性別（選填）</label>
+            <select name="gender">
+              <option value="">請選擇性別</option>
+              ${GENDER_OPTIONS.map(g => `<option value="${g}" ${p.gender===g?'selected':''}>${g}</option>`).join("")}
+            </select>
+          </div>
           <div class="field"><label>階級</label>
             <select name="rank">
               <option value="">請選擇階級</option>
@@ -12530,7 +12540,7 @@ window.__saveProfile = (ev) => {
       plate: row.querySelector(".vehicle-plate-input")?.value || ""
     };
   }).filter(v => v.type || v.brand || v.plate);
-  updateOwnProfile(f.get("displayName"), f.get("rank"), f.get("phone"), f.get("emtLevel"), vehicles).then(() => {
+  updateOwnProfile(f.get("displayName"), f.get("rank"), f.get("phone"), f.get("emtLevel"), vehicles, f.get("gender")).then(() => {
     state.profileEditing = false; render();
   }).catch(err => showToast(`個人資料儲存失敗：[${err.code||'?'}] ${err.message||err}`));
 };
