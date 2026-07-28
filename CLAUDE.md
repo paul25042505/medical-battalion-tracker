@@ -3,6 +3,12 @@
 單一 HTML 檔案（`index.html`）的 vanilla JS + Firebase 應用，無建置流程，
 透過 GitHub Actions 部署到 Firebase Hosting + Firestore Rules。
 
+## 溝通習慣
+
+不管是修 bug、加功能還是單純討論，最後都要附上一段中文白話說明：這次
+改了什麼、為什麼要改、之後用起來會有什麼不同——不用等使用者再問才補充，
+也不用特別被要求才用中文回覆。
+
 ## 出貨檢查清單（每次 PR 都要做）
 
 1. 修改 `index.html`
