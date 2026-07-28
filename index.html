@@ -803,7 +803,17 @@
     padding:2px 7px; border-radius:999px;
   }
   .policy-notice-home-row-title{
-    font-size:var(--text-xs); color:var(--text); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;
+    flex:1 1 auto; font-size:var(--text-xs); color:var(--text); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;
+  }
+  /* 提醒有新通報要看用的小徽章：政令宣導純被動查閱、不推播（見上方
+     policyNoticeHomeCardHtml 的說明），沒有這個標示的話發布了新通報
+     不會有任何提示。isPolicyNoticeNew() 判斷發布日期在 14 天內。 */
+  .policy-notice-new-badge{
+    flex-shrink:0; font-size:9px; font-weight:800; letter-spacing:0.03em; color:#fff;
+    background:var(--red); padding:2px 6px; border-radius:999px;
+  }
+  .policy-notice-home-date{
+    flex-shrink:0; font-size:10px; color:var(--muted); font-family:var(--mono);
   }
   .home-date{font-size:var(--text-sm); color:var(--muted); font-weight:600; font-family:var(--mono); margin-bottom:16px;}
   /* 天氣卡片改成跟任務卡片／急診待命卡片共用的 .spatial-card 語言——
@@ -2120,7 +2130,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-28-473-release-notes-collapse";
+const BUILD_TAG = "2026-07-28-474-policynotice-new-badge";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3335,6 +3345,10 @@ const RELEASE_NOTES = [
       "後台基礎資料管理清單（車輛、行車紀錄器、醫院、醫官、任務名稱範本、網網相連、軍品項目、政令宣導、訊息管理）改成滑動操作：原本常駐顯示的「編輯／刪除／啟用停用」按鈕改成向左滑動才會顯示，比照 iOS 原生清單（例如 Mail／提醒事項）的操作方式，畫面更清爽；人員與帳號清單維持現狀不變（編輯是常駐的鉛筆圖示，本來就是很好的捷徑）",
       "後台「管理勤務」清單也改成同一套滑動操作，編輯／強制結束／刪除改成向左滑動才會顯示",
       "「關於系統 → 更新紀錄」每天預設收合，只列出日期，點下去才展開當天完整異動內容，避免一次全部攤開要滑很久才找得到某一天的內容",
+    ] },
+    { category: "政令宣導", items: [
+      "首頁小區塊每一列加上發布日期（原本只有分類標籤＋標題，看不到是什麼時候發布的）",
+      "發布日期在 14 天內的通報加上「NEW」徽章提醒還有新內容沒看過，首頁小區塊跟完整列表頁都會顯示",
     ] },
   ] },
   { date: "2026/07/27", groups: [
@@ -4807,6 +4821,19 @@ async function addMilitaryItem(category, name){
 // 管理員/高勤官/主官管都能發布（跟基礎資料管理同一組權限，見
 // canManageBaseData），內容不分單位，全營共用。
 const POLICY_NOTICE_CATEGORIES = ["運輸通報", "軍醫通報", "其他"];
+// 政令宣導是純被動查閱、不推播（見上方說明），發布了新的通報不會主動
+// 通知任何人；靠這個「NEW」徽章提醒最近幾天內發布的通報還沒被特別標示
+// 過，14 天是憑經驗抓的緩衝期（比對照通知中心公告的一個月效期短，這裡
+// 純粹是「提醒有新內容」而不是「有效期限」，兩者概念不同不要混用同一個
+// 常數）。發布日期在未來（例如手動填了還沒到的日期）不算新，避免顯示
+// 邏輯上矛盾。
+const POLICY_NOTICE_NEW_DAYS = 14;
+function isPolicyNoticeNew(publishDate){
+  const t = publishDate ? new Date(publishDate).getTime() : NaN;
+  if (Number.isNaN(t)) return false;
+  const diff = Date.now() - t;
+  return diff >= 0 && diff <= POLICY_NOTICE_NEW_DAYS * 24 * 60 * 60 * 1000;
+}
 // 內容改成公文式編號階層：每一段落存 { level, text }，level 0～2 對應
 // 「一、」「（一）」「1.」三層縮排／編號，跟公文常見的條列格式一致（見
 // policyNoticeParaRowHtml／__indentPolicyNoticePara 等後台編輯用的函式）。
@@ -9803,7 +9830,7 @@ function viewPolicyNotices(){
     </div>
     ${rows.length ? rows.map(x => `
       <div class="admin-row clickable" onclick="window.__nav({name:'policyNoticeDetail', id:'${x.id}'})">
-        <div><div class="name">${esc(x.title)}</div><div class="sub">${esc(x.category)} · ${esc(x.publishDate||'—')}</div></div>
+        <div><div class="name">${esc(x.title)}${isPolicyNoticeNew(x.publishDate) ? `<span class="policy-notice-new-badge" style="margin-left:6px;">NEW</span>` : ''}</div><div class="sub">${esc(x.category)} · ${esc(x.publishDate||'—')}</div></div>
         ${icon('chevronRight',18)}
       </div>`).join("") : `<div class="empty">目前沒有政令宣導</div>`}
   `;
@@ -9849,6 +9876,8 @@ function policyNoticeHomeCardHtml(){
         <div class="policy-notice-home-row" onclick="window.__nav({name:'policyNoticeDetail', id:'${x.id}'})">
           <span class="policy-notice-home-cat">${esc(x.category)}</span>
           <span class="policy-notice-home-row-title">${esc(x.title)}</span>
+          ${isPolicyNoticeNew(x.publishDate) ? `<span class="policy-notice-new-badge">NEW</span>` : ''}
+          <span class="policy-notice-home-date">${esc(x.publishDate||'—')}</span>
         </div>`).join("")}
     </div>`;
 }
