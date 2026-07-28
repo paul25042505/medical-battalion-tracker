@@ -1409,6 +1409,19 @@
   .admin-row .name{font-size:var(--text-sm); font-weight:600; word-break:break-word;}
   .admin-row .sub{font-size:var(--text-xs); color:var(--muted); font-family:var(--mono); word-break:break-word;}
   .admin-row > div:first-child{min-width:0; flex:1 1 160px;}
+  /* 後台清單通用滑動列（見 swipeRowHtml／setupSwipeRows）：操作按鈕
+     （.swipe-row-actions）貼齊右側、絕對定位在底層，可見內容
+     （.swipe-row-content）疊在上層、往左拖曳露出底下的按鈕；外層
+     overflow:hidden 讓拖曳露出的按鈕維持跟內容一致的圓角矩形範圍，
+     不會露出方形邊角看起來像裁切錯誤。 */
+  .swipe-row{position:relative; overflow:hidden; border-radius:var(--radius-md); margin-bottom:10px;}
+  .swipe-row .swipe-row-content{margin-bottom:0; position:relative; z-index:1; transition:transform 0.2s ease; touch-action:pan-y;}
+  .swipe-row-actions{position:absolute; top:0; right:0; bottom:0; display:flex; z-index:0;}
+  .swipe-action{
+    width:76px; flex-shrink:0; border:none; display:flex; align-items:center; justify-content:center;
+    font-size:var(--text-xs); font-weight:600; color:var(--text); background:var(--panel-2);
+  }
+  .swipe-action.danger{background:var(--red); color:#fff;}
   /* 洽公／廠商入營登記：行事曆月曆格＋列表卡片，比照 iOS 行事曆 App 的
      圓角格子＋當日高亮樣式，跟站內既有的圓角卡片系統共用同一套設計語彙
      （--radius-md/--panel-2/--blue），不另外開一套視覺風格。 */
@@ -2096,7 +2109,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-28-470-edge-swipe-back";
+const BUILD_TAG = "2026-07-28-471-basedata-swipe-actions";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3308,6 +3321,7 @@ const RELEASE_NOTES = [
     ] },
     { category: "介面優化", items: [
       "新增左邊緣右滑返回手勢：比照 iOS 系統手勢，從螢幕最左邊緣往右滑超過門檻放開就返回上一頁，跟點擊左上角返回鍵導去同一個地方；沒有返回鍵的畫面（例如首頁）這個手勢不會有作用，彈窗開著時也不會觸發，避免跟填表手勢互相干擾",
+      "後台基礎資料管理清單（車輛、行車紀錄器、醫院、醫官、任務名稱範本、網網相連、軍品項目、政令宣導、訊息管理）改成滑動操作：原本常駐顯示的「編輯／刪除／啟用停用」按鈕改成向左滑動才會顯示，比照 iOS 原生清單（例如 Mail／提醒事項）的操作方式，畫面更清爽；人員與帳號清單維持現狀不變（編輯是常駐的鉛筆圖示，本來就是很好的捷徑）",
     ] },
   ] },
   { date: "2026/07/27", groups: [
@@ -9327,11 +9341,12 @@ function renderNotificationsList(editable){
   const markAllBtn = hasUnread
     ? `<button class="btn-glass-blue" style="margin-bottom:12px;" onclick="window.__markAllNotificationsRead(${!editable})">全部標記為已讀</button>`
     : "";
-  return `
-    ${addBtn}
-    ${markAllBtn}
-    ${list.length ? list.map(n => `
-      <div class="notif-card spatial-card ${!n.isRead ? 'unread' : ''}" onclick="window.__markNotificationRead('${n.id}','${n._coll||'notifications'}')">
+  // 訊息管理（editable=true）的公告卡片改成滑動才顯示編輯/刪除，跟其他
+  // 後台清單一致；通知中心（editable=false，個人查看用）沒有編輯權限，
+  // 維持原本卡片點擊即「標記已讀」，不套用滑動列。卡片本身「點擊標記
+  // 已讀」的 onclick 兩種情境都要保留，用 opts.attrs 塞進滑動列的內層
+  // 容器，跟滑動手勢互不衝突（見 swipeRowHtml 的說明）。
+  const notifInnerHtml = (n) => `
         <div class="notif-card-head">
           <span class="notif-icon">${icon('bell',18)}</span>
           <div class="notif-head-text">
@@ -9341,13 +9356,21 @@ function renderNotificationsList(editable){
           ${!n.isRead ? `<span class="notif-dot"></span>` : ""}
         </div>
         <div class="notif-body">${esc(n.body)}</div>
-        ${n.expiresAt ? `<div class="notif-expiry">效期至 ${fmtDateShort(new Date(n.expiresAt).getTime())}</div>` : ""}
-        ${editable ? `
-        <div style="display:flex; gap:6px; margin-top:12px;">
-          <button class="icon-btn" onclick="event.stopPropagation(); window.__openBaseDataModal('notifications','${n.id}','')">編輯</button>
-          <button class="icon-btn danger" onclick="event.stopPropagation(); window.__deleteBaseData('notifications','${n.id}')">刪除</button>
-        </div>` : ""}
-      </div>`).join("") : `<div class="empty">尚無通知</div>`}
+        ${n.expiresAt ? `<div class="notif-expiry">效期至 ${fmtDateShort(new Date(n.expiresAt).getTime())}</div>` : ""}`;
+  const notifCardHtml = (n) => `
+      <div class="notif-card spatial-card ${!n.isRead ? 'unread' : ''}" onclick="window.__markNotificationRead('${n.id}','${n._coll||'notifications'}')">${notifInnerHtml(n)}
+      </div>`;
+  return `
+    ${addBtn}
+    ${markAllBtn}
+    ${list.length ? list.map(n => editable ? swipeRowHtml(
+      notifInnerHtml(n),
+      [
+        { label:'編輯', onclick:`window.__openBaseDataModal('notifications','${n.id}','')` },
+        { label:'刪除', onclick:`window.__deleteBaseData('notifications','${n.id}')`, danger:true },
+      ],
+      { className:`notif-card spatial-card ${!n.isRead ? 'unread' : ''}`, attrs:`onclick="window.__markNotificationRead('${n.id}','${n._coll||'notifications'}')"` }
+    ) : notifCardHtml(n)).join("") : `<div class="empty">尚無通知</div>`}
   `;
 }
 function viewNotifications(){
@@ -10593,6 +10616,28 @@ function viewBaseDataHub(){
     ${settingsSection('共用資料', sharedRows)}
   `;
 }
+// 後台清單通用的滑動列：把原本常駐顯示的「編輯／刪除／啟用停用」等操作
+// 按鈕改成向左滑動才會顯示，比照 iOS 原生清單（例如 Mail／提醒事項）的
+// 操作方式。actions 是 [{label, onclick, danger}]，由右至左排列；
+// opts.className 是內層可見內容要套用的樣式 class（大部分清單是
+// "admin-row"，訊息管理的公告卡片是 "notif-card spatial-card" 這種
+// 不同視覺樣式），opts.attrs 是額外要塞進內層容器標籤的原始屬性字串
+// （例如訊息管理公告卡片本身還需要一個「點擊標記已讀」的 onclick，
+// 這個 onclick 跟滑動手勢互不衝突——滑動手勢只有偵測到明顯水平拖曳
+// 才會攔截，單純點擊放開時序上等同一般 tap，原本的 onclick 照常觸發）。
+// 滑動手勢統一委派在 window 層級處理（見 setupSwipeRows），不受個別
+// 清單樣式差異影響。
+function swipeRowHtml(innerHtml, actions, opts){
+  opts = opts || {};
+  const cls = opts.className || 'admin-row';
+  const attrs = opts.attrs || '';
+  const actionsHtml = actions.map(a => `<button type="button" class="swipe-action${a.danger?' danger':''}" onclick="${a.onclick}">${esc(a.label)}</button>`).join("");
+  return `
+    <div class="swipe-row">
+      <div class="swipe-row-actions">${actionsHtml}</div>
+      <div class="swipe-row-content ${cls}" ${attrs}>${innerHtml}</div>
+    </div>`;
+}
 function viewBaseDataVehicles(){
   const p = state.profile;
   const canSwitch = canSeeAllUnits(p);
@@ -10605,15 +10650,14 @@ function viewBaseDataVehicles(){
   const rows = sortVehicles(state.vehicles.filter(x => x.unit === unit));
   const body = `
     <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('vehicles', null, '${unit}')">${icon('plus',15)} 新增車輛</button>
-    ${rows.length ? rows.map(x => `
-      <div class="admin-row">
-        <div><div class="name">${esc(x.plate)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.type||'—')}</div></div>
-        <div style="display:flex; gap:6px; flex-wrap:wrap;">
-          <button class="icon-btn" onclick="window.__openBaseDataModal('vehicles','${x.id}','${unit}')">編輯</button>
-          <button class="icon-btn" onclick="window.__toggleBaseData('vehicles','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
-          <button class="icon-btn danger" onclick="window.__deleteBaseData('vehicles','${x.id}')">刪除</button>
-        </div>
-      </div>`).join("") : `<div class="empty">尚無車輛資料</div>`}`;
+    ${rows.length ? rows.map(x => swipeRowHtml(
+      `<div><div class="name">${esc(x.plate)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.type||'—')}</div></div>`,
+      [
+        { label:'編輯', onclick:`window.__openBaseDataModal('vehicles','${x.id}','${unit}')` },
+        { label:x.active===false?'啟用':'停用', onclick:`window.__toggleBaseData('vehicles','${x.id}',${x.active!==false})` },
+        { label:'刪除', onclick:`window.__deleteBaseData('vehicles','${x.id}')`, danger:true },
+      ]
+    )).join("") : `<div class="empty">尚無車輛資料</div>`}`;
   return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">車輛</div>${unitTabs}${body}`;
 }
 function viewBaseDataRecorders(){
@@ -10628,15 +10672,14 @@ function viewBaseDataRecorders(){
   const rows = state.recorders.filter(x => x.unit === unit);
   const body = `
     <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('recorders', null, '${unit}')">${icon('plus',15)} 新增行車紀錄器</button>
-    ${rows.length ? rows.map(x => `
-      <div class="admin-row">
-        <div><div class="name">${esc(x.code)}${x.active===false?'（已停用）':''}</div></div>
-        <div style="display:flex; gap:6px; flex-wrap:wrap;">
-          <button class="icon-btn" onclick="window.__openBaseDataModal('recorders','${x.id}','${unit}')">編輯</button>
-          <button class="icon-btn" onclick="window.__toggleBaseData('recorders','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
-          <button class="icon-btn danger" onclick="window.__deleteBaseData('recorders','${x.id}')">刪除</button>
-        </div>
-      </div>`).join("") : `<div class="empty">尚無行車紀錄器資料</div>`}`;
+    ${rows.length ? rows.map(x => swipeRowHtml(
+      `<div><div class="name">${esc(x.code)}${x.active===false?'（已停用）':''}</div></div>`,
+      [
+        { label:'編輯', onclick:`window.__openBaseDataModal('recorders','${x.id}','${unit}')` },
+        { label:x.active===false?'啟用':'停用', onclick:`window.__toggleBaseData('recorders','${x.id}',${x.active!==false})` },
+        { label:'刪除', onclick:`window.__deleteBaseData('recorders','${x.id}')`, danger:true },
+      ]
+    )).join("") : `<div class="empty">尚無行車紀錄器資料</div>`}`;
   return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">行車紀錄器</div>${unitTabs}${body}`;
 }
 // 醫院、醫官都是全營共用的參考資料，不像人員/車輛/行車紀錄器綁定特定
@@ -10646,57 +10689,53 @@ function viewBaseDataHospitals(){
   const rows = state.hospitals.slice().sort((a,b) => HOSPITAL_NAME_COLLATOR.compare(a.name||'', b.name||''));
   const body = `
     ${canAdd ? `<button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('hospitals', null, '')">${icon('plus',15)} 新增醫院</button>` : ""}
-    ${rows.length ? rows.map(x => `
-      <div class="admin-row">
-        <div><div class="name">${esc(x.name)}</div><div class="sub">${esc(x.tier||'—')} · ${esc(x.level||'—')}${x.phone?' · '+esc(x.phone):''}</div>${x.note?`<div class="sub">${esc(x.note)}</div>`:""}</div>
-        <div style="display:flex; gap:6px; flex-wrap:wrap;">
-          <button class="icon-btn" onclick="window.__openBaseDataModal('hospitals','${x.id}','')">編輯</button>
-          <button class="icon-btn danger" onclick="window.__deleteBaseData('hospitals','${x.id}')">刪除</button>
-        </div>
-      </div>`).join("") : `<div class="empty">尚無醫院資料</div>`}`;
+    ${rows.length ? rows.map(x => swipeRowHtml(
+      `<div><div class="name">${esc(x.name)}</div><div class="sub">${esc(x.tier||'—')} · ${esc(x.level||'—')}${x.phone?' · '+esc(x.phone):''}</div>${x.note?`<div class="sub">${esc(x.note)}</div>`:""}</div>`,
+      [
+        { label:'編輯', onclick:`window.__openBaseDataModal('hospitals','${x.id}','')` },
+        { label:'刪除', onclick:`window.__deleteBaseData('hospitals','${x.id}')`, danger:true },
+      ]
+    )).join("") : `<div class="empty">尚無醫院資料</div>`}`;
   return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">醫院</div>${body}`;
 }
 function viewBaseDataDoctors(){
   const rows = state.doctors.slice().sort((a,b) => (a.name||'').localeCompare(b.name||''));
   const body = `
     <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('doctors', null, '')">${icon('plus',15)} 新增醫官</button>
-    ${rows.length ? rows.map(x => `
-      <div class="admin-row">
-        <div><div class="name">${esc(x.name)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.title||'—')}${x.phone?' · '+esc(x.phone):''}</div></div>
-        <div style="display:flex; gap:6px; flex-wrap:wrap;">
-          <button class="icon-btn" onclick="window.__openBaseDataModal('doctors','${x.id}','')">編輯</button>
-          <button class="icon-btn" onclick="window.__toggleBaseData('doctors','${x.id}',${x.active!==false})">${x.active===false?'啟用':'停用'}</button>
-          <button class="icon-btn danger" onclick="window.__deleteBaseData('doctors','${x.id}')">刪除</button>
-        </div>
-      </div>`).join("") : `<div class="empty">尚無醫官資料</div>`}`;
+    ${rows.length ? rows.map(x => swipeRowHtml(
+      `<div><div class="name">${esc(x.name)}${x.active===false?'（已停用）':''}</div><div class="sub">${esc(x.title||'—')}${x.phone?' · '+esc(x.phone):''}</div></div>`,
+      [
+        { label:'編輯', onclick:`window.__openBaseDataModal('doctors','${x.id}','')` },
+        { label:x.active===false?'啟用':'停用', onclick:`window.__toggleBaseData('doctors','${x.id}',${x.active!==false})` },
+        { label:'刪除', onclick:`window.__deleteBaseData('doctors','${x.id}')`, danger:true },
+      ]
+    )).join("") : `<div class="empty">尚無醫官資料</div>`}`;
   return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">醫官</div>${body}`;
 }
 function viewBaseDataTaskTitleTemplates(){
   const rows = state.taskTitleTemplates.slice().sort((a,b) => HOSPITAL_NAME_COLLATOR.compare(a.text||'', b.text||''));
   const body = `
     <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('taskTitleTemplates', null, '')">${icon('plus',15)} 新增範本</button>
-    ${rows.length ? rows.map(x => `
-      <div class="admin-row">
-        <div><div class="name">${esc(x.text)}</div></div>
-        <div style="display:flex; gap:6px; flex-wrap:wrap;">
-          <button class="icon-btn" onclick="window.__openBaseDataModal('taskTitleTemplates','${x.id}','')">編輯</button>
-          <button class="icon-btn danger" onclick="window.__deleteBaseData('taskTitleTemplates','${x.id}')">刪除</button>
-        </div>
-      </div>`).join("") : `<div class="empty">尚無範本，建立勤務頁的「任務名稱」欄位不會顯示快速選擇</div>`}`;
+    ${rows.length ? rows.map(x => swipeRowHtml(
+      `<div><div class="name">${esc(x.text)}</div></div>`,
+      [
+        { label:'編輯', onclick:`window.__openBaseDataModal('taskTitleTemplates','${x.id}','')` },
+        { label:'刪除', onclick:`window.__deleteBaseData('taskTitleTemplates','${x.id}')`, danger:true },
+      ]
+    )).join("") : `<div class="empty">尚無範本，建立勤務頁的「任務名稱」欄位不會顯示快速選擇</div>`}`;
   return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">任務名稱範本</div>${body}`;
 }
 function viewBaseDataWebLinks(){
   const rows = state.webLinks.slice().sort((a,b) => HOSPITAL_NAME_COLLATOR.compare(a.name||'', b.name||''));
   const body = `
     <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('webLinks', null, '')">${icon('plus',15)} 新增網址</button>
-    ${rows.length ? rows.map(x => `
-      <div class="admin-row">
-        <div><div class="name">${esc(x.name)}</div><div class="sub">${esc(x.url)}</div></div>
-        <div style="display:flex; gap:6px; flex-wrap:wrap;">
-          <button class="icon-btn" onclick="window.__openBaseDataModal('webLinks','${x.id}','')">編輯</button>
-          <button class="icon-btn danger" onclick="window.__deleteBaseData('webLinks','${x.id}')">刪除</button>
-        </div>
-      </div>`).join("") : `<div class="empty">尚無網址，「網網相連」頁不會顯示任何連結</div>`}`;
+    ${rows.length ? rows.map(x => swipeRowHtml(
+      `<div><div class="name">${esc(x.name)}</div><div class="sub">${esc(x.url)}</div></div>`,
+      [
+        { label:'編輯', onclick:`window.__openBaseDataModal('webLinks','${x.id}','')` },
+        { label:'刪除', onclick:`window.__deleteBaseData('webLinks','${x.id}')`, danger:true },
+      ]
+    )).join("") : `<div class="empty">尚無網址，「網網相連」頁不會顯示任何連結</div>`}`;
   return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">網網相連</div>${body}`;
 }
 function viewBaseDataMilitaryItems(){
@@ -10707,28 +10746,26 @@ function viewBaseDataMilitaryItems(){
     <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('militaryItems', null, '')">${icon('plus',15)} 新增品項</button>
     ${groups.map(g => `
       <div class="section-label" style="margin-top:14px;">${g.cat}</div>
-      ${g.items.length ? g.items.map(x => `
-        <div class="admin-row">
-          <div><div class="name">${esc(x.name)}</div></div>
-          <div style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button class="icon-btn" onclick="window.__openBaseDataModal('militaryItems','${x.id}','')">編輯</button>
-            <button class="icon-btn danger" onclick="window.__deleteBaseData('militaryItems','${x.id}')">刪除</button>
-          </div>
-        </div>`).join("") : `<div class="empty">尚無「${g.cat}」品項</div>`}`).join("")}`;
+      ${g.items.length ? g.items.map(x => swipeRowHtml(
+        `<div><div class="name">${esc(x.name)}</div></div>`,
+        [
+          { label:'編輯', onclick:`window.__openBaseDataModal('militaryItems','${x.id}','')` },
+          { label:'刪除', onclick:`window.__deleteBaseData('militaryItems','${x.id}')`, danger:true },
+        ]
+      )).join("") : `<div class="empty">尚無「${g.cat}」品項</div>`}`).join("")}`;
   return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">軍品項目</div>${body}`;
 }
 function viewBaseDataPolicyNotices(){
   const rows = state.policyNotices.slice().sort((a,b) => (b.publishDate||"").localeCompare(a.publishDate||""));
   const body = `
     <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('policyNotices', null, '')">${icon('plus',15)} 新增政令宣導</button>
-    ${rows.length ? rows.map(x => `
-      <div class="admin-row">
-        <div><div class="name">${esc(x.title)}</div><div class="sub">${esc(x.category)} · ${esc(x.publishDate||'—')}${x.docNumber ? ' · ' + esc(x.docNumber) : ''}</div></div>
-        <div style="display:flex; gap:6px; flex-wrap:wrap;">
-          <button class="icon-btn" onclick="window.__openBaseDataModal('policyNotices','${x.id}','')">編輯</button>
-          <button class="icon-btn danger" onclick="window.__deleteBaseData('policyNotices','${x.id}')">刪除</button>
-        </div>
-      </div>`).join("") : `<div class="empty">尚無政令宣導，首頁與「政令宣導」頁不會顯示任何項目</div>`}`;
+    ${rows.length ? rows.map(x => swipeRowHtml(
+      `<div><div class="name">${esc(x.title)}</div><div class="sub">${esc(x.category)} · ${esc(x.publishDate||'—')}${x.docNumber ? ' · ' + esc(x.docNumber) : ''}</div></div>`,
+      [
+        { label:'編輯', onclick:`window.__openBaseDataModal('policyNotices','${x.id}','')` },
+        { label:'刪除', onclick:`window.__deleteBaseData('policyNotices','${x.id}')`, danger:true },
+      ]
+    )).join("") : `<div class="empty">尚無政令宣導，首頁與「政令宣導」頁不會顯示任何項目</div>`}`;
   return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">政令宣導</div>${body}`;
 }
 
@@ -13486,6 +13523,70 @@ window.__saveTaskEdit = (ev, taskId) => {
       }
     }
     startX = null; startY = null; dragging = false; target = null;
+  }, { passive: true });
+})();
+
+/* =========================================================
+   後台清單通用滑動列（見 swipeRowHtml 的說明）：手指往左拖曳
+   .swipe-row-content，露出底下的 .swipe-row-actions 操作按鈕，比照
+   iOS 原生清單（Mail／提醒事項）的操作方式。同一時間只允許一列被滑開，
+   點擊別的地方（操作按鈕本身除外）會把已經滑開的那一列收回去。
+   ========================================================= */
+(function setupSwipeRows(){
+  let content = null, actionsWidth = 0, startX = null, startY = null, baseX = 0, dragging = false;
+  let openRow = null;
+
+  function closeRow(el){
+    if (!el) return;
+    el.style.transition = 'transform 0.2s ease';
+    el.style.transform = '';
+    if (openRow === el) openRow = null;
+  }
+
+  window.addEventListener('touchstart', (e) => {
+    const el = e.target.closest && e.target.closest('.swipe-row-content');
+    if (!el) {
+      // 點在滑動列以外的地方（操作按鈕本身除外，讓按鈕正常觸發點擊）
+      // 就把目前滑開的那一列收回去。
+      if (openRow && !(e.target.closest && e.target.closest('.swipe-row-actions'))) closeRow(openRow);
+      content = null; startX = null; return;
+    }
+    content = el;
+    const actionsEl = el.closest('.swipe-row').querySelector('.swipe-row-actions');
+    actionsWidth = actionsEl ? actionsEl.offsetWidth : 0;
+    startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+    baseX = (openRow === el) ? -actionsWidth : 0;
+    if (openRow && openRow !== el) closeRow(openRow);
+    dragging = false;
+  }, { passive: true });
+
+  window.addEventListener('touchmove', (e) => {
+    if (!content || startX == null) return;
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+    if (Math.abs(dy) > Math.abs(dx)) return;
+    dragging = true;
+    const x = Math.max(-actionsWidth, Math.min(0, baseX + dx));
+    content.style.transition = 'none';
+    content.style.transform = `translateX(${x}px)`;
+    e.preventDefault();
+  }, { passive: false });
+
+  window.addEventListener('touchend', () => {
+    if (!content) return;
+    if (dragging) {
+      const m = /translateX\((-?[\d.]+)px\)/.exec(content.style.transform);
+      const x = m ? parseFloat(m[1]) : 0;
+      content.style.transition = 'transform 0.2s ease';
+      if (actionsWidth > 0 && x <= -actionsWidth / 2) {
+        content.style.transform = `translateX(-${actionsWidth}px)`;
+        openRow = content;
+      } else {
+        content.style.transform = '';
+        if (openRow === content) openRow = null;
+      }
+    }
+    content = null; startX = null; startY = null; dragging = false;
   }, { passive: true });
 })();
 
