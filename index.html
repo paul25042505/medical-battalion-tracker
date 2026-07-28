@@ -2130,7 +2130,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-28-476-devolve-basedata-member";
+const BUILD_TAG = "2026-07-28-477-hide-completed-empty-patient-card";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3345,6 +3345,9 @@ const RELEASE_NOTES = [
     { category: "管理後台", items: [
       "行車紀錄器、醫官、軍品項目、政令宣導這四類參考資料下放給一般成員維護（原本限管理層）：一般成員可在「更多 → 共用資料維護」新增/編輯/刪除，行車紀錄器仍只能維護自己單位的資料；車輛、醫院、人員與帳號、勤務管理維持原本限管理層",
       "移除後台「基礎資料 → 醫院」獨立管理頁：醫院的新增/編輯/刪除本來就整合在前台「醫院資訊」頁（依角色顯示對應按鈕），後台不需要重複維護一份",
+    ] },
+    { category: "患者紀錄", items: [
+      "修正已完成的勤務仍顯示「尚未建立患者紀錄」＋「開始記錄」按鈕的問題：勤務完成後不會再新增患者，這種情況直接隱藏整張患者狀況卡片；完成前就已經建立的患者紀錄不受影響，仍會照常保留顯示",
     ] },
   ] },
   { date: "2026/07/27", groups: [
@@ -8707,6 +8710,11 @@ function viewTaskDetail(taskId){
   // ---- 患者狀況：任何進行中的任務，遇到突發狀況都能記錄生命徵象／主訴，
   // 不綁定特定任務類型或當下的勤務進度階段。可持續新增，形成時間序列方便
   // 看出病人狀況變化。首頁／任務卡片會依此凸顯有患者的任務（見 taskCard）。
+  // canReport() 本身不判斷任務是否已完成（回報權限只看角色/是否指派本人），
+  // 所以已完成的任務如果完全沒有患者紀錄，不能只靠 canDoReport 判斷要不要
+  // 顯示這張卡片，否則會一直顯示「尚未建立患者紀錄」＋「開始記錄」按鈕，
+  // 讓人誤以為還能對一筆已經結束的任務新增患者；已經有紀錄的話（不論是不是
+  // 完成前建立的）維持顯示，紀錄本身不會因為任務完成而消失。
   const taskVitals = state.vitals.filter(v => v.taskId === taskId).sort(eventOrderCompare);
   const hasPatient = taskVitals.length > 0;
   // 一筆任務（尤其是醫務所待命）可能依序處理過好幾位不同患者：舊患者
@@ -8736,7 +8744,7 @@ function viewTaskDetail(taskId){
   const patientActionLabel = hasActivePatient
     ? (canDoReport ? '查看／更新紀錄' : '查看紀錄')
     : (canDoReport ? '開始記錄' : '查看紀錄');
-  const vitalsSection = !isLiaison && (canDoReport || hasPatient) ? `
+  const vitalsSection = !isLiaison && (hasPatient || (canDoReport && s !== "completed")) ? `
     <div class="section-label">患者狀況</div>
     <div class="patient-card${hasActivePatient ? ' has-record' : ''}">
       <${patientCardTag} class="patient-card-main"${patientCardClickAttr}>
