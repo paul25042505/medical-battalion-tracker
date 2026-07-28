@@ -2093,7 +2093,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-28-463-login-popup-revert";
+const BUILD_TAG = "2026-07-28-464-emt-none-option";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3255,6 +3255,9 @@ const RELEASE_NOTES = [
     ] },
     { category: "登入", items: [
       "修正已加入主畫面、以獨立模式開啟時 Google 登入完全登不進去的問題：上一版為了解決彈出視窗偶爾誤跳「登入失敗」錯誤訊息，改成整頁轉址登入，結果轉址流程在部分裝置上會在跳回 App 後靜悄悄地失敗（沒有任何錯誤提示，直接彈回登入畫面），比原本的問題更嚴重；改回一律使用彈出視窗登入，只把那個已知無害的錯誤代碼過濾掉不顯示，其餘真正的登入錯誤維持正常顯示",
+    ] },
+    { category: "個人資料", items: [
+      "EMT 證照等級下拉選單新增明確的「無」選項（註冊帳號、個人資料編輯、後台編輯人員三處都同步更新），取代原本容易讓人以為一定要選一個的「請選擇證照等級」預設文字，效果跟原本不選一樣，純粹是文字更清楚",
     ] },
   ] },
   { date: "2026/07/27", groups: [
@@ -6631,7 +6634,7 @@ function viewPending(){
       <div class="field"><label>電話</label><input name="phone" type="tel" inputmode="tel" value="${esc(p.phone||'')}" placeholder="例如：0912345678"></div>
       <div class="field"><label>EMT 證照等級（選填）</label>
         <select name="emtLevel">
-          <option value="">請選擇證照等級</option>
+          <option value="">無</option>
           ${EMT_LEVELS.map(l => `<option value="${l}" ${p.emtLevel===l?'selected':''}>${l}</option>`).join("")}
         </select>
       </div>
@@ -9352,7 +9355,7 @@ function viewProfile(){
           <div class="field"><label>電話</label><input name="phone" type="tel" inputmode="tel" value="${esc(p.phone||'')}" placeholder="例如：0912345678"></div>
           <div class="field"><label>EMT 證照等級（選填）</label>
             <select name="emtLevel">
-              <option value="">請選擇證照等級</option>
+              <option value="">無</option>
               ${EMT_LEVELS.map(l => `<option value="${l}" ${p.emtLevel===l?'selected':''}>${l}</option>`).join("")}
             </select>
           </div>
@@ -10646,7 +10649,7 @@ function viewBaseDataModal(){
       <div class="field"><label>電話（選填）</label><input name="phone" type="tel" inputmode="tel" value="${esc(editing?.phone||'')}"></div>
       <div class="field"><label>EMT 證照等級（選填）</label>
         <select name="emtLevel">
-          <option value="">請選擇證照等級</option>
+          <option value="">無</option>
           ${EMT_LEVELS.map(l => `<option value="${l}" ${editing?.emtLevel===l?'selected':''}>${l}</option>`).join("")}
         </select>
       </div>
