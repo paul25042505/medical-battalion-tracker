@@ -2096,7 +2096,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-28-469-appcheck-sitekey";
+const BUILD_TAG = "2026-07-28-470-edge-swipe-back";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3305,6 +3305,9 @@ const RELEASE_NOTES = [
       "「關於系統」新增「資訊安全說明」頁面：詳細說明身分驗證（Google 登入＋待審核機制）、Firestore 存取規則如何在伺服器端依角色/單位/欄位限制資料讀寫、傳輸與儲存加密、機敏資訊浮水印的可追溯性用途，以及使用者可自行加強的部分（例如高權限帳號開啟兩步驟驗證）",
       "新增 Firebase App Check（reCAPTCHA v3）防護：驗證每一次對資料庫的請求是不是真的從本系統網頁發出，防止有人取得登入權杖後另外寫程式繞過網頁直接大量存取資料庫；此機制已建置於程式碼中，實際生效仍需管理員在 Google reCAPTCHA 後台申請金鑰、並於 Firebase Console 完成 App Check 設定（建議先以「監控」模式觀察一段時間，確認流量正常再切換為「強制」模式）",
       "App Check 補上實際申請好的 reCAPTCHA v3 網站金鑰，程式碼端準備完成；仍需管理員到 Firebase Console → App Check 完成最後的啟用設定（建議先選「監控」模式）才會真正開始生效",
+    ] },
+    { category: "介面優化", items: [
+      "新增左邊緣右滑返回手勢：比照 iOS 系統手勢，從螢幕最左邊緣往右滑超過門檻放開就返回上一頁，跟點擊左上角返回鍵導去同一個地方；沒有返回鍵的畫面（例如首頁）這個手勢不會有作用，彈窗開著時也不會觸發，避免跟填表手勢互相干擾",
     ] },
   ] },
   { date: "2026/07/27", groups: [
@@ -6588,6 +6591,15 @@ function rankTagHtml(rank, extraClass){
   const ic = rankBadgeIcon(rank, 15);
   return `<span class="rank-tag${extraClass ? ' ' + extraClass : ''}">${ic}${esc(rank)}</span>`;
 }
+// 左邊緣右滑返回手勢（見 setupEdgeSwipeBack）要知道「滑了要導去哪裡」，
+// 但又不能為此另外維護一份跟 backBtn() 各自獨立、容易兜不起來的導覽歷史
+// 堆疊——backBtn() 本來就是每個畫面在渲染當下就已經算好、寫死的返回目的
+// 地，這裡直接把同一份 route 記下來，滑動手勢觸發時就是呼叫這裡記住的
+// 目的地，保證「滑動返回」跟「點返回鍵」兩種操作永遠導去同一個地方。
+// render() 每次重繪前會先把這個變數清空（見 render() 的說明），沒有呼叫
+// backBtn() 的畫面（例如首頁）滑動手勢就不會有作用，這是刻意的——這些
+// 畫面本來就沒有「上一頁」可以返回。
+let currentBackTarget = null;
 // 全站共用的返回鍵：純圖示的液態玻璃圓圈＋chevron SVG（不接文字、右邊不接
 // 標題），不管目的地是哪裡都一樣，不要再依頁面各自寫「返回列表」「返回
 // 更多」等。onclick 屬性務必用單引號包起來，因為裡面的 JSON.stringify(route)
@@ -6595,6 +6607,7 @@ function rankTagHtml(rank, extraClass){
 // bug）。chevron 用行內 SVG（stroke-width 2.5，比全站圖標系統的 1.8 粗一點，
 // 圓圈變大之後細線條比例上會顯得太細）而不是共用的 icon() helper。
 function backBtn(route){
+  currentBackTarget = route;
   return `<button class="back-btn" onclick='window.__nav(${JSON.stringify(route)})'><span class="back-btn-circle"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></span></button>`;
 }
 // 多選（checkbox）/單選（radio）標籤群組，用於過去病史／過敏史／處置項目／意識狀態。
@@ -11551,6 +11564,9 @@ function render(){
   if (state.profile.role === "pending") { app.innerHTML = `<main><div class="main-content">${viewPending()}</div></main>`; return; }
   if (state.profile.role === "disabled") { app.innerHTML = `<main><div class="main-content">${viewDisabled()}</div></main>`; return; }
 
+  // 清空上一次渲染留下的返回目的地，這個畫面如果沒有呼叫 backBtn()
+  // （例如首頁），左滑返回手勢就應該沒有作用，不能沿用上一頁殘留的值。
+  currentBackTarget = null;
   const view = ROUTE_VIEWS[state.route.name] || viewHome;
   const body = view();
 
@@ -13405,6 +13421,71 @@ window.__saveTaskEdit = (ev, taskId) => {
       }
     }
     sheet = null; startY = null; dragging = false;
+  }, { passive: true });
+})();
+
+/* =========================================================
+   左邊緣右滑返回：比照 iOS 系統手勢，從螢幕最左邊緣開始往右滑，滑超過
+   門檻放開就返回上一頁；目的地就是目前畫面的返回鍵會導去的地方（見
+   backBtn()／currentBackTarget 的說明），保證滑動手勢跟點擊返回鍵導去
+   同一個地方，不用另外維護一份導覽歷史堆疊。
+   沒有返回鍵（例如首頁，currentBackTarget 是 null）的畫面，這個手勢
+   不會有作用；彈窗開著的時候也不觸發，避免跟填表填到一半時的手勢互相
+   干擾（要關彈窗有自己的下滑關閉手勢，見 setupModalSwipeToDismiss）。
+   ========================================================= */
+(function setupEdgeSwipeBack(){
+  const EDGE_ZONE = 24;
+  const THRESHOLD = 80;
+  const MAX_DRAG = 120;
+  const app = document.getElementById('app');
+  let startX = null, startY = null, dragging = false, currentDx = 0, target = null;
+
+  window.addEventListener('touchstart', (e) => {
+    const x = e.touches[0].clientX;
+    if (x > EDGE_ZONE || !currentBackTarget || e.target.closest('.modal-overlay')) {
+      startX = null; return;
+    }
+    startX = x; startY = e.touches[0].clientY;
+    dragging = false; currentDx = 0;
+    target = currentBackTarget;
+  }, { passive: true });
+
+  window.addEventListener('touchmove', (e) => {
+    if (startX == null) return;
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+    // 手指移動要明顯偏水平（往右滑）才當成返回手勢，垂直方向為主就放行
+    // 給畫面正常上下捲動用，不要搶走捲動手勢。
+    if (dx <= 0 || Math.abs(dy) > dx) {
+      if (dragging) { app.style.transition = ''; app.style.transform = ''; dragging = false; }
+      return;
+    }
+    dragging = true;
+    currentDx = dx;
+    app.style.transition = 'none';
+    app.style.transform = `translateX(${Math.min(dx, MAX_DRAG)}px)`;
+    e.preventDefault();
+  }, { passive: false });
+
+  window.addEventListener('touchend', () => {
+    if (startX == null) return;
+    if (dragging) {
+      const dest = target;
+      app.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+      if (currentDx >= THRESHOLD) {
+        app.style.transform = 'translateX(100%)';
+        app.style.opacity = '0.4';
+        setTimeout(() => {
+          nav(dest);
+          app.style.transition = 'none';
+          app.style.transform = '';
+          app.style.opacity = '';
+        }, 180);
+      } else {
+        app.style.transform = '';
+      }
+    }
+    startX = null; startY = null; dragging = false; target = null;
   }, { passive: true });
 })();
 
