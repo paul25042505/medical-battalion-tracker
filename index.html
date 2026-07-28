@@ -2083,7 +2083,7 @@
 // 預先快取清單，離線時才真的載得起來。
 import { initializeApp } from "./vendor/firebase/firebase-app.js";
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged
+  getAuth, GoogleAuthProvider, signInWithPopup, getRedirectResult, signOut, onAuthStateChanged
 } from "./vendor/firebase/firebase-auth.js";
 import {
   getMessaging, getToken, deleteToken, onMessage, isSupported as isMessagingSupported
@@ -2093,7 +2093,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-28-462-policy-notice-home-limit";
+const BUILD_TAG = "2026-07-28-463-login-popup-revert";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2136,11 +2136,12 @@ const FCM_VAPID_KEY = "BP0uwpNgyOr3TDnqxI_bLRuI28DH9Q4SCH_ocG5nfvgBMeJmSv0TX41L3
 // 清除」邏輯捕捉到，導致同一支裝置收到重複推播）。
 const FCM_TOKEN_STORAGE_KEY = "medtrack_fcm_token";
 const googleProvider = new GoogleAuthProvider();
-// 已加入主畫面、以獨立模式（standalone）開啟時，登入改走 signInWithRedirect
-// （見 doLogin()），這裡負責接住轉址回來後的結果——redirect 流程本身沒有
-// 回呼函式可以掛，登入失敗（例如使用者中途取消）只有這裡撈得到，不然會
-// 靜悄悄地失敗、直接被導回登入畫面卻沒有任何錯誤提示。登入成功時
-// onAuthStateChanged 本來就會收到，這裡不用重複處理成功的情況。
+// doLogin() 已經改回一律用 signInWithPopup，不再主動呼叫
+// signInWithRedirect；這裡仍保留 getRedirectResult()，純粹是為了接住
+// 「使用者在部署新版本的前一刻，用舊版程式碼觸發了轉址登入」這種交接期
+// 的殘留轉址（redirect 流程本身沒有回呼函式可以掛，不接住的話舊版轉址
+// 回來會靜悄悄地失敗，卡在登入畫面卻沒有任何錯誤提示）；一般情況下沒有
+// 待處理的轉址，這裡就只是安靜地 resolve 成 null，不影響任何登入流程。
 getRedirectResult(auth).catch(e => showToast("登入失敗：" + e.message));
 // Cloud Functions（推播通知後端，見 functions/index.js）的 HTTP 呼叫端點
 // 前綴，第 2 代（v2）函式預設部署在 us-central1，跟 setGlobalOptions()
@@ -3251,6 +3252,9 @@ const RELEASE_NOTES = [
     { category: "介面優化", items: [
       "修正輸入框偶爾聚焦後游標卡在畫面最上面、下面留一大片空白的問題：鍵盤（尤其注音輸入法的候選字列）動畫有時候會在既有的 1 秒校正保護期結束後才真正彈完，導致最後一次版面變動沒有被校正到；改成只要偵測到還在修正版面就延長保護期，直到連續 1 秒都不需要再修正才停止（最多延長到 3 秒，避免無止盡卡住手動捲動）",
       "首頁「政令宣導」小區塊最多只列 3 筆最新標題（原本是 5 筆），維持首頁小區塊的份量，更多筆數請按「查看全部」",
+    ] },
+    { category: "登入", items: [
+      "修正已加入主畫面、以獨立模式開啟時 Google 登入完全登不進去的問題：上一版為了解決彈出視窗偶爾誤跳「登入失敗」錯誤訊息，改成整頁轉址登入，結果轉址流程在部分裝置上會在跳回 App 後靜悄悄地失敗（沒有任何錯誤提示，直接彈回登入畫面），比原本的問題更嚴重；改回一律使用彈出視窗登入，只把那個已知無害的錯誤代碼過濾掉不顯示，其餘真正的登入錯誤維持正常顯示",
     ] },
   ] },
   { date: "2026/07/27", groups: [
@@ -4978,20 +4982,27 @@ function doLogin(){
   // onAuthStateChanged 又會用同一個過期時間戳判定閒置逾時，當場再登出
   // 一次、跳出同一個提示——使用者會卡在「一直登入一直被踢出」的迴圈。
   try { localStorage.setItem(IDLE_STORAGE_KEY, String(Date.now())); } catch (e) {}
-  // 已加入主畫面、以獨立模式開啟時改用轉址流程，不用彈出視窗：
-  // signInWithPopup 在 iOS/Android 的 standalone PWA 環境下不穩定——
-  // window.open() 開出來的驗證視窗跟這個獨立模式的 App 之間沒有正常的
-  // opener 關係，系統在兩個畫面間切換（開窗、跳轉回來）時，Firebase SDK
-  // 有時會誤判成「這是第二個登入請求」，把原本那個判定成
-  // cancelled-popup-request 而丟出錯誤——即使使用者真的只點了一次也會
-  // 跳出這個看起來像「登入失敗」的錯誤提示，但實際上登入流程通常還是
-  // 會正常完成。轉址流程整頁跳轉、跳轉回來才繼續，沒有這種視窗管理的
-  // 競態問題，見上面的 getRedirectResult(auth) 負責接住結果。
-  if (isStandalonePwa()) {
-    signInWithRedirect(auth, googleProvider).catch(e => showToast("登入失敗：" + e.message));
-    return;
-  }
-  signInWithPopup(auth, googleProvider).catch(e => showToast("登入失敗：" + e.message));
+  // 曾經在已加入主畫面、以獨立模式（standalone）開啟時改用 signInWithRedirect
+  // 取代彈出視窗，理由是 signInWithPopup 在 standalone PWA 環境下偶爾會
+  // 誤判成「這是第二個登入請求」而丟出 cancelled-popup-request 錯誤，即使
+  // 使用者真的只點了一次也會跳出這個看起來像「登入失敗」的錯誤提示。
+  // 但實機回報（已核准過的帳號、從主畫面圖示開啟）改用轉址後出現更嚴重
+  // 的問題：點完 Google 登入、選完帳號，整頁轉址跳轉再跳回 App 之後，
+  // 完全沒有任何錯誤提示，卻直接彈回登入畫面、完全登不進去——這是
+  // signInWithRedirect 在 iOS Safari standalone 模式下已知的限制：轉址
+  // 前寫進 IndexedDB 的「待處理轉址」狀態，經過整頁離開又跳回來的過程
+  // 有時候沒辦法正確保留下來，getRedirectResult() 拿回來的結果就是
+  // 空的，既不報錯也不算登入成功，使用者只會看到卡在登入畫面。相較之下
+  // signInWithPopup 就算跳出那個容易誤導人的錯誤訊息，Google 登入本身
+  // 通常還是有正常完成（onAuthStateChanged 照樣會收到登入成功的使用者）
+  // ——「偶爾出現嚇人但無害的錯誤訊息」還是比「完全靜默登不進去」好，
+  // 所以改回全部情境都用 signInWithPopup，只把這個已知無害的錯誤代碼
+  // 特別過濾掉，不跳出誤導人的「登入失敗」提示，其餘真正的錯誤（例如
+  // 使用者自己取消、網路問題）維持照常顯示。
+  signInWithPopup(auth, googleProvider).catch(e => {
+    if (e.code === "auth/cancelled-popup-request") return;
+    showToast("登入失敗：" + e.message);
+  });
 }
 function doLogout(){ signOut(auth); }
 
