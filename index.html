@@ -2096,7 +2096,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-28-468-security-page-appcheck";
+const BUILD_TAG = "2026-07-28-469-appcheck-sitekey";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2129,20 +2129,18 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 // App Check（見「關於系統 → 資訊安全說明」）：用 reCAPTCHA v3 驗證每一次
 // Firestore 請求是不是真的從這個網頁發出，擋掉有人拿到有效登入權杖後
-// 寫腳本直接打 API、繞過網頁本身大量爬資料的情況。RECAPTCHA_V3_SITE_KEY
-// 要換成實際申請的金鑰才會生效，這兩步都要登入對應主控台操作，不是改
-// 這裡的程式碼就能自動完成：
-// 1) 到 https://www.google.com/recaptcha/admin 申請一組「v3」網站金鑰
-//    （網域填正式發布用的網域，例如 medical-battalion-tracker.web.app）。
-// 2) 到 Firebase Console → 專案設定 → App Check，替這個網頁 App 註冊
-//    同一組金鑰，並先選「監控」（Monitor）而不是直接「強制」
-//    （Enforce）——監控模式會照樣放行所有請求，只是讓後台看得到「這個
-//    網頁送來的請求有沒有帶有效的 App Check 權杖」，先確認流量正常、
-//    沒有出現大量驗證失敗，再切成強制模式，才不會因為設定沒接好就直接
-//    把所有使用者擋在外面。
-// 金鑰還沒填、或還沒完成上面兩步時，appCheckInstance 會是 null，下面
-// appCheckToken() 一律回傳空字串，對現有功能沒有任何影響。
-const RECAPTCHA_V3_SITE_KEY = "";
+// 寫腳本直接打 API、繞過網頁本身大量爬資料的情況。這組是在
+// https://www.google.com/recaptcha/admin 申請的「v3」網站金鑰（網域已經
+// 填 medical-battalion-tracker.web.app／medical-battalion-tracker.
+// firebaseapp.com 這兩個）。
+// 還差最後一步才會真正生效：到 Firebase Console → 專案設定 → App Check，
+// 替這個網頁 App 註冊同一組金鑰，並先選「監控」（Monitor）而不是直接
+// 「強制」（Enforce）——監控模式會照樣放行所有請求，只是讓後台看得到
+// 「這個網頁送來的請求有沒有帶有效的 App Check 權杖」，先確認流量正常、
+// 沒有出現大量驗證失敗，再切成強制模式，才不會因為設定沒接好就直接把
+// 所有使用者擋在外面。這一步還沒做之前，Firestore 那邊還是照舊放行所有
+// 請求（不管有沒有帶這個標頭），程式碼這邊先接好、不影響現有功能。
+const RECAPTCHA_V3_SITE_KEY = "6LfSSWktAAAAADAOMczkt_fMi59q5wEmLZqJsalX";
 let appCheckInstance = null;
 if (RECAPTCHA_V3_SITE_KEY) {
   appCheckInstance = initializeAppCheck(app, {
@@ -3306,6 +3304,7 @@ const RELEASE_NOTES = [
     { category: "資訊安全", items: [
       "「關於系統」新增「資訊安全說明」頁面：詳細說明身分驗證（Google 登入＋待審核機制）、Firestore 存取規則如何在伺服器端依角色/單位/欄位限制資料讀寫、傳輸與儲存加密、機敏資訊浮水印的可追溯性用途，以及使用者可自行加強的部分（例如高權限帳號開啟兩步驟驗證）",
       "新增 Firebase App Check（reCAPTCHA v3）防護：驗證每一次對資料庫的請求是不是真的從本系統網頁發出，防止有人取得登入權杖後另外寫程式繞過網頁直接大量存取資料庫；此機制已建置於程式碼中，實際生效仍需管理員在 Google reCAPTCHA 後台申請金鑰、並於 Firebase Console 完成 App Check 設定（建議先以「監控」模式觀察一段時間，確認流量正常再切換為「強制」模式）",
+      "App Check 補上實際申請好的 reCAPTCHA v3 網站金鑰，程式碼端準備完成；仍需管理員到 Firebase Console → App Check 完成最後的啟用設定（建議先選「監控」模式）才會真正開始生效",
     ] },
   ] },
   { date: "2026/07/27", groups: [
