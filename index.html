@@ -2093,7 +2093,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-28-466-policynotice-paste-parse";
+const BUILD_TAG = "2026-07-28-467-policynotice-paste-merge-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3264,6 +3264,7 @@ const RELEASE_NOTES = [
     ] },
     { category: "政令宣導", items: [
       "後台編輯內容新增「整段貼上」：把已經在別處打好的公文內容整段貼進去，系統會自動判斷每一行開頭是「一、」「（一）」「1.」還是「(1)」並拆成一段一段、自動設定對應的縮排層級，不用再逐段手動點左右箭頭調整；辨識不出編號的行會沿用上一行的層級當成延續內容，貼上會整批取代目前表單裡已有的段落，若已經有內容會先跳出確認提示避免手滑蓋掉",
+      "修正「整段貼上」的問題：沒有編號的那一行原本會自己另外成一段（層級跟上一段一樣），導致大綱編號往下多編一號，例如「（一）標題：」後面接一行說明文字，說明文字會被誤編成「（二）」，看起來像多了一個不存在的子項目；已修正為沒有編號的行直接併入上一段文字後面，當成那一段的延續說明，不會再多出一段、也不會多編號",
     ] },
   ] },
   { date: "2026/07/27", groups: [
@@ -4775,17 +4776,28 @@ const POLICY_NOTICE_PASTE_LEVEL_PATTERNS = [
   { level: 1, re: /^[（(][一二三四五六七八九十百千零]+[）)]\s*/ },
   { level: 2, re: /^(?:\d+[.．]\s*|[（(]\d+[）)]\s*)/ },
 ];
-// 貼上整段文字時逐行判斷層級：辨識不出編號格式的行（沒有前綴）直接沿用
-// 上一行的層級，當成同一層的延續內容，不用每一行都逼使用者自己打編號；
-// 空白行單純當成排版分隔，不會變成一段空內容。
+// 貼上整段文字時逐行判斷層級：辨識不出編號格式的行（沒有前綴）併進「上一
+// 個有編號的段落」文字後面，當成那一段的延續說明，不會自己另外成一段；
+// 如果獨立成一段，大綱編號會照樣往下編（例如標題「（一）」後面接一行說明
+// 文字，說明文字如果自己成段，會被編成「（二）」，看起來像多了一個不存在
+// 的子項目，不是原本公文的排版）。空白行單純當成排版分隔，不會變成一段
+// 空內容；貼上的內容如果第一行就沒有編號，仍然自成一段（沒有上一段可以
+// 併）。
 function parsePolicyNoticePasteText(raw){
   const lines = (raw||"").split("\n").map(l => l.trim()).filter(l => l);
-  let lastLevel = 0;
-  return lines.map(line => {
+  const result = [];
+  lines.forEach(line => {
     const hit = POLICY_NOTICE_PASTE_LEVEL_PATTERNS.find(p => p.re.test(line));
-    if (hit) { lastLevel = hit.level; return { level: hit.level, text: line.replace(hit.re, "") }; }
-    return { level: lastLevel, text: line };
+    if (hit) {
+      result.push({ level: hit.level, text: line.replace(hit.re, "") });
+    } else if (result.length) {
+      const last = result[result.length-1];
+      last.text = last.text ? `${last.text} ${line}` : line;
+    } else {
+      result.push({ level: 0, text: line });
+    }
   });
+  return result;
 }
 // 後台編輯用的單一段落列：控制列（縮排/取消縮排/刪除）＋段落文字。跟
 // vehicleEntryRowHtml 一樣是純 DOM 操作（見 __addPolicyNoticePara 等），
@@ -10804,7 +10816,7 @@ function viewBaseDataModal(){
       <div class="field"><label>內容</label></div>
       <button type="button" class="icon-btn" style="margin-bottom:10px;" onclick="window.__togglePolicyNoticePasteBox()">${icon('records',15)} <span class="btn-label">整段貼上</span></button>
       <div id="policy-notice-paste-box" style="display:none; margin-bottom:14px;">
-        <textarea id="policy-notice-paste-input" class="notice-para-text" rows="6" placeholder="把已經打好的整段公文內容貼在這裡，系統會自動判斷「一、」「（一）」「1.」「(1)」開頭的段落層級並拆成一段一段，辨識不出編號的行會沿用上一行的層級"></textarea>
+        <textarea id="policy-notice-paste-input" class="notice-para-text" rows="6" placeholder="把已經打好的整段公文內容貼在這裡，系統會自動判斷「一、」「（一）」「1.」「(1)」開頭的段落層級並拆成一段一段，沒有編號的行會併入上一段內容（當成該段的延續說明）"></textarea>
         <div style="display:flex; gap:8px; margin-top:8px;">
           <button type="button" class="btn-primary" style="flex:1;" onclick="window.__applyPolicyNoticePaste()">解析並套用</button>
           <button type="button" class="btn-ghost" style="flex:1;" onclick="window.__togglePolicyNoticePasteBox()">取消</button>
