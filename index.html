@@ -2109,7 +2109,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-28-471-basedata-swipe-actions";
+const BUILD_TAG = "2026-07-28-472-admintasks-swipe-actions";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3322,6 +3322,7 @@ const RELEASE_NOTES = [
     { category: "介面優化", items: [
       "新增左邊緣右滑返回手勢：比照 iOS 系統手勢，從螢幕最左邊緣往右滑超過門檻放開就返回上一頁，跟點擊左上角返回鍵導去同一個地方；沒有返回鍵的畫面（例如首頁）這個手勢不會有作用，彈窗開著時也不會觸發，避免跟填表手勢互相干擾",
       "後台基礎資料管理清單（車輛、行車紀錄器、醫院、醫官、任務名稱範本、網網相連、軍品項目、政令宣導、訊息管理）改成滑動操作：原本常駐顯示的「編輯／刪除／啟用停用」按鈕改成向左滑動才會顯示，比照 iOS 原生清單（例如 Mail／提醒事項）的操作方式，畫面更清爽；人員與帳號清單維持現狀不變（編輯是常駐的鉛筆圖示，本來就是很好的捷徑）",
+      "後台「管理勤務」清單也改成同一套滑動操作，編輯／強制結束／刪除改成向左滑動才會顯示",
     ] },
   ] },
   { date: "2026/07/27", groups: [
@@ -10572,18 +10573,17 @@ function viewAdminTasks(){
     <button class="btn-ghost" style="width:100%;margin-bottom:10px;" onclick="window.__exportTasks()">匯出 CSV</button>
     ${tasks.length ? tasks.map(t => {
       const s = deriveStatus(t.id);
-      return `
-      <div class="admin-row">
-        <div>
+      const actions = [];
+      if (canEditTask(p, t)) actions.push({ label:'編輯', onclick:`window.__nav({name:'editTask', id:'${t.id}'})` });
+      if (s !== "completed" && canForceEndTask(p)) actions.push({ label:'強制結束', onclick:`window.__forceEndTask('${t.id}')` });
+      if (canDelete) actions.push({ label:'刪除', onclick:`window.__deleteTask('${t.id}')`, danger:true });
+      return swipeRowHtml(
+        `<div>
           <div class="name">${esc(t.title)}</div>
           <div class="sub">${esc(t.vehicle||'—')} · ${unitLabel(t.unit)} · ${STATUS_LABEL[s]}</div>
-        </div>
-        <div style="display:flex; gap:6px; flex-wrap:wrap;">
-          ${canEditTask(p, t) ? `<button class="icon-btn" onclick="window.__nav({name:'editTask', id:'${t.id}'})">編輯</button>` : ""}
-          ${s !== "completed" && canForceEndTask(p) ? `<button class="icon-btn" onclick="window.__forceEndTask('${t.id}')">強制結束</button>` : ""}
-          ${canDelete ? `<button class="icon-btn danger" onclick="window.__deleteTask('${t.id}')">刪除</button>` : ""}
-        </div>
-      </div>`;
+        </div>`,
+        actions
+      );
     }).join("") : `<div class="empty">尚無勤務</div>`}
   `;
 }
