@@ -1220,6 +1220,11 @@
   .step-body{flex:1; min-width:0; padding-top:1px;}
   .step-head{display:flex; align-items:center; justify-content:space-between; gap:8px;}
   .step-meta{font-family:var(--mono); font-size:var(--text-xs); color:var(--muted); font-weight:500; margin-top:3px;}
+  /* .muted-suffix（姓名後面的階級）全站預設固定 15px，在大部分姓名字級
+     比它大的地方（任務卡片、頂欄等）看起來確實比姓名小、達到弱化效果；
+     但這裡（勤務進度時間軸）姓名本身用的是 .step-meta 的 13px 小字級，
+     15px 反而比姓名還大，跟其他地方相反。改成跟著 .step-meta 一樣大。 */
+  .step-meta .muted-suffix{font-size:inherit;}
   .step-note{font-size:var(--text-sm); color:var(--text); margin-top:5px;}
 
   /* ---- Sticky Bottom Action Bar：主要回報按鈕固定在畫面底部，方便單手操作 ---- */
@@ -2130,7 +2135,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-28-477-hide-completed-empty-patient-card";
+const BUILD_TAG = "2026-07-28-478-stepmeta-rank-size-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3324,6 +3329,7 @@ const RELEASE_NOTES = [
       "新增左邊緣右滑返回手勢；後台基礎資料管理清單與「管理勤務」清單改成滑動操作（左滑才顯示編輯／刪除等按鈕，比照 iOS 原生清單），人員與帳號清單維持現狀不變",
       "「關於系統 → 更新紀錄」改成每天預設收合，只列出日期，點下去才展開當天完整內容",
       "「關於系統 → 更新紀錄」的歷史內容全面整理精簡：同一天同一分類原本拆成好幾筆的異動記錄合併成一筆，同一個功能反覆修改的過程收斂成最終結果，內容更精簡好讀",
+      "修正勤務進度時間軸姓名旁邊的階級字級比姓名還大的問題：這裡的姓名本身就是縮小的灰階小字，階級改成跟著姓名一樣大，不再比姓名醒目",
     ] },
     { category: "登入", items: [
       "修正已加入主畫面、以獨立模式開啟時 Google 登入登不進去的問題：改回一律使用彈出視窗登入，只過濾已知無害的錯誤代碼，其餘登入錯誤維持正常顯示",
