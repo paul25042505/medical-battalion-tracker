@@ -2130,7 +2130,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-28-475-releasenotes-consolidate";
+const BUILD_TAG = "2026-07-28-476-devolve-basedata-member";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2138,7 +2138,7 @@ const BUILD_TAG = "2026-07-28-475-releasenotes-consolidate";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.31";
+const APP_MAJOR_MINOR = "2.32";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -3342,6 +3342,10 @@ const RELEASE_NOTES = [
       "「關於系統」新增「資訊安全說明」頁面：說明身分驗證、Firestore 存取規則、傳輸與儲存加密、浮水印用途，以及使用者可自行加強的部分（例如高權限帳號開啟兩步驟驗證）",
       "新增 Firebase App Check（reCAPTCHA v3）防護並補上正式申請的網站金鑰：驗證每一次請求是不是真的從本系統網頁發出，防止有人取得登入權杖後繞過網頁直接大量存取資料庫；仍需管理員到 Firebase Console → App Check 完成啟用設定（建議先選「監控」模式）",
     ] },
+    { category: "管理後台", items: [
+      "行車紀錄器、醫官、軍品項目、政令宣導這四類參考資料下放給一般成員維護（原本限管理層）：一般成員可在「更多 → 共用資料維護」新增/編輯/刪除，行車紀錄器仍只能維護自己單位的資料；車輛、醫院、人員與帳號、勤務管理維持原本限管理層",
+      "移除後台「基礎資料 → 醫院」獨立管理頁：醫院的新增/編輯/刪除本來就整合在前台「醫院資訊」頁（依角色顯示對應按鈕），後台不需要重複維護一份",
+    ] },
   ] },
   { date: "2026/07/27", groups: [
     { category: "介面優化", items: [
@@ -4176,6 +4180,11 @@ function canManageUsers(p){ return myRole(p) === "admin"; }
 // 任務管理／基礎資料管理：admin、高勤官（全單位），連級主官管（僅自己單位）皆可進入管理後台
 function canManageTasks(p){ const r = myRole(p); return r === "admin" || r === "duty_officer" || r === "commander"; }
 function canManageBaseData(p){ return canManageTasks(p); }
+// 行車紀錄器／醫官／軍品項目／政令宣導：這幾類參考資料風險較低（不涉及
+// 角色/單位指派、不影響他人的勤務/患者資料），下放給一般成員也能維護，
+// 減輕管理層的登打負擔；車輛／醫院／人員與帳號／勤務管理仍限制在
+// canManageBaseData（見 firestore.rules 對應集合的 isMember() 開放範圍）。
+function canManageSharedRefData(p){ return canManageBaseData(p) || myRole(p) === "member"; }
 // 急診待命緊急動員廣播滑動條：不是照角色（admin/高勤官/主官管）判斷，而是
 // 只有「目前這班待命勤務指派的車長／駕駛／值班醫官」本人才看得到、才能
 // 觸發——這是現場人員自己按下去回報真的有狀況，不是後方指揮層級代為
@@ -6233,7 +6242,6 @@ const ROUTE_REFRESH = {
   // 重抓自己真的會用到的集合。
   baseDataVehicles: ['vehicles'],
   baseDataRecorders: ['recorders'],
-  baseDataHospitals: ['hospitals'],
   baseDataDoctors: ['doctors'],
   baseDataTaskTitleTemplates: ['taskTitleTemplates'],
   baseDataWebLinks: ['webLinks'],
@@ -9345,6 +9353,11 @@ function viewProfile(){
     settingsRow({icon:'user', bg:'#E9F9EF', fg:'#177A34', title:'成員列表', subtitle:'各單位人員姓名/階級/電話/證照/民車', onclick:"window.__nav({name:'memberList'})"}),
     settingsRow({icon:'car', bg:'#FFF2E0', fg:'#B45F00', title:'車號查詢', subtitle:'輸入車牌反查車主', onclick:"window.__nav({name:'plateSearch'})"}),
     settingsRow({icon:'link', bg:'#EAF1FF', fg:'#0052E0', title:'網網相連', subtitle:'常用網址快速切換', onclick:"window.__nav({name:'webLinks'})"}),
+    // 行車紀錄器／醫官／軍品項目／政令宣導下放給一般成員維護（見
+    // canManageSharedRefData）；admin／高勤官／主官管已經能從「管理後台
+    // → 基礎資料」進到同一批頁面，這裡只給一般成員看，避免同一批功能在
+    // 「更多」頁出現兩個入口。
+    ...(myRole(p) === 'member' ? [settingsRow({icon:'records', bg:'#F2E9FE', fg:'#6B23C7', title:'共用資料維護', subtitle:'行車紀錄器／醫官／軍品項目／政令宣導', onclick:"window.__nav({name:'sharedBaseData'})"})] : []),
     settingsRow({icon:'alert', bg:'#FFEAEA', fg:'#C7233B', title:'大量傷患演練模組（建構中）', subtitle:'開事件、傷患檢傷分類與車輛/醫院指派', onclick:"window.__nav({name:'mciList'})", disabled: myRole(p) !== 'admin'}),
     settingsRow({icon:'records', bg:'#F2E9FE', fg:'#6B23C7', title:'教學園地（建構中）', subtitle:'救護技術教學文章，圖文解說', onclick:"window.__nav({name:'tutorials'})", disabled: myRole(p) !== 'admin'}),
     settingsRow({icon:'sun', bg:'#F2E9FE', fg:'#6B23C7', title:'螢幕顯示', subtitle:THEME_MODE_LABEL[state.themeMode], onclick:"window.__nav({name:'displayAppearance'})"}),
@@ -10333,17 +10346,12 @@ function viewBaseDataVehiclesPage(){
 }
 function viewBaseDataRecordersPage(){
   const p = state.profile;
-  if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
+  if (!canManageSharedRefData(p)) return `<div class="empty">您沒有管理權限</div>`;
   return viewBaseDataRecorders();
-}
-function viewBaseDataHospitalsPage(){
-  const p = state.profile;
-  if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
-  return viewBaseDataHospitals();
 }
 function viewBaseDataDoctorsPage(){
   const p = state.profile;
-  if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
+  if (!canManageSharedRefData(p)) return `<div class="empty">您沒有管理權限</div>`;
   return viewBaseDataDoctors();
 }
 function viewBaseDataTaskTitleTemplatesPage(){
@@ -10358,12 +10366,12 @@ function viewBaseDataWebLinksPage(){
 }
 function viewBaseDataMilitaryItemsPage(){
   const p = state.profile;
-  if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
+  if (!canManageSharedRefData(p)) return `<div class="empty">您沒有管理權限</div>`;
   return viewBaseDataMilitaryItems();
 }
 function viewBaseDataPolicyNoticesPage(){
   const p = state.profile;
-  if (!canManageBaseData(p)) return `<div class="empty">您沒有管理權限</div>`;
+  if (!canManageSharedRefData(p)) return `<div class="empty">您沒有管理權限</div>`;
   return viewBaseDataPolicyNotices();
 }
 function viewAdminUsersPage(){
@@ -10441,15 +10449,16 @@ function viewAdminTasks(){
 // 類別（例如這次新增的醫官）只會越擠越亂，改成列表後每加一類只要在
 // 對應分區多加一列，不影響既有排版。人員名冊已經併入「人員與帳號」
 // （見管理後台首頁、viewAdminUsers），這裡只剩車輛／行車紀錄器依單位
-// 分類，歸在「單位資料」；醫院／醫官是全營共用、不綁定單位，歸在
-// 「共用資料」。
+// 分類，歸在「單位資料」；醫官等全營共用、不綁定單位的資料歸在
+// 「共用資料」。醫院已從後台移除獨立管理入口——「醫院資訊」前台頁本身
+// 就內建新增/編輯/刪除（見 renderHospitalListBody 的 canAdd/canEdit），
+// 不需要在後台重複維護一份。
 function viewBaseDataHub(){
   const unitRows = [
     settingsRow({icon:'depart', bg:'#FFF2E0', fg:'#B45F00', title:'車輛', subtitle:'依單位分類的車輛名冊', onclick:"window.__nav({name:'baseDataVehicles'})"}),
     settingsRow({icon:'records', bg:'#F2E9FE', fg:'#6B23C7', title:'行車紀錄器', subtitle:'依單位分類', onclick:"window.__nav({name:'baseDataRecorders'})"}),
   ];
   const sharedRows = [
-    settingsRow({icon:'hospital', bg:'#E9F9EF', fg:'#177A34', title:'醫院', subtitle:'急救責任等級／電話，全營共用', onclick:"window.__nav({name:'baseDataHospitals'})"}),
     settingsRow({icon:'heartbeat', bg:'#FFEAEA', fg:'#C7233B', title:'醫官', subtitle:'值班醫官名冊，全營共用', onclick:"window.__nav({name:'baseDataDoctors'})"}),
     settingsRow({icon:'tasks', bg:'#EAF1FF', fg:'#0052E0', title:'任務名稱範本', subtitle:'建立勤務頁「任務名稱」快速選擇，全營共用', onclick:"window.__nav({name:'baseDataTaskTitleTemplates'})"}),
     settingsRow({icon:'link', bg:'#E9F9EF', fg:'#177A34', title:'網網相連', subtitle:'常用網址快速切換清單，全營共用', onclick:"window.__nav({name:'baseDataWebLinks'})"}),
@@ -10459,6 +10468,27 @@ function viewBaseDataHub(){
   return `
     ${settingsSection('單位資料', unitRows)}
     ${settingsSection('共用資料', sharedRows)}
+  `;
+}
+// 一般成員專用的入口（見「更多」頁 userRows）：行車紀錄器／醫官／軍品
+// 項目／政令宣導這幾類下放給一般成員維護（見 canManageSharedRefData），
+// 但一般成員進不去整個「管理後台」（canManageTasks 才能看到 admin 這個
+// 入口），所以另外開一個獨立的精簡版列表，只收這四類、不含車輛/醫院/
+// 人員與帳號/勤務管理等仍限管理層的功能。admin／高勤官／主官管本來就
+// 能從「管理後台 → 基礎資料」直接進到同一批頁面，這個入口對他們來說是
+// 多一條捷徑，不影響原本的路徑。
+function viewSharedBaseDataHub(){
+  const p = state.profile;
+  if (!canManageSharedRefData(p)) return `<div class="empty">您沒有管理權限</div>`;
+  const rows = [
+    settingsRow({icon:'records', bg:'#F2E9FE', fg:'#6B23C7', title:'行車紀錄器', subtitle:'依單位分類', onclick:"window.__nav({name:'baseDataRecorders'})"}),
+    settingsRow({icon:'heartbeat', bg:'#FFEAEA', fg:'#C7233B', title:'醫官', subtitle:'值班醫官名冊，全營共用', onclick:"window.__nav({name:'baseDataDoctors'})"}),
+    settingsRow({icon:'wrench', bg:'#FFEAEA', fg:'#C7233B', title:'軍品項目', subtitle:'武器裝備／通信裝備品項，供建立勤務「軍品攜帶」選用', onclick:"window.__nav({name:'baseDataMilitaryItems'})"}),
+    settingsRow({icon:'flag', bg:'#EAF1FF', fg:'#0052E0', title:'政令宣導', subtitle:'軍中運輸通報／軍醫通報等公告存檔，全營共用', onclick:"window.__nav({name:'baseDataPolicyNotices'})"}),
+  ];
+  return `
+    <div class="back-row">${backBtn({name:'profile'})}</div>
+    ${settingsSection('共用資料維護', rows)}
   `;
 }
 // 後台清單通用的滑動列：把原本常駐顯示的「編輯／刪除／啟用停用」等操作
@@ -10509,7 +10539,8 @@ function viewBaseDataRecorders(){
   const p = state.profile;
   const canSwitch = canSeeAllUnits(p);
   const unit = canSwitch ? (state.baseDataUnit || UNITS[0].code) : myUnit(p);
-  if (!unit) return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="empty">您尚未被指派單位，請聯繫管理員。</div>`;
+  const backRoute = canManageBaseData(p) ? 'adminBaseData' : 'sharedBaseData';
+  if (!unit) return `<div class="back-row">${backBtn({name:backRoute})}</div><div class="empty">您尚未被指派單位，請聯繫管理員。</div>`;
   const unitTabs = canSwitch ? `
     <div class="tabs2">
       ${UNITS.map(u => `<div class="tab2 ${unit===u.code?'active':''}" onclick="window.__setBaseDataUnit('${u.code}')">${u.label}</div>`).join("")}
@@ -10525,25 +10556,12 @@ function viewBaseDataRecorders(){
         { label:'刪除', onclick:`window.__deleteBaseData('recorders','${x.id}')`, danger:true },
       ]
     )).join("") : `<div class="empty">尚無行車紀錄器資料</div>`}`;
-  return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">行車紀錄器</div>${unitTabs}${body}`;
+  return `<div class="back-row">${backBtn({name:backRoute})}</div><div class="section-label">行車紀錄器</div>${unitTabs}${body}`;
 }
-// 醫院、醫官都是全營共用的參考資料，不像人員/車輛/行車紀錄器綁定特定
-// 單位，不需要單位切換頁籤。
-function viewBaseDataHospitals(){
-  const canAdd = canAddHospital(state.profile);
-  const rows = state.hospitals.slice().sort((a,b) => HOSPITAL_NAME_COLLATOR.compare(a.name||'', b.name||''));
-  const body = `
-    ${canAdd ? `<button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('hospitals', null, '')">${icon('plus',15)} 新增醫院</button>` : ""}
-    ${rows.length ? rows.map(x => swipeRowHtml(
-      `<div><div class="name">${esc(x.name)}</div><div class="sub">${esc(x.tier||'—')} · ${esc(x.level||'—')}${x.phone?' · '+esc(x.phone):''}</div>${x.note?`<div class="sub">${esc(x.note)}</div>`:""}</div>`,
-      [
-        { label:'編輯', onclick:`window.__openBaseDataModal('hospitals','${x.id}','')` },
-        { label:'刪除', onclick:`window.__deleteBaseData('hospitals','${x.id}')`, danger:true },
-      ]
-    )).join("") : `<div class="empty">尚無醫院資料</div>`}`;
-  return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">醫院</div>${body}`;
-}
+// 醫官是全營共用的參考資料，不像人員/車輛/行車紀錄器綁定特定單位，
+// 不需要單位切換頁籤。
 function viewBaseDataDoctors(){
+  const backRoute = canManageBaseData(state.profile) ? 'adminBaseData' : 'sharedBaseData';
   const rows = state.doctors.slice().sort((a,b) => (a.name||'').localeCompare(b.name||''));
   const body = `
     <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('doctors', null, '')">${icon('plus',15)} 新增醫官</button>
@@ -10555,7 +10573,7 @@ function viewBaseDataDoctors(){
         { label:'刪除', onclick:`window.__deleteBaseData('doctors','${x.id}')`, danger:true },
       ]
     )).join("") : `<div class="empty">尚無醫官資料</div>`}`;
-  return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">醫官</div>${body}`;
+  return `<div class="back-row">${backBtn({name:backRoute})}</div><div class="section-label">醫官</div>${body}`;
 }
 function viewBaseDataTaskTitleTemplates(){
   const rows = state.taskTitleTemplates.slice().sort((a,b) => HOSPITAL_NAME_COLLATOR.compare(a.text||'', b.text||''));
@@ -10584,6 +10602,7 @@ function viewBaseDataWebLinks(){
   return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">網網相連</div>${body}`;
 }
 function viewBaseDataMilitaryItems(){
+  const backRoute = canManageBaseData(state.profile) ? 'adminBaseData' : 'sharedBaseData';
   const groups = MILITARY_ITEM_CATEGORIES.map(cat => ({
     cat, items: state.militaryItems.filter(x => x.category === cat).slice().sort((a,b) => HOSPITAL_NAME_COLLATOR.compare(a.name||'', b.name||''))
   }));
@@ -10598,9 +10617,10 @@ function viewBaseDataMilitaryItems(){
           { label:'刪除', onclick:`window.__deleteBaseData('militaryItems','${x.id}')`, danger:true },
         ]
       )).join("") : `<div class="empty">尚無「${g.cat}」品項</div>`}`).join("")}`;
-  return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">軍品項目</div>${body}`;
+  return `<div class="back-row">${backBtn({name:backRoute})}</div><div class="section-label">軍品項目</div>${body}`;
 }
 function viewBaseDataPolicyNotices(){
+  const backRoute = canManageBaseData(state.profile) ? 'adminBaseData' : 'sharedBaseData';
   const rows = state.policyNotices.slice().sort((a,b) => (b.publishDate||"").localeCompare(a.publishDate||""));
   const body = `
     <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openBaseDataModal('policyNotices', null, '')">${icon('plus',15)} 新增政令宣導</button>
@@ -10611,7 +10631,7 @@ function viewBaseDataPolicyNotices(){
         { label:'刪除', onclick:`window.__deleteBaseData('policyNotices','${x.id}')`, danger:true },
       ]
     )).join("") : `<div class="empty">尚無政令宣導，首頁與「政令宣導」頁不會顯示任何項目</div>`}`;
-  return `<div class="back-row">${backBtn({name:'adminBaseData'})}</div><div class="section-label">政令宣導</div>${body}`;
+  return `<div class="back-row">${backBtn({name:backRoute})}</div><div class="section-label">政令宣導</div>${body}`;
 }
 
 /* =========================================================
@@ -11329,9 +11349,9 @@ const ROUTE_VIEWS = {
   adminTasks: viewAdminTasksPage,
   commanderBroadcast: viewCommanderBroadcastPage,
   adminBaseData: viewAdminBaseDataPage,
+  sharedBaseData: viewSharedBaseDataHub,
   baseDataVehicles: viewBaseDataVehiclesPage,
   baseDataRecorders: viewBaseDataRecordersPage,
-  baseDataHospitals: viewBaseDataHospitalsPage,
   baseDataDoctors: viewBaseDataDoctorsPage,
   baseDataTaskTitleTemplates: viewBaseDataTaskTitleTemplatesPage,
   baseDataWebLinks: viewBaseDataWebLinksPage,
