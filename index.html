@@ -2093,7 +2093,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-28-465-platesearch-refresh-fix";
+const BUILD_TAG = "2026-07-28-466-policynotice-paste-parse";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3261,6 +3261,9 @@ const RELEASE_NOTES = [
     ] },
     { category: "人員與帳號", items: [
       "修正後台幫成員新增車號後，車號查詢頁面看不到新車輛的問題：車號查詢頁面沒有列在換頁時會自動重新抓取最新名冊資料的清單裡，如果這次瀏覽階段還沒去過會重抓名冊的頁面（例如任務、首頁、後台人員管理），就會一直顯示舊的名冊快照；已修正為進車號查詢頁面時也會重新抓取最新資料",
+    ] },
+    { category: "政令宣導", items: [
+      "後台編輯內容新增「整段貼上」：把已經在別處打好的公文內容整段貼進去，系統會自動判斷每一行開頭是「一、」「（一）」「1.」還是「(1)」並拆成一段一段、自動設定對應的縮排層級，不用再逐段手動點左右箭頭調整；辨識不出編號的行會沿用上一行的層級當成延續內容，貼上會整批取代目前表單裡已有的段落，若已經有內容會先跳出確認提示避免手滑蓋掉",
     ] },
   ] },
   { date: "2026/07/27", groups: [
@@ -4759,6 +4762,29 @@ function policyNoticeOutlineLabels(paragraphs){
       : lvl === 1 ? `（${toChineseNumeral(counters[1])}）`
       : `${counters[2]}.`;
     return { ...p, level: lvl, label };
+  });
+}
+// 「整段貼上」自動判斷層級用：依序比對每一行開頭是不是這三種公文編號
+// 記法，符合哪一種就對應到哪一層，順便把編號本身從文字裡拿掉（編號是
+// 系統自動算的，貼上的原始編號沒有用、留著反而會跟自動編號重複）。
+// 阿拉伯數字不管是「1.」還是「(1)」都算同一層（最深的第三層），系統本來
+// 就只支援三層縮排，沒有再細分的必要。順序沒有影響——中文數字（頓號／
+// 括號）跟阿拉伯數字（點/括號）字元不會互相誤判。
+const POLICY_NOTICE_PASTE_LEVEL_PATTERNS = [
+  { level: 0, re: /^[一二三四五六七八九十百千零]+、\s*/ },
+  { level: 1, re: /^[（(][一二三四五六七八九十百千零]+[）)]\s*/ },
+  { level: 2, re: /^(?:\d+[.．]\s*|[（(]\d+[）)]\s*)/ },
+];
+// 貼上整段文字時逐行判斷層級：辨識不出編號格式的行（沒有前綴）直接沿用
+// 上一行的層級，當成同一層的延續內容，不用每一行都逼使用者自己打編號；
+// 空白行單純當成排版分隔，不會變成一段空內容。
+function parsePolicyNoticePasteText(raw){
+  const lines = (raw||"").split("\n").map(l => l.trim()).filter(l => l);
+  let lastLevel = 0;
+  return lines.map(line => {
+    const hit = POLICY_NOTICE_PASTE_LEVEL_PATTERNS.find(p => p.re.test(line));
+    if (hit) { lastLevel = hit.level; return { level: hit.level, text: line.replace(hit.re, "") }; }
+    return { level: lastLevel, text: line };
   });
 }
 // 後台編輯用的單一段落列：控制列（縮排/取消縮排/刪除）＋段落文字。跟
@@ -10776,9 +10802,17 @@ function viewBaseDataModal(){
       <div class="field"><label>發文字號（選填）</label><input name="docNumber" value="${esc(editing?.docNumber||'')}" placeholder="例如：陸軍後勤字第1130001234號"></div>
       <div class="field"><label>發布日期</label><input name="publishDate" type="date" required value="${esc(editing?.publishDate||isoDate(new Date()))}"></div>
       <div class="field"><label>內容</label></div>
+      <button type="button" class="icon-btn" style="margin-bottom:10px;" onclick="window.__togglePolicyNoticePasteBox()">${icon('records',15)} <span class="btn-label">整段貼上</span></button>
+      <div id="policy-notice-paste-box" style="display:none; margin-bottom:14px;">
+        <textarea id="policy-notice-paste-input" class="notice-para-text" rows="6" placeholder="把已經打好的整段公文內容貼在這裡，系統會自動判斷「一、」「（一）」「1.」「(1)」開頭的段落層級並拆成一段一段，辨識不出編號的行會沿用上一行的層級"></textarea>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button type="button" class="btn-primary" style="flex:1;" onclick="window.__applyPolicyNoticePaste()">解析並套用</button>
+          <button type="button" class="btn-ghost" style="flex:1;" onclick="window.__togglePolicyNoticePasteBox()">取消</button>
+        </div>
+      </div>
       <div id="policy-notice-paras">${initialParas.map(p => policyNoticeParaRowHtml(p.text, p.level||0)).join("")}</div>
       <button type="button" class="vehicle-add-btn" style="margin-top:2px;" onclick="window.__addPolicyNoticePara()">${icon('plus',16)} 新增一段</button>
-      <div style="color:var(--muted); font-size:var(--text-xs); margin:12px 0;">用左右箭頭調整這段的縮排層級（一、／（一）／1.），編號會自動計算，不用自己打數字。</div>
+      <div style="color:var(--muted); font-size:var(--text-xs); margin:12px 0;">用左右箭頭調整這段的縮排層級（一、／（一）／1.），編號會自動計算，不用自己打數字；也可以用上面的「整段貼上」一次貼進已經打好的內容自動判斷層級。</div>
       <div style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 12px;">政令宣導不會推播通知，純粹放在首頁／「政令宣導」頁供大家查閱，發布/編輯後不會主動提醒大家。</div>`;
   } else {
     title = editing ? "編輯行車紀錄器" : "新增行車紀錄器";
@@ -12888,6 +12922,29 @@ function readPolicyNoticeParasFromDom(){
     .map(r => ({ level: parseInt(r.dataset.paraLevel, 10) || 0, text: r.querySelector(".notice-para-text").value.trim() }))
     .filter(p => p.text);
 }
+window.__togglePolicyNoticePasteBox = () => {
+  const box = document.getElementById("policy-notice-paste-box");
+  if (!box) return;
+  const show = box.style.display === "none";
+  box.style.display = show ? "block" : "none";
+  if (show) document.getElementById("policy-notice-paste-input").focus();
+};
+// 「整段貼上」是整批取代，不是附加——貼上的內容會覆蓋掉目前表單裡所有
+// 段落，如果目前已經有打了字的段落就先跟使用者確認一次，避免手滑貼上
+// 蓋掉原本辛苦編輯到一半的內容。
+window.__applyPolicyNoticePaste = () => {
+  const input = document.getElementById("policy-notice-paste-input");
+  const paras = parsePolicyNoticePasteText(input.value);
+  if (!paras.length) { showToast("請先貼上內容"); return; }
+  const hasExisting = readPolicyNoticeParasFromDom().length > 0;
+  if (hasExisting && !confirm("這會取代目前表單裡已經輸入的段落內容，確定要套用貼上的內容嗎？")) return;
+  const container = document.getElementById("policy-notice-paras");
+  container.innerHTML = paras.map(p => policyNoticeParaRowHtml(p.text, p.level)).join("");
+  renumberPolicyNoticeParas();
+  input.value = "";
+  window.__togglePolicyNoticePasteBox();
+  showToast(`已解析成 ${paras.length} 段`);
+};
 window.__saveProfile = (ev) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
