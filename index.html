@@ -1136,7 +1136,18 @@
      串沒有結構的清單。 */
   .release-note-group{margin-bottom:20px;}
   .release-note-group:last-child{margin-bottom:0;}
-  .release-note-date{font-weight:700; font-size:var(--text-base); margin-bottom:12px;}
+  .release-note-date{font-weight:700; font-size:var(--text-base);}
+  /* 每天預設收合，只顯示日期，點下去才展開當天完整內容（見
+     viewAboutReleaseNotes／window.__toggleReleaseNoteDate）。展開/收合用
+     grid-template-rows 做滑動動畫，跟軍品攜帶購物車清單同一套做法，瞬間
+     display:none/block 會讓版面看起來突然跳動。 */
+  .release-note-date-toggle{display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer; padding:4px 0;}
+  .release-note-date-toggle:active{opacity:0.7;}
+  .release-note-chevron{display:inline-flex; color:var(--muted); transition:transform 0.2s ease; flex-shrink:0;}
+  .release-note-chevron.expanded{transform:rotate(90deg);}
+  .release-note-collapse{display:grid; grid-template-rows:0fr; transition:grid-template-rows 0.28s ease;}
+  .release-note-collapse.expanded{grid-template-rows:1fr;}
+  .release-note-collapse-inner{overflow:hidden; min-height:0;}
   .release-note-category{
     font-size:var(--text-xs); font-weight:700; color:var(--blue); text-transform:uppercase; letter-spacing:0.04em;
     margin:14px 0 6px 0;
@@ -2109,7 +2120,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-28-472-admintasks-swipe-actions";
+const BUILD_TAG = "2026-07-28-473-release-notes-collapse";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3323,6 +3334,7 @@ const RELEASE_NOTES = [
       "新增左邊緣右滑返回手勢：比照 iOS 系統手勢，從螢幕最左邊緣往右滑超過門檻放開就返回上一頁，跟點擊左上角返回鍵導去同一個地方；沒有返回鍵的畫面（例如首頁）這個手勢不會有作用，彈窗開著時也不會觸發，避免跟填表手勢互相干擾",
       "後台基礎資料管理清單（車輛、行車紀錄器、醫院、醫官、任務名稱範本、網網相連、軍品項目、政令宣導、訊息管理）改成滑動操作：原本常駐顯示的「編輯／刪除／啟用停用」按鈕改成向左滑動才會顯示，比照 iOS 原生清單（例如 Mail／提醒事項）的操作方式，畫面更清爽；人員與帳號清單維持現狀不變（編輯是常駐的鉛筆圖示，本來就是很好的捷徑）",
       "後台「管理勤務」清單也改成同一套滑動操作，編輯／強制結束／刪除改成向左滑動才會顯示",
+      "「關於系統 → 更新紀錄」每天預設收合，只列出日期，點下去才展開當天完整異動內容，避免一次全部攤開要滑很久才找得到某一天的內容",
     ] },
   ] },
   { date: "2026/07/27", groups: [
@@ -4156,6 +4168,7 @@ const state = {
 
   baseDataUnit: "", baseDataModal: null, // 基礎資料管理目前選的單位；baseDataModal: {coll, id, unit} | null
   memberStatsUnitFilter: "", // 成員列表統計圖目前看的範圍："" 代表全部單位加總，否則是單一單位代碼；跟下面成員卡片清單的 baseDataUnit 是各自獨立的篩選，不是同一顆狀態
+  releaseNoteExpandedDates: [], // 「關於系統 → 更新紀錄」目前展開的日期（見 viewAboutReleaseNotes）：預設每天都收合，只列出日期，點下去才展開當天完整異動內容
 
   emergencyBroadcastResult: null, // 急診待命緊急動員廣播結果彈窗：{ok, message, recipients}|{ok:false, reason} | null
   createTaskUnit: "", // 建立勤務頁面：admin/高勤官可切換的單位
@@ -9734,6 +9747,11 @@ window.__setPlateSearchType = (typeKey) => {
   state.plateSearchTypeFilter = typeKey;
   render();
 };
+window.__toggleReleaseNoteDate = (date) => {
+  const i = state.releaseNoteExpandedDates.indexOf(date);
+  if (i === -1) state.releaseNoteExpandedDates.push(date); else state.releaseNoteExpandedDates.splice(i, 1);
+  render();
+};
 function viewPlateSearch(){
   const typeFilter = state.plateSearchTypeFilter || "";
   return `
@@ -10096,16 +10114,30 @@ function viewAboutLicenses(){
     <p style="margin-top:16px; color:var(--muted);">除上述雲端服務外，本系統前端介面與邏輯皆為衛生營自行開發之原始程式碼（單一 HTML 檔案、原生 JavaScript／CSS 撰寫），未使用其他前端框架或第三方 UI 套件。</p>
   `);
 }
+// 每天預設收合，只列出日期，點下去才展開當天完整異動內容（見
+// state.releaseNoteExpandedDates／window.__toggleReleaseNoteDate）；
+// 展開/收合用 grid-template-rows 做滑動動畫，跟軍品攜帶購物車清單的
+// 展開/收合（.military-items-collapse）同一套做法，瞬間 display:none/
+// block 會讓版面看起來突然跳動。
 function viewAboutReleaseNotes(){
-  return viewAboutContentPage("更新紀錄", RELEASE_NOTES.map(n => `
+  return viewAboutContentPage("更新紀錄", RELEASE_NOTES.map(n => {
+    const expanded = state.releaseNoteExpandedDates.includes(n.date);
+    return `
     <div class="release-note-group">
-      <div class="release-note-date">${esc(n.date)}</div>
-      ${n.groups.map(g => `
-        <div class="release-note-category">${esc(g.category)}</div>
-        <ul class="release-note-list">${g.items.map(item => `<li>${esc(item)}</li>`).join("")}</ul>
-      `).join("")}
-    </div>
-  `).join(""));
+      <div class="release-note-date-toggle" onclick="window.__toggleReleaseNoteDate('${n.date}')">
+        <span class="release-note-date">${esc(n.date)}</span>
+        <span class="release-note-chevron ${expanded?'expanded':''}">${icon('chevronRight',16)}</span>
+      </div>
+      <div class="release-note-collapse ${expanded?'expanded':''}">
+        <div class="release-note-collapse-inner">
+          ${n.groups.map(g => `
+            <div class="release-note-category">${esc(g.category)}</div>
+            <ul class="release-note-list">${g.items.map(item => `<li>${esc(item)}</li>`).join("")}</ul>
+          `).join("")}
+        </div>
+      </div>
+    </div>`;
+  }).join(""));
 }
 function viewFeedbackForm(){
   const p = state.profile;
