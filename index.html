@@ -2088,12 +2088,15 @@ import {
 import {
   getMessaging, getToken, deleteToken, onMessage, isSupported as isMessagingSupported
 } from "./vendor/firebase/firebase-messaging.js";
+import {
+  initializeAppCheck, ReCaptchaV3Provider, getToken as getAppCheckToken
+} from "./vendor/firebase/firebase-app-check.js";
 
 /* =========================================================
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-28-467-policynotice-paste-merge-fix";
+const BUILD_TAG = "2026-07-28-468-security-page-appcheck";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2101,7 +2104,7 @@ const BUILD_TAG = "2026-07-28-467-policynotice-paste-merge-fix";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.30";
+const APP_MAJOR_MINOR = "2.31";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -2124,6 +2127,29 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+// App Check（見「關於系統 → 資訊安全說明」）：用 reCAPTCHA v3 驗證每一次
+// Firestore 請求是不是真的從這個網頁發出，擋掉有人拿到有效登入權杖後
+// 寫腳本直接打 API、繞過網頁本身大量爬資料的情況。RECAPTCHA_V3_SITE_KEY
+// 要換成實際申請的金鑰才會生效，這兩步都要登入對應主控台操作，不是改
+// 這裡的程式碼就能自動完成：
+// 1) 到 https://www.google.com/recaptcha/admin 申請一組「v3」網站金鑰
+//    （網域填正式發布用的網域，例如 medical-battalion-tracker.web.app）。
+// 2) 到 Firebase Console → 專案設定 → App Check，替這個網頁 App 註冊
+//    同一組金鑰，並先選「監控」（Monitor）而不是直接「強制」
+//    （Enforce）——監控模式會照樣放行所有請求，只是讓後台看得到「這個
+//    網頁送來的請求有沒有帶有效的 App Check 權杖」，先確認流量正常、
+//    沒有出現大量驗證失敗，再切成強制模式，才不會因為設定沒接好就直接
+//    把所有使用者擋在外面。
+// 金鑰還沒填、或還沒完成上面兩步時，appCheckInstance 會是 null，下面
+// appCheckToken() 一律回傳空字串，對現有功能沒有任何影響。
+const RECAPTCHA_V3_SITE_KEY = "";
+let appCheckInstance = null;
+if (RECAPTCHA_V3_SITE_KEY) {
+  appCheckInstance = initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider(RECAPTCHA_V3_SITE_KEY),
+    isTokenAutoRefreshEnabled: true
+  });
+}
 const auth = getAuth(app);
 // 推播通知（Firebase Cloud Messaging）用的 Web Push 憑證公鑰，在 Firebase
 // Console → 專案設定 → 雲端訊息傳遞 → Web Push 憑證 產生，是公開金鑰，
@@ -2190,12 +2216,23 @@ function fromFsFields(fields){
   for (const k in fields||{}) out[k] = fromFsValue(fields[k]);
   return out;
 }
+// 這個 App 是直接打 Firestore REST API（見上面「1b) Firestore REST 用戶端」
+// 的說明），不是透過 Firestore SDK，App Check SDK 內建的「自動夾帶驗證
+// 標頭」機制只認得住透過官方 SDK 發出的請求，不會生效；所以每一個直接
+// 呼叫 Firestore 的地方都要自己手動夾帶 X-Firebase-AppCheck 標頭，這個
+// 函式統一負責拿權杖，appCheckInstance 還沒設定（見上面 RECAPTCHA_V3_
+// SITE_KEY 的說明）或拿權杖失敗都回傳空字串，維持原本沒有這道防護時的
+// 行為。
+async function appCheckToken(){
+  if (!appCheckInstance) return "";
+  try { return (await getAppCheckToken(appCheckInstance)).token; } catch(e) { return ""; }
+}
 
 async function fsFetch(path, options={}, allow404=false){
   const idToken = await auth.currentUser.getIdToken();
   const res = await fetch(`${FIRESTORE_BASE}/${path}`, {
     ...options,
-    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json", ...(options.headers||{}) }
+    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json", "X-Firebase-AppCheck": await appCheckToken(), ...(options.headers||{}) }
   });
   // 404 只有在「讀取單一文件、文件不存在」時才是合理狀態；
   // 寫入（PATCH/POST/DELETE）如果也回傳 404，一定是真的出錯了，
@@ -2244,7 +2281,7 @@ async function fsBatchUpdate(updates){
   const idToken = await auth.currentUser.getIdToken();
   const res = await fetch(`https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents:commit`, {
     method: "POST",
-    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json" },
+    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json", "X-Firebase-AppCheck": await appCheckToken() },
     body: JSON.stringify({ writes })
   });
   if (!res.ok) {
@@ -2280,7 +2317,7 @@ async function fsQuerySince(collectionId, field, sinceDate, limit, unitFilter){
   };
   const res = await fetch(`${FIRESTORE_BASE}:runQuery`, {
     method: "POST",
-    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json" },
+    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json", "X-Firebase-AppCheck": await appCheckToken() },
     body: JSON.stringify(body)
   });
   if (!res.ok) {
@@ -2309,7 +2346,7 @@ async function fsQueryEquals(collectionId, field, value, limit){
   };
   const res = await fetch(`${FIRESTORE_BASE}:runQuery`, {
     method: "POST",
-    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json" },
+    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json", "X-Firebase-AppCheck": await appCheckToken() },
     body: JSON.stringify(body)
   });
   if (!res.ok) {
@@ -2341,7 +2378,7 @@ async function fsQueryRange(collectionId, field, fromDate, toDate, limit, unitFi
   };
   const res = await fetch(`${FIRESTORE_BASE}:runQuery`, {
     method: "POST",
-    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json" },
+    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json", "X-Firebase-AppCheck": await appCheckToken() },
     body: JSON.stringify(body)
   });
   if (!res.ok) {
@@ -2379,7 +2416,7 @@ async function fsQueryByTaskIds(collectionId, taskIds, unitFilter){
     };
     const res = await fetch(`${FIRESTORE_BASE}:runQuery`, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json", "X-Firebase-AppCheck": await appCheckToken() },
       body: JSON.stringify(body)
     });
     if (!res.ok) {
@@ -2414,7 +2451,7 @@ async function fsQueryErStandbyTasks(sinceDate){
   };
   const res = await fetch(`${FIRESTORE_BASE}:runQuery`, {
     method: "POST",
-    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json" },
+    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json", "X-Firebase-AppCheck": await appCheckToken() },
     body: JSON.stringify(body)
   });
   if (!res.ok) {
@@ -2449,7 +2486,7 @@ async function fsQueryInvolvedUnits(collectionId, rangeField, sinceDate, unit){
   };
   const res = await fetch(`${FIRESTORE_BASE}:runQuery`, {
     method: "POST",
-    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json" },
+    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json", "X-Firebase-AppCheck": await appCheckToken() },
     body: JSON.stringify(body)
   });
   if (!res.ok) {
@@ -2476,7 +2513,7 @@ async function fsQueryIn(collectionId, field, values, limit){
   };
   const res = await fetch(`${FIRESTORE_BASE}:runQuery`, {
     method: "POST",
-    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json" },
+    headers: { "Authorization": `Bearer ${idToken}`, "Content-Type": "application/json", "X-Firebase-AppCheck": await appCheckToken() },
     body: JSON.stringify(body)
   });
   if (!res.ok) {
@@ -3265,6 +3302,10 @@ const RELEASE_NOTES = [
     { category: "政令宣導", items: [
       "後台編輯內容新增「整段貼上」：把已經在別處打好的公文內容整段貼進去，系統會自動判斷每一行開頭是「一、」「（一）」「1.」還是「(1)」並拆成一段一段、自動設定對應的縮排層級，不用再逐段手動點左右箭頭調整；辨識不出編號的行會沿用上一行的層級當成延續內容，貼上會整批取代目前表單裡已有的段落，若已經有內容會先跳出確認提示避免手滑蓋掉",
       "修正「整段貼上」的問題：沒有編號的那一行原本會自己另外成一段（層級跟上一段一樣），導致大綱編號往下多編一號，例如「（一）標題：」後面接一行說明文字，說明文字會被誤編成「（二）」，看起來像多了一個不存在的子項目；已修正為沒有編號的行直接併入上一段文字後面，當成那一段的延續說明，不會再多出一段、也不會多編號",
+    ] },
+    { category: "資訊安全", items: [
+      "「關於系統」新增「資訊安全說明」頁面：詳細說明身分驗證（Google 登入＋待審核機制）、Firestore 存取規則如何在伺服器端依角色/單位/欄位限制資料讀寫、傳輸與儲存加密、機敏資訊浮水印的可追溯性用途，以及使用者可自行加強的部分（例如高權限帳號開啟兩步驟驗證）",
+      "新增 Firebase App Check（reCAPTCHA v3）防護：驗證每一次對資料庫的請求是不是真的從本系統網頁發出，防止有人取得登入權杖後另外寫程式繞過網頁直接大量存取資料庫；此機制已建置於程式碼中，實際生效仍需管理員在 Google reCAPTCHA 後台申請金鑰、並於 Firebase Console 完成 App Check 設定（建議先以「監控」模式觀察一段時間，確認流量正常再切換為「強制」模式）",
     ] },
   ] },
   { date: "2026/07/27", groups: [
@@ -9883,6 +9924,7 @@ function viewAbout(){
     <div class="detail-head" style="padding-top:2px; padding-bottom:2px;">
       <div class="about-list-row" onclick="window.__nav({name:'aboutTerms'})">使用條款（Terms of Use）<span class="chev">›</span></div>
       <div class="about-list-row" onclick="window.__nav({name:'aboutPrivacy'})">隱私權政策（Privacy Policy）<span class="chev">›</span></div>
+      <div class="about-list-row" onclick="window.__nav({name:'aboutSecurity'})">資訊安全說明（Security Overview）<span class="chev">›</span></div>
       <div class="about-list-row" onclick="window.__nav({name:'aboutLicenses'})">開源授權（Open Source Licenses）<span class="chev">›</span></div>
     </div>
     <div class="section-label">支援</div>
@@ -9991,6 +10033,24 @@ function viewAboutPrivacy(){
     <p><b>4. 資料保存</b><br>勤務與患者紀錄將依內部規定保存，作為勤務歷程與救護品質檢討之用。</p>
     <p><b>5. 資料安全</b><br>系統採用 Firebase 雲端服務並設定存取規則（Security Rules），依帳號角色與單位限制資料讀取／寫入範圍，防止未授權存取。</p>
     <p><b>6. 聯絡窗口</b><br>如對個人資料之蒐集、處理或利用有任何疑義，請洽系統管理員。</p>
+  `);
+}
+// 資訊安全說明：跟「隱私權政策」不同——隱私權政策講「蒐集什麼資料、給誰
+// 看」，這頁講「技術上怎麼防止外人／未授權對象存取資料」，內容對應實際
+// 的身分驗證流程與 firestore.rules 存取規則，不是制式法律文字，有異動
+// 時要跟著程式碼一起更新，避免說明跟實際防護內容兜不起來。
+function viewAboutSecurity(){
+  return viewAboutContentPage("資訊安全說明", `
+    <p>本系統資料存放於 Google Firebase 雲端服務，資訊安全機制分為以下幾層。</p>
+    <p><b>1. 身分驗證</b><br>唯一登入方式為 Google 帳號登入，不提供帳號密碼登入或訪客（匿名）登入。首次登入的帳號預設為「待審核」狀態，須由系統管理員核准並指派角色／單位後，才能存取對應範圍的功能與資料；未經核准的帳號幾乎看不到任何營務資料。</p>
+    <p><b>2. 存取權限控制（Firestore Security Rules）</b><br>資料的讀取／寫入權限規則是設定在 Google 伺服器端強制執行，不是僅由網頁介面隱藏按鈕做前端限制——即使繞過畫面直接對資料庫發出請求，一樣會被伺服器端規則擋下。權限依三個維度限制：</p>
+    <p style="padding-left:16px;">• <b>角色分級</b>：管理員／高勤官／主官管／一般成員，權限範圍逐層限縮。<br>• <b>單位隔離</b>：一般成員與主官管僅能存取自己單位的人員、車輛、勤務等資料，跨單位資料在資料庫層級即無法查得。<br>• <b>欄位級保護</b>：例如使用者自行編輯個人資料時，僅開放姓名／電話／證照等級等「名冊類」欄位，角色（role）、單位（unit）、信箱（email）等權限欄位不可能透過自助編輯修改，避免自行提升權限或跨單位。</p>
+    <p><b>3. 傳輸與儲存加密</b><br>裝置與資料庫之間的連線採用 HTTPS/TLS 加密，資料庫內容本身也是加密狀態（at-rest 加密），此為 Google Cloud 基礎設施內建保障。</p>
+    <p><b>4. 前端設定值（API Key）公開不影響安全性</b><br>網頁原始碼中可見的 Firebase 專案設定值（apiKey）依 Firebase 設計本來就非機密資訊，任何 Firebase 網頁應用都會將其放在前端程式碼中；真正的存取防線是上述第 2 點的伺服器端規則，並非仰賴隱藏此設定值。</p>
+    <p><b>5. App Check（防自動化爬取）</b><br>系統另設有 Firebase App Check 機制（採 reCAPTCHA v3），用來驗證每一次資料庫請求是否確實從本系統網頁發出，防止有心人士取得權杖後另行撰寫程式大量對資料庫發出請求、繞過網頁本身存取。此機制已建置於程式碼中，實際生效時間依主控台端設定進度而定。</p>
+    <p><b>6. 可追溯性</b><br>畫面另設有機敏資訊浮水印（顯示登入者姓名／階級／時間戳記），供日後如發生畫面外流情形時，可追溯當下之檢視者身分，屬事後追蹤機制，非事前阻擋手段。</p>
+    <p><b>7. 使用者可自行強化的部分</b><br>具管理員／高勤官等高權限角色之帳號，建議自行於 Google 帳號設定中開啟兩步驟驗證，降低帳號遭盜用後波及系統資料的風險——此屬 Google 帳號本身之設定，系統無法代為強制。</p>
+    <p><b>8. 聯絡窗口</b><br>如對資訊安全機制有任何疑義或發現可疑狀況，請洽系統管理員。</p>
   `);
 }
 function viewAboutLicenses(){
@@ -11365,6 +11425,7 @@ const ROUTE_VIEWS = {
   about: viewAbout,
   aboutTerms: viewAboutTerms,
   aboutPrivacy: viewAboutPrivacy,
+  aboutSecurity: viewAboutSecurity,
   aboutLicenses: viewAboutLicenses,
   aboutReleaseNotes: viewAboutReleaseNotes,
   feedback: viewFeedbackForm,

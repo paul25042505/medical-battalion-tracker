@@ -16,7 +16,7 @@
    /（App Shell 本體）一律是「先打網路，失敗才退回快取」，只要使用者
    有網路，每次都會拿到最新版本，版號只影響「真的離線時退回的那份快取
    多舊」。 */
-const CACHE_NAME = "medtrack-shell-v2";
+const CACHE_NAME = "medtrack-shell-v3";
 const PRECACHE_URLS = [
   "/",
   "/manifest.json",
@@ -31,7 +31,9 @@ const PRECACHE_URLS = [
   "/vendor/firebase/firebase-auth.js",
   "/vendor/firebase/firebase-messaging.js",
   "/vendor/firebase/firebase-app-compat.js",
-  "/vendor/firebase/firebase-messaging-compat.js"
+  "/vendor/firebase/firebase-messaging-compat.js",
+  // App Check（見 index.html 的 RECAPTCHA_V3_SITE_KEY 說明），一併預先快取。
+  "/vendor/firebase/firebase-app-check.js"
 ];
 
 self.addEventListener("install", (event) => {
