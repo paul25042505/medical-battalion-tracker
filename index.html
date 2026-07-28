@@ -2093,7 +2093,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-28-464-emt-none-option";
+const BUILD_TAG = "2026-07-28-465-platesearch-refresh-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3258,6 +3258,9 @@ const RELEASE_NOTES = [
     ] },
     { category: "個人資料", items: [
       "EMT 證照等級下拉選單新增明確的「無」選項（註冊帳號、個人資料編輯、後台編輯人員三處都同步更新），取代原本容易讓人以為一定要選一個的「請選擇證照等級」預設文字，效果跟原本不選一樣，純粹是文字更清楚",
+    ] },
+    { category: "人員與帳號", items: [
+      "修正後台幫成員新增車號後，車號查詢頁面看不到新車輛的問題：車號查詢頁面沒有列在換頁時會自動重新抓取最新名冊資料的清單裡，如果這次瀏覽階段還沒去過會重抓名冊的頁面（例如任務、首頁、後台人員管理），就會一直顯示舊的名冊快照；已修正為進車號查詢頁面時也會重新抓取最新資料",
     ] },
   ] },
   { date: "2026/07/27", groups: [
@@ -6318,6 +6321,11 @@ const ROUTE_REFRESH = {
   baseDataMilitaryItems: ['militaryItems'],
   adminUsers: ['personnel'],
   notifications: ['notifications', 'pushLog'],
+  // 車號查詢是被動查閱頁面，沒有這條的話進頁面只會沿用記憶體裡現有的
+  // state.personnel 快照——如果這個瀏覽階段從登入之後就沒去過任何會重抓
+  // personnel 的頁面（任務／首頁／後台人員管理…），剛在後台幫別人新增的
+  // 車輛就會看起來「沒有顯示」，其實只是資料還沒重抓，不是真的沒存進去。
+  plateSearch: ['personnel'],
 };
 // App Shell 改成 <main> 自己捲動（見 #app 的 CSS 註解）以後，window 本身
 // 不會再捲動，換頁／換頁籤要回頂端得改成重設 main 的 scrollTop。
