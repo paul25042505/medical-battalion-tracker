@@ -18,7 +18,20 @@ service cloud.firestore {
     // 車輛/醫院/人員與帳號/勤務管理低，不影響他人的勤務/患者資料。
     function isMember() { return isSignedIn() && myRole() == 'member'; }
     function isActive() { return isSignedIn() && myRole() != 'pending' && myRole() != 'disabled' && myRole() != 'unclaimed'; }
-    function sameUnit(unit) { return isSignedIn() && myUnit() == unit; }
+    // 一定要是「在職帳號」才算同單位——原本只比對 isSignedIn()，沒有排除
+    // pending/disabled/unclaimed 這幾種非在職狀態。tasks/events/vitals/
+    // campRegistrations/recorders 這幾個集合的讀取規則都是
+    // `isStaff() || sameUnit(...) || ...` 這種寫法，sameUnit() 在這裡沒有
+    // 額外搭配角色檢查，等於單獨把關；帳號被停用（disabled）後，只要
+    // unit 欄位還在、登入權杖還沒失效，理論上仍然讀得到原單位的完整勤務/
+    // 回報時間軸/患者生命徵象/洽公登記——「停用」實際上只擋住新增/編輯
+    // （那些規則都有另外檢查角色），沒有真正擋住讀取，是規則本身的缺口，
+    // 不是靠前端畫面（render() 偵測到 disabled 就整頁換提示畫面）就能真正
+    // 補起來的。這裡直接把 isActive() 檢查放進 sameUnit() 本身，一次補齊
+    // 全部用到它的地方；其他呼叫 sameUnit() 的地方本來就都有額外搭配角色
+    // 檢查（isCommander()/isMember()/isDutyOfficer() 等），這幾個角色本身
+    // 已經隱含在職狀態，加上 isActive() 不會有任何影響。
+    function sameUnit(unit) { return isActive() && myUnit() == unit; }
     // 只改了 allowedKeys 涵蓋的欄位（例如姓名/階級/電話這類「名冊類」欄位），
     // 不管改了幾個、改成什麼值，只要沒去動 allowedKeys 以外的欄位（尤其是
     // role/unit/email 這幾個帳號權限欄位）就算通過——update 規則用這個把關
