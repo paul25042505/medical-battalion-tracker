@@ -55,6 +55,18 @@ service cloud.firestore {
       let tzMs = 8 * 60 * 60 * 1000;
       return math.floor((request.time.toMillis() + tzMs) / 86400000) == math.floor((ts.toMillis() + tzMs) / 86400000);
     }
+    // events／vitals 的回報/編輯權限：誰能回報這筆勤務（isAssignedToTaskData）
+    // ＋這筆勤務是不是「今天」建立的，兩個條件都要滿足才放行——跟 tasks
+    // 集合本身的 update 規則（isCrewOfTask + isSameLocalDayAsNow）同一套
+    // 「過了當天就算歷史紀錄，本人不能再竄改」的規則。原本 events/vitals
+    // 這兩個集合只比對 isAssignedToTaskData，沒有比對日期，導致本人被指派
+    // 過的任務不管建立於多久以前，時間軸每一步都還能無限期編輯、患者紀錄
+    // 也還能無限期新增/修改，直接違背這條既定的設計目標，這裡補上日期判斷。
+    // 只 get() 一次任務文件、同時做兩個判斷，不重複查詢。
+    function canReportOnTask(taskId) {
+      let t = get(/databases/$(database)/documents/tasks/$(taskId)).data;
+      return isAssignedToTaskData(t) && isSameLocalDayAsNow(t.createdAt);
+    }
 
     // 帳號與人員名冊合併成同一份集合（原本 users／personnel 兩份分開維護，
     // 一份存帳號權限、一份存花名冊，同一個人要對照兩邊資料容易搞混，也曾經
@@ -202,14 +214,19 @@ service cloud.firestore {
       // 使用者選擇讓借用單位的主官管看得到完整患者紀錄內容，不是只有摘要。
       allow read: if isStaff() || sameUnit(resource.data.unit)
                   || (isCommander() && 'involvedUnits' in resource.data && myUnit() in resource.data.involvedUnits);
+      // 回報/修改/刪除都要求「本人被指派＋今天建立的任務」（canReportOnTask，
+      // 跟 tasks 集合自己的 update 規則同一套「過了當天算歷史紀錄」原則）；
+      // 原本這三條只比對 isAssignedToTaskData，沒有比對日期，本人被指派過的
+      // 任務不管建立於多久以前都能無限期回報/修改/刪除，違背既定的歷史
+      // 紀錄不可竄改設計，這裡補上。
       allow create: if isAdmin() ||
                     (isSignedIn() && myRole() == 'member'
-                     && isAssignedToTaskData(get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data));
+                     && canReportOnTask(request.resource.data.taskId));
       // 時間、里程有時候會回報錯誤，需要能修正；開放對象跟 create 一致
       // （admin 或該筆勤務指定的本人），維持「誰能回報、誰就能修正自己回報的內容」。
       allow update: if isAdmin() ||
                     (isSignedIn() && myRole() == 'member'
-                     && isAssignedToTaskData(get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data));
+                     && canReportOnTask(resource.data.taskId));
       // 誤按到不該回報的步驟時要能整筆撤銷；開放對象跟 update 一致。rules 語言
       // 無法查詢「這是不是這筆勤務時間軸上最後一筆事件」（沒有跨文件比較機制），
       // 所以「只能刪最後一筆」這條限制是在前端（見 index.html 的 eventEditModal，
@@ -217,13 +234,13 @@ service cloud.firestore {
       // （限定該筆勤務指定的本人或 admin），不是把關「刪哪一筆」。
       allow delete: if isAdmin() ||
                     (isSignedIn() && myRole() == 'member'
-                     && isAssignedToTaskData(get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data));
+                     && canReportOnTask(resource.data.taskId));
     }
 
     match /vitals/{id} {
       // 患者生命徵象/主訴紀錄，權限比照 events：誰能回報這筆勤務（admin、
-      // 該勤務指定的車長/駕駛/洽公人員本人）就能修正自己填錯的內容；不開放
-      // 刪除，避免病歷紀錄憑空消失。
+      // 該勤務指定的車長/駕駛/洽公人員本人，且限勤務建立當天）就能修正自己
+      // 填錯的內容；不開放刪除，避免病歷紀錄憑空消失。
       // 讀取權限比對這筆 vitals 自己的 unit 欄位（建立時就從所屬勤務複製過來，
       // 見 index.html 的 addVitalsEntry），理由跟上面 events 的說明一致。
       // 跨單位借用資源時同樣開放該單位主官管讀取完整內容，理由跟 tasks 一致。
@@ -231,10 +248,10 @@ service cloud.firestore {
                   || (isCommander() && 'involvedUnits' in resource.data && myUnit() in resource.data.involvedUnits);
       allow create: if isAdmin() ||
                     (isSignedIn() && myRole() == 'member'
-                     && isAssignedToTaskData(get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data));
+                     && canReportOnTask(request.resource.data.taskId));
       allow update: if isAdmin() ||
                     (isSignedIn() && myRole() == 'member'
-                     && isAssignedToTaskData(get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data));
+                     && canReportOnTask(resource.data.taskId));
       allow delete: if false;
     }
 
