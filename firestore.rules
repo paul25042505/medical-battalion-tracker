@@ -80,6 +80,22 @@ service cloud.firestore {
       let t = get(/databases/$(database)/documents/tasks/$(taskId)).data;
       return isAssignedToTaskData(t) && isSameLocalDayAsNow(t.createdAt);
     }
+    // 急診待命「完成當前勤務，啟動新勤務」：把已經被新任務取代的舊待命
+    // 勤務標記完成，前端固定寫入 COMPLETED（一般待命）或 RETURNING（洽公型）
+    // 事件（見 index.html 的 silentlyCompleteTask）。這種待命勤務本來就可能
+    // 連續好幾天沒有真的出勤（一直待命中，沒被指派過任務），createdAt 因此
+    // 常常不是今天；上面 canReportOnTask() 的「限建立當天」判斷會誤擋這個
+    // 系統既定的收尾流程，導致舊勤務永遠卡在「待命中」、沒辦法真正結案。
+    // 這裡只放寬這一種情境：該任務有 erStandbyKey（只有透過急診待命頁建立
+    // 的勤務才會有這個欄位）、且要寫入的事件類型是收尾用的
+    // COMPLETED／RETURNING——不影響其他事件類型（DISPATCH／ARRIVED_SCENE
+    // 等時間軸中段步驟）也不影響沒有 erStandbyKey 的一般勤務，那些仍然套用
+    // 原本「過了當天不能再竄改」的限制。
+    function isStandbyClosingEvent(taskId, eventType) {
+      let t = get(/databases/$(database)/documents/tasks/$(taskId)).data;
+      return isAssignedToTaskData(t) && 'erStandbyKey' in t
+             && (eventType == 'COMPLETED' || eventType == 'RETURNING');
+    }
 
     // 帳號與人員名冊合併成同一份集合（原本 users／personnel 兩份分開維護，
     // 一份存帳號權限、一份存花名冊，同一個人要對照兩邊資料容易搞混，也曾經
@@ -234,7 +250,8 @@ service cloud.firestore {
       // 紀錄不可竄改設計，這裡補上。
       allow create: if isAdmin() ||
                     (isSignedIn() && myRole() == 'member'
-                     && canReportOnTask(request.resource.data.taskId));
+                     && (canReportOnTask(request.resource.data.taskId)
+                         || isStandbyClosingEvent(request.resource.data.taskId, request.resource.data.type)));
       // 時間、里程有時候會回報錯誤，需要能修正；開放對象跟 create 一致
       // （admin 或該筆勤務指定的本人），維持「誰能回報、誰就能修正自己回報的內容」。
       allow update: if isAdmin() ||
