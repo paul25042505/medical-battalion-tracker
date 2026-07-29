@@ -2138,7 +2138,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-29-480-createtask-error-handling";
+const BUILD_TAG = "2026-07-29-481-push-toggle-device-scope";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3332,6 +3332,9 @@ const RELEASE_NOTES = [
     { category: "任務管理", items: [
       "修正建立勤務「跨單位借車」「跨單位選人」開關對一般成員/主官管沒有作用的問題：這兩個功能原本受限於資料查詢範圍，只有管理員/高勤官看得到別單位資料，現在開放給所有在職帳號；成員列表、車號查詢、成員統計卡等日常查看畫面維持只顯示自己單位，不受影響",
       "修正建立勤務時若剛好收訊不好、寫入失敗，畫面卻仍然清空表單並跳轉回任務列表、看起來像已經建立成功的問題：現在會保留已填寫的內容並顯示錯誤訊息，方便重新送出",
+    ] },
+    { category: "推播通知", items: [
+      "修正「推播通知」開關誤判成整個帳號共用狀態的問題：如果同一帳號在另一台裝置已經開過推播，換一台新裝置打開系統時開關會顯示成「已開啟」，這時如果點下去關閉，會把帳號底下所有裝置（含真正在用的那支手機）的推播權杖一起清空；現在改成正確反映「這台裝置」自己的開關狀態，關閉時也只會移除這台裝置自己的權杖",
     ] },
   ] },
   { date: "2026/07/28", groups: [
@@ -5126,8 +5129,18 @@ async function disablePush(){
     // 一組既有權杖，不會重新產生新的）。
     let token = localStorage.getItem(FCM_TOKEN_STORAGE_KEY);
     if (!token && reg) { try { token = await getToken(messaging, { vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: reg }); } catch(e){} }
+    // fcmTokens 是整個帳號共用的欄位（手機、平板可能各存一組）。如果連
+    // getToken() 都問不到，代表這台裝置本來就沒有在這裡登記過推播——
+    // 這種情況下絕對不能把 fcmTokens 整包清空，那樣會連帳號底下其他
+    // 真正在用、依賴這個系統做緊急派遣通知的裝置也一起關掉推播，而且
+    // 使用者完全不會發現。找不到自己的 token 就什麼都不動，只提示現況。
+    if (!token) {
+      state.pushEnabling = false; render();
+      showToast("這台裝置尚未偵測到推播權杖，未變更任何裝置的推播設定");
+      return;
+    }
     const existing = state.profile.fcmTokens || [];
-    const updated = token ? existing.filter(t => t !== token) : [];
+    const updated = existing.filter(t => t !== token);
     await fsSetDoc(`users/${state.user.uid}`, { fcmTokens: updated });
     state.profile.fcmTokens = updated;
     try { await deleteToken(messaging); } catch(e){}
@@ -5140,10 +5153,22 @@ async function disablePush(){
     showToast("關閉推播失敗：" + (e.message || e));
   }
 }
+// fcmTokens 是整個帳號共用的欄位，不能直接拿「陣列長不長」當這台裝置的
+// 開關狀態——同一帳號在另一台裝置開過推播，這台裝置從沒開過的話也會被
+// 誤判成「已開啟」，使用者點下去關閉時會把別台裝置的推播一起清掉（見
+// disablePush 的防呆說明）。這裡改成同時要求「帳號裡有 token」＋「這台
+// 裝置自己存的 localStorage token 確實在那份清單裡」，才算這台裝置已開啟；
+// 這台裝置從沒登記過（localStorage 沒有值）一律視為未開啟。
+function isPushEnabledOnThisDevice(){
+  const tokens = (state.profile && state.profile.fcmTokens) || [];
+  if (!tokens.length) return false;
+  const localToken = localStorage.getItem(FCM_TOKEN_STORAGE_KEY);
+  return !!localToken && tokens.includes(localToken);
+}
 function pushStatusLabel(){
   if (state.pushSupported === false) return "此裝置不支援";
   if (state.pushPermission === "denied") return "已被瀏覽器封鎖";
-  return (state.profile && state.profile.fcmTokens && state.profile.fcmTokens.length) ? "已開啟" : "已關閉";
+  return isPushEnabledOnThisDevice() ? "已開啟" : "已關閉";
 }
 // 已經允許通知權限的裝置，每次登入都重新跟 Firebase 要一次目前的權杖，
 // 跟資料庫裡存的比對，不一樣就更新——FCM 的權杖偶爾會在背景悄悄輪替，
@@ -9732,7 +9757,9 @@ function policyNoticeHomeCardHtml(){
 function viewPushSettings(){
   const p = state.profile;
   const tokens = p.fcmTokens || [];
-  const enabled = tokens.length > 0;
+  // 跟 pushStatusLabel 同一個判斷：這台裝置有沒有開啟，不是整個帳號
+  // 有沒有任何一台裝置開啟（見 isPushEnabledOnThisDevice 的說明）。
+  const enabled = isPushEnabledOnThisDevice();
   const supported = state.pushSupported;
   const denied = state.pushPermission === "denied";
   return `
