@@ -2067,7 +2067,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-30-501-fix-report-modal-clipped";
+const BUILD_TAG = "2026-07-30-502-depart-returning-fork";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2545,8 +2545,10 @@ const EVENT_TYPES = [
   { type: "DEPART_SCENE",  label: "離開現場", icon: "depart",      statusKey: "transit",   hint: "離開目前地點，前往下一個地點" },
   { type: "RETURNING",     label: "返營",     icon: "returnArrow", statusKey: "returning", hint: "處置完畢，返回營區" },
   // COMPLETED 原本標籤是「抵達營區」，改成「結束勤務案件」跟洽公任務的
-  // 「結束洽公案件」用詞對齊，同時強調這是任務的最終步驟（回報 reportableTypes()
-  // 現在讓出勤/抵達現場後就能直接送出這個類型結案，不再一定要先經過 RETURNING）。
+  // 「結束洽公案件」用詞對齊，同時強調這是任務的最終步驟。出勤後可以直接
+  // 送出這個類型結案（見 reportableTypes()）；抵達現場之後則一定要先表態
+  // 「前往下一站」或「返回營區」，選了返回營區、真的抵達營區之後才會送出
+  // 這個類型（見 RETURNING → [COMPLETED] 的分支）。
   { type: "COMPLETED",     label: "結束勤務案件", icon: "flag",        statusKey: "completed", hint: "完成勤務，回報最終里程與油量" }
 ];
 // 洽公任務（現勘、開會等非車輛派遣性質的外出）：不追蹤里程/油量，流程也比較
@@ -2973,6 +2975,7 @@ const RELEASE_NOTES = [
     { category: "任務管理", items: [
       "勤務類任務出勤後，不用再強制先回報「抵達現場」才能結案：現在出勤當下就會同時顯示「抵達現場」「結束勤務案件」兩顆按鈕，任務臨時取消或出發沒多久就折返等情境可以直接結案，不用卡在「抵達現場」這一步；跟洽公任務出發後就能直接結案是同一套邏輯",
       "「結束勤務案件」現在會直接完成整筆勤務（同時要求填寫最終里程、剩餘油量），按下去之後不會再冒出「抵達營區」這個後續步驟——原本的用詞代表案件已經結束，卻還留了一步待完成的按鈕，容易讓人以為沒按完",
+      "勤務類任務抵達現場之後，「離開」這一步改成分兩種選擇：「前往下一站」（跟原本一樣，還有後續行程）或「返回營區」（回報準備返程，這步不用填地點/里程）；抵達現場之後不再能直接按「結束勤務案件」結案，改成一定要先表態往下一站還是返營。選了「返回營區」之後，下一步只會剩一顆「結束勤務案件」按鈕，等真的抵達營區才按，同一個動作直接結案（要求填最終里程/油量），任務卡片在這段期間會顯示「返回營區中」",
     ] },
   ] },
   { date: "2026/07/29", groups: [
@@ -3793,19 +3796,29 @@ function reportableTypes(taskId){
   // 出發後也開放直接結案（不強制先抵達現場）：跟洽公任務同一個理由——
   // 有些外出本來就沒有單一固定的「現場」可以回報抵達（任務臨時取消、
   // 出發沒多久就折返等情況），沒有這個例外的話，使用者會卡在「抵達現場」
-  // 這顆按鈕、找不到結案的地方。
-  // 這兩個分岔點直接給 COMPLETED（不是 RETURNING）：「結束勤務案件」
-  // 這顆按鈕按下去就是任務真正的最後一步（連最終里程/油量一起收），
-  // 不會按完還冒出下一個「抵達營區」按鈕——使用者的原話是「代表這個
-  // 勤務結束了」，不應該還有下一步。RETURNING／「返營」這個事件類型
-  // 對勤務類任務來說不再由這裡觸發，只留給下面已經處於 RETURNING 狀態
-  // 的舊資料（這次修正上線前就卡在這個狀態的任務）當作相容路徑。
+  // 這顆按鈕、找不到結案的地方。這個「直接結案」的分岔點只留在出勤這裡，
+  // 抵達現場之後就不再開放（見下面 ARRIVED_SCENE 分支的說明）。
   if (lastType === "DISPATCH") return ["ARRIVED_SCENE", "COMPLETED"];
-  if (lastType === "ARRIVED_SCENE") return ["DEPART_SCENE", "COMPLETED"]; // 另一個分岔點
+  // 抵達現場之後，「離開」這個動作本身還分兩種意圖，都要花時間移動、
+  // 不是按下去當下就結案：
+  // 1. 離開，前往下一個地點（DEPART_SCENE）：還有其他站要跑，之後要另外
+  //    回報「抵達」那一站，回到這個分岔點（可以重複跑好幾站）。
+  // 2. 離開，返回營區（RETURNING）：跟「前往下一站」一樣是先宣告意圖，
+  //    真正的車輛/人員還在路上，要等真的到了營區、另外回報「抵達營區」
+  //    那一刻才會結案——不是按這顆按鈕的當下就結案，這是使用者特別澄清
+  //    過的一點（「返回營區，也算一個路途，要抵達營區後才會結束案件」）。
+  //    抵達現場之後不再開放直接送 COMPLETED（拿掉了，只保留在上面出勤
+  //    這個分岔點），逼使用者一定要先表態「往下一站」還是「返回營區」，
+  //    講清楚意圖之後系統才知道下一步該問「抵達下一個地點」還是直接問
+  //    「抵達營區」（見下面 RETURNING 分支）。
+  if (lastType === "ARRIVED_SCENE") return ["DEPART_SCENE", "RETURNING"];
   // 離開現場後車輛正在移動，還沒抵達下一個地點，所以下一步只會是「抵達」；
   // 離開跟抵達是兩個不同時刻（中間有移動時間），必須分開回報各自的時間/里程，
   // 不能像返營那樣直接假設同一刻，否則抵達時間會被錯誤地套用成離開時間。
   if (lastType === "DEPART_SCENE") return ["ARRIVED_SCENE"];
+  // 已經宣告「返回營區」了，車輛正在返程路上，下一步只會是「抵達營區」，
+  // 這一步本身就等於結案（連最終里程/油量一起收），不用像前往下一站那樣
+  // 抵達之後還要回到分岔點——因為抵達營區沒有下一站，這趟就是真的結束了。
   if (lastType === "RETURNING") return ["COMPLETED"];
   return [];
 }
@@ -6464,17 +6477,15 @@ function taskCard(t){
   // 文字要講清楚是「正在前往」而不是「已經在那裡」，避免看起來像已經抵達
   // 了——出勤當下車輛才剛從營區/醫務所出發，還沒到任務地點，跟離開現場後
   // 前往下一站是同一種「移動中」狀態，不能只處理離開現場這一種情況。
-  // 「結束勤務案件」現在會直接送出 COMPLETED（見 viewTaskDetail 的
-  // stickyBar 說明），任務會直接變成已完成狀態，不會再停在 RETURNING——
-  // 這裡的 RETURNING 分支只留給極少數這次修正上線前就已經卡在 RETURNING
-  // 狀態的舊任務相容用。上一次離開現場時記的那個地點已經是過去式了，
-  // 不能沿用舊的地點文字，否則會顯示已經離開的地方、跟目前狀態對不上，
-  // 所以改顯示「勤務結束中」——不寫「返回營區中」，因為不保證車輛真的
-  // 直接開回營區（可能還會先繞去別的廠商據點）。
+  // 抵達現場之後選「返回營區」（RETURNING）：這是使用者特別澄清過的
+  // 一趟真實路途——「返回營區，也算一個路途，要抵達營區後才會結束案件」，
+  // 按下去當下人車還在路上，不是直接結案，所以要跟其他「移動中」狀態
+  // 一樣講清楚是「正在前往」；上一次離開現場記的地點已經是過去式了，不能
+  // 沿用舊的地點文字，這裡固定顯示「返回營區中」（跟這顆按鈕的意圖一致）。
   const inTransit = last && (last.type === "DISPATCH" || last.type === "DEPART_SCENE");
   const returningToBase = last && last.type === "RETURNING" && !isLiaison;
   const locationLine = returningToBase
-    ? "勤務結束中"
+    ? "返回營區中"
     : currentLocation
       ? (inTransit ? `前往 ${esc(currentLocation)} 中` : esc(currentLocation))
       : "";
@@ -8182,35 +8193,18 @@ function viewTaskDetail(taskId){
         <button class="btn-primary" style="width:100%;" onclick="window.__startReport('${t.id}','${rTypes[0]}')">${icon(def.icon,20)} ${btnLabel}</button>
       </div>`;
   } else if (canDoReport && !draft && rTypes.length === 2 && rTypes.includes("COMPLETED") && !isLiaison) {
-    // 勤務類任務有兩個分岔點，這裡合併用同一套邏輯處理：
-    // 1. 出發後（DISPATCH → [ARRIVED_SCENE, COMPLETED]）：不強制先抵達
-    //    現場才能結案，任務臨時取消／出發沒多久就折返也能直接結案。
-    // 2. 抵達現場後（ARRIVED_SCENE → [DEPART_SCENE, COMPLETED]）：離開
-    //    前往下一個地點（這裡回報的是「離開現場」本身，抵達下一站要等
-    //    真的到了才另外回報，兩者是不同時刻，不能混在同一次動作裡）
-    //    或直接結案。
-    // 兩種情境都可能是「當下不容易決定按哪顆」（例如開車送保養廠，車輛
-    // 可能被拖到外面其他廠商據點而不是直接回營區，也可能要等隔天甚至
-    // 兩三天才能牽車回營），下面統一補上提示句。
-    // 綠色按鈕故意直接送出 COMPLETED（不是 RETURNING）：使用者的原話是
-    // 「結束勤務案件後就不會有抵達營區的按鈕了，因為代表這個勤務結束了」
-    // ——按下去就是任務真正的最後一步，回報表單本來就會照 COMPLETED 的
-    // 規則要求填最終里程／剩餘油量（見 needsMileage／isFinal），一次收
-    // 齊、不會按完還冒出下一個「抵達營區」按鈕。RETURNING／「返營」這個
-    // 事件類型對勤務類任務來說不再由這兩個分岔點觸發，只留給極少數這次
-    // 修正上線前就已經卡在 RETURNING 狀態的舊任務當相容路徑（會落到上面
-    // rTypes.length===1 的通用單顆按鈕分支，一樣要求填最終里程／油量）。
-    // 按鈕文字故意不寫「抵達營區」：跟洽公任務把「抵達營區」改成「結束
-    // 洽公案件」是同一個理由——標籤講「狀態」而不是講「地點」，車輛不一定
-    // 會直接開回營區（可能還會先繞去別的廠商據點）。
-    const moveType = rTypes.find(x => x !== "COMPLETED"); // ARRIVED_SCENE 或 DEPART_SCENE
-    const moveLabel = moveType === "ARRIVED_SCENE" ? "抵達現場" : "前往下一站";
-    const moveIcon = moveType === "ARRIVED_SCENE" ? "pin" : "depart";
-    const moveHint = moveType === "ARRIVED_SCENE" ? "尚未抵達現場選抵達現場" : "尚有後續行程選前往下一站";
+    // 出發後的分岔點（DISPATCH → [ARRIVED_SCENE, COMPLETED]）：不強制先
+    // 抵達現場才能結案，任務臨時取消／出發沒多久就折返也能直接結案。這個
+    // 「直接結案」的選項只留在出勤這裡——使用者確認過「只有第一次出勤
+    // 抵達目的地後可以直接結束案件，後面只能選離開往下一站或是離開返回
+    // 營區」，抵達現場之後就不再開放直接送 COMPLETED（見下面 RETURNING
+    // 分支），逼使用者一定要先表態離開之後要去哪裡。
+    const moveType = "ARRIVED_SCENE";
+    const moveLabel = "抵達現場";
+    const moveHint = "尚未抵達現場選抵達現場";
     // 出發後、還沒抵達現場前，下一步剛好是抵達現場且出勤時有選送醫醫院時，
-    // 一樣保留導航按鈕（見 rTypes.length===1 分支同樣的邏輯，這裡分岔點
-    // 多了結束勤務案件這個選項，導航需求沒有變）。
-    const showNavAboveBtn = moveType === "ARRIVED_SCENE" && hospitalForArrival;
+    // 在按鈕上面加一排導航按鈕。
+    const showNavAboveBtn = hospitalForArrival;
     const navRow = showNavAboveBtn ? `<div style="display:flex; gap:8px;">
       <a class="icon-btn" style="flex:1; justify-content:center;" href="${googleMapsUrl(hospitalNavQuery(hospitalForArrival))}" target="_blank" rel="noopener">${icon('depart',14)} Google 導航</a>
       <a class="icon-btn" style="flex:1; justify-content:center;" href="${appleMapsUrl(hospitalNavQuery(hospitalForArrival))}" target="_blank" rel="noopener">${icon('depart',14)} Apple 導航</a>
@@ -8219,10 +8213,30 @@ function viewTaskDetail(taskId){
       <div class="sticky-action-bar" style="flex-direction:column; align-items:stretch; gap:8px;">
         ${navRow}
         <div style="display:flex; gap:10px;">
-          <button class="btn-primary" onclick="window.__startReport('${t.id}','${moveType}')">${icon(moveIcon,20)} ${moveLabel}</button>
+          <button class="btn-primary" onclick="window.__startReport('${t.id}','${moveType}')">${icon('pin',20)} ${moveLabel}</button>
           <button class="btn-primary green" onclick="window.__startReport('${t.id}','COMPLETED')">${icon('home',20)} 結束勤務案件</button>
         </div>
         <div class="action-bar-hint">${moveHint}；勤務辦畢選結束勤務案件</div>
+      </div>`;
+  } else if (canDoReport && !draft && rTypes.length === 2 && rTypes.includes("RETURNING") && !isLiaison) {
+    // 抵達現場之後的「離開」分岔點：不再開放直接結案（拿掉了「結束勤務
+    // 案件」這顆，只留在出勤那個分岔點），逼使用者一定要先表態離開之後
+    // 要去哪裡——「前往下一站」或「返回營區」。這兩顆按鈕都只是宣告意圖，
+    // 車輛人員都還在路上，不是按下去當下就結束，所以都用一般藍色按鈕
+    // （不用綠色的「結束」樣式，避免讓人誤會按了就結案）：
+    // 1. 前往下一站（DEPART_SCENE）：之後抵達下一站時再另外回報「抵達」，
+    //    回到這個分岔點，可以依此類推重複跑好幾站。
+    // 2. 返回營區（RETURNING）：返回營區也算一趟路途，要等真的抵達營區、
+    //    另外回報「抵達營區」才會結案——不是按這顆按鈕的當下就結案。下一步
+    //    只會剩「抵達營區」這一顆按鈕，按下去才是真的到了，同一個動作
+    //    直接結案（連最終里程/油量一起收），沒有下一站可以再跑。
+    stickyBar = `
+      <div class="sticky-action-bar" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <div style="display:flex; gap:10px;">
+          <button class="btn-primary" onclick="window.__startReport('${t.id}','DEPART_SCENE')">${icon('depart',20)} 前往下一站</button>
+          <button class="btn-primary" onclick="window.__startReport('${t.id}','RETURNING')">${icon('returnArrow',20)} 返回營區</button>
+        </div>
+        <div class="action-bar-hint">還有下一站選前往下一站；準備返營選返回營區</div>
       </div>`;
   } else if (canDoReport && !draft && rTypes.length === 2 && isLiaison) {
     // 分岔點二（僅洽公任務才會出現）：出發之後，短天期洽公可以照原本順序
