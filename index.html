@@ -2138,7 +2138,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-29-483-pushconsole-stats-fix";
+const BUILD_TAG = "2026-07-29-484-lock-historical-reports";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3332,6 +3332,7 @@ const RELEASE_NOTES = [
     { category: "任務管理", items: [
       "修正建立勤務「跨單位借車」「跨單位選人」開關對一般成員/主官管沒有作用的問題：這兩個功能原本受限於資料查詢範圍，只有管理員/高勤官看得到別單位資料，現在開放給所有在職帳號；成員列表、車號查詢、成員統計卡等日常查看畫面維持只顯示自己單位，不受影響",
       "修正建立勤務時若剛好收訊不好、寫入失敗，畫面卻仍然清空表單並跳轉回任務列表、看起來像已經建立成功的問題：現在會保留已填寫的內容並顯示錯誤訊息，方便重新送出",
+      "修正勤務過了建立當天之後，本人被指派的回報事件跟患者紀錄仍然可以無限期新增/編輯的問題：勤務本身超過當天就不能再改（既有規則），但回報事件的時間軸跟患者生命徵象紀錄之前漏了這條限制，現在補上跟勤務本身一致的規則；過了當天仍然可以唯讀查看自己當初記錄的內容，只是不能再編輯/新增",
     ] },
     { category: "推播通知", items: [
       "修正「推播通知」開關誤判成整個帳號共用狀態的問題：如果同一帳號在另一台裝置已經開過推播，換一台新裝置打開系統時開關會顯示成「已開啟」，這時如果點下去關閉，會把帳號底下所有裝置（含真正在用的那支手機）的推播權杖一起清空；現在改成正確反映「這台裝置」自己的開關狀態，關閉時也只會移除這台裝置自己的權杖",
@@ -4276,12 +4277,24 @@ function isAssignedToTask(p, t){
 // 回報（出勤/抵達現場/返營/抵達營區）僅開放給這筆勤務指定的車長/駕駛/洽公
 // 人員本人，以及 admin（後台支援用）——同單位其他成員不能代替沒有被指派
 // 到的勤務回報，避免誤觸或代填別人的紀錄；高勤官、主官管屬於督導/查看
-// 角色，不進行第一線回報操作。
-function canReport(p, task){ const r = myRole(p); return r === "admin" || (r === "member" && isAssignedToTask(p, task)); }
+// 角色，不進行第一線回報操作。跟 canEditTask 一樣，本人只能在「建立當天」
+// 才能繼續回報/修改——過了當天這筆任務就算進歷史紀錄，不能再讓本人事後
+// 竄改（原本這裡漏了這條日期限制，同一個人被指派過的任務不管多久以前，
+// 時間軸每一步都還能無限期編輯、患者紀錄也還能無限期新增/修改，直接違背
+// 「歷史紀錄不能被本人事後竄改」這個既定設計目標，這裡補上跟 canEditTask
+// 一致的判斷）。
+function canReport(p, task){
+  const r = myRole(p);
+  if (r === "admin") return true;
+  return r === "member" && isAssignedToTask(p, task) && isSameDay(new Date(task.createdAt||0).getTime(), new Date());
+}
 // 患者紀錄的「查看」跟「回報/編輯」分開：高勤官、主官管雖然不能自己記錄
 // 患者狀況，但督導角色仍需要看得到既有紀錄內容（例如遠端掌握傷病患狀況），
-// 所以查看權限比照 canManageTasks，比 canReport 更寬。
-function canViewVitals(p, task){ return canReport(p, task) || canManageTasks(p); }
+// 所以查看權限比照 canManageTasks，比 canReport 更寬；本人被指派過的任務
+// 就算過了當天不能再編輯，仍然要能唯讀回顧自己當初記錄的內容——不能直接
+// 沿用現在已經加上「當天」限制的 canReport()，改成直接比對 isAssignedToTask，
+// 不受日期限制，只有「能不能編輯」才受日期限制。
+function canViewVitals(p, task){ return isAssignedToTask(p, task) || canManageTasks(p); }
 // 主官管除了自己單位的勤務，還能看到「借用了自己單位資源」的別單位勤務
 // （見 involvedUnits，由 createTask／updateTask 依車輛/車長/駕駛/洽公人員
 // 實際歸屬單位算出來）——只開放 commander，一般成員不開放（見設計討論：
