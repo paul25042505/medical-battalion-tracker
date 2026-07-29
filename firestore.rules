@@ -91,9 +91,18 @@ service cloud.firestore {
     // COMPLETED／RETURNING——不影響其他事件類型（DISPATCH／ARRIVED_SCENE
     // 等時間軸中段步驟）也不影響沒有 erStandbyKey 的一般勤務，那些仍然套用
     // 原本「過了當天不能再竄改」的限制。
+    //
+    // 故意不比對 isAssignedToTaskData(t)（該任務指定的車長/駕駛/建立者）：
+    // 「完成當前勤務，啟動新勤務」的整個用意就是換班——換班當下按下這顆
+    // 按鈕的人幾乎一定是「接手的新班別」，跟舊任務上記錄的舊車長/駕駛不是
+    // 同一個人，比對 isAssignedToTaskData 幾乎必定失敗（第一版修正漏想到
+    // 這點，導致換班換到不同人操作時，舊任務一樣結不了案）。改成比對
+    // sameUnit(t.unit)——跟「建立新任務」本身的權限範圍一致（一般成員只能
+    // 建立自己單位的勤務），確保只有同單位的在職成員能結掉這筆待命任務，
+    // 不開放給其他單位的成員代為結案。
     function isStandbyClosingEvent(taskId, eventType) {
       let t = get(/databases/$(database)/documents/tasks/$(taskId)).data;
-      return isAssignedToTaskData(t) && 'erStandbyKey' in t
+      return 'erStandbyKey' in t && sameUnit(t.unit)
              && (eventType == 'COMPLETED' || eventType == 'RETURNING');
     }
 
