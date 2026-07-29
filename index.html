@@ -2067,7 +2067,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-30-500-duty-complete-is-final";
+const BUILD_TAG = "2026-07-30-501-fix-report-modal-clipped";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2968,6 +2968,7 @@ const RELEASE_NOTES = [
       "修正洽公任務出發後結案提示句在部分機型會被拉成兩行的問題（縮短文字，不再逐字引用按鈕全名）；勤務類任務抵達現場後同時顯示「前往下一個地點」「返回營區」兩顆按鈕時（例如車輛送保養廠可能要等隔天甚至兩三天才能牽車回營，當下不容易決定按哪顆），也補上同一套提示句",
       "勤務類任務抵達現場後的「前往下一個地點」「返回營區」兩顆按鈕改名為「前往下一站」「結束勤務案件」（任務卡片上對應的狀態文字也從「返回營區中」改成「勤務結束中」）：綠色按鈕實際的作用是回報這趟外出即將結束，不代表車輛一定會直接開回營區（例如車輛送保養廠可能被拖到其他廠商據點），改名後標籤講的是「狀態」而不是「地點」；文字也順便縮短到不會在手機上被擠成兩行",
       "洽公任務的結案按鈕「完成洽公」進一步改名為「結束洽公案件」，用詞跟上面勤務類任務新增的「結束勤務案件」對齊，兩種任務類型結案時看到的說法一致",
+      "修正勤務進度「編輯回報」「回報」彈窗最下面的按鈕（例如「刪除這筆回報」）在手機上會被畫面底部的「結束勤務案件」等固定按鈕列蓋住、點不到的問題：這兩個彈窗改成跟其他全螢幕彈窗一樣畫在捲動內容外面，不再受這個已知的 iOS Safari 定位問題影響",
     ] },
     { category: "任務管理", items: [
       "勤務類任務出勤後，不用再強制先回報「抵達現場」才能結案：現在出勤當下就會同時顯示「抵達現場」「結束勤務案件」兩顆按鈕，任務臨時取消或出發沒多久就折返等情境可以直接結案，不用卡在「抵達現場」這一步；跟洽公任務出發後就能直接結案是同一套邏輯",
@@ -6177,6 +6178,19 @@ let currentBackTarget = null;
 // 裡不捲動的固定兄弟元素，天生就會一直貼在畫面最下面，不受 main 內容
 // 長短影響。
 let currentTaskActionBar = "";
+// 回報表單／編輯回報彈窗：跟 currentTaskActionBar 同一套「畫面函式渲染當下
+// 順便設一個模組變數、render() 事後畫在 main 外面」的做法，理由也一樣、
+// 而且更嚴重——這兩個彈窗本來是直接內嵌在 viewTaskDetail() 回傳的內容
+// 字串裡（畫在 <main> 裡面），main 有 -webkit-overflow-scrolling:touch，
+// 撞上 iOS Safari 對「捲動容器裡面的 position:fixed」的 containing block
+// bug：彈窗的定位基準被錯算成 main 本身而不是整個視窗，導致彈窗被切齊在
+// main 的下緣——原本只到 bottomnav 上緣，這兩個彈窗又晚於 currentTaskActionBar
+// 才補上，main 的下緣其實是 sticky-action-bar 的上緣，彈窗最下面的按鈕
+// （例如「編輯回報」的「刪除這筆回報」）就被結束勤務案件等 sticky 按鈕蓋住
+// 點不到。跟 viewVitalsReportModal()／viewCampRegModal() 一樣的道理，全螢幕
+// 彈窗一定要在 main 外面渲染才不會中這個坑。
+let currentTaskReportModal = "";
+let currentTaskEventEditModal = "";
 // 全站共用的返回鍵：純圖示的液態玻璃圓圈＋chevron SVG（不接文字、右邊不接
 // 標題），不管目的地是哪裡都一樣，不要再依頁面各自寫「返回列表」「返回
 // 更多」等。onclick 屬性務必用單引號包起來，因為裡面的 JSON.stringify(route)
@@ -8225,10 +8239,11 @@ function viewTaskDetail(taskId){
         <div class="action-bar-hint">尚有後續行程選抵達目的地；洽公完畢選結束洽公案件</div>
       </div>`;
   }
-  // stickyBar 不塞進這個函式回傳的內容字串裡（不進 <main>），改交給
-  // currentTaskActionBar，讓 render() 畫在 main 外面——原因見
-  // currentTaskActionBar 宣告處的說明。
+  // stickyBar／reportModal 都不塞進這個函式回傳的內容字串裡（不進
+  // <main>），改交給 currentTaskActionBar／currentTaskReportModal，讓
+  // render() 畫在 main 外面——原因見這兩個變數宣告處的說明。
   currentTaskActionBar = stickyBar;
+  currentTaskReportModal = reportModal;
 
   // ---- 編輯既有回報（時間/里程有時候會填錯，需要能修正）----
   const editingEvent = canDoReport && state.eventEditId ? evs.find(e => e.id === state.eventEditId) : null;
@@ -8264,6 +8279,9 @@ function viewTaskDetail(taskId){
         </div>
       </div>`;
   }
+  // 跟 reportModal 同理，不塞進這個函式回傳的內容字串裡（不進 <main>），
+  // 改交給 currentTaskEventEditModal，讓 render() 畫在 main 外面。
+  currentTaskEventEditModal = eventEditModal;
 
   const personnelLine = isLiaison && Array.isArray(t.personnel) && t.personnel.length
     ? t.personnel.map(n => nameWithRank(n, t.unit)).join('、')
@@ -8318,8 +8336,6 @@ function viewTaskDetail(taskId){
         <div class="k">任務耗時</div><div class="v">${duration!=null ? durationLabel(duration) : '—'}</div>
       </div>
     </div>`) : ""}
-    ${reportModal}
-    ${eventEditModal}
   `;
 }
 
@@ -10806,6 +10822,8 @@ function render(){
   // （例如首頁），左滑返回手勢就應該沒有作用，不能沿用上一頁殘留的值。
   currentBackTarget = null;
   currentTaskActionBar = "";
+  currentTaskReportModal = "";
+  currentTaskEventEditModal = "";
   const view = ROUTE_VIEWS[state.route.name] || viewHome;
   const body = view();
 
@@ -10865,6 +10883,8 @@ function render(){
          這裡跟 viewBaseDataModal() 同一個位置渲染才不會中這個坑。 -->
     ${viewVitalsReportModal()}
     ${viewCampRegModal()}
+    ${currentTaskReportModal}
+    ${currentTaskEventEditModal}
   `;
   if (prevScrollTop > 0) {
     const newMain = document.querySelector("main");
