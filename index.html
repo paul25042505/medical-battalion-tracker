@@ -1251,6 +1251,10 @@
     flex:1; margin-top:0;
   }
   .btn-primary.green{background:var(--green); box-shadow:0 4px 14px color-mix(in srgb, var(--green) 25%, transparent);}
+  /* 洽公任務出發後，「抵達目的地」／「完成洽公」兩顆按鈕並列時的提示句
+     （見 viewTaskDetail 的說明）：放在按鈕列下面，不是塞進按鈕裡面或排在
+     按鈕上面——這樣才不會讓按鈕本身變擠，也不會佔用上面內容區塊的空間。 */
+  .action-bar-hint{font-size:var(--text-xs); color:var(--muted); text-align:center; line-height:1.5;}
   .btn-ghost{
     background:none; border:1.5px solid var(--border); color:var(--text); font-weight:600;
     border-radius:var(--radius-btn); min-height:var(--btn-height); padding:0 20px; font-size:var(--text-base); font-family:var(--sans);
@@ -2063,7 +2067,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-29-494-remove-mci-tutorial";
+const BUILD_TAG = "2026-07-29-495-liaison-complete-button";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2544,15 +2548,16 @@ const EVENT_TYPES = [
 ];
 // 洽公任務（現勘、開會等非車輛派遣性質的外出）：不追蹤里程/油量，流程也比較
 // 單純，沒有「前往下一個地點」的分岔——地點在建立任務時就一次填完，回報只
-// 是單純的出發→抵達目的地→離開目的地→抵達營區四個時間點，抵達營區即代表
-// 任務結束。標籤刻意都講清楚「去哪裡」（目的地／營區），不用「返營」這種
-// 需要前後文才看得懂在講哪一段的講法，單獨出現在通知標題、時間軸裡也能
-// 一眼看懂。
+// 是單純的出發→抵達目的地→離開目的地→完成洽公四個時間點。
+// 最後一步原本標籤是「抵達營區」，但這顆按鈕實際的作用是「結案」，不是真的
+// 檢查人在不在營區——長期受訓／外派不會回到原本營區的情況，一樣是按這顆
+// 結案，「抵達營區」這個講法容易讓人誤會要人真的到營區才能按，改成強調
+// 「狀態」而非「地點」的「完成洽公」。
 const LIAISON_EVENT_TYPES = [
   { type: "DISPATCH",      label: "出發",     icon: "alert",       statusKey: "dispatch",   hint: "從營區出發" },
   { type: "ARRIVED_SCENE", label: "抵達目的地", icon: "pin",         statusKey: "onscene",    hint: "抵達洽公目的地" },
   { type: "DEPART_SCENE",  label: "離開目的地", icon: "depart",      statusKey: "transit",    hint: "離開目的地，準備返回營區" },
-  { type: "RETURNING",     label: "抵達營區",  icon: "returnArrow", statusKey: "completed",  hint: "返回營區，洽公完成" }
+  { type: "RETURNING",     label: "完成洽公",  icon: "returnArrow", statusKey: "completed",  hint: "洽公事宜已完成（不一定要真的回到營區才能按）" }
 ];
 function eventTypesFor(t){ return (t && t.type === "liaison") ? LIAISON_EVENT_TYPES : EVENT_TYPES; }
 const STATUS_LABEL = {
@@ -2988,6 +2993,7 @@ const RELEASE_NOTES = [
     ] },
     { category: "介面優化", items: [
       "修正勤務詳情頁底部的回報按鈕（例如「抵達目的地」「抵達營區」）在內容較短的任務（例如洽公任務）下方會多出一段空白、沒有貼齊底部導覽列的問題：改成跟底部導覽列同一套做法固定在畫面最下面，不受頁面內容長短影響",
+      "洽公任務出發後的結案按鈕「抵達營區」改名為「完成洽公」：這顆按鈕實際的作用是結案，不是真的檢查人在不在營區，長期受訓/外派不會回到原本營區的情況也是按這顆結案，改名後不會再讓人誤會要人真的到營區才能按；出發後同時顯示「抵達目的地」「完成洽公」兩顆按鈕時，下方新增一行提示句幫忙判斷該按哪一顆",
     ] },
     { category: "系統功能", items: [
       "移除「大量傷患演練模組」與「教學園地」這兩個仍在建構中、只開放管理員使用的功能（更多頁入口與相關頁面一併下架）",
@@ -4145,7 +4151,7 @@ async function deleteTask(taskId){
 }
 async function forceEndTask(taskId){
   const t = state.tasks.find(x => x.id === taskId);
-  // 洽公任務沒有 COMPLETED 事件，結束點是「抵達營區」（type 仍是
+  // 洽公任務沒有 COMPLETED 事件，結束點是「完成洽公」（type 仍是
   // RETURNING，statusKey completed，只是顯示標籤改了）。
   const finalType = (t && t.type === "liaison") ? "RETURNING" : "COMPLETED";
   await addEvent(taskId, finalType, { note: "管理員強制結束" });
@@ -7936,7 +7942,7 @@ function viewTaskDetail(taskId){
   const startMileage = dispatchEv?.mileage ?? t.startMileage ?? null;
   const finalMileage = completedEv?.mileage ?? null;
   const distance = (startMileage != null && finalMileage != null) ? (finalMileage - startMileage) : null;
-  // 洽公任務沒有 COMPLETED 事件，「抵達營區」（type 仍是 RETURNING，
+  // 洽公任務沒有 COMPLETED 事件，「完成洽公」（type 仍是 RETURNING，
   // statusKey completed，只是顯示標籤改了）本身就是結束點。
   const finalEv = isLiaison ? returningEv : completedEv;
   const duration = finalEv ? (finalEv.ts - (dispatchEv?.ts ?? new Date(t.createdAt||0).getTime())) : null;
@@ -8144,11 +8150,17 @@ function viewTaskDetail(taskId){
   } else if (canDoReport && !draft && rTypes.length === 2 && isLiaison) {
     // 分岔點二（僅洽公任務才會出現）：出發之後，短天期洽公可以照原本順序
     // 先回報抵達目的地；長期受訓／長期外派沒有單一固定的「現場」可以回報
-    // 抵達/離開目的地，可以直接跳過這兩步，出發後直接回報抵達營區。
+    // 抵達/離開目的地，可以直接跳過這兩步，出發後直接回報完成洽公。這是
+    // 唯一會同時出現兩顆意義不同按鈕的分岔點，容易讓人猶豫該按哪顆，下面
+    // 補一行提示句幫忙判斷；其他分岔點（例如勤務類的「前往下一個地點」／
+    // 「返回營區」）語意本來就清楚，不需要這行提示。
     stickyBar = `
-      <div class="sticky-action-bar">
-        <button class="btn-primary" onclick="window.__startReport('${t.id}','ARRIVED_SCENE')">${icon('pin',20)} 抵達目的地</button>
-        <button class="btn-primary green" onclick="window.__startReport('${t.id}','RETURNING')">${icon('home',20)} 抵達營區</button>
+      <div class="sticky-action-bar" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <div style="display:flex; gap:10px;">
+          <button class="btn-primary" onclick="window.__startReport('${t.id}','ARRIVED_SCENE')">${icon('pin',20)} 抵達目的地</button>
+          <button class="btn-primary green" onclick="window.__startReport('${t.id}','RETURNING')">${icon('home',20)} 完成洽公</button>
+        </div>
+        <div class="action-bar-hint">尚有後續行程請選「抵達目的地」；洽公完畢請選「完成洽公」</div>
       </div>`;
   }
   // stickyBar 不塞進這個函式回傳的內容字串裡（不進 <main>），改交給
