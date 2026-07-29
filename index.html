@@ -1549,6 +1549,9 @@
   .personnel-email{font-size:11px; color:var(--muted); margin-top:2px; word-break:break-all;}
   .personnel-card-actions-top{display:flex; align-items:center; gap:6px; flex-shrink:0;}
   .personnel-unclaimed-badge{font-size:10px; font-weight:700; padding:2px 8px; border-radius:999px; background:color-mix(in srgb, var(--amber-text) 16%, var(--panel-2)); color:var(--amber-text); white-space:nowrap;}
+  /* 待審核徽章：跟「尚未登入」的琥珀色徽章刻意分開用紅色，待審核代表需要
+     管理員動作（審核/指派角色），比「尚未登入」急迫，顏色要更醒目。 */
+  .personnel-pending-badge{font-size:10px; font-weight:700; padding:2px 8px; border-radius:999px; background:color-mix(in srgb, var(--red) 16%, var(--panel-2)); color:var(--red); white-space:nowrap;}
   .personnel-edit-btn{
     width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:50%;
     background:none; border:none; color:var(--muted); cursor:pointer; transition:background 0.15s ease; flex-shrink:0;
@@ -2135,7 +2138,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-28-478-stepmeta-rank-size-fix";
+const BUILD_TAG = "2026-07-29-479-crossunit-pending-badge";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3322,6 +3325,14 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/07/29", groups: [
+    { category: "人員與帳號", items: [
+      "後台「人員與帳號」新增獨立的「待審核」彙整區塊，不分單位切換的分頁一次列出所有待審核帳號，並在名冊卡片加上紅色「待審核」徽章，方便管理員第一時間找到還沒審核的新帳號",
+    ] },
+    { category: "任務管理", items: [
+      "修正建立勤務「跨單位借車」「跨單位選人」開關對一般成員/主官管沒有作用的問題：這兩個功能原本受限於資料查詢範圍，只有管理員/高勤官看得到別單位資料，現在開放給所有在職帳號；成員列表、車號查詢、成員統計卡等日常查看畫面維持只顯示自己單位，不受影響",
+    ] },
+  ] },
   { date: "2026/07/28", groups: [
     { category: "介面優化", items: [
       "修正輸入框偶爾聚焦後游標卡在畫面最上面、下面留一大片空白的問題（動態延長版面校正保護期，最多到 3 秒）",
@@ -5439,16 +5450,21 @@ function startDataListeners(){
     if (changed) safeRender();
   });
   personnelPoll = poll(async () => {
-    const unitFilter = myQueryUnitFilter();
-    const raw = unitFilter ? await fsQueryEquals("users", "unit", unitFilter) : await fsListCollection("users");
+    // 不分單位整批抓（見 firestore.rules 的 users 讀取規則已開放 isActive()），
+    // 供「跨單位選人」使用；一般成員/主官管平常看到的成員列表／車號查詢
+    // 各自在畫面層再篩回自己單位（見 viewMemberList／plateSearchResultsHtml），
+    // 不是靠這裡的查詢範圍把關。
+    const raw = await fsListCollection("users");
     const docs = raw.map(mapUserToPersonnel);
     const changed = changedSince("personnel", docs);
     state.personnel = docs;
     if (changed) safeRender();
   });
   vehiclesPoll = poll(async () => {
-    const unitFilter = myQueryUnitFilter();
-    const docs = unitFilter ? await fsQueryEquals("vehicles", "unit", unitFilter) : await fsListCollection("vehicles");
+    // 不分單位整批抓（見 firestore.rules 的 vehicles 讀取規則已開放
+    // isActive()），供建立勤務「跨單位借車」使用；平常的車輛清單（基礎
+    // 資料管理）畫面層仍會篩回自己單位，跟 personnelPoll 同樣的道理。
+    const docs = await fsListCollection("vehicles");
     const changed = changedSince("vehicles", docs);
     state.vehicles = docs;
     if (changed) safeRender();
@@ -9005,9 +9021,14 @@ function viewRecords(){
 
   const statusOptions = ["", ...STATUS_ORDER].map(s => `<option value="${s}" ${f.status===s?'selected':''}>${s?STATUS_LABEL[s]:'全部狀態'}</option>`).join("");
 
-  // 車號／人員下拉選單：依目前單位篩選（或全部單位）動態列出，不再手打文字搜尋
-  const vehiclePool = sortVehicles(f.unit ? state.vehicles.filter(v => v.unit === f.unit) : state.vehicles);
-  const personPool = (f.unit ? state.personnel.filter(x => x.unit === f.unit) : state.personnel);
+  // 車號／人員下拉選單：依目前單位篩選（或全部單位）動態列出，不再手打文字搜尋。
+  // 一般成員/主官管沒有「全部單位」的單位篩選按鈕（見下面 unitPills），f.unit
+  // 永遠是空字串——不能直接拿 f.unit 判斷要不要篩選，否則會變成看得到別單位
+  // 的車號/人員名單；改用 filterUnit：staff 才照 f.unit（可能是「全部單位」），
+  // 非 staff 一律鎖自己單位，跟 viewMemberList／plateSearchResultsHtml 同一套規則。
+  const filterUnit = canSeeAllUnits(p) ? f.unit : myUnit(p);
+  const vehiclePool = sortVehicles(filterUnit ? state.vehicles.filter(v => v.unit === filterUnit) : state.vehicles);
+  const personPool = (filterUnit ? state.personnel.filter(x => x.unit === filterUnit) : state.personnel);
   const vehicleOptions = `<option value="">全部車號</option>` + vehicleOptionsByType(vehiclePool, v => `<option value="${esc(v.plate)}" ${f.vehicle===v.plate?'selected':''}>${esc(v.plate)}</option>`);
   const personOptions = [`<option value="">全部人員</option>`, ...personPool.map(x => `<option value="${esc(x.name)}" ${f.person===x.name?'selected':''}>${esc(x.name)}${x.title?' '+esc(x.title):''}</option>`)].join("");
 
@@ -9451,7 +9472,13 @@ function memberCardHtml(x){
 // 會有這排可以點的標籤；一般成員/主官管本來就只查得到自己單位
 // （Firestore 規則限制），永遠只有一個單位可看，不需要切換也切換不了。
 function memberStatsCardHtml(){
-  const pool = state.personnel.filter(x => x.active !== false);
+  // state.personnel 現在不分單位整批抓（見 personnelPoll，供跨單位選人/
+  // 借車使用），這裡不能直接用整包資料算統計——一般成員/主官管本來就只能
+  // 看自己單位，不然這張卡的甜甜圈跟單位人數標籤會把別單位的人數也算進來、
+  // 洩漏出去；跟 viewMemberList／plateSearchResultsHtml 同一套規則。
+  const p = state.profile;
+  const restrictUnit = canSeeAllUnits(p) ? null : myUnit(p);
+  const pool = state.personnel.filter(x => x.active !== false && (restrictUnit === null || x.unit === restrictUnit));
   if (!pool.some(x => rankCategory(x.title))) return '';
   const unitCounts = {};
   pool.forEach(x => { unitCounts[x.unit] = (unitCounts[x.unit] || 0) + 1; });
@@ -9524,10 +9551,13 @@ function viewMemberList(){
 
 /* =========================================================
    17a-0b) 畫面：車號查詢（輸入車牌或姓名反查車主，所有登入使用者皆可見；
-   跟成員列表同一份 state.personnel、同樣受單位範圍限制——一般成員/
-   主官管只查得到自己單位，admin/高勤官不分單位；不是額外開放更大的
-   查詢範圍，車輛資訊本來就已經在成員列表攤開給這個範圍的人看了，
-   這裡只是換一個「用車牌反查」的入口，方便好記，不是新的權限）。
+   跟成員列表同樣受單位範圍限制——一般成員/主官管只查得到自己單位，
+   admin/高勤官不分單位。注意：state.personnel 為了支援「跨單位借車／
+   跨單位選人」，背景輪詢已經改成不分單位整批抓（見 personnelPoll），
+   這裡的單位篩選（plateSearchResultsHtml 內的 unit 變數）是唯一的
+   把關點，不能拿掉，否則一般成員會透過這個查詢頁看到別單位人員的姓名/
+   階級/車輛登記——跟成員列表的道理一樣、只是各自獨立過濾，不共用同一段
+   篩選邏輯。
    沒輸入查詢字串時預設列出這個範圍內所有已登記車輛（不用先打字才看
    得到東西），輸入框同時比對車牌（忽略大小寫/破折號）跟姓名（原文
    比對，中文姓名沒有大小寫問題）。頂部「全部／汽車／機車」分類 +
@@ -9562,7 +9592,9 @@ function plateRowHtml(person, vehicle){
 function plateSearchResultsHtml(query, typeFilter){
   const q = (query||"").trim();
   const nq = normalizePlateForSearch(q);
-  const pool = state.personnel.filter(x => x.active !== false);
+  const p = state.profile;
+  const unit = canSeeAllUnits(p) ? null : myUnit(p);
+  const pool = state.personnel.filter(x => x.active !== false && (unit === null || x.unit === unit));
   const rows = [];
   pool.forEach(x => {
     (x.vehicles||[]).filter(v => v.plate).forEach(v => {
@@ -10885,6 +10917,7 @@ function viewAdminUsers(){
         </div>
         <div class="personnel-card-actions-top">
           ${x.role==='unclaimed' ? `<span class="personnel-unclaimed-badge">尚未登入</span>` : ''}
+          ${x.role==='pending' ? `<span class="personnel-pending-badge">待審核</span>` : ''}
           <button class="personnel-edit-btn" type="button" title="編輯資料" onclick="window.__openBaseDataModal('personnel','${x.id}','${x.unit||''}')">${icon('pencil',15)}</button>
         </div>
       </div>
@@ -10905,6 +10938,14 @@ function viewAdminUsers(){
   };
   const unassigned = canAssignRole ? state.personnel.filter(x => !x.unit) : [];
   const unit = canSwitch ? (state.baseDataUnit || UNITS[0].code) : myUnit(p);
+  // 待審核彙整區塊：不管目前分頁切到哪個單位，都要能一眼看到「還有誰沒
+  // 審核」，不然要一個個切單位分頁才找得到，見使用者回報「待審核的人會
+  // 跟已審核的人混在一起」。admin／高勤官（canSwitch）不分單位列出全部；
+  // 主官管（!canSwitch）本來就只看得到自己單位，這裡也只篩自己單位，
+  // 不要因為加了這個彙整區塊反而看到別單位的待審核名單。
+  const pendingScope = canSwitch ? state.personnel : state.personnel.filter(x => x.unit === unit);
+  const pendingAccounts = pendingScope.filter(x => x.role === 'pending')
+    .slice().sort((a,b) => unitWeight(a.unit) - unitWeight(b.unit) || rankWeight(a.title) - rankWeight(b.title));
   const unitTabs = canSwitch ? `
     <div class="tabs2">
       ${UNITS.map(u => `<div class="tab2 ${unit===u.code?'active':''}" onclick="window.__setBaseDataUnit('${u.code}')">${u.label}</div>`).join("")}
@@ -10915,6 +10956,10 @@ function viewAdminUsers(){
     ${unassigned.length ? `
       <div class="section-label">待指派單位</div>
       ${unassigned.map(renderRow).join("")}
+    ` : ''}
+    ${pendingAccounts.length ? `
+      <div class="section-label">待審核（${pendingAccounts.length}）</div>
+      ${pendingAccounts.map(renderRow).join("")}
     ` : ''}
     ${unit ? `
       <button class="icon-btn primary" style="margin:12px 0;" onclick="window.__openBaseDataModal('personnel', null, '${unit}')">${icon('plus',15)} 預先建立人員</button>

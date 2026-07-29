@@ -64,9 +64,16 @@ service cloud.firestore {
     // 自動把這筆資料轉成用真實帳號 uid 命名的正式文件（詳見
     // functions/index.js）。
     //
-    // 讀取：admin／高勤官不分單位；一般成員/主官管只能看自己單位的（供
-    // 建立勤務下拉選單使用）——跟原本 personnel 集合的讀取範圍一致，只是
-    // 現在同一份文件裡也看得到 role/email，這是合併資料模型必然的取捨。
+    // 讀取：任何在職帳號（isActive()）都能讀到全部人員的文件，不分單位——
+    // 供建立勤務「跨單位選人」使用（一般成員/主官管原本只能看自己單位，
+    // 這個查詢範圍限制讓跨單位選人這個既有功能形同虛設，2026-07-29 開放
+    // 為不分單位，換取跨單位選人真正能用）。這是文件層級的放行，同一份
+    // 文件裡的 phone/email 等欄位沒辦法只放行名冊類欄位、擋掉聯絡資訊——
+    // Firestore 規則不能做欄位層級的細粒度控制，是已知取捨；一般在職帳號
+    // 日常瀏覽的畫面（成員列表／車號查詢／統計卡）在前端各自把顯示範圍
+    // 篩回自己單位（見 index.html 的 viewMemberList／plateSearchResultsHtml／
+    // memberStatsCardHtml），不是靠這裡的查詢範圍把關，只有「跨單位選人」
+    // 這個功能本身才真的用得到全部單位的資料。
     //
     // 寫入分三種身分：
     // 1) admin：什麼欄位都能改（角色/單位指派、花名冊資料都算）。
@@ -86,7 +93,7 @@ service cloud.firestore {
       // 回傳 403，新帳號會卡在「登入後初始化失敗」動彈不得。
       // request.auth.uid == uid 純粹比對路徑跟權杖，不會呼叫 get()，
       // 排在最前面才能確保這個 short-circuit 一定先被評估到。
-      allow read: if (isSignedIn() && request.auth.uid == uid) || isStaff() || sameUnit(resource.data.unit);
+      allow read: if (isSignedIn() && request.auth.uid == uid) || isActive();
       // 建立分兩種情境：(a) 使用者自己第一次登入，前端自動建立一筆
       // role:'pending'、unit 空白的待審核帳號；(b) 管理員/高勤官/主官管
       // 幫還沒登入過的人預先建立資料，role 一定要是 'unclaimed'，不能藉
@@ -126,10 +133,12 @@ service cloud.firestore {
 
     // 基礎資料：車輛／行車紀錄器，依單位分類（人員已併入 users 集合，
     // 見上方 match /users/{uid} 的說明）。
-    // Admin、高勤官可管理所有單位；主官管僅能管理自己單位的資料；
-    // 一般成員與主官管都只能讀取自己單位的資料（供建立勤務下拉選單使用）。
+    // Admin、高勤官可管理所有單位；主官管僅能管理自己單位的資料。
+    // 讀取比照上面 users 集合，開放給任何在職帳號、不分單位——供建立勤務
+    // 「跨單位借車」使用；一般在職帳號日常看到的車輛清單（基礎資料管理）
+    // 前端一樣篩回自己單位，理由跟 users 集合完全一致，不重複說明。
     match /vehicles/{id} {
-      allow read: if isStaff() || sameUnit(resource.data.unit);
+      allow read: if isActive();
       allow create: if isStaff() || (isCommander() && sameUnit(request.resource.data.unit));
       allow update, delete: if isStaff() || (isCommander() && sameUnit(resource.data.unit) && sameUnit(request.resource.data.unit));
     }
