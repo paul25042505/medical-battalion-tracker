@@ -2067,7 +2067,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-29-495-liaison-complete-button";
+const BUILD_TAG = "2026-07-30-01-action-bar-hint-oneline";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2960,6 +2960,11 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/07/30", groups: [
+    { category: "介面優化", items: [
+      "修正洽公任務出發後結案提示句在部分機型會被拉成兩行的問題（縮短文字，不再逐字引用按鈕全名）；勤務類任務抵達現場後同時顯示「前往下一個地點」「返回營區」兩顆按鈕時（例如車輛送保養廠可能要等隔天甚至兩三天才能牽車回營，當下不容易決定按哪顆），也補上同一套提示句",
+    ] },
+  ] },
   { date: "2026/07/29", groups: [
     { category: "人員與帳號", items: [
       "後台「人員與帳號」新增獨立的「待審核」彙整區塊，不分單位切換的分頁一次列出所有待審核帳號，並在名冊卡片加上紅色「待審核」徽章，方便管理員第一時間找到還沒審核的新帳號",
@@ -8141,26 +8146,30 @@ function viewTaskDetail(taskId){
   } else if (canDoReport && !draft && rTypes.length === 2 && rTypes.includes("DEPART_SCENE")) {
     // 分岔點一（僅勤務類任務才會出現）：抵達現場之後，離開前往下一個地點
     // （這裡回報的是「離開現場」本身，抵達下一站要等真的到了才另外回報，
-    // 兩者是不同時刻，不能混在同一次動作裡）或直接返回營區。
+    // 兩者是不同時刻，不能混在同一次動作裡）或直接返回營區。跟洽公任務的
+    // 分岔點二是同一種情境（例如開車送保養廠，可能要等隔天甚至兩三天才能
+    // 牽車回營，不是當天就能決定按哪顆），下面補上同一套提示句。
     stickyBar = `
-      <div class="sticky-action-bar">
-        <button class="btn-primary" onclick="window.__startReport('${t.id}','DEPART_SCENE')">${icon('depart',20)} 前往下一個地點</button>
-        <button class="btn-primary green" onclick="window.__startReport('${t.id}','RETURNING')">${icon('home',20)} 返回營區</button>
+      <div class="sticky-action-bar" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <div style="display:flex; gap:10px;">
+          <button class="btn-primary" onclick="window.__startReport('${t.id}','DEPART_SCENE')">${icon('depart',20)} 前往下一個地點</button>
+          <button class="btn-primary green" onclick="window.__startReport('${t.id}','RETURNING')">${icon('home',20)} 返回營區</button>
+        </div>
+        <div class="action-bar-hint">尚有後續行程選前往下一站；已可返營選返回營區</div>
       </div>`;
   } else if (canDoReport && !draft && rTypes.length === 2 && isLiaison) {
     // 分岔點二（僅洽公任務才會出現）：出發之後，短天期洽公可以照原本順序
     // 先回報抵達目的地；長期受訓／長期外派沒有單一固定的「現場」可以回報
     // 抵達/離開目的地，可以直接跳過這兩步，出發後直接回報完成洽公。這是
     // 唯一會同時出現兩顆意義不同按鈕的分岔點，容易讓人猶豫該按哪顆，下面
-    // 補一行提示句幫忙判斷；其他分岔點（例如勤務類的「前往下一個地點」／
-    // 「返回營區」）語意本來就清楚，不需要這行提示。
+    // 補一行提示句幫忙判斷。
     stickyBar = `
       <div class="sticky-action-bar" style="flex-direction:column; align-items:stretch; gap:8px;">
         <div style="display:flex; gap:10px;">
           <button class="btn-primary" onclick="window.__startReport('${t.id}','ARRIVED_SCENE')">${icon('pin',20)} 抵達目的地</button>
           <button class="btn-primary green" onclick="window.__startReport('${t.id}','RETURNING')">${icon('home',20)} 完成洽公</button>
         </div>
-        <div class="action-bar-hint">尚有後續行程請選「抵達目的地」；洽公完畢請選「完成洽公」</div>
+        <div class="action-bar-hint">尚有後續行程選抵達目的地；洽公完畢選完成洽公</div>
       </div>`;
   }
   // stickyBar 不塞進這個函式回傳的內容字串裡（不進 <main>），改交給
