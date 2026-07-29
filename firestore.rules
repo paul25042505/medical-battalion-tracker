@@ -105,6 +105,22 @@ service cloud.firestore {
       return 'erStandbyKey' in t && sameUnit(t.unit)
              && (eventType == 'COMPLETED' || eventType == 'RETURNING');
     }
+    // 待命勤務結案時，addEvent() 會自動幫同一個地點續約下一筆待命勤務
+    // （見 index.html 的 renewStandbyTask），新任務的 unit 直接沿用舊任務
+    // 的 unit，不是操作者自己的單位。跟上面 isStandbyClosingEvent 同一個
+    // 病灶：這筆待命勤務的車長/駕駛本來就可能是「跨單位選人」借來的別單位
+    // 人員，等到這個人自己回報完成、觸發自動續約時，操作者自己帳號的單位
+    // 跟待命地點的單位當然對不上，原本 tasks 建立規則要求
+    // sameUnit(request.resource.data.unit) 會直接擋下這筆系統自動寫入，
+    // 導致醫務所悄悄失去待命車、沒有任何畫面提示（跟上面同一種「系統背景
+    // 寫入被規則誤擋」的問題）。這裡放寬：只要目標 erStandbyKey 對應到
+    // 真實存在的醫務所地點文件、任務類型固定是 duty（待命勤務唯一使用的
+    // 類型），任何在職帳號都能建立，不比對單位——跟 erStandbyKey 任務的
+    // 讀取規則本來就對全營開放（急診待命地點是全營共用資源）的精神一致。
+    function isStandbyRenewalTask(data) {
+      return isActive() && data.type == 'duty' && ('erStandbyKey' in data)
+             && exists(/databases/$(database)/documents/erStandby/$(data.erStandbyKey));
+    }
 
     // 帳號與人員名冊合併成同一份集合（原本 users／personnel 兩份分開維護，
     // 一份存帳號權限、一份存花名冊，同一個人要對照兩邊資料容易搞混，也曾經
@@ -220,7 +236,9 @@ service cloud.firestore {
       allow read: if isStaff() || sameUnit(resource.data.unit) || ('erStandbyKey' in resource.data)
                   || (isCommander() && 'involvedUnits' in resource.data && myUnit() in resource.data.involvedUnits);
       // 建立勤務限一般成員（限自己單位）與管理員；高勤官、主官管維持督導/查看角色，不再能自己建立。
-      allow create: if isAdmin() || (isSignedIn() && myRole() == 'member' && sameUnit(request.resource.data.unit));
+      // 待命勤務自動續約（isStandbyRenewalTask）是唯一的例外，見上面說明。
+      allow create: if isAdmin() || (isSignedIn() && myRole() == 'member' && sameUnit(request.resource.data.unit))
+                    || isStandbyRenewalTask(request.resource.data);
       // 高勤官、主官管對勤務維持只有查看權限：不可編輯。一般成員只能編輯
       // 自己被指派（車長/駕駛/洽公人員本人）的勤務，且只限建立當天——過了
       // 當天 24:00（台灣在地時區）這筆任務就算進了紀錄查詢的歷史資料，
