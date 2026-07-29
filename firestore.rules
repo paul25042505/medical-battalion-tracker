@@ -424,16 +424,6 @@ service cloud.firestore {
       allow create, delete: if false;
     }
 
-    // 大量傷患演練模組：還在建構中，目前只開放 admin 使用（前端更多頁
-    // 對其他角色顯示灰階、點不進去，這裡是後端同步擋一次，避免有人繞過
-    // 前端直接呼叫 API）。等模組正式開放時再放寬回所有在職帳號可用。
-    match /mciEvents/{id} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /mciPatients/{id} {
-      allow read, create, update, delete: if isAdmin();
-    }
-
     // 洽公登記／廠商入營登記：值日官登記表，跟現有的「洽公」任務類型完全
     // 獨立（不同集合，見 index.html 的洽公登記頁）。日期沒有時間，只記錄
     // 當天有沒有排這筆登記；「已登記」是值日官謄寫進軍用電腦後勾選的狀態，

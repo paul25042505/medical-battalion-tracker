@@ -85,10 +85,6 @@
     --glass-btn-border-active: rgba(255,255,255,0.7);
     --glass-btn-highlight: rgba(255,255,255,0.6);
     --glass-btn-glow: rgba(255,255,255,0.55);
-    /* 大量傷患模組專用的「極簡戰術」卡片陰影：比全站標準的 --shadow-xs
-       更輕、拿掉卡片外框，改用大留白＋柔和陰影分隔層次，只有這個模組用，
-       不影響其他頁面既有的卡片樣式。 */
-    --mci-shadow: 0 4px 12px rgba(0,0,0,0.03);
   }
   /* ---- 深色模式：預設跟隨系統設定（設定 → 一般 → 外觀），使用者也可以在
      「更多 → 外觀模式」手動固定選淺色/深色（見 window.__setThemeMode，會在
@@ -137,7 +133,6 @@
       --spatial-glow-alpha: 30%;
       --spatial-blob-alpha: 0.28;
       --spatial-depth-shadow: 0 22px 48px -18px rgba(0,0,0,0.6);
-      --mci-shadow: 0 4px 14px rgba(0,0,0,0.32);
     }
   }
   :root[data-theme="dark"]{
@@ -173,7 +168,6 @@
     --spatial-glow-alpha: 30%;
     --spatial-blob-alpha: 0.28;
     --spatial-depth-shadow: 0 22px 48px -18px rgba(0,0,0,0.6);
-    --mci-shadow: 0 4px 14px rgba(0,0,0,0.32);
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   /* 全站禁止選取文字（比照原生 App 手感，長按/雙點不會跳出選取把手或
@@ -1672,9 +1666,8 @@
     margin:-16px -16px 20px -16px; padding:22px 16px 10px 16px;
     background:color-mix(in srgb, var(--bg) 82%, transparent);
     backdrop-filter:blur(16px) saturate(180%); -webkit-backdrop-filter:blur(16px) saturate(180%);
-    /* 大量傷患事件詳情頁有 5 個分頁（首頁/檢傷官/治療官/後送官/車輛視角），
-       比原本設計的 3～4 個多，窄螢幕上固定寬度的圖示排滿可能會超出可視
-       範圍；加上水平捲動當安全網，不影響原本 3～4 個剛好塞得下的頁面。 */
+    /* 任務頁分頁數量之後可能繼續增加，窄螢幕上固定寬度的圖示排滿可能會
+       超出可視範圍；加上水平捲動當安全網，不影響本來就塞得下的頁面。 */
     overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch;
   }
   .icon-subtabs::-webkit-scrollbar{display:none;}
@@ -2006,94 +1999,15 @@
     .modal-sheet{border-radius:var(--radius-lg); max-height:80vh; max-height:80dvh;}
   }
 
-  /* ---- 大量傷患事件（MCI）----
-     視覺語言：蘋果極簡風＋戰術高清晰。拿掉卡片實體外框，改用大留白＋
-     --mci-shadow（比全站標準陰影更輕的柔和陰影）分隔層次；圓角統一
-     16px；檢傷分類／後送狀態改用藥丸狀 badge，不用方塊。這幾條規則
-     只套用在 .mci- 開頭的元件，不影響其他頁面既有的卡片/badge 樣式。 */
-  /* 這兩個卡片本身還套用 .spatial-card（既有的「空間感／流體擬態」卡片
-     語言：依 --card-accent 做色調漸層＋柔光陰影＋色邊框，已經是柔和陰影
-     不是生硬邊框），這裡只調整版面（留白/圓角/游標），不覆寫背景跟陰影，
-     不然會蓋掉 .spatial-card 原本的漸層光暈效果。 */
-  .mci-event-card, .mci-patient-card{padding:18px 20px; margin-bottom:14px; border-radius:16px; cursor:pointer;}
-  .mci-patient-card{cursor:default;}
-  .mci-event-card-top, .mci-event-header-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
-  .mci-event-card-title, .mci-event-header-title{font-size:var(--text-lg); font-weight:800; display:flex; align-items:center; gap:8px;}
-  .mci-event-card-meta{font-size:var(--text-xs); color:var(--muted); margin-top:4px; font-family:var(--mono);}
-  .mci-event-card-counts{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;}
-  .mci-count-chip{background:color-mix(in srgb, var(--c) 14%, transparent); color:var(--c); font-size:var(--text-xs); font-weight:800; padding:5px 12px; border-radius:999px; font-family:var(--mono);}
-  .badge.danger{background:color-mix(in srgb, var(--red) 12%, transparent); color:var(--red);}
   .badge.muted{background:color-mix(in srgb, var(--gray) 13%, transparent); color:var(--gray);}
-  .mci-event-header{background:var(--panel); box-shadow:var(--mci-shadow); border-radius:16px; padding:18px 20px; margin-bottom:20px;}
-  .mci-roles-card{background:var(--panel); box-shadow:var(--mci-shadow); border-radius:16px; padding:6px 16px; margin-bottom:20px;}
-  .mci-role-row{display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--border);}
-  .mci-role-row:last-child{border-bottom:none;}
-  .mci-role-row label{width:104px; flex-shrink:0; font-size:var(--text-sm); font-weight:700; color:var(--muted);}
-  /* iOS 原生設定風格：輸入框沒有外框，文字靠右對齊（跟左邊固定寬度的
-     label 對齊成一列一列），只有 focus 的時候才亮起淺灰底色提示正在編輯
-     哪一欄，平常完全融入卡片背景。 */
-  .mci-role-row input{flex:1; border:none; background:none; font-size:var(--text-sm); color:var(--text); padding:6px 8px; text-align:right; border-radius:8px; transition:background 0.15s ease;}
-  .mci-role-row input:focus{background:var(--panel-2); outline:none;}
-  .mci-stat-grid{margin-bottom:20px;}
-  .mci-stat-grid .stat-tile{border:none; border-left:5px solid var(--tc, var(--border)); border-radius:16px; box-shadow:var(--mci-shadow);}
-  .mci-subbreak{display:block; font-size:var(--text-xs); font-weight:600; color:var(--muted); font-family:var(--mono); margin-top:2px;}
-  /* 藥丸狀 badge：檢傷分類色與後送狀態都用同一套形狀語言，跟方塊/矩形
-     徹底區隔開來，一眼就能認出這是「狀態」而不是一般文字內容。 */
-  .mci-triage-badge{background:color-mix(in srgb, var(--c) 16%, transparent); color:var(--c); font-size:var(--text-xs); font-weight:800; padding:6px 13px; border-radius:999px; font-family:var(--mono); flex-shrink:0;}
-  .mci-patient-top{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
-  .mci-patient-seq{font-weight:700; font-family:var(--mono);}
-  .mci-patient-status{margin-left:auto; font-size:var(--text-xs); color:var(--muted); font-weight:700; background:var(--panel-2); padding:5px 12px; border-radius:999px;}
-  .mci-patient-complaint{font-size:var(--text-sm); color:var(--text); margin-top:10px; line-height:1.5;}
-  .mci-patient-actions{display:flex; gap:8px; margin-top:14px;}
-  .mci-patient-card-clickable{cursor:pointer;}
-  .mci-evac-chain{display:flex; align-items:center; gap:8px; margin-top:10px; font-size:var(--text-sm); font-weight:700; color:var(--text);}
-  .mci-evac-arrow{color:var(--muted); font-weight:400;}
-  .mci-evac-time{font-size:var(--text-xs); color:var(--muted); margin-top:6px; font-family:var(--mono);}
-  /* ---- 檢傷官 START 檢傷決策問答：免打字、免動腦，全程巨大按鈕 ---- */
-  .mci-start-card{background:var(--panel); box-shadow:var(--mci-shadow); border-radius:16px; padding:22px 20px; margin-bottom:20px;}
-  .mci-start-question{font-size:var(--text-lg); font-weight:800; line-height:1.4; margin-bottom:6px;}
-  .mci-start-hint{font-size:var(--text-xs); color:var(--muted); margin-bottom:14px; line-height:1.6;}
-  .mci-start-options{display:flex; flex-direction:column; gap:10px;}
-  .mci-start-btn{
-    width:100%; min-height:58px; border-radius:16px; border:none;
-    background:var(--panel-2); color:var(--text); font-size:var(--text-base); font-weight:700;
-    padding:14px 18px; text-align:center; transition:transform 0.12s ease, opacity 0.12s ease;
-  }
-  .mci-start-btn:active{transform:scale(0.97); opacity:0.85;}
-  .mci-start-btn[style*="--c"]{background:color-mix(in srgb, var(--c) 14%, transparent); color:var(--c);}
-  .mci-start-result{display:flex; align-items:center; gap:10px; font-size:var(--text-sm); font-weight:700; color:var(--text); margin-bottom:16px;}
-  /* 檢傷官在還沒開始 START 問答前就先看到這次傷患的流水編號，方便一邊看
-     螢幕一邊把號碼手寫填到實體傷患票卡上，不用等系統送出後才知道編號。 */
-  .mci-seq-preview{background:var(--panel); box-shadow:var(--mci-shadow); border-radius:16px; padding:16px 20px; margin-bottom:16px; text-align:center;}
-  .mci-seq-preview-label{font-size:var(--text-xs); color:var(--muted); font-weight:700; letter-spacing:0.04em;}
-  .mci-seq-preview-num{font-size:40px; font-weight:800; font-family:var(--mono); margin-top:2px; color:var(--blue);}
-  /* 已經目視判斷得出顏色的傷患，可以跳過整套 START 問答直接選色（紅色
-     選完還是會再問一次 ABCD，跟走完整套問答判定紅色的後續流程一致）。 */
-  .mci-quickcolor-card{background:var(--panel); box-shadow:var(--mci-shadow); border-radius:16px; padding:16px 20px; margin-bottom:16px;}
-  .mci-quickcolor-label{font-size:var(--text-xs); color:var(--muted); font-weight:700; margin-bottom:10px;}
-  .mci-quickcolor-options{display:flex; gap:10px;}
-  .mci-quickcolor-btn{flex:1; min-height:52px; border-radius:16px; border:none; background:color-mix(in srgb, var(--c) 14%, transparent); color:var(--c); font-size:var(--text-lg); font-weight:800; transition:transform 0.12s ease, opacity 0.12s ease;}
-  .mci-quickcolor-btn:active{transform:scale(0.95); opacity:0.85;}
 
-  /* ---- 教學園地：文章內文區塊（沿用 .detail-head 當外層卡片，這裡只
-     定義 h3／圖片／圖說／重點提醒框這幾個內文才有的元件）---- */
-  .tutorial-h3{font-size:var(--text-base); font-weight:800; margin:20px 0 8px 0;}
-  .tutorial-h3:first-child{margin-top:0;}
-  .tutorial-image-block{margin:16px 0;}
-  .tutorial-image{width:100%; border-radius:16px; display:block; box-shadow:var(--mci-shadow);}
-  .tutorial-image-caption{font-size:var(--text-xs); color:var(--muted); text-align:center; margin-top:8px;}
-  .tutorial-callout{
+  /* ---- 提示框（黃色警示色條，例如洽公登記頁的值日官提醒）---- */
+  .hint-callout{
     display:flex; gap:10px; align-items:flex-start; margin:16px 0; padding:12px 14px; border-radius:10px;
     background:color-mix(in srgb, var(--amber) 12%, transparent); border-left:4px solid var(--amber);
     font-size:var(--text-sm); color:var(--text); line-height:1.7;
   }
-  .tutorial-callout svg{flex-shrink:0; margin-top:2px; color:var(--amber-text);}
-  .tutorial-table-wrap{margin:16px 0; overflow-x:auto; -webkit-overflow-scrolling:touch;}
-  .tutorial-table-title{font-size:var(--text-sm); font-weight:700; color:var(--text); margin-bottom:8px;}
-  .tutorial-table{width:100%; border-collapse:collapse; font-size:var(--text-sm); background:var(--panel-2); border-radius:12px; overflow:hidden;}
-  .tutorial-table th, .tutorial-table td{padding:9px 12px; text-align:left; white-space:nowrap;}
-  .tutorial-table th{background:color-mix(in srgb, var(--blue) 12%, transparent); color:var(--blue); font-weight:700; font-size:var(--text-xs);}
-  .tutorial-table tbody tr:not(:last-child) td{border-bottom:1px solid var(--border);}
+  .hint-callout svg{flex-shrink:0; margin-top:2px; color:var(--amber-text);}
 
   /* ---- 人員選擇器（車長／駕駛，跨單位＋搜尋） ---- */
   .picker-field{
@@ -2149,7 +2063,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-29-493-fix-task-action-bar-gap";
+const BUILD_TAG = "2026-07-29-494-remove-mci-tutorial";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2940,301 +2854,6 @@ function hospitalSelectOptionsHtml(list, selectedName){
   return `<optgroup label="常用醫院">${frequent.map(opt).join("")}</optgroup><optgroup label="其他醫院">${others.map(opt).join("")}</optgroup>`;
 }
 
-/* =========================================================
-   2e-2) 大量傷患事件（MCI）：檢傷分類／人員配置常數
-   ========================================================= */
-// 紅色（立即）再依 ABCD 順序（呼吸道／呼吸／循環／神經學，依序評估、
-// 第一個出問題的地方就是分類依據，不用往下評）判斷送醫優先順序；
-// 黃/綠/黑各自都是單一類別，不再細分。
-const MCI_TRIAGE_COLORS = [
-  { key:"red",    label:"紅",  fullLabel:"紅色（立即）",        color:"#FF3B30" },
-  { key:"yellow", label:"黃",  fullLabel:"黃色（延遲）",        color:"#FFCC00" },
-  { key:"green",  label:"綠",  fullLabel:"綠色（輕微）",        color:"#34C759" },
-  { key:"black",  label:"黑",  fullLabel:"黑色（死亡／無法救治）", color:"#3A3A3C" }
-];
-const MCI_RED_SUBCATS = [
-  { key:"A", label:"A．呼吸道" },
-  { key:"B", label:"B．呼吸" },
-  { key:"C", label:"C．循環" },
-  { key:"D", label:"D．神經學" }
-];
-// 純顯示用的現場人員配置（模擬系統，所有功能不分角色都能操作，這裡只是
-// 記錄「目前誰在負責什麼」方便對照，不影響誰能點什麼按鈕）。
-const MCI_ROLES = [
-  { key:"commander",         label:"現場指揮官" },
-  { key:"triageOfficer",     label:"檢傷官" },
-  { key:"transportOfficer",  label:"後送官" },
-  { key:"treatmentOfficer",  label:"治療官" },
-  { key:"logisticsOfficer",  label:"資源／後勤官" },
-  { key:"recorder",          label:"紀錄官" }
-];
-/* =========================================================
-   教學園地：救護技術教學文章（圖文解說），目前限 admin 使用（見
-   settingsRow 的 disabled 判斷／viewTutorialCategories 等函式）。
-   內容純靜態寫在程式碼裡（沒有後台可以編輯，跟 RELEASE_NOTES 同一種
-   維護方式），圖片是 repo 裡的靜態檔案（tutorials/img/），透過 Firebase
-   Hosting 直接連到，不用另外接 Firebase Storage。分類是固定的 7 類，
-   之後新增教學只需要往對應分類的陣列裡加一筆，不用改分類本身。
-   ========================================================= */
-const TUTORIAL_CATEGORIES = [
-  { key:"vitals",    label:"評估與生命徵象",     iconName:"heartbeat", bg:"#E8F1FF", fg:"#0056C7" },
-  { key:"airway",    label:"呼吸道與心肺復甦",   iconName:"lungs",     bg:"#FFEAEA", fg:"#C7233B" },
-  { key:"ecg",       label:"心臟監測與心電圖",   iconName:"chart",     bg:"#F2E9FE", fg:"#6B23C7" },
-  { key:"trauma",    label:"創傷處置",           iconName:"alert",     bg:"#FFF2E0", fg:"#B45F00" },
-  { key:"medical",   label:"內科與環境急症",     iconName:"sun",       bg:"#E9F9EF", fg:"#177A34" },
-  { key:"equipment", label:"儀器與裝備操作",     iconName:"wrench",    bg:"#E8F1FF", fg:"#0056C7" },
-  { key:"mci",       label:"大量傷患與檢傷分類", iconName:"alert",     bg:"#FFEAEA", fg:"#C7233B" }
-];
-// 文章內文用區塊陣列描述：h3（子標題）／p（段落）／image（示意圖，src是
-// tutorials/img/ 底下的靜態檔案路徑，caption選填）／callout（重點提醒，
-// 左側色條樣式）。圖片目前都是示意圖佔位，之後有正式的照片/圖表可以
-// 直接換掉 src，不用動排版邏輯。
-const TUTORIAL_ARTICLES = {
-  vitals: [{
-    id: "vitals-basic",
-    title: "基本生命徵象判定",
-    summary: "呼吸、脈搏、血壓、體溫、SpO2 的測量方式與正常範圍，是傷患評估最基本的第一步。",
-    body: [
-      { type:"p", text:"生命徵象（Vital Signs）是評估傷患狀況最基本、也最容易在現場快速取得的客觀資訊，通常包含呼吸、脈搏、血壓、體溫、血氧濃度五項，搭配意識程度評估，構成初步評估的核心。" },
-      { type:"image", src:"tutorials/img/vitals-overview.svg", caption:"五大生命徵象測量項目與正常參考值" },
-      { type:"h3", text:"1. 呼吸（Respiration Rate）" },
-      { type:"p", text:"觀察胸廓起伏，計算 30 秒次數再乘以 2，同時留意呼吸型態是否規律、有無使用呼吸輔助肌、有無異常呼吸音。成人正常範圍約 12-20 次/分，低於 8 次或高於 30 次都屬於危急徵象。" },
-      { type:"h3", text:"2. 脈搏（Pulse）" },
-      { type:"p", text:"優先於橈動脈觸診，摸不到才改摸頸動脈；計算 30 秒次數再乘以 2，同時記錄脈搏強弱與規律性。成人正常範圍約 60-100 次/分。" },
-      { type:"h3", text:"3. 血壓（Blood Pressure）" },
-      { type:"p", text:"使用壓脈帶搭配聽診器測量收縮壓與舒張壓，壓脈帶寬度須包覆上臂約 2/3、下緣距肘窩 2-3 公分。成人正常參考值約為 120/80 mmHg，收縮壓低於 90 mmHg 需高度警覺休克可能。" },
-      { type:"h3", text:"4. 體溫（Temperature）" },
-      { type:"p", text:"現場常用耳溫槍或額溫槍快速測量，正常範圍約 36-37.5°C。體溫過高需考慮熱急症，體溫過低（低於 35°C）則要注意失溫與凝血功能異常。" },
-      { type:"h3", text:"5. 血氧濃度（SpO2）" },
-      { type:"p", text:"以脈搏血氧儀夾在指尖測量，正常值應在 95% 以上。低血氧合併呼吸窘迫、意識改變時，屬於需要立即處置的危急徵象。" },
-      { type:"callout", text:"重點提醒：單一次測量只是一個時間點的數字，生命徵象要重複測量、比較變化趨勢，才能真正判斷傷患是在惡化還是穩定。" },
-      { type:"h3", text:"意識程度評估（GCS）" },
-      { type:"p", text:"格拉斯哥昏迷指數（GCS）以睜眼反應（E）、語言反應（V）、運動反應（M）三項評分加總，滿分 15 分，用來量化描述意識狀態，方便交班與追蹤變化。" },
-      { type:"image", src:"tutorials/img/gcs-scale.svg", caption:"GCS 三項評分標準（E＋V＋M）" },
-      { type:"callout", text:"重點提醒：GCS 8 分以下通常代表傷患已無法自行保護呼吸道，須優先處理呼吸道並準備後送。" }
-    ]
-  }],
-  airway: [{
-    id: "cpr-aed",
-    title: "成人 CPR 與 AED 操作流程",
-    summary: "檢查反應到胸部按壓、人工呼吸、AED電擊，完整的成人心肺復甦流程與貼片位置。",
-    body: [
-      { type:"p", text:"心肺復甦術（CPR）搭配自動體外電擊去顫器（AED），是搶救心跳停止患者最關鍵的現場處置，每延遲一分鐘才開始壓胸，存活率就會明顯下降。" },
-      { type:"h3", text:"1. 檢查反應與呼吸" },
-      { type:"p", text:"輕拍雙肩並大聲呼叫，同時觀察胸廓起伏 5-10 秒。如果沒有反應、沒有呼吸或只有喘息式呼吸（agonal breathing），視為心跳停止，立即啟動下一步。" },
-      { type:"h3", text:"2. 求救與準備" },
-      { type:"p", text:"大聲呼救、請人啟動緊急救護系統並取得 AED，自己不要離開患者身邊，馬上開始胸部按壓，不用等其他人到齊。" },
-      { type:"h3", text:"3. 胸部按壓與人工呼吸" },
-      { type:"p", text:"雙手掌根交疊，置於胸骨中下段（兩乳頭連線中點），手臂打直、垂直向下按壓，深度 5-6 公分、速率每分鐘 100-120 次，每次按壓後讓胸廓完全回彈。每 30 次按壓給予 2 次人工呼吸，持續循環直到 AED 到達或患者恢復反應。" },
-      { type:"image", src:"tutorials/img/cpr-cycle.svg", caption:"30 次胸部按壓：2 次人工呼吸的循環比例" },
-      { type:"callout", text:"重點提醒：按壓中斷時間要盡量壓到最短（例如換手、分析心律時），持續、有效、少中斷的按壓才是提高存活率的關鍵。" },
-      { type:"h3", text:"4. AED 操作步驟" },
-      { type:"p", text:"打開 AED 電源後跟著語音指示：擦乾患者胸口、貼上兩片電擊貼片、待機器分析心律。分析與電擊當下所有人員都要離開患者身體，避免不必要的觸電或干擾判讀。電擊完成後立即恢復胸部按壓，不用先摸脈搏確認。" },
-      { type:"image", src:"tutorials/img/aed-pad-placement.svg", caption:"AED 貼片標準放置位置：右鎖骨下方與左側腋中線" },
-      { type:"callout", text:"重點提醒：電擊前務必確認『全部人員已離開患者』，包含自己的雙手，避免電擊時被波及。" }
-    ]
-  }, {
-    id: "airway-adjuncts",
-    title: "口咽／鼻咽通氣道與 I-gel／LMA 使用教學",
-    summary: "基本呼吸道輔助器（OPA/NPA）與聲門上呼吸道（I-gel/LMA）的適應症、尺寸選擇與置入方式。",
-    body: [
-      { type:"p", text:"呼吸道輔助器材大致分兩類：口咽／鼻咽通氣道（OPA/NPA）用來維持呼吸道暢通，屬於基本呼吸道處置；I-gel／喉罩（LMA）則是聲門上呼吸道，能提供更確實的通氣控制，常用於插管不可行或需要爭取時間的情境。" },
-      { type:"h3", text:"1. 口咽通氣道（OPA, Oropharyngeal Airway）" },
-      { type:"p", text:"適應症：意識完全喪失、沒有咳嗽／嘔吐反射的患者。清醒或半清醒的患者會誘發嘔吐，禁止使用。尺寸選擇：從嘴角量到耳垂（或下顎角）。成人置入時凹面朝上（朝向上顎）沿著舌面推進，接近咽喉後旋轉 180 度，使凹面朝下貼合舌根；也可以用壓舌板壓住舌頭，直接以正確方向置入，不用旋轉。" },
-      { type:"h3", text:"2. 鼻咽通氣道（NPA, Nasopharyngeal Airway）" },
-      { type:"p", text:"適應症：意識程度比 OPA 適用對象稍高、仍有輕微嘔吐反射也能耐受的患者。尺寸選擇：鼻孔量到耳垂（或下顎角），直徑約與患者小指粗細相近。置入前潤滑管身，沿著鼻道底部、與臉部垂直的方向緩慢推進，不要往頭頂方向推。" },
-      { type:"image", src:"tutorials/img/opa-npa-sizing.svg", caption:"OPA／NPA 尺寸測量方式與適用情境" },
-      { type:"callout", text:"重點提醒：疑似顱底骨折或嚴重顏面創傷的患者，禁止使用鼻咽通氣道，避免經鼻道誤入顱腔造成二次傷害。" },
-      { type:"h3", text:"3. 聲門上呼吸道：I-gel／喉罩（LMA）" },
-      { type:"p", text:"I-gel 是免充氣的凝膠套囊設計，置入相對簡單快速；LMA（喉罩）套囊需要另外充氣。兩者都是依患者體重挑選對應號數，號數選錯會導致密合度不佳、通氣漏氣或置入困難，使用前務必核對體重對應表。" },
-      { type:"table", title:"I-gel 號數對應體重", headers:["號數","適用體重","適用族群"], rows:[
-        ["1","<5 kg","新生兒"],
-        ["1.5","5-12 kg","嬰兒"],
-        ["2","10-25 kg","幼兒"],
-        ["2.5","25-35 kg","兒童"],
-        ["3","30-60 kg","小型成人"],
-        ["4","50-90 kg","中型成人"],
-        ["5",">90 kg","大型成人"]
-      ] },
-      { type:"table", title:"LMA（喉罩）號數對應體重", headers:["號數","適用體重","適用族群"], rows:[
-        ["1","<5 kg","新生兒"],
-        ["1.5","5-10 kg","嬰兒"],
-        ["2","10-20 kg","幼兒"],
-        ["2.5","20-30 kg","兒童"],
-        ["3","30-50 kg","小型成人"],
-        ["4","50-70 kg","中型成人"],
-        ["5","70-100 kg","大型成人"],
-        ["6",">100 kg","超大型成人"]
-      ] },
-      { type:"callout", text:"重點提醒：I-gel 與 LMA 的號數雖然相同，但對應體重範圍不一樣，不能拿 I-gel 的號數直接套用在 LMA 上，選用前要看清楚是哪一種產品的對照表。" },
-      { type:"p", text:"置入方式：頭頸維持中線位置，管身沿著硬顎方向盲插，感覺到明顯阻力代表已到達正確深度，LMA 需要依廠商建議量充氣，再接上甦醒球或呼吸器。" },
-      { type:"image", src:"tutorials/img/igel-lma-placement.svg", caption:"聲門上呼吸道置入方向與置入後確認重點" },
-      { type:"callout", text:"重點提醒：置入完成後一定要確認雙側呼吸音對稱、胸廓起伏對稱，並留意上腹部有沒有異常充氣聲音，避免誤置入食道造成通氣無效。" }
-    ]
-  }],
-  ecg: [{
-    id: "ecg-basic",
-    title: "心電圖機操作與導程貼片位置",
-    summary: "12 導程電極貼片標準位置與操作步驟，以及 P-QRS-T 基本波形判讀入門。",
-    body: [
-      { type:"p", text:"心電圖（ECG/EKG）記錄心臟電氣活動的變化，是判斷心律不整、心肌缺血等心臟疾病最直接的工具之一，正確的貼片位置是取得可信賴波形的第一步。" },
-      { type:"h3", text:"12 導程電極配置" },
-      { type:"p", text:"四肢導程（RA／LA／RL／LL）分別貼在左右鎖骨下方與左右下腹或下肢；胸前導程 V1-V6 則依序貼在胸骨兩側肋間與腋前線、腋中線，精確位置請參考下圖。" },
-      { type:"image", src:"tutorials/img/ecg-electrode-placement.svg", caption:"12 導程電極貼片標準位置" },
-      { type:"h3", text:"操作步驟" },
-      { type:"p", text:"貼片前先用酒精棉片清潔皮膚、去除毛髮與汗水以確保訊號品質，貼上電極片後連接導線，機器開機後選擇正確的紀錄模式，請患者放鬆、暫時不要說話與移動，再列印或儲存波形。" },
-      { type:"h3", text:"基本波形判讀入門" },
-      { type:"p", text:"一個完整的心跳週期會呈現 P 波、QRS 複合波與 T 波：P 波代表心房去極化，QRS 複合波代表心室去極化，T 波代表心室再極化。判讀時先看整體節律是否規則、心跳速率是否正常，再逐一檢視每個波形的形態。" },
-      { type:"image", src:"tutorials/img/ecg-waveform.svg", caption:"正常竇性心律的 P-QRS-T 波形" },
-      { type:"callout", text:"重點提醒：心電圖判讀需要搭配臨床症狀一起評估，機器本身有時候也會誤判（例如貼片鬆脫造成的假性心律不整），不能只看數字或波形就下結論。" }
-    ]
-  }],
-  trauma: [{
-    id: "hemorrhage-control",
-    title: "大出血止血技術",
-    summary: "直接加壓止血與止血帶的使用時機、方法，以及基本傷口包紮原則。",
-    body: [
-      { type:"p", text:"大出血是現場最容易在短時間內致命的創傷情況之一，止血的優先順序與速度，往往比其他處置都更關鍵。" },
-      { type:"h3", text:"1. 直接加壓止血" },
-      { type:"p", text:"用紗布或乾淨敷料直接覆蓋傷口，用掌根穩定、持續施力加壓，中途不要頻繁掀開查看，血液會先在敷料上凝結，過度掀開反而會破壞已形成的血栓。如果敷料被血浸濕，直接在上面再疊加一層，不要移除原本的敷料。" },
-      { type:"h3", text:"2. 止血帶使用時機" },
-      { type:"p", text:"當直接加壓無法止血、或肢體出現大量出血危及生命時，才使用止血帶。止血帶應綁在傷口近心端 5-7 公分處，直接綁在皮膚上（不要隔著寬鬆衣物），拉緊至遠端脈搏消失、出血完全停止為止，並清楚紀錄綁紮時間。" },
-      { type:"image", src:"tutorials/img/hemorrhage-control.svg", caption:"直接加壓止血與止血帶使用位置" },
-      { type:"callout", text:"重點提醒：止血帶一旦綁上就不要中途鬆開查看，鬆開可能讓已經控制住的出血再度惡化；後送時務必把綁紮時間交班給後續接手的醫療人員。" },
-      { type:"h3", text:"3. 傷口包紮" },
-      { type:"p", text:"止血完成後用繃帶固定敷料，包紮力道要能維持加壓效果但不能過緊阻斷血流，包紮後應定時檢查遠端肢體的顏色、溫度與脈搏，確認血液循環正常。" }
-    ]
-  }],
-  medical: [{
-    id: "heat-illness",
-    title: "熱急症（中暑／熱衰竭）辨識與現場處置",
-    summary: "熱痙攣、熱衰竭、中暑的分辨方式，以及現場降溫與後送判斷原則。",
-    body: [
-      { type:"p", text:"野外操課、行軍等高溫環境下的訓練，熱急症是最常見也最容易被輕忽的內科急症，依嚴重程度可分為熱痙攣、熱衰竭、中暑三個層級。" },
-      { type:"h3", text:"熱痙攣（Heat Cramps）" },
-      { type:"p", text:"大量流汗後電解質流失，造成肌肉不自主抽筋，意識通常清楚。處置以休息、補充含電解質的水分、緩慢伸展抽筋肌肉為主。" },
-      { type:"h3", text:"熱衰竭（Heat Exhaustion）" },
-      { type:"p", text:"合併大量流汗、皮膚濕冷蒼白、頭暈、噁心、疲倦，體溫通常升高但意識仍清楚。應立即移至陰涼處平躺休息、鬆開衣物、給予降溫並補充水分，密切觀察是否惡化為中暑。" },
-      { type:"h3", text:"中暑（Heat Stroke）" },
-      { type:"p", text:"體溫調節機制失效，核心體溫可能超過 40°C，皮膚可能轉為乾熱、出現意識改變（躁動、昏迷）、抽搐等神經學症狀，屬於熱急症中最危急的型態，死亡率高，需要立即積極降溫並後送。" },
-      { type:"image", src:"tutorials/img/heat-illness-cooling.svg", caption:"現場降溫三要點：移至陰涼處、大量降溫、監測意識與體溫" },
-      { type:"callout", text:"重點提醒：只要出現意識改變，不管體溫高低，都要當作中暑等級的危急個案處理，優先降溫並立即後送，不要等體溫計數字確認再行動。" }
-    ]
-  }],
-  equipment: [{
-    id: "pulseox-bp-equipment",
-    title: "血氧機與血壓計操作教學",
-    summary: "脈搏血氧儀夾取方式與血壓計聽診測量法的實際操作步驟。",
-    body: [
-      { type:"p", text:"正確操作測量儀器，是取得可靠生命徵象數據的前提，儀器本身再精準，操作方式錯誤還是會得到失真的讀數。" },
-      { type:"h3", text:"脈搏血氧儀（Pulse Oximeter）" },
-      { type:"p", text:"夾在食指或中指指尖，避開指甲油、灰指甲或過冷、末梢循環不良的肢體（會影響訊號讀取）。夾上後等待數秒讓讀數穩定，同時觀察波形是否規律，波形不規律或訊號微弱時讀數不可靠，應更換測量部位。" },
-      { type:"h3", text:"血壓計聽診測量法" },
-      { type:"p", text:"壓脈帶下緣距肘窩 2-3 公分，寬度包覆上臂約三分之二，聽診器膜面貼於肱動脈上，打氣至橈動脈脈搏消失後再多加壓 20-30 mmHg，緩慢洩壓的同時聆聽柯氏音（Korotkoff sounds），第一個聲音出現時為收縮壓，聲音完全消失時為舒張壓。" },
-      { type:"image", src:"tutorials/img/equipment-pulseox-bp.svg", caption:"指尖式血氧機與血壓計聽診法操作重點" },
-      { type:"callout", text:"重點提醒：測量前確認電池電量與儀器歸零，環境太吵雜聽不清楚柯氏音時，可以改用觸診法先抓收縮壓概略數值，再找安靜處補做完整測量。" }
-    ]
-  }],
-  mci: [{
-    id: "start-triage",
-    title: "START 檢傷分類法簡介",
-    summary: "行動力、呼吸、灌流、意識四道決策關卡，快速將大量傷患分類為紅黃綠黑。",
-    body: [
-      { type:"p", text:"START（Simple Triage And Rapid Treatment）是大量傷患事件現場最常用的快速檢傷分類法，目標是在極短時間內（每位傷患約 30 秒內）完成分類，讓有限的救護資源優先送到最危急的傷患身上。" },
-      { type:"h3", text:"檢傷決策流程" },
-      { type:"p", text:"依序評估行動力（能否自行走動）、呼吸（有無呼吸、呼吸速率）、灌流（橈動脈脈搏或微血管回充）、意識（能否配合簡單指令）四道關卡，第一個出現異常的地方就決定傷患的檢傷顏色，不用等所有項目都評估完。" },
-      { type:"image", src:"tutorials/img/start-triage-flowchart.svg", caption:"START 檢傷分類決策流程" },
-      { type:"h3", text:"紅黃綠黑代表意義" },
-      { type:"p", text:"紅色（立即）：呼吸/循環/意識任一項異常，需要立即處置與優先後送。黃色（延遲）：能配合指令但無法自行走動，可延後處置。綠色（輕微）：能自行走動，屬於輕傷。黑色：暢通呼吸道後仍無呼吸，判定為死亡或無法救治。" },
-      { type:"callout", text:"重點提醒：判定為紅色的傷患，實務上還會再追加評估 A（呼吸道）／B（呼吸）／C（循環）／D（神經學）子分類，找出第一個出問題的地方，方便治療官掌握優先處置重點。這套邏輯跟本系統「大量傷患演練模組」的檢傷官流程完全一致，可以直接在系統裡實際操作練習。" }
-    ]
-  }]
-};
-// 檢傷官建立案件用的 START 檢傷法決策流程（行動力→呼吸→灌流→意識），
-// 免打字、免動腦，全程大按鈕點選；每個步驟的選項用 go 表示下一步走去
-// 哪裡（{step:"下一步key"}）或直接判定顏色（{color:"..."}）。呼吸這一關
-// 沒呼吸時要先「壓額抬下巴暢通呼吸道」再重新檢查一次，跟其他單純二選一
-// 的關卡不一樣，多一個 reposition 中繼步驟。判定為紅色的傷患，流程結束
-// 後還要再多問一次 ABCD（見 MCI_RED_SUBCATS），黃/綠/黑不用。
-const MCI_START_FLOW = {
-  ambulate: {
-    q: "傷患能自行走動嗎？",
-    opts: [
-      { label: "能自行走動", go: { color:"green" } },
-      { label: "不能走動",   go: { step:"breathing" } }
-    ]
-  },
-  breathing: {
-    q: "檢查呼吸：有呼吸嗎？",
-    opts: [
-      { label: "有呼吸",   go: { step:"rate" } },
-      { label: "沒有呼吸", go: { step:"reposition" } }
-    ]
-  },
-  reposition: {
-    q: "請先壓額抬下巴，暢通呼吸道",
-    opts: [
-      { label: "已暢通呼吸道，繼續檢查", go: { step:"recheck" } }
-    ]
-  },
-  recheck: {
-    q: "暢通呼吸道後，現在有呼吸了嗎？",
-    opts: [
-      { label: "有呼吸了",   go: { color:"red" } },
-      { label: "仍然沒有呼吸", go: { color:"black" } }
-    ]
-  },
-  rate: {
-    q: "呼吸速率是否明顯過快（每分鐘超過30次）？",
-    opts: [
-      { label: "是，明顯過快", go: { color:"red" } },
-      { label: "否，速率正常", go: { step:"perfusion" } }
-    ]
-  },
-  perfusion: {
-    q: "橈動脈摸得到脈搏（或微血管回充小於2秒）嗎？",
-    opts: [
-      { label: "摸得到／回充正常", go: { step:"mental" } },
-      { label: "摸不到／回充過久", go: { color:"red" } }
-    ]
-  },
-  mental: {
-    q: "能聽從簡單指令嗎？（例如：眨眨眼、動動手指）",
-    opts: [
-      { label: "能配合指令", go: { color:"yellow" } },
-      { label: "無法配合",   go: { color:"red" } }
-    ]
-  }
-};
-function mciTriageInfo(key){ return MCI_TRIAGE_COLORS.find(c => c.key === key) || null; }
-function mciRedSubcatLabel(key){ return (MCI_RED_SUBCATS.find(s => s.key === key) || {}).label || key || ""; }
-// 傷患名冊排序：紅色依 ABCD、黃、綠、黑；同一組內依編號（seq）排序。
-// 檢傷官建立案件時一律走完整套 START 流程才會送出，不會再有「還沒檢傷」
-// 的傷患存在（舊資料極少數沒有 triageColor 的例外排最前面，方便發現）。
-const MCI_NON_RED_RANK = { yellow: 4, green: 5, black: 6 };
-function mciPatientSortRank(p){
-  if (!p.triageColor) return -1;
-  if (p.triageColor === "red") {
-    const idx = MCI_RED_SUBCATS.findIndex(s => s.key === p.redSubcat);
-    return idx >= 0 ? idx : 0;
-  }
-  return MCI_NON_RED_RANK[p.triageColor] != null ? MCI_NON_RED_RANK[p.triageColor] : 7;
-}
-// 傷患生命週期：治療中（檢傷官剛建立，人還在集中區給治療官處置，尚未
-// 標記處置完成）→ 待後送（治療官點「處置完成」，後送官才看得到、開始
-// 安排；尚未指派車輛/醫院）→ 待出發（後送官已指派車輛/醫院，車輛還沒
-// 出發）→ 後送中（已離開現場，還沒抵達）→ 已送達（抵達醫院，填過里程/
-// 備註）。「治療中」跟「待後送」的差別是治療官有沒有點過處置完成——
-// 後送官分頁只看得到已經處置完成的傷患，還在治療中的傷患後送官看不
-// 到、也不會被誤提早指派車輛/醫院。
-function mciPatientStatus(p){
-  if (!p.triageColor) return "待檢傷";
-  if (p.arrivedAt) return "已送達";
-  if (p.departedAt) return "後送中";
-  if (p.vehicle && p.hospital) return "待出發";
-  if (p.treatmentComplete) return "待後送";
-  return "治療中";
-}
 // 健保署「全民健康保險特約醫事機構基本資料」清冊（醫學中心／區域醫院／地區醫院
 // 三個層級的公開資料集合併去重，只留下這裡實際會用到的欄位：c=醫事機構代碼
 // （對應到 hospitals/{id}.nhiCode，也是急診即時資訊比對用的同一組代碼）、
@@ -3369,6 +2988,9 @@ const RELEASE_NOTES = [
     ] },
     { category: "介面優化", items: [
       "修正勤務詳情頁底部的回報按鈕（例如「抵達目的地」「抵達營區」）在內容較短的任務（例如洽公任務）下方會多出一段空白、沒有貼齊底部導覽列的問題：改成跟底部導覽列同一套做法固定在畫面最下面，不受頁面內容長短影響",
+    ] },
+    { category: "系統功能", items: [
+      "移除「大量傷患演練模組」與「教學園地」這兩個仍在建構中、只開放管理員使用的功能（更多頁入口與相關頁面一併下架）",
     ] },
   ] },
   { date: "2026/07/28", groups: [
@@ -3527,7 +3149,7 @@ const RELEASE_NOTES = [
       "管理後台「人員與帳號」改成卡片式排版：大頭貼＋姓名＋階級徽章＋信箱一目了然，電話號碼改成獨立的可點撥膠囊列，編輯功能改成右上角的鉛筆圖示按鈕",
       "全站的布林開關（值日官、標記為常用醫院、跨單位借車、跨單位選人）統一改成 iOS 風格的綠色 Switch，取代原本的小勾選框＋文字",
       "「權限說明」新增「依人員預覽」：可直接選一位真實人員，姓名/階級/EMT/電話都會換成該員的資料，才能真正看到「這個人登入後」會看到的畫面內容",
-      "全站彈窗（大量傷患事件/回報/基礎資料/洽公登記/緊急動員廣播/人員車輛挑選器等）改成真的毛玻璃質感：面板改成半透明＋高斯模糊，跟 header／底部導覽列／懸浮按鈕同一套液態玻璃語彙",
+      "全站彈窗（回報/基礎資料/洽公登記/緊急動員廣播/人員車輛挑選器等）改成真的毛玻璃質感：面板改成半透明＋高斯模糊，跟 header／底部導覽列／懸浮按鈕同一套液態玻璃語彙",
     ] },
   ] },
   { date: "2026/07/14", groups: [
@@ -3565,19 +3187,6 @@ const RELEASE_NOTES = [
     ] },
   ] },
   { date: "2026/07/12", groups: [
-    { category: "大量傷患事件", items: [
-      "修正檢傷官／治療官／後送官分頁內容不足一螢幕時無法下拉重新整理的問題",
-      "治療官分頁狀態文字「待命」改為「治療中」；更多頁入口改名為「大量傷患演練模組（建構中）」，目前只開放管理員使用（其他角色顯示灰階、後端也同步擋下）",
-      "抵達醫院回報不用再填里程；後送官分頁新增資料校正入口（可修改已指派的車輛/醫院/備註）與「刪除此傷患」按鈕，離開現場/抵達醫院時間點確認後不能逆轉",
-      "新增「車輛視角」分頁：救護車車長可直接看到自己車輛的任務狀態並回報返回地點，執行中的車輛不會出現在後送官可選清單避免重複指派",
-      "事件卡片新增「刪除」按鈕（一併清除底下傷患紀錄）；檢傷官分頁新增「快速選色」卡片，可直接點選紅／黃／綠／黑跳過 START 問答",
-      "首頁分頁改版：統計/人員配置/傷患名冊區塊標題更新並加上表情符號，功能不變",
-      "整個模組視覺改版（蘋果極簡風＋戰術高清晰）：卡片拿掉外框改用大留白與柔和陰影，檢傷分類/後送狀態改用藥丸狀 badge",
-    ] },
-    { category: "教學園地", items: [
-      "新增「教學園地（建構中）」：救護技術教學文章，分 7 大分類，圖文交錯呈現並附重點提醒框，目前只開放管理員使用（跟大量傷患演練模組同一套收斂方式）",
-      "呼吸道與心肺復甦分類新增「口咽／鼻咽通氣道與 I-gel／LMA 使用教學」文章，並補上 I-gel／LMA 號數對應體重表",
-    ] },
     { category: "推播通知", items: [
       "推播守門員提示文字修正：「以確保能接收緊急任務調派」改成「以確保能即時收到訊息通知」，用詞更準確",
     ] },
@@ -3616,12 +3225,6 @@ const RELEASE_NOTES = [
     ] },
     { category: "效能／穩定性", items: [
       "程式碼清理：移除幾個先前迭代留下、完全沒有被呼叫到的函式與常數，純內部清理，畫面/功能沒有任何改變",
-    ] },
-    { category: "大量傷患事件", items: [
-      "新增「大量傷患事件」模組（更多頁）：可建立傷患名冊，依 START 檢傷法決策問答（行動力→呼吸→灌流→意識，全程巨大按鈕免打字）自動判定紅／黃／綠／黑，紅色再依 ABCD 順序決定送醫優先順序；全程匿名化，傷患唯一身分是流水號（MCI-01, MCI-02...），純模擬演練用途、不分角色不分單位皆可操作",
-      "事件詳情頁拆成四個分頁對應現場分工：「首頁」（事件概況/傷患統計/人員配置/完整傷患名冊）、「檢傷官」（START 問答建立案件）、「治療官」（傷患集中區列表，可編輯主訴／二次檢傷升級／標記處置完成）、「後送官」（指派車輛醫院、追蹤離開現場／抵達醫院兩節點）；車輛/醫院指派職責歸後送官，檢傷官只負責 START 判定",
-      "新增事件時可設定本次事件實際出勤的車輛與收治醫院範圍（模擬資源池概念），檢傷官建立案件時車輛/醫院只會顯示這次設定的範圍",
-      "修正「抵達醫院」「編輯傷患」「新增/編輯事件」彈出視窗的「取消」按鈕在部分裝置被底部分頁列擋住點不到的問題",
     ] },
   ] },
   { date: "2026/07/10", groups: [
@@ -4073,16 +3676,6 @@ const state = {
   gatekeeperDismissed: false, // 【前台】推播守門員被使用者按 X 關掉——只在本次開啟期間生效，重新整理/下次開啟又會恢復判斷
   profileNagDismissed: false, // 個人資料補齊提醒彈窗被按「稍後再說」/「前往補齊」關掉——同樣只在本次開啟期間生效，資料還沒補齊的話下次開啟會再次提示
   pushConsoleFilter: { keyword: "", unit: "", status: "" }, // 【後台】推播控制台的篩選條件
-  mciEvents: [], mciPatients: [], // 大量傷患事件／傷患名冊
-  mciEventModal: null, // 大量傷患事件頁：新增/編輯事件彈窗，{ id } | null（id 為 null 代表新增）
-  mciEventTab: "home", // 事件詳情頁目前分頁：home（首頁）／triage（檢傷官）／ccp（治療官）／evac（後送官）
-  mciTriageStep: "ambulate", // 檢傷官 START 決策問答目前在哪一關；"form" 代表已判定完顏色，進入後送資訊表單
-  mciTriageColor: null, // 檢傷官這次判定出的顏色，"form" 步驟要用
-  mciTriageRedSubcat: null, // 紅色傷患再評估的 ABCD 子分類
-  mciCcpEditId: null, // 治療官：目前編輯中的傷患 id，null 代表沒開編輯彈窗
-  mciRetriageActive: false, // 治療官編輯彈窗內，二次檢傷（黃→紅）ABCD 選擇是否展開
-  mciAssignId: null, // 後送官：目前正在指派車輛/醫院的傷患 id，null 代表沒開彈窗
-  mciArriveId: null // 後送官：目前正在填「抵達醫院」里程/備註的傷患 id
 };
 applyThemeMode(state.themeMode); // 在第一次 render() 之前就套用，避免畫面先閃一次錯的模式再跳回正確的
 let tasksPoll = null, eventsPoll = null, profilePoll = null;
@@ -4091,7 +3684,6 @@ let hospitalsPoll = null, vitalsPoll = null, erStandbyPoll = null, doctorsPoll =
 let notificationsPoll = null;
 let pushLogPoll = null;
 let erRealtimePoll = null;
-let mciEventsPoll = null, mciPatientsPoll = null;
 let campRegistrationsPoll = null;
 // 只有資料真的變動時才重繪畫面，避免每次背景輪詢都整頁重畫造成畫面閃爍/捲動位置跳動。
 const lastJson = {};
@@ -4898,69 +4490,6 @@ async function updateBaseData(coll, id, fields){
   showToast("已更新");
   refreshBaseDataPoll(coll);
 }
-/* ---- 大量傷患事件（MCI）：事件本身＋傷患名冊 ---- */
-// vehicles/hospitals：這次演習模擬「派了哪幾台救護車、指定哪幾家收治
-// 醫院」的資源池，開事件當下設定（或事後用編輯功能調整），檢傷官建立
-// 案件時車輛/醫院下拉選單只會列出這裡設定的範圍；留空代表不限制，沿用
-// 全部車輛/醫院名冊（相容還沒設定過資源池的舊事件）。
-async function createMciEvent(data){
-  const p = state.profile;
-  const doc = await fsAddDoc("mciEvents", {
-    title: (data.title||"").trim() || "大量傷患事件", unit: data.unit||"", status: "active",
-    vehicles: data.vehicles||[], hospitals: data.hospitals||[],
-    roles: { commander:"", triageOfficer:"", transportOfficer:"", treatmentOfficer:"", logisticsOfficer:"", recorder:"" },
-    createdBy: state.user.uid, createdByName: p.displayName||p.email||"", createdAt: new Date()
-  });
-  showToast("已開啟事件"); if (mciEventsPoll) await mciEventsPoll.refreshNow();
-  return doc;
-}
-async function updateMciEvent(id, data){
-  await fsSetDoc(`mciEvents/${id}`, data);
-  showToast("已更新事件設定"); if (mciEventsPoll) await mciEventsPoll.refreshNow();
-}
-async function setMciEventStatus(id, status){
-  await fsSetDoc(`mciEvents/${id}`, { status });
-  showToast(status === "closed" ? "已結束事件" : "已重新開啟事件");
-  if (mciEventsPoll) mciEventsPoll.refreshNow();
-}
-// 刪除事件時一併清掉底下的傷患紀錄，避免刪除後留下永遠沒有畫面看得到、
-// 也刪不掉的孤兒傷患資料（這個模組是反覆演練用，事件建了又刪很常見）。
-async function deleteMciEvent(id){
-  const patientIds = state.mciPatients.filter(p => p.eventId === id).map(p => p.id);
-  await Promise.all(patientIds.map(pid => fsDeleteDoc(`mciPatients/${pid}`)));
-  await fsDeleteDoc(`mciEvents/${id}`);
-  showToast("已刪除大量傷患事件");
-  if (mciEventsPoll) mciEventsPoll.refreshNow();
-  if (mciPatientsPoll) mciPatientsPoll.refreshNow();
-}
-async function updateMciEventRoles(id, roles){
-  await fsSetDoc(`mciEvents/${id}`, { roles });
-  showToast("已儲存人員配置");
-  if (mciEventsPoll) mciEventsPoll.refreshNow();
-}
-// 傷患編號（MCI-01, MCI-02...）：同一事件底下依目前已有筆數自動往上加，
-// 不重用已刪除傷患的編號，避免現場對編號對到一半突然重複。
-function nextMciPatientSeq(eventId){
-  const nums = state.mciPatients.filter(p => p.eventId === eventId).map(p => p.seq||0);
-  return (nums.length ? Math.max(...nums) : 0) + 1;
-}
-async function addMciPatient(eventId, data){
-  const p = state.profile;
-  await fsAddDoc("mciPatients", {
-    eventId, seq: nextMciPatientSeq(eventId),
-    createdBy: state.user.uid, createdByName: p.displayName||p.email||"", createdAt: new Date(),
-    ...data
-  });
-  showToast("已新增傷患"); if (mciPatientsPoll) await mciPatientsPoll.refreshNow();
-}
-async function updateMciPatient(id, data){
-  await fsSetDoc(`mciPatients/${id}`, data);
-  showToast("已更新傷患資料"); if (mciPatientsPoll) await mciPatientsPoll.refreshNow();
-}
-async function deleteMciPatient(id){
-  await fsDeleteDoc(`mciPatients/${id}`);
-  showToast("已刪除傷患"); if (mciPatientsPoll) mciPatientsPoll.refreshNow();
-}
 /* ---- 患者狀況：突發狀況時記錄生命徵象／主訴，可持續新增觀察病人變化趨勢 ---- */
 async function addVitalsEntry(taskId, data){
   const task = state.tasks.find(t => t.id === taskId);
@@ -5713,19 +5242,6 @@ function startDataListeners(){
     state.pushLog = docs;
     if (changed) safeRender();
   });
-  mciEventsPoll = poll(async () => {
-    const docs = await fsListCollection("mciEvents");
-    docs.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0));
-    const changed = changedSince("mciEvents", docs);
-    state.mciEvents = docs;
-    if (changed) safeRender();
-  });
-  mciPatientsPoll = poll(async () => {
-    const docs = await fsListCollection("mciPatients");
-    const changed = changedSince("mciPatients", docs);
-    state.mciPatients = docs;
-    if (changed) safeRender();
-  });
   campRegistrationsPoll = poll(async () => {
     const p = state.profile;
     const unitFilter = myQueryUnitFilter();
@@ -5760,12 +5276,12 @@ function startDataListeners(){
   ensureMilitaryItemsSeeded();
 }
 function cleanupListeners(){
-  [tasksPoll, eventsPoll, profilePoll, personnelPoll, vehiclesPoll, recordersPoll, hospitalsPoll, vitalsPoll, erStandbyPoll, doctorsPoll, taskTitleTemplatesPoll, webLinksPoll, militaryItemsPoll, policyNoticesPoll, notificationsPoll, pushLogPoll, mciEventsPoll, mciPatientsPoll, campRegistrationsPoll].forEach(p => p && p.stop());
+  [tasksPoll, eventsPoll, profilePoll, personnelPoll, vehiclesPoll, recordersPoll, hospitalsPoll, vitalsPoll, erStandbyPoll, doctorsPoll, taskTitleTemplatesPoll, webLinksPoll, militaryItemsPoll, policyNoticesPoll, notificationsPoll, pushLogPoll, campRegistrationsPoll].forEach(p => p && p.stop());
   for (const k in lastJson) delete lastJson[k];
-  tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = hospitalsPoll = vitalsPoll = erStandbyPoll = doctorsPoll = taskTitleTemplatesPoll = webLinksPoll = militaryItemsPoll = policyNoticesPoll = notificationsPoll = pushLogPoll = erRealtimePoll = mciEventsPoll = mciPatientsPoll = campRegistrationsPoll = null;
+  tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = hospitalsPoll = vitalsPoll = erStandbyPoll = doctorsPoll = taskTitleTemplatesPoll = webLinksPoll = militaryItemsPoll = policyNoticesPoll = notificationsPoll = pushLogPoll = erRealtimePoll = campRegistrationsPoll = null;
   state.tasks = []; state.events = []; state.personnel = []; state.vehicles = []; state.recorders = [];
   state.hospitals = []; state.vitals = []; state.erStandby = []; state.doctors = []; state.taskTitleTemplates = []; state.webLinks = []; state.militaryItems = []; state.policyNotices = []; state.notifications = []; state.pushLog = [];
-  state.mciEvents = []; state.mciPatients = []; state.campRegistrations = [];
+  state.campRegistrations = [];
   state.deepTasks = []; state.deepEvents = []; state.deepVitals = []; state.recordsDeepQuery = null;
   state.previewActive = false; state.realProfileSnapshot = null;
 }
@@ -6397,11 +5913,6 @@ const ROUTE_REFRESH = {
   // 結果跟篩選下拉選單要用到的集合（vitals/personnel/vehicles）一併列在
   // 這裡，不能只列勤務清單本身用到的 tasks/events。
   tasks: ['tasks','events','vitals','personnel','vehicles','campRegistrations'],
-  // 大量傷患事件從「更多」頁進入（獨立入口，不掛在任務頁底下），列表頁
-  // 只需要 mciEvents/mciPatients（算統計數字），事件詳情頁另外要指派傷患
-  // 車輛/醫院，多列 vehicles/hospitals。
-  mciList: ['mciEvents','mciPatients'],
-  mciEvent: ['mciEvents','mciPatients','vehicles','hospitals'],
   task: ['tasks','events','vitals'],
   vitals: ['tasks','events','vitals'],
   editTask: ['tasks','events','personnel','vehicles','recorders','doctors','militaryItems'],
@@ -6445,7 +5956,7 @@ function nav(route){
   if (route.name === "adminFeedback") state._feedbackCache = null;
   if (route.name === "adminSettings") state._testModeCache = null;
   render(); scrollContentToTop();
-  const polls = { tasks: tasksPoll, events: eventsPoll, personnel: personnelPoll, vehicles: vehiclesPoll, recorders: recordersPoll, hospitals: hospitalsPoll, vitals: vitalsPoll, erStandby: erStandbyPoll, doctors: doctorsPoll, taskTitleTemplates: taskTitleTemplatesPoll, webLinks: webLinksPoll, militaryItems: militaryItemsPoll, notifications: notificationsPoll, pushLog: pushLogPoll, erRealtime: erRealtimePoll, mciEvents: mciEventsPoll, mciPatients: mciPatientsPoll, campRegistrations: campRegistrationsPoll };
+  const polls = { tasks: tasksPoll, events: eventsPoll, personnel: personnelPoll, vehicles: vehiclesPoll, recorders: recordersPoll, hospitals: hospitalsPoll, vitals: vitalsPoll, erStandby: erStandbyPoll, doctors: doctorsPoll, taskTitleTemplates: taskTitleTemplatesPoll, webLinks: webLinksPoll, militaryItems: militaryItemsPoll, notifications: notificationsPoll, pushLog: pushLogPoll, erRealtime: erRealtimePoll, campRegistrations: campRegistrationsPoll };
   (ROUTE_REFRESH[route.name] || []).forEach(key => { if (polls[key]) polls[key].refreshNow(); });
   // 保險機制：換頁時強制重新校正一次 #app 高度／window 捲動值，不依賴
   // 前一頁鍵盤關閉時是否有確實觸發 visualViewport 事件或輸入框 focusout
@@ -7645,513 +7156,6 @@ function viewTasks(){
     ${listHtml}
     ${canCreateTask(p) ? `<button class="fab" onclick="window.__nav({name:'createTask'})">${icon('plus',26)}</button>` : ""}
   `;
-}
-
-/* =========================================================
-   12b) 畫面：大量傷患事件（MCI）
-   ========================================================= */
-function mciEventStats(eventId){
-  const patients = state.mciPatients.filter(p => p.eventId === eventId);
-  const stats = { total: patients.length, redA:0, redB:0, redC:0, redD:0, yellow:0, green:0, black:0, enroute:0, arrived:0 };
-  patients.forEach(p => {
-    if (p.triageColor === "red") stats["red"+(p.redSubcat||"A")]++;
-    else if (stats[p.triageColor] != null) stats[p.triageColor]++;
-    if (p.arrivedAt) stats.arrived++;
-    else if (p.departedAt) stats.enroute++;
-  });
-  return stats;
-}
-function mciEventCard(ev){
-  const stats = mciEventStats(ev.id);
-  const redTotal = stats.redA + stats.redB + stats.redC + stats.redD;
-  return `
-  <div class="mci-event-card spatial-card" style="--card-accent:${ev.status==='closed'?'var(--gray)':'var(--red)'};" onclick="window.__nav({name:'mciEvent', id:'${ev.id}'})">
-    <div class="mci-event-card-top">
-      <div class="mci-event-card-title">${icon('alert',18)} ${esc(ev.title||'大量傷患事件')}</div>
-      <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
-        <button class="icon-btn" onclick="event.stopPropagation(); window.__openMciCreateModal('${ev.id}')">編輯</button>
-        <button class="icon-btn danger" onclick="event.stopPropagation(); window.__deleteMciEvent('${ev.id}')">${icon('close',14)} 刪除</button>
-        <span class="badge ${ev.status==='closed'?'muted':'danger'}">${ev.status==='closed'?'已結束':'進行中'}</span>
-      </div>
-    </div>
-    <div class="mci-event-card-meta">${ev.unit?unitLabel(ev.unit)+'・':''}${fmtTime(new Date(ev.createdAt||0).getTime())}・共 ${stats.total} 名傷患</div>
-    <div class="mci-event-card-counts">
-      <span class="mci-count-chip" style="--c:${mciTriageInfo('red').color}">紅 ${redTotal}</span>
-      <span class="mci-count-chip" style="--c:${mciTriageInfo('yellow').color}">黃 ${stats.yellow}</span>
-      <span class="mci-count-chip" style="--c:${mciTriageInfo('green').color}">綠 ${stats.green}</span>
-      <span class="mci-count-chip" style="--c:${mciTriageInfo('black').color}">黑 ${stats.black}</span>
-    </div>
-  </div>`;
-}
-// 目前只開放 admin 使用（建構中）：更多頁的入口本身已經灰階擋掉點擊，
-// 這裡再擋一次直接導覽（例如透過 window.__nav 手動呼叫），雙重防護。
-function viewMciList(){
-  if (myRole(state.profile) !== 'admin') return `<div class="back-row">${backBtn({name:'profile'})}</div><div class="empty">此功能目前僅開放管理員使用</div>`;
-  const events = state.mciEvents.slice().sort((a,b) => {
-    const sa = a.status==='closed' ? 1 : 0, sb = b.status==='closed' ? 1 : 0;
-    if (sa !== sb) return sa - sb;
-    return new Date(b.createdAt||0) - new Date(a.createdAt||0);
-  });
-  return `
-    <div class="back-row">${backBtn({name:'profile'})}</div>
-    <div class="section-label">大量傷患事件</div>
-    <button class="icon-btn primary" style="margin-bottom:12px;" onclick="window.__openMciCreateModal()">${icon('plus',15)} 新增大量傷患事件</button>
-    ${events.length ? events.map(mciEventCard).join("") : `<div class="empty">目前沒有大量傷患事件</div>`}
-  `;
-}
-// 新增／編輯共用同一個彈窗（跟基礎資料管理的新增/編輯彈窗同一套慣例）：
-// vehicles/hospitals 是這次演習模擬「派了哪幾台救護車、指定收治哪幾家
-// 醫院」的資源池，留空代表不限制（檢傷官表單沿用全部車輛/醫院名冊）。
-function viewMciCreateModal(){
-  const m = state.mciEventModal;
-  if (!m) return "";
-  const editing = m.id ? state.mciEvents.find(e => e.id === m.id) : null;
-  const p = state.profile;
-  const vehiclePool = state.vehicles.filter(v=>v.active!==false);
-  // 車輛依單位分組顯示（組內照後台車輛管理同一套排序：車種→車號），方便
-  // 在一長串車號裡快速找到自己單位的車；checkbox 仍共用同一個 name，勾選
-  // 不受分組限制，可以跨連隊挑車支援。
-  const vehicleGroupsHtml = UNITS.map(u => {
-    const list = sortVehicles(vehiclePool.filter(v => v.unit === u.code)).map(v => v.plate);
-    return list.length ? `<div class="picker-group"><div class="picker-group-label">${esc(u.label)}</div>${chipGroup('vehicles', list, editing?.vehicles||[], true)}</div>` : "";
-  }).join("");
-  const hospitalOptions = state.hospitals.slice().sort((a,b)=>HOSPITAL_NAME_COLLATOR.compare(a.name||'',b.name||'')).map(h=>h.name);
-  return `
-  <div class="modal-overlay" onclick="if(event.target===this) window.__closeMciCreateModal()">
-    <div class="modal-sheet">
-      <div class="modal-handle"></div>
-      <div class="modal-title">${icon('alert',19)} ${editing?'編輯大量傷患事件':'新增大量傷患事件'}</div>
-      <form onsubmit="window.__submitMciCreateModal(event,'${m.id||''}')">
-        <div class="field"><label>事件名稱</label><input name="title" value="${esc(editing?.title||'')}" placeholder="例如：成功嶺集合場中暑事件" required></div>
-        <div class="field"><label>單位（選填）</label>
-          <select name="unit">
-            <option value="">未指定</option>
-            ${UNITS.map(u => `<option value="${u.code}" ${(editing?editing.unit===u.code:myUnit(p)===u.code)?'selected':''}>${u.label}</option>`).join("")}
-          </select>
-        </div>
-        <div class="field">
-          <label>本次事件出勤車輛（選填，不選代表開放全部車輛；依單位分組，可跨連隊選擇）</label>
-          ${vehiclePool.length ? vehicleGroupsHtml : `<div class="empty" style="padding:14px 0;">尚未建立車輛名冊</div>`}
-        </div>
-        <div class="field">
-          <label>本次事件收治醫院（選填，不選代表開放全部醫院）</label>
-          ${hospitalOptions.length ? chipGroup('hospitals', hospitalOptions, editing?.hospitals||[], true) : `<div class="empty" style="padding:14px 0;">尚未建立醫院名冊</div>`}
-        </div>
-        <button class="btn-primary" type="submit">${editing?'儲存':'開啟事件'}</button>
-        <button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__closeMciCreateModal()">取消</button>
-      </form>
-    </div>
-  </div>`;
-}
-// 事件詳情頁底下依角色拆成三個獨立畫面（分頁切換，不是各自獨立路由——
-// 三個角色本來就是在看/操作同一個事件的同一份傷患名冊，用路由拆開會
-// 沒必要地把「同一個事件」這件事複雜化）：檢傷官負責建立案件、治療官
-// 負責傷患集中區的追蹤與二次檢傷、後送官負責車輛出發/抵達的生命週期。
-// 全程匿名化：傷患不記錄姓名，唯一身分是流水號（MCI-01, MCI-02...）。
-const MCI_EVENT_TABS = [
-  { key:"home",    label:"首頁", iconName:"home" },
-  { key:"triage",  label:"檢傷官", iconName:"alert" },
-  { key:"ccp",     label:"治療官", iconName:"heartbeat" },
-  { key:"evac",    label:"後送官", iconName:"depart" },
-  { key:"vehicle", label:"車輛視角", iconName:"returnArrow" }
-];
-function viewMciEvent(eventId){
-  if (myRole(state.profile) !== 'admin') return `<div class="back-row">${backBtn({name:'profile'})}</div><div class="empty">此功能目前僅開放管理員使用</div>`;
-  const ev = state.mciEvents.find(e => e.id === eventId);
-  if (!ev) return `<div class="back-row">${backBtn({name:'mciList'})}</div><div class="empty">找不到這筆事件</div>`;
-  const eventTab = state.mciEventTab || "home";
-  const tabBar = `
-    <div class="icon-subtabs">
-      ${MCI_EVENT_TABS.map(tb => `
-        <button type="button" class="icon-subtab ${eventTab===tb.key?'active':''}" onclick="window.__setMciEventTab('${tb.key}')">
-          <span class="icon-subtab-icon">${icon(tb.iconName,26)}</span>
-          <span class="label">${tb.label}</span>
-        </button>`).join("")}
-    </div>`;
-  const tabBody = eventTab === "triage" ? viewMciTriageTab(eventId)
-    : eventTab === "ccp" ? viewMciCcpTab(eventId)
-    : eventTab === "evac" ? viewMciEvacTab(eventId)
-    : eventTab === "vehicle" ? viewMciVehicleTab(eventId)
-    : viewMciHomeTab(eventId);
-  return `
-    <div class="back-row">${backBtn({name:'mciList'})}</div>
-    ${tabBar}
-    ${tabBody}
-  `;
-}
-// 首頁分頁：事件本身的概況（標題/狀態/編輯/結束事件、傷患統計、人員配置、
-// 完整傷患名冊）。檢傷官分頁只留下一號傷患編號跟 START 檢傷問答，這些
-// 事件層級的資訊挪到這個獨立分頁，不用每次切分頁都先看到一樣的東西。
-function viewMciHomeTab(eventId){
-  const ev = state.mciEvents.find(e => e.id === eventId);
-  const stats = mciEventStats(eventId);
-  const roles = ev.roles || {};
-  const patients = state.mciPatients.filter(p => p.eventId === eventId)
-    .sort((a,b) => mciPatientSortRank(a) - mciPatientSortRank(b) || (a.seq||0) - (b.seq||0));
-  return `
-    <div class="mci-event-header">
-      <div class="mci-event-header-top">
-        <div class="mci-event-header-title">${icon('alert',20)} ${esc(ev.title||'大量傷患事件')}</div>
-        <span class="badge ${ev.status==='closed'?'muted':'danger'}">${ev.status==='closed'?'已結束':'進行中'}</span>
-      </div>
-      <div class="mci-event-card-meta">${ev.unit?unitLabel(ev.unit)+'・':''}${ev.createdByName?esc(ev.createdByName)+' 開啟・':''}${fmtTime(new Date(ev.createdAt||0).getTime())}</div>
-      <div style="display:flex;gap:8px;margin-top:10px;">
-        <button class="icon-btn" onclick="window.__openMciCreateModal('${ev.id}')">編輯車輛／醫院</button>
-        <button class="icon-btn" onclick="window.__toggleMciEventStatus('${ev.id}','${ev.status}')">${ev.status==='closed'?'重新開啟事件':'結束事件'}</button>
-      </div>
-    </div>
-
-    <div class="section-label">現況戰情統計</div>
-    <div class="stat-grid stat-grid-2 mci-stat-grid">
-      <div class="stat-tile" style="--tc:${mciTriageInfo('red').color}"><div class="stat-tile-top"><span class="lbl">🔴 紅色（立即）</span></div><div class="num">${stats.redA+stats.redB+stats.redC+stats.redD}<span class="mci-subbreak">A${stats.redA} B${stats.redB} C${stats.redC} D${stats.redD}</span></div></div>
-      <div class="stat-tile" style="--tc:${mciTriageInfo('yellow').color}"><div class="stat-tile-top"><span class="lbl">🟡 黃色（延遲）</span></div><div class="num">${stats.yellow}</div></div>
-      <div class="stat-tile" style="--tc:${mciTriageInfo('green').color}"><div class="stat-tile-top"><span class="lbl">🟢 綠色（輕微）</span></div><div class="num">${stats.green}</div></div>
-      <div class="stat-tile" style="--tc:${mciTriageInfo('black').color}"><div class="stat-tile-top"><span class="lbl">⚫ 黑色</span></div><div class="num">${stats.black}</div></div>
-      <div class="stat-tile"><div class="stat-tile-top"><span class="lbl">🚑 後送轉運中</span></div><div class="num">${stats.enroute}</div></div>
-      <div class="stat-tile"><div class="stat-tile-top"><span class="lbl">🏥 已送達醫院</span></div><div class="num">${stats.arrived}</div></div>
-    </div>
-
-    <div class="section-label">現場編組指派</div>
-    <div class="mci-roles-card">
-      ${MCI_ROLES.map(r => `
-        <div class="mci-role-row">
-          <label>${esc(r.label)}</label>
-          <input value="${esc(roles[r.key]||'')}" placeholder="選填，可填多人" onchange="window.__updateMciRole('${ev.id}','${r.key}',this.value)">
-        </div>`).join("")}
-    </div>
-
-    <div class="section-label">動態追蹤名冊（共 ${patients.length} 人）</div>
-    ${patients.length ? patients.map(mciHomePatientCard).join("") : `<div class="empty">目前沒有傷患</div>`}
-  `;
-}
-// 首頁的傷患名冊是純唯讀總覽，不分角色、不管目前處於哪個生命週期節點都
-// 看得到完整資料（檢傷分類、主訴、車輛/醫院配對、離開現場/抵達醫院時間
-// 與里程備註）——這點跟治療官/後送官分頁刻意「只顯示跟這個角色有關的
-// 那一段狀態」不同，那兩個分頁是工作清單，這裡是總覽，兩者不衝突。沒有
-// 任何操作按鈕，要編輯/指派/推進生命週期還是要去對應角色的分頁做。
-function mciHomePatientCard(p){
-  const info = p.triageColor ? mciTriageInfo(p.triageColor) : null;
-  const badgeLabel = p.triageColor === "red" ? `紅${p.redSubcat||''}` : (info ? info.label : '未分類');
-  return `
-  <div class="mci-patient-card spatial-card" style="--card-accent:${info?info.color:'var(--gray)'};">
-    <div class="mci-patient-top">
-      <span class="mci-triage-badge" style="--c:${info?info.color:'#8E8E93'}">${badgeLabel}</span>
-      <span class="mci-patient-seq">MCI-${String(p.seq||0).padStart(2,'0')}</span>
-      <span class="mci-patient-status">${mciPatientStatus(p)}</span>
-    </div>
-    ${p.complaint ? `<div class="mci-patient-complaint">${esc(p.complaint)}</div>` : ""}
-    ${p.vehicle && p.hospital ? `<div class="mci-evac-chain"><span>${esc(p.vehicle)}</span><span class="mci-evac-arrow">→</span><span>${esc(p.hospital)}</span></div>` : ""}
-    ${p.departedAt ? `<div class="mci-evac-time">離開現場：${fmtTime(new Date(p.departedAt).getTime())}</div>` : ""}
-    ${p.arrivedAt ? `<div class="mci-evac-time">抵達醫院：${fmtTime(new Date(p.arrivedAt).getTime())}${p.notes?'・'+esc(p.notes):''}</div>` : ""}
-  </div>`;
-}
-// 檢傷分類 ABCD 子項改用自己的 chip 樣式（顏色點各自不同、需要 fullLabel
-// 這種跟 value 不一樣的顯示文字），不套用全站共用的 chipGroup()（那支只
-// 支援 value 當顯示文字）。紅色的 START 判定結束後、以及治療官的二次
-// 檢傷升級都會用到這組。
-function mciRedSubcatChipGroup(selected){
-  return `<div class="chip-select">${MCI_RED_SUBCATS.map(s => `
-    <label class="chip-option">
-      <input type="radio" name="redSubcat" value="${s.key}" ${selected===s.key?'checked':''}>
-      <span>${esc(s.label)}</span>
-    </label>`).join("")}
-  </div>`;
-}
-
-/* ---- 檢傷官視角：先看傷患編號＋START 檢傷決策問答＋主訴，確認上傳 ----
-   檢傷官不指派車輛/醫院（那是後送官在傷患待命時的職責，見 viewMciEvacTab／
-   viewMciAssignModal）；傷患上傳後狀態一律是「待命」，於集中區等候治療官
-   或後送官接手。 */
-function viewMciTriageTab(eventId){
-  const nextSeq = nextMciPatientSeq(eventId);
-  const seqPreview = `
-    <div class="mci-seq-preview">
-      <div class="mci-seq-preview-label">下一號傷患編號</div>
-      <div class="mci-seq-preview-num">MCI-${String(nextSeq).padStart(2,'0')}</div>
-    </div>`;
-  const step = state.mciTriageStep || "ambulate";
-  if (step === "form") return seqPreview + viewMciTriageForm(eventId);
-  if (step === "redSubcat") {
-    return seqPreview + `
-      <div class="mci-start-card">
-        <div class="mci-start-question">紅色傷患再評估：第一個出問題的地方是？</div>
-        <div class="mci-start-hint">依序評估呼吸道／呼吸／循環／神經學，第一個出問題的地方評到那裡就停，不用再往下評</div>
-        <div class="mci-start-options">
-          ${MCI_RED_SUBCATS.map(s => `<button type="button" class="mci-start-btn" style="--c:${mciTriageInfo('red').color}" onclick="window.__mciSelectRedSubcat('${s.key}')">${esc(s.label)}</button>`).join("")}
-        </div>
-      </div>`;
-  }
-  const flow = MCI_START_FLOW[step] || MCI_START_FLOW.ambulate;
-  return seqPreview + (step === "ambulate" ? mciQuickColorCard() : "") + `
-    <div class="mci-start-card">
-      <div class="mci-start-question">${esc(flow.q)}</div>
-      <div class="mci-start-options">
-        ${flow.opts.map(o => `<button type="button" class="mci-start-btn" onclick='window.__mciStartGo(${JSON.stringify(o.go)})'>${esc(o.label)}</button>`).join("")}
-      </div>
-      ${step !== "ambulate" ? `<button type="button" class="btn-ghost" style="width:100%;margin-top:14px;" onclick="window.__mciStartRestart()">重新開始檢傷</button>` : ""}
-    </div>`;
-}
-// 已經目視判斷得出顏色的傷患（例如明顯行動自如、明顯死亡），不用逼著
-// 檢傷官照 START 問答一步步點過去；直接複用 __mciStartGo 既有的路由邏輯
-// （紅色一樣會先轉去 redSubcat 關卡，其餘顏色直接進表單），行為跟走完整套
-// 問答判定出來的結果完全一致，只是省略中間的問答步驟。
-function mciQuickColorCard(){
-  return `
-  <div class="mci-quickcolor-card">
-    <div class="mci-quickcolor-label">已經目視判斷得出顏色？可以跳過問答直接選擇</div>
-    <div class="mci-quickcolor-options">
-      ${MCI_TRIAGE_COLORS.map(c => `<button type="button" class="mci-quickcolor-btn" style="--c:${c.color}" onclick="window.__mciStartGo({color:'${c.key}'})">${esc(c.label)}</button>`).join("")}
-    </div>
-  </div>`;
-}
-function viewMciTriageForm(eventId){
-  const info = mciTriageInfo(state.mciTriageColor);
-  return `
-    <div class="mci-start-card">
-      <div class="mci-start-result">
-        <span class="mci-triage-badge" style="--c:${info.color}">${state.mciTriageColor==='red'?'紅'+(state.mciTriageRedSubcat||''):info.label}</span>
-        <span>檢傷完成，請填寫主訴</span>
-      </div>
-      <form onsubmit="window.__submitMciTriageForm(event,'${eventId}')">
-        <div class="field"><label>主訴／受傷部位</label><input name="complaint" placeholder="例如：右大腿開放性骨折" required></div>
-        <button class="btn-primary" type="submit">確認上傳</button>
-        <button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__mciStartRestart()">重新檢傷</button>
-      </form>
-    </div>`;
-}
-
-/* ---- 治療官視角：傷患集中區（CCP）動態追蹤，含二次檢傷 ----
-   只看得到還在「治療中」的傷患：一旦點過處置完成，這位傷患就離開集中
-   區、交給後送官的分頁繼續追蹤，不會同時出現在兩邊。 */
-function viewMciCcpTab(eventId){
-  const patients = state.mciPatients.filter(p => p.eventId === eventId && mciPatientStatus(p) === "治療中")
-    .sort((a,b) => mciPatientSortRank(a) - mciPatientSortRank(b) || (a.seq||0) - (b.seq||0));
-  return `
-    <div class="section-label">傷患集中區（共 ${patients.length} 人）</div>
-    ${patients.length ? patients.map(mciCcpPatientCard).join("") : `<div class="empty">目前沒有治療中的傷患</div>`}
-  `;
-}
-function mciCcpPatientCard(p){
-  const info = p.triageColor ? mciTriageInfo(p.triageColor) : null;
-  const badgeLabel = p.triageColor === "red" ? `紅${p.redSubcat||''}` : (info ? info.label : '未分類');
-  return `
-  <div class="mci-patient-card mci-patient-card-clickable spatial-card" style="--card-accent:${info?info.color:'var(--gray)'};" onclick="window.__openMciCcpEdit('${p.id}')">
-    <div class="mci-patient-top">
-      <span class="mci-triage-badge" style="--c:${info?info.color:'#8E8E93'}">${badgeLabel}</span>
-      <span class="mci-patient-seq">MCI-${String(p.seq||0).padStart(2,'0')}</span>
-      <span class="mci-patient-status">${mciPatientStatus(p)}</span>
-    </div>
-    ${p.complaint ? `<div class="mci-patient-complaint">${esc(p.complaint)}</div>` : ""}
-  </div>`;
-}
-function viewMciCcpEditModal(){
-  const id = state.mciCcpEditId;
-  if (!id) return "";
-  const p = state.mciPatients.find(x => x.id === id);
-  if (!p) return "";
-  const info = p.triageColor ? mciTriageInfo(p.triageColor) : null;
-  const retriage = state.mciRetriageActive;
-  return `
-  <div class="modal-overlay" onclick="if(event.target===this) window.__closeMciCcpEdit()">
-    <div class="modal-sheet">
-      <div class="modal-handle"></div>
-      <div class="modal-title">${icon('heartbeat',19)} MCI-${String(p.seq||0).padStart(2,'0')}</div>
-      <div class="mci-start-result" style="margin-bottom:14px;">
-        <span class="mci-triage-badge" style="--c:${info?info.color:'#8E8E93'}">${p.triageColor==='red'?'紅'+(p.redSubcat||''):(info?info.label:'未分類')}</span>
-      </div>
-      <div class="field"><label>主訴／受傷部位</label><input name="complaint" value="${esc(p.complaint||'')}" placeholder="例如：右大腿開放性骨折"></div>
-      ${p.triageColor === "yellow" ? (retriage ? `
-        <form onsubmit="window.__confirmMciRetriage(event,'${p.id}')" style="margin-top:18px; padding-top:18px; border-top:1px solid var(--border);">
-          <div class="section-label">二次檢傷：升級為紅色，第一個出問題的地方？</div>
-          ${mciRedSubcatChipGroup("")}
-          <button class="btn-primary" type="submit" style="background:${mciTriageInfo('red').color}; border-color:${mciTriageInfo('red').color}; margin-top:10px;">確認升級為紅色</button>
-          <button class="btn-ghost" type="button" style="width:100%;margin-top:8px;" onclick="window.__cancelMciRetriage()">取消</button>
-        </form>
-      ` : `
-        <button type="button" class="icon-btn danger" style="width:100%; margin-top:18px;" onclick="window.__startMciRetriage()">${icon('alert',15)} 傷情惡化，二次檢傷升級為紅色</button>
-      `) : ""}
-      <div style="display:flex; gap:8px; margin-top:12px;">
-        <button type="button" class="btn-primary" style="flex:1; background:var(--red); border-color:var(--red); box-shadow:none;" onclick="window.__deleteMciPatientFromCcp('${p.id}')">刪除此傷患</button>
-        <button type="button" class="btn-primary" style="flex:1;" onclick="window.__completeMciTreatment('${p.id}')">處置完成</button>
-      </div>
-      <button type="button" class="btn-ghost" style="width:100%;margin-top:10px;" onclick="window.__closeMciCcpEdit()">關閉</button>
-    </div>
-  </div>`;
-}
-
-// 車輛忙碌判斷：同一台車在同一個事件裡可能載過不只一位傷患（送到醫院
-// 後折返，再載下一位），「目前」可不可以再派看的是這台車「最近一次」
-// （seq 最大）的指派紀錄有沒有完成返回（returnArrivedAt）；已經返回代表
-// 這趟任務結束，車輛回到待命狀態，可以再指派新的傷患。excludeId 用來
-// 排除「正在編輯中的這筆傷患自己」，不然編輯已指派傷患的車輛時，會把
-// 自己現有的車也當成「被別人占用」濾掉，選單裡看不到原本選的那台車。
-function mciVehicleLatestAssignment(eventId, plate, excludeId){
-  return state.mciPatients
-    .filter(p => p.eventId === eventId && p.vehicle === plate && p.id !== excludeId)
-    .sort((a,b) => (b.seq||0) - (a.seq||0))[0] || null;
-}
-function mciVehicleIsBusy(eventId, plate, excludeId){
-  const latest = mciVehicleLatestAssignment(eventId, plate, excludeId);
-  return !!latest && !latest.returnArrivedAt;
-}
-/* ---- 後送官視角：雙節點後送生命週期（離開現場／抵達醫院） ---- */
-// 治療官還沒點「處置完成」（狀態仍是「治療中」）的傷患不會出現在這裡：
-// 後送官只處理已經處置完成的傷患，不會提早看到、提早指派車輛/醫院。
-function viewMciEvacTab(eventId){
-  const patients = state.mciPatients.filter(p => p.eventId === eventId && mciPatientStatus(p) !== "治療中")
-    .sort((a,b) => mciPatientSortRank(a) - mciPatientSortRank(b) || (a.seq||0) - (b.seq||0));
-  return `
-    <div class="section-label">後送指揮（共 ${patients.length} 人）</div>
-    ${patients.length ? patients.map(mciEvacPatientCard).join("") : `<div class="empty">目前沒有傷患</div>`}
-  `;
-}
-function mciEvacPatientCard(p){
-  const info = p.triageColor ? mciTriageInfo(p.triageColor) : null;
-  const badgeLabel = p.triageColor === "red" ? `紅${p.redSubcat||''}` : (info ? info.label : '未分類');
-  // 車輛/醫院是後送官在這裡指派的（檢傷官建立傷患時不填），還沒指派完成
-  // 前不會有配對字串可以顯示，只給一顆「指派車輛／醫院」按鈕。
-  const needsAssign = !p.vehicle || !p.hospital;
-  return `
-  <div class="mci-patient-card spatial-card" style="--card-accent:${info?info.color:'var(--gray)'};">
-    <div class="mci-patient-top">
-      <span class="mci-triage-badge" style="--c:${info?info.color:'#8E8E93'}">${badgeLabel}</span>
-      <span class="mci-patient-seq">MCI-${String(p.seq||0).padStart(2,'0')}</span>
-      <span class="mci-patient-status">${mciPatientStatus(p)}</span>
-    </div>
-    ${p.complaint ? `<div class="mci-patient-complaint">${esc(p.complaint)}</div>` : ""}
-    ${needsAssign ? "" : `<div class="mci-evac-chain"><span>${esc(p.vehicle)}</span><span class="mci-evac-arrow">→</span><span>${esc(p.hospital)}</span></div>`}
-    ${p.departedAt ? `<div class="mci-evac-time">離開現場：${fmtTime(new Date(p.departedAt).getTime())}</div>` : ""}
-    ${p.arrivedAt ? `<div class="mci-evac-time">抵達醫院：${fmtTime(new Date(p.arrivedAt).getTime())}${p.notes?'・'+esc(p.notes):''}</div>` : ""}
-    <div class="mci-patient-actions">
-      ${needsAssign ? `<button class="icon-btn primary" onclick="window.__openMciAssign('${p.id}')">${icon('depart',15)} 指派車輛／醫院</button>` : ""}
-      ${!needsAssign && !p.departedAt ? `<button class="icon-btn primary" onclick="window.__mciMarkDeparted('${p.id}')">${icon('depart',15)} 離開現場</button>` : ""}
-      ${p.departedAt && !p.arrivedAt ? `<button class="icon-btn primary" onclick="window.__openMciArrive('${p.id}')">${icon('hospital',15)} 抵達醫院</button>` : ""}
-    </div>
-    <!-- 資料校正用的編輯按鈕：只補正資料本身，不逆轉離開現場/抵達醫院
-         這類已經按下去的生命週期節點。已指派的車輛/醫院隨時可以改；抵達
-         醫院之後備註也可以改，時間點本身不受影響。 -->
-    <div class="mci-patient-actions">
-      ${!needsAssign ? `<button class="icon-btn" onclick="window.__openMciAssign('${p.id}')">${icon('depart',14)} 編輯車輛／醫院</button>` : ""}
-      ${p.arrivedAt ? `<button class="icon-btn" onclick="window.__openMciArrive('${p.id}')">${icon('hospital',14)} 編輯備註</button>` : ""}
-      <button class="icon-btn danger" onclick="window.__deleteMciPatientFromCcp('${p.id}')">${icon('close',14)} 刪除此傷患</button>
-    </div>
-  </div>`;
-}
-// 後送官在這裡指派車輛/醫院（沿用事件建立時設定的資源池範圍，留空代表
-// 不限制），指派完成才會出現離開現場／抵達醫院的動作按鈕。同一個彈窗也
-// 用來「編輯」已經指派過的傷患（資料校正，不影響已經記錄的生命週期時
-// 間點）：車輛選單會排除掉目前正被其他傷患佔用（還沒返回）的車，但
-// 會把這位傷患自己原本選的車留著（excludeId），不然編輯時看不到自己
-// 原本選的那台。
-function viewMciAssignModal(){
-  const id = state.mciAssignId;
-  if (!id) return "";
-  const p = state.mciPatients.find(x => x.id === id);
-  if (!p) return "";
-  const ev = state.mciEvents.find(e => e.id === p.eventId);
-  const outSet = dispatchedVehiclePlates();
-  const vehiclePool = (ev && ev.vehicles && ev.vehicles.length
-    ? state.vehicles.filter(v => v.active!==false && ev.vehicles.includes(v.plate))
-    : state.vehicles.filter(v=>v.active!==false)
-  ).filter(v => !mciVehicleIsBusy(p.eventId, v.plate, p.id));
-  const hospitalPool = ev && ev.hospitals && ev.hospitals.length
-    ? state.hospitals.filter(h => ev.hospitals.includes(h.name))
-    : state.hospitals.slice();
-  const editing = !!(p.vehicle && p.hospital);
-  return `
-  <div class="modal-overlay" onclick="if(event.target===this) window.__closeMciAssign()">
-    <div class="modal-sheet">
-      <div class="modal-handle"></div>
-      <div class="modal-title">${icon('depart',19)} MCI-${String(p.seq||0).padStart(2,'0')} ${editing?'編輯':'指派'}車輛／醫院</div>
-      <form onsubmit="window.__submitMciAssign(event,'${p.id}')">
-        <div class="field"><label>選取本次出勤車輛</label>
-          <select name="vehicle" required>
-            <option value="">請選擇車輛</option>
-            ${vehiclePool.map(v => `<option value="${esc(v.plate)}" ${v.plate===p.vehicle?'selected':''}>${esc(vehicleOptionLabel(v.plate,outSet))}</option>`).join("")}
-          </select>
-        </div>
-        <div class="field"><label>選取後送目標醫院</label>
-          <select name="hospital" required>
-            <option value="">請選擇醫院</option>
-            ${hospitalPool.sort((a,b)=>HOSPITAL_NAME_COLLATOR.compare(a.name||'',b.name||'')).map(h => `<option value="${esc(h.name)}" ${h.name===p.hospital?'selected':''}>${esc(h.name)}${h.tier?'・'+esc(h.tier):''}</option>`).join("")}
-          </select>
-        </div>
-        <button class="btn-primary" type="submit">${editing?'儲存':'確認指派'}</button>
-        <button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__closeMciAssign()">取消</button>
-      </form>
-    </div>
-  </div>`;
-}
-function viewMciArriveModal(){
-  const id = state.mciArriveId;
-  if (!id) return "";
-  const p = state.mciPatients.find(x => x.id === id);
-  if (!p) return "";
-  return `
-  <div class="modal-overlay" onclick="if(event.target===this) window.__closeMciArrive()">
-    <div class="modal-sheet">
-      <div class="modal-handle"></div>
-      <div class="modal-title">${icon('hospital',19)} MCI-${String(p.seq||0).padStart(2,'0')} 抵達醫院</div>
-      <form onsubmit="window.__submitMciArrive(event,'${p.id}')">
-        <div class="field"><label>備註（選填）</label><input name="notes" value="${esc(p.notes||'')}" placeholder="備註"></div>
-        <button class="btn-primary" type="submit">確認送出</button>
-        <button class="btn-ghost" type="button" style="width:100%;margin-top:10px;" onclick="window.__closeMciArrive()">取消</button>
-      </form>
-    </div>
-  </div>`;
-}
-
-/* ---- 車輛視角：救護車車長看「自己這台車現在在哪裡」，跟後送官負責
-   「把傷患送到醫院」的視角互補——後送官只在意傷患本身有沒有送到；這裡
-   在意的是傷患送達之後，車輛自己還沒走完的旅程（返回後管站或現地），
-   讓車輛真正「回報待命」之前，後送官在指派車輛時看不到、選不到這台
-   車，避免同一台車被誤重複派出去。狀態掛在「這台車最近一次載的那位
-   傷患」的紀錄上，不另外開一個獨立的車輛集合。 ---- */
-function viewMciVehicleTab(eventId){
-  const patients = state.mciPatients.filter(p => p.eventId === eventId && p.vehicle);
-  const plates = [...new Set(patients.map(p => p.vehicle))].sort((a,b)=>a.localeCompare(b));
-  const cards = plates.map(plate => mciVehicleCard(eventId, plate));
-  return `
-    <div class="section-label">車輛狀態（共 ${plates.length} 台出勤過）</div>
-    ${cards.length ? cards.join("") : `<div class="empty">目前還沒有車輛出勤</div>`}
-  `;
-}
-function mciVehicleCard(eventId, plate){
-  const p = mciVehicleLatestAssignment(eventId, plate, null);
-  if (!p) return "";
-  const destLabel = p.returnDestination === "scene" ? "現地" : "後管站";
-  let statusText, accent, actions = "";
-  if (!p.arrivedAt) {
-    statusText = `運送中 → ${esc(p.hospital||'')}`;
-    accent = "var(--blue)";
-  } else if (!p.returnDestination) {
-    statusText = `已抵達 ${esc(p.hospital||'')}，等待選擇返回地點`;
-    accent = mciTriageInfo('yellow').color;
-    actions = `
-      <div class="mci-patient-actions">
-        <button class="icon-btn primary" onclick="window.__mciVehicleReturn('${p.id}','station')">${icon('returnArrow',15)} 返回後管站</button>
-        <button class="icon-btn primary" onclick="window.__mciVehicleReturn('${p.id}','scene')">${icon('returnArrow',15)} 返回現地</button>
-      </div>`;
-  } else if (!p.returnArrivedAt) {
-    statusText = `返回中：${destLabel}`;
-    accent = mciTriageInfo('yellow').color;
-    actions = `
-      <div class="mci-patient-actions">
-        <button class="icon-btn primary" onclick="window.__mciVehicleReturnArrive('${p.id}')">${icon('returnArrow',15)} 已抵達${destLabel}</button>
-      </div>`;
-  } else {
-    statusText = `待命中（可再派遣）`;
-    accent = "var(--green)";
-  }
-  return `
-  <div class="mci-patient-card spatial-card" style="--card-accent:${accent};">
-    <div class="mci-patient-top">
-      <span class="mci-patient-seq">${esc(plate)}</span>
-      <span class="mci-patient-status">MCI-${String(p.seq||0).padStart(2,'0')}</span>
-    </div>
-    <div class="mci-patient-complaint">${statusText}</div>
-    ${actions}
-  </div>`;
 }
 
 /* =========================================================
@@ -9508,9 +8512,9 @@ function viewNotifications(){
    框架裡的 SettingsItem／SettingsSection component，這裡用純字串
    組裝實作，符合本專案單檔 vanilla JS 的寫法）
    ========================================================= */
-// disabled：功能還沒開放給這位使用者時（目前只有大量傷患演練模組限
-// admin），整列變灰階、拿掉點擊跟箭頭，看起來像「建構中」按不下去，
-// 不是單純隱藏整列——讓其他角色知道這個功能存在，只是還沒開放。
+// disabled：功能還沒開放給這位使用者時，整列變灰階、拿掉點擊跟箭頭，
+// 看起來像「建構中」按不下去，不是單純隱藏整列——讓其他角色知道這個
+// 功能存在，只是還沒開放。
 function settingsRow({icon:iconName, bg, fg, title, subtitle, onclick, disabled}){
   if (disabled) {
     return `
@@ -9650,8 +8654,6 @@ function viewProfile(){
     // → 基礎資料」進到同一批頁面，這裡只給一般成員看，避免同一批功能在
     // 「更多」頁出現兩個入口。
     ...(myRole(p) === 'member' ? [settingsRow({icon:'records', bg:'#F2E9FE', fg:'#6B23C7', title:'共用資料維護', subtitle:'行車紀錄器／醫官／軍品項目／政令宣導', onclick:"window.__nav({name:'sharedBaseData'})"})] : []),
-    settingsRow({icon:'alert', bg:'#FFEAEA', fg:'#C7233B', title:'大量傷患演練模組（建構中）', subtitle:'開事件、傷患檢傷分類與車輛/醫院指派', onclick:"window.__nav({name:'mciList'})", disabled: myRole(p) !== 'admin'}),
-    settingsRow({icon:'records', bg:'#F2E9FE', fg:'#6B23C7', title:'教學園地（建構中）', subtitle:'救護技術教學文章，圖文解說', onclick:"window.__nav({name:'tutorials'})", disabled: myRole(p) !== 'admin'}),
     settingsRow({icon:'sun', bg:'#F2E9FE', fg:'#6B23C7', title:'螢幕顯示', subtitle:THEME_MODE_LABEL[state.themeMode], onclick:"window.__nav({name:'displayAppearance'})"}),
     settingsRow({icon:'bell', bg:'#FFEAEA', fg:'#C7233B', title:'推播通知', subtitle:pushStatusLabel(), onclick:"window.__nav({name:'pushSettings'})"}),
     settingsRow({icon:'chat', bg:'#E9F9EF', fg:'#177A34', title:'意見回饋', onclick:"window.__nav({name:'feedback'})"}),
@@ -10119,72 +9121,6 @@ function viewAbout(){
     <div class="about-copyright">
       Copyright © 2026 MEDTRACK. All Rights Reserved.<br><br>
       本系統為衛生營內部勤務管理使用，未經授權不得擅自複製、散布、修改或提供予第三方。所有系統內容、介面設計及相關資料均受著作權及相關法律保護。
-    </div>
-  `;
-}
-/* =========================================================
-   教學園地：分類列表 → 分類內文章列表 → 文章內頁（圖文教學）。
-   目前限 admin 使用（跟大量傷患演練模組同一套「還在建構中」的收斂
-   方式）：更多頁入口本身就已經灰階擋掉，這裡三個畫面各自也擋一次，
-   避免有人直接呼叫 window.__nav 硬導覽過去繞過去。
-   ========================================================= */
-function viewTutorialCategories(){
-  if (myRole(state.profile) !== 'admin') return `<div class="back-row">${backBtn({name:'profile'})}</div><div class="empty">此功能目前僅開放管理員使用</div>`;
-  return `
-    <div class="back-row">${backBtn({name:'profile'})}</div>
-    <div class="section-label">教學園地</div>
-    <div class="settings-group">
-      ${TUTORIAL_CATEGORIES.map(c => {
-        const count = (TUTORIAL_ARTICLES[c.key]||[]).length;
-        return settingsRow({icon:c.iconName, bg:c.bg, fg:c.fg, title:c.label, subtitle:`共 ${count} 篇教學`, onclick:`window.__nav({name:'tutorialCategory', key:'${c.key}'})`});
-      }).join("")}
-    </div>
-  `;
-}
-function viewTutorialCategory(key){
-  if (myRole(state.profile) !== 'admin') return `<div class="back-row">${backBtn({name:'profile'})}</div><div class="empty">此功能目前僅開放管理員使用</div>`;
-  const cat = TUTORIAL_CATEGORIES.find(c => c.key === key);
-  if (!cat) return `<div class="back-row">${backBtn({name:'tutorials'})}</div><div class="empty">找不到這個分類</div>`;
-  const articles = TUTORIAL_ARTICLES[key] || [];
-  return `
-    <div class="back-row">${backBtn({name:'tutorials'})}</div>
-    <div class="section-label">${esc(cat.label)}</div>
-    ${articles.length ? `<div class="settings-group">${articles.map(a => settingsRow({icon:cat.iconName, bg:cat.bg, fg:cat.fg, title:a.title, subtitle:a.summary, onclick:`window.__nav({name:'tutorialArticle', key:'${key}', id:'${a.id}'})`})).join("")}</div>` : `<div class="empty">這個分類還沒有教學文章</div>`}
-  `;
-}
-// 文章內文的區塊渲染：h3／p／image／callout 四種類型，圖片跟重點提醒框
-// 樣式見上面 CSS 的 .tutorial-* 系列。
-function renderTutorialBody(blocks){
-  return blocks.map(b => {
-    if (b.type === "h3") return `<div class="tutorial-h3">${esc(b.text)}</div>`;
-    if (b.type === "p") return `<p>${esc(b.text)}</p>`;
-    if (b.type === "image") return `
-      <div class="tutorial-image-block">
-        <img src="${esc(b.src)}" alt="${esc(b.caption||'')}" class="tutorial-image" loading="lazy">
-        ${b.caption ? `<div class="tutorial-image-caption">${esc(b.caption)}</div>` : ""}
-      </div>`;
-    if (b.type === "callout") return `<div class="tutorial-callout">${icon('alert',16)}<span>${esc(b.text)}</span></div>`;
-    if (b.type === "table") return `
-      <div class="tutorial-table-wrap">
-        ${b.title ? `<div class="tutorial-table-title">${esc(b.title)}</div>` : ""}
-        <table class="tutorial-table">
-          <thead><tr>${b.headers.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead>
-          <tbody>${b.rows.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody>
-        </table>
-      </div>`;
-    return "";
-  }).join("");
-}
-function viewTutorialArticle(key, id){
-  if (myRole(state.profile) !== 'admin') return `<div class="back-row">${backBtn({name:'profile'})}</div><div class="empty">此功能目前僅開放管理員使用</div>`;
-  const cat = TUTORIAL_CATEGORIES.find(c => c.key === key);
-  const article = cat ? (TUTORIAL_ARTICLES[key]||[]).find(a => a.id === id) : null;
-  if (!cat || !article) return `<div class="back-row">${backBtn({name:'tutorials'})}</div><div class="empty">找不到這篇教學</div>`;
-  return `
-    <div class="back-row">${backBtn({name:'tutorialCategory', key})}</div>
-    <div class="section-label">${esc(article.title)}</div>
-    <div class="detail-head" style="text-align:left; font-size:var(--text-sm); line-height:1.8; color:var(--text);">
-      ${renderTutorialBody(article.body)}
     </div>
   `;
 }
@@ -11598,10 +10534,10 @@ function viewCampRegCalendar(){
 function viewCampRegBody(){
   const p = state.profile;
   // 值日官登入時提示一次「該點哪個按鈕」：卡片右上角那顆「已登記／未登記」
-  // 藥丸按鈕，本人在成功嶺營區範圍的登記卡片上都能點——用跟教學園地
-  // 提示框一致的樣式（tutorial-callout），不用另外開一套視覺。
+  // 藥丸按鈕，本人在成功嶺營區範圍的登記卡片上都能點——用共用的黃色提示框
+  // 樣式（hint-callout），不用另外開一套視覺。
   const dutyOfficerHint = p && p.isCampDutyOfficer ? `
-    <div class="tutorial-callout">${icon('lightbulb',16)}<span>【值日官提醒】完成謄寫至洽公名冊後，請將右上角灰色「未登記」按鈕切換為藍色「已登記」。此標記是為了讓值日官及相關人員能快速確認該筆資料已登記至洽公名冊，避免重複或遺漏作業。</span></div>` : '';
+    <div class="hint-callout">${icon('lightbulb',16)}<span>【值日官提醒】完成謄寫至洽公名冊後，請將右上角灰色「未登記」按鈕切換為藍色「已登記」。此標記是為了讓值日官及相關人員能快速確認該筆資料已登記至洽公名冊，避免重複或遺漏作業。</span></div>` : '';
   return `
     ${dutyOfficerHint}
     <button class="icon-btn primary" style="margin-bottom:14px;" onclick="window.__openCampRegModal(null)">${icon('plus',15)} 新增登記</button>
@@ -11694,12 +10630,7 @@ const ROUTE_VIEWS = {
   adminMessages: viewAdminMessagesPage,
   adminSettings: viewAdminSettingsPage,
   adminFeedback: viewAdminFeedbackPage,
-  pushConsole: viewPushConsolePage,
-  mciList: viewMciList,
-  mciEvent: () => viewMciEvent(state.route.id),
-  tutorials: viewTutorialCategories,
-  tutorialCategory: () => viewTutorialCategory(state.route.key),
-  tutorialArticle: () => viewTutorialArticle(state.route.key, state.route.id)
+  pushConsole: viewPushConsolePage
 };
 const NAV_ITEMS = [
   { name:"home", iconName:"home", label:"首頁", accent:"#007AFF" },
@@ -11851,18 +10782,13 @@ function render(){
     </div>
     ${viewBaseDataModal()}
     ${viewEmergencyBroadcastModal()}
-    <!-- 大量傷患事件的三個彈窗一定要在這裡（main 外面）渲染，不能塞回
-         viewMciList()／viewMciCcpTab()／viewMciEvacTab() 的回傳內容裡：
-         main 有 -webkit-overflow-scrolling:touch，iOS Safari 對「捲動容器
-         裡面的 position:fixed」有名的 containing block bug，會把 fixed
-         元素的定位基準錯算成 main 本身而不是整個視窗，導致彈窗被切齊在
-         main 的下緣（也就是 bottomnav 的上緣），彈窗最下面的按鈕（例如
-         「取消」）整個被 bottomnav 蓋住、點不到。這裡跟 viewBaseDataModal()
-         同一個位置渲染才不會中這個坑。 -->
-    ${viewMciCreateModal()}
-    ${viewMciCcpEditModal()}
-    ${viewMciAssignModal()}
-    ${viewMciArriveModal()}
+    <!-- 全螢幕彈窗（Modal）一定要在這裡（main 外面）渲染，不能塞進各畫面
+         函式回傳的內容裡：main 有 -webkit-overflow-scrolling:touch，iOS
+         Safari 對「捲動容器裡面的 position:fixed」有名的 containing
+         block bug，會把 fixed 元素的定位基準錯算成 main 本身而不是整個
+         視窗，導致彈窗被切齊在 main 的下緣（也就是 bottomnav 的上緣），
+         彈窗最下面的按鈕（例如「取消」）整個被 bottomnav 蓋住、點不到。
+         這裡跟 viewBaseDataModal() 同一個位置渲染才不會中這個坑。 -->
     ${viewVitalsReportModal()}
     ${viewCampRegModal()}
   `;
@@ -12667,130 +11593,6 @@ window.__submitCampRegModal = (ev, type, id) => {
 };
 window.__deleteCampReg = (id) => { if (confirm("確定刪除此筆登記？此動作無法復原。")) deleteCampRegistration(id).catch(baseDataErr); };
 window.__toggleCampRegTranscribed = (id, checked) => setCampRegistrationTranscribed(id, checked).catch(baseDataErr);
-window.__openMciCreateModal = (id) => { state.mciEventModal = { id: id || null }; render(); };
-window.__closeMciCreateModal = () => { state.mciEventModal = null; render(); };
-window.__submitMciCreateModal = (ev, id) => {
-  ev.preventDefault();
-  const f = new FormData(ev.target);
-  const data = { title: f.get("title"), unit: f.get("unit")||"", vehicles: f.getAll("vehicles"), hospitals: f.getAll("hospitals") };
-  const action = id ? updateMciEvent(id, data) : createMciEvent(data);
-  action.then(doc => {
-    state.mciEventModal = null;
-    if (!id) nav({ name:"mciEvent", id: doc.id }); else render();
-  }).catch(baseDataErr);
-};
-window.__deleteMciEvent = (id) => {
-  if (!confirm("確定刪除此大量傷患事件？底下所有傷患紀錄也會一併刪除，此動作無法復原。")) return;
-  deleteMciEvent(id).catch(baseDataErr);
-};
-window.__toggleMciEventStatus = (id, curStatus) => {
-  const next = curStatus === "closed" ? "active" : "closed";
-  if (next === "closed" && !confirm("確定要結束這個大量傷患事件嗎？結束後仍可查看紀錄，需要的話可以再重新開啟。")) return;
-  setMciEventStatus(id, next).catch(baseDataErr);
-};
-window.__updateMciRole = (eventId, key, value) => {
-  const ev = state.mciEvents.find(e => e.id === eventId);
-  if (!ev) return;
-  updateMciEventRoles(eventId, { ...(ev.roles||{}), [key]: value }).catch(baseDataErr);
-};
-window.__setMciEventTab = (key) => { state.mciEventTab = key; render(); };
-// 檢傷官：START 決策問答狀態機。go 是 {step:"下一關"} 或 {color:"..."}，
-// 判定為紅色會先轉去 redSubcat 關卡再進表單，其餘顏色直接進表單。
-window.__mciStartGo = (go) => {
-  if (go.color) {
-    state.mciTriageColor = go.color;
-    state.mciTriageStep = go.color === "red" ? "redSubcat" : "form";
-  } else if (go.step) {
-    state.mciTriageStep = go.step;
-  }
-  render();
-};
-window.__mciSelectRedSubcat = (key) => {
-  state.mciTriageRedSubcat = key;
-  state.mciTriageStep = "form";
-  render();
-};
-window.__mciStartRestart = () => {
-  state.mciTriageStep = "ambulate";
-  state.mciTriageColor = null;
-  state.mciTriageRedSubcat = null;
-  render();
-};
-window.__submitMciTriageForm = (ev, eventId) => {
-  ev.preventDefault();
-  const f = new FormData(ev.target);
-  const data = {
-    triageColor: state.mciTriageColor,
-    redSubcat: state.mciTriageColor === "red" ? state.mciTriageRedSubcat : null,
-    complaint: f.get("complaint") || "",
-    vehicle: "", hospital: "",
-    departedAt: null, arrivedAt: null, notes: ""
-  };
-  addMciPatient(eventId, data).then(() => { window.__mciStartRestart(); }).catch(baseDataErr);
-};
-// 治療官：傷患集中區編輯（主訴）＋二次檢傷（僅黃→紅）。主訴沒有獨立的
-// 儲存按鈕，輸入框裡的內容會在點「處置完成」時一併存檔（見
-// __completeMciTreatment）。
-window.__openMciCcpEdit = (id) => { state.mciCcpEditId = id; state.mciRetriageActive = false; render(); };
-window.__closeMciCcpEdit = () => { state.mciCcpEditId = null; state.mciRetriageActive = false; render(); };
-window.__startMciRetriage = () => { state.mciRetriageActive = true; render(); };
-window.__cancelMciRetriage = () => { state.mciRetriageActive = false; render(); };
-window.__confirmMciRetriage = (ev, id) => {
-  ev.preventDefault();
-  const f = new FormData(ev.target);
-  const redSubcat = f.get("redSubcat");
-  if (!redSubcat) { showToast("請選擇第一個出問題的地方"); return; }
-  updateMciPatient(id, { triageColor: "red", redSubcat }).then(() => { state.mciRetriageActive = false; render(); }).catch(baseDataErr);
-};
-window.__deleteMciPatientFromCcp = (id) => {
-  if (!confirm("確定刪除此傷患紀錄？此動作無法復原。")) return;
-  deleteMciPatient(id).then(() => { state.mciCcpEditId = null; render(); }).catch(baseDataErr);
-};
-// 治療官標記「處置完成」：連同輸入框裡可能還沒按儲存的主訴一起存檔，
-// 避免使用者直接點處置完成卻遺失剛打的字。完成後這位傷患會從治療官的
-// 待命清單消失，改在後送官分頁出現（見 mciPatientStatus／viewMciEvacTab）。
-window.__completeMciTreatment = (id) => {
-  const input = document.querySelector('.modal-sheet input[name="complaint"]');
-  const data = { treatmentComplete: true };
-  if (input) data.complaint = input.value;
-  updateMciPatient(id, data).then(() => { state.mciCcpEditId = null; render(); }).catch(baseDataErr);
-};
-// 後送官：先指派車輛/醫院，才會出現離開現場／抵達醫院（填里程/備註）的
-// 雙節點生命週期動作。
-window.__openMciAssign = (id) => { state.mciAssignId = id; render(); };
-window.__closeMciAssign = () => { state.mciAssignId = null; render(); };
-window.__submitMciAssign = (ev, id) => {
-  ev.preventDefault();
-  const f = new FormData(ev.target);
-  updateMciPatient(id, { vehicle: f.get("vehicle"), hospital: f.get("hospital") }).then(() => {
-    state.mciAssignId = null; render();
-  }).catch(baseDataErr);
-};
-window.__mciMarkDeparted = (id) => { updateMciPatient(id, { departedAt: new Date() }).catch(baseDataErr); };
-window.__openMciArrive = (id) => { state.mciArriveId = id; render(); };
-window.__closeMciArrive = () => { state.mciArriveId = null; render(); };
-window.__submitMciArrive = (ev, id) => {
-  ev.preventDefault();
-  const f = new FormData(ev.target);
-  // 資料校正：如果這位傷患已經抵達過（重新打開這個彈窗只是要改備註），
-  // 不要把 arrivedAt 這個已經記錄的時間點覆蓋掉，只更新備註。
-  const p = state.mciPatients.find(x => x.id === id);
-  const data = { notes: f.get("notes")||"" };
-  if (!p || !p.arrivedAt) data.arrivedAt = new Date();
-  updateMciPatient(id, data).then(() => {
-    state.mciArriveId = null; render();
-  }).catch(baseDataErr);
-};
-// 車輛視角：選擇返回地點（後管站／現地），以及確認已經抵達返回地點。
-// 這兩步都掛在「這台車最近一次載的那位傷患」的紀錄上，不是另外開一個
-// 獨立的車輛集合；車輛真正「返回待命」前，後送官指派車輛時看不到、選
-// 不到這台車（見 viewMciAssignModal／mciVehicleIsBusy）。
-window.__mciVehicleReturn = (id, dest) => {
-  updateMciPatient(id, { returnDestination: dest, returningAt: new Date() }).catch(baseDataErr);
-};
-window.__mciVehicleReturnArrive = (id) => {
-  updateMciPatient(id, { returnArrivedAt: new Date() }).catch(baseDataErr);
-};
 // 醫院道路距離（OSRM Table API，router.project-osrm.org 公開 demo server）：
 // 只當直線距離之外的加分項，永遠不擋主流程。這台 demo server 官方明講不
 // 保證 uptime／延遲，限流 1 req/秒，也可能隨時停用（見 OSRM 專案 wiki 的
@@ -13585,9 +12387,9 @@ window.__saveTaskEdit = (ev, taskId) => {
     // main 的 scrollTop，不是 window 的。之前這裡還多判斷過 main 的
     // scrollHeight 是否真的超過 clientHeight（內容不足一螢幕就整個不給
     // 觸發），原意是想避免「內容不夠捲、到處都算頂端」誤觸——但這反而讓
-    // 內容本來就短的頁面（例如大量傷患系統的檢傷官/治療官/後送官分頁，
-    // 案件不多時一眼就看完，完全捲不動）永遠沒辦法下拉重新整理，變成
-    // 「內容越簡單的畫面越沒辦法刷新」的反效果。內容不足一螢幕時整頁本
+    // 內容本來就短的頁面（例如剛開始沒幾筆資料、一眼就看完，完全捲不動
+    // 的清單頁）永遠沒辦法下拉重新整理，變成「內容越簡單的畫面越沒辦法
+    // 刷新」的反效果。內容不足一螢幕時整頁本
     // 來就等於「頂端」，從任何位置下拉都合理，不需要额外擋掉，只要
     // scrollTop<=0（捲得動的頁面用來確認真的捲到頂；捲不動的頁面本來就
     // 恆成立）就夠了。
@@ -13963,8 +12765,8 @@ const KEYBOARD_HEIGHT_THRESHOLD = 80;
 // 下緣。但只修正 overlay 高度、放著 sheet 的 max-height 不管，又會出現
 // 另一個問題：sheet 自己的 max-height 是 88vh/88dvh，這個 CSS 單位在這支
 // 裝置上鍵盤打開時並不會跟著縮小（跟本檔案其他地方反覆驗證過的結論一
-// 致），如果表單內容（例如大量傷患新增傷患彈窗，姓名／檢傷分類／主訴／
-// 車輛／醫院一大排欄位）本身就比鍵盤打開後的可視高度還高，sheet 會照著
+// 致），如果表單內容（例如患者生命徵象回報彈窗，主訴／生命徵象／處置
+// 項目一大排欄位）本身就比鍵盤打開後的可視高度還高，sheet 會照著
 // 這個「量錯」的 max-height 撐開、貼齊（已經正確縮小的）overlay 底部，
 // 撐出來的高度超過 overlay 本身，sheet 的頂部就會被推到 y=0（可視範圍
 // 最上緣）以上、跑到看不見也捲不到的地方——因為 sheet 內容本身還沒撐滿
@@ -13995,7 +12797,7 @@ function syncAppHeight() {
     sheet.style.maxHeight = keyboardOpen ? Math.max(window.visualViewport.height - 24, 120) + "px" : "";
   });
   // 彈窗表單（.modal-sheet）鍵盤打開時已經有上面這段校正撐出足夠空間；
-  // 但一般頁面裡直接寫在頁面內容中的欄位（例如大量傷患檢傷官分頁的主訴
+  // 但一般頁面裡直接寫在頁面內容中的欄位（例如患者生命徵象頁面的主訴
   // 輸入框）完全沒有這層照顧——main 底下可捲動的內容區塊到底就是頁面
   // 最後一段內容，沒有多留鍵盤高度的緩衝，聚焦欄位如果離內容底部很近，
   // scrollIntoView() 能捲動的空間不夠，會先被瀏覽器自己的原生捲動行為
