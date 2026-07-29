@@ -2067,7 +2067,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-30-498-end-case-button-rename";
+const BUILD_TAG = "2026-07-30-499-duty-early-close-fork";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2966,6 +2966,9 @@ const RELEASE_NOTES = [
       "勤務類任務抵達現場後的「前往下一個地點」「返回營區」兩顆按鈕改名為「前往下一站」「結束勤務案件」（任務卡片上對應的狀態文字也從「返回營區中」改成「勤務結束中」）：綠色按鈕實際的作用是回報這趟外出即將結束，不代表車輛一定會直接開回營區（例如車輛送保養廠可能被拖到其他廠商據點），改名後標籤講的是「狀態」而不是「地點」；文字也順便縮短到不會在手機上被擠成兩行",
       "洽公任務的結案按鈕「完成洽公」進一步改名為「結束洽公案件」，用詞跟上面勤務類任務新增的「結束勤務案件」對齊，兩種任務類型結案時看到的說法一致",
     ] },
+    { category: "任務管理", items: [
+      "勤務類任務出勤後，不用再強制先回報「抵達現場」才能結案：現在出勤當下就會同時顯示「抵達現場」「結束勤務案件」兩顆按鈕，任務臨時取消或出發沒多久就折返等情境可以直接結案，不用卡在「抵達現場」這一步；跟洽公任務出發後就能直接結案是同一套邏輯",
+    ] },
   ] },
   { date: "2026/07/29", groups: [
     { category: "人員與帳號", items: [
@@ -3782,8 +3785,12 @@ function reportableTypes(taskId){
     return [];
   }
   if (!lastType) return ["DISPATCH"];
-  if (lastType === "DISPATCH") return ["ARRIVED_SCENE"];
-  if (lastType === "ARRIVED_SCENE") return ["DEPART_SCENE", "RETURNING"]; // 唯一的分岔點
+  // 出發後也開放直接結案（不強制先抵達現場）：跟洽公任務同一個理由——
+  // 有些外出本來就沒有單一固定的「現場」可以回報抵達（任務臨時取消、
+  // 出發沒多久就折返等情況），沒有這個例外的話，使用者會卡在「抵達現場」
+  // 這顆按鈕、找不到結案的地方。
+  if (lastType === "DISPATCH") return ["ARRIVED_SCENE", "RETURNING"];
+  if (lastType === "ARRIVED_SCENE") return ["DEPART_SCENE", "RETURNING"]; // 另一個分岔點
   // 離開現場後車輛正在移動，還沒抵達下一個地點，所以下一步只會是「抵達」；
   // 離開跟抵達是兩個不同時刻（中間有移動時間），必須分開回報各自的時間/里程，
   // 不能像返營那樣直接假設同一刻，否則抵達時間會被錯誤地套用成離開時間。
@@ -8147,13 +8154,17 @@ function viewTaskDetail(taskId){
         ${navRow}
         <button class="btn-primary" style="width:100%;" onclick="window.__startReport('${t.id}','${rTypes[0]}')">${icon(def.icon,20)} ${btnLabel}</button>
       </div>`;
-  } else if (canDoReport && !draft && rTypes.length === 2 && rTypes.includes("DEPART_SCENE")) {
-    // 分岔點一（僅勤務類任務才會出現）：抵達現場之後，離開前往下一個地點
-    // （這裡回報的是「離開現場」本身，抵達下一站要等真的到了才另外回報，
-    // 兩者是不同時刻，不能混在同一次動作裡）或直接返程。跟洽公任務的
-    // 分岔點二是同一種情境（例如開車送保養廠，車輛可能被拖到外面其他廠商
-    // 據點而不是直接回營區，也可能要等隔天甚至兩三天才能牽車回營，不是
-    // 當天就能決定按哪顆），下面補上同一套提示句。
+  } else if (canDoReport && !draft && rTypes.length === 2 && rTypes.includes("RETURNING") && !isLiaison) {
+    // 勤務類任務有兩個分岔點，這裡合併用同一套邏輯處理：
+    // 1. 出發後（DISPATCH → [ARRIVED_SCENE, RETURNING]）：不強制先抵達
+    //    現場才能結案，任務臨時取消／出發沒多久就折返也能直接結案。
+    // 2. 抵達現場後（ARRIVED_SCENE → [DEPART_SCENE, RETURNING]）：離開
+    //    前往下一個地點（這裡回報的是「離開現場」本身，抵達下一站要等
+    //    真的到了才另外回報，兩者是不同時刻，不能混在同一次動作裡）
+    //    或直接結案。
+    // 兩種情境都可能是「當下不容易決定按哪顆」（例如開車送保養廠，車輛
+    // 可能被拖到外面其他廠商據點而不是直接回營區，也可能要等隔天甚至
+    // 兩三天才能牽車回營），下面統一補上提示句。
     // 綠色按鈕故意不寫「返回營區」：這裡回報的是勤務案件即將結束這件事，
     // 不是保證車輛真的會直接開回營區（可能還會先繞去別的廠商據點），跟
     // 洽公任務把「抵達營區」改成「結束洽公案件」是同一個理由——標籤講
@@ -8163,13 +8174,26 @@ function viewTaskDetail(taskId){
     // 勤務案件」這個按鈕文字講的是「這趟外出的案件性質已經結束、準備收尾」，
     // 不是「按下去這筆任務就完全關閉」，使用者按完後緊接著還是要填最終
     // 里程/油量才會真正結案。
+    const moveType = rTypes.find(x => x !== "RETURNING"); // ARRIVED_SCENE 或 DEPART_SCENE
+    const moveLabel = moveType === "ARRIVED_SCENE" ? "抵達現場" : "前往下一站";
+    const moveIcon = moveType === "ARRIVED_SCENE" ? "pin" : "depart";
+    const moveHint = moveType === "ARRIVED_SCENE" ? "尚未抵達現場選抵達現場" : "尚有後續行程選前往下一站";
+    // 出發後、還沒抵達現場前，下一步剛好是抵達現場且出勤時有選送醫醫院時，
+    // 一樣保留導航按鈕（見 rTypes.length===1 分支同樣的邏輯，這裡分岔點
+    // 多了結束勤務案件這個選項，導航需求沒有變）。
+    const showNavAboveBtn = moveType === "ARRIVED_SCENE" && hospitalForArrival;
+    const navRow = showNavAboveBtn ? `<div style="display:flex; gap:8px;">
+      <a class="icon-btn" style="flex:1; justify-content:center;" href="${googleMapsUrl(hospitalNavQuery(hospitalForArrival))}" target="_blank" rel="noopener">${icon('depart',14)} Google 導航</a>
+      <a class="icon-btn" style="flex:1; justify-content:center;" href="${appleMapsUrl(hospitalNavQuery(hospitalForArrival))}" target="_blank" rel="noopener">${icon('depart',14)} Apple 導航</a>
+    </div>` : "";
     stickyBar = `
       <div class="sticky-action-bar" style="flex-direction:column; align-items:stretch; gap:8px;">
+        ${navRow}
         <div style="display:flex; gap:10px;">
-          <button class="btn-primary" onclick="window.__startReport('${t.id}','DEPART_SCENE')">${icon('depart',20)} 前往下一站</button>
+          <button class="btn-primary" onclick="window.__startReport('${t.id}','${moveType}')">${icon(moveIcon,20)} ${moveLabel}</button>
           <button class="btn-primary green" onclick="window.__startReport('${t.id}','RETURNING')">${icon('home',20)} 結束勤務案件</button>
         </div>
-        <div class="action-bar-hint">尚有後續行程選前往下一站；勤務辦畢選結束勤務案件</div>
+        <div class="action-bar-hint">${moveHint}；勤務辦畢選結束勤務案件</div>
       </div>`;
   } else if (canDoReport && !draft && rTypes.length === 2 && isLiaison) {
     // 分岔點二（僅洽公任務才會出現）：出發之後，短天期洽公可以照原本順序
