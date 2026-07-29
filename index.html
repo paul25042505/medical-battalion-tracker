@@ -2067,7 +2067,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-30-504-dispatch-fork-hint-wording2";
+const BUILD_TAG = "2026-07-30-505-erstandby-crossunit-renew";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2075,7 +2075,7 @@ const BUILD_TAG = "2026-07-30-504-dispatch-fork-hint-wording2";
 // 「主/次版號怎麼判斷」：次版號 = 新增完整功能模組或既有功能明顯擴充；
 // 主版號 = 整個介面重新設計/破壞性資料遷移/核心架構更換；純 bug
 // 修正/文字/樣式調整不動主次版號。
-const APP_MAJOR_MINOR = "2.32";
+const APP_MAJOR_MINOR = "2.33";
 function buildSeq(){
   const m = BUILD_TAG.match(/^\d{4}-\d{2}-\d{2}-(\d+)-/);
   return m ? m[1] : "0";
@@ -2978,6 +2978,7 @@ const RELEASE_NOTES = [
       "勤務類任務出勤後，不用再強制先回報「抵達現場」才能結案：現在出勤當下就會同時顯示「抵達現場」「結束勤務案件」兩顆按鈕，任務臨時取消或出發沒多久就折返等情境可以直接結案，不用卡在「抵達現場」這一步；跟洽公任務出發後就能直接結案是同一套邏輯",
       "「結束勤務案件」現在會直接完成整筆勤務（同時要求填寫最終里程、剩餘油量），按下去之後不會再冒出「抵達營區」這個後續步驟——原本的用詞代表案件已經結束，卻還留了一步待完成的按鈕，容易讓人以為沒按完",
       "勤務類任務抵達現場之後，「離開」這一步改成分兩種選擇：「前往下一站」（跟原本一樣，還有後續行程）或「返回營區」（回報準備返程，這步不用填地點/里程）；抵達現場之後不再能直接按「結束勤務案件」結案，改成一定要先表態往下一站還是返營。選了「返回營區」之後，下一步只會剩一顆「結束勤務案件」按鈕，等真的抵達營區才按，同一個動作直接結案（要求填最終里程/油量），任務卡片在這段期間會顯示「返回營區中」",
+      "急診待命開放跨單位代班：兩個醫務所的待命勤務目前如果是別的單位在跑（例如成功北醫務所平常是一連在顧，營部偶爾支援代班），現在也能看到「完成當前勤務，啟動新勤務」按鈕，不用等對方單位自己來結案續約；新開的勤務會歸在代班單位自己名下（營部代班就算營部的任務），車輛如果沿用原本駐點的車，系統會自動偵測並展開「跨單位借車」正確帶出車號，不用手動重選；查看前一班完整任務內容（含患者紀錄）維持只有同單位/主官管才看得到，跟續約是兩件事",
     ] },
   ] },
   { date: "2026/07/29", groups: [
@@ -7309,6 +7310,14 @@ function viewCreateTask(){
   const vehicleOpts = sortVehicles(state.vehicles.filter(x => x.unit === unit && x.active !== false));
   const recorderOpts = state.recorders.filter(x => x.unit === unit && x.active !== false);
   const outSet = dispatchedVehiclePlates();
+  // 急診待命續約帶進來的 presetVehicle 可能是別單位的車（例如營部代班
+  // 支援成功北醫務所，車還是原本一連停在那裡的救護車）——這種情況下這
+  // 個 unit 決定的車輛清單裡本來就找不到那台車，選單只會靜靜落回「請
+  // 選擇車輛」的空白狀態，使用者會誤以為原本的車不見了。跟 viewEditTask
+  // 同一套邏輯：偵測到 presetVehicle 是跨單位的車，就自動展開「跨單位
+  // 借車」、車號選單一開始就用全單位清單渲染，才能正確帶出預選值。
+  const presetVehicleRecord = state.route.presetVehicle ? state.vehicles.find(v => v.plate === state.route.presetVehicle) : null;
+  const isCrossUnitVehiclePreset = !!(presetVehicleRecord && presetVehicleRecord.unit !== unit);
 
   return `
     <div class="section-label">建立勤務</div>
@@ -7348,13 +7357,14 @@ function viewCreateTask(){
         <div class="personnel-hidden-checkboxes"></div>
       </div>` : `
       <div class="field">
-        <div class="field-label-row"><label>車號</label><div style="display:flex; gap:8px;">${crossUnitVehicleToggleBtn(false)}${externalToggleBtn('vehicle', '外部車輛', false)}</div></div>
+        <div class="field-label-row"><label>車號</label><div style="display:flex; gap:8px;">${crossUnitVehicleToggleBtn(isCrossUnitVehiclePreset)}${externalToggleBtn('vehicle', '外部車輛', false)}</div></div>
         <div data-mode="normal">
           <select name="vehicle" data-field-name="vehicle" data-unit="${unit}">
-            <option value="">請選擇車輛</option>
-            ${vehicleOptionsByType(vehicleOpts, v => `<option value="${esc(v.plate)}" ${state.route.presetVehicle===v.plate?'selected':''}>${esc(vehicleOptionLabel(v.plate, outSet))}</option>`)}
+            ${isCrossUnitVehiclePreset
+              ? vehicleSelectOptionsAllUnits(state.route.presetVehicle)
+              : `<option value="">請選擇車輛</option>${vehicleOptionsByType(vehicleOpts, v => `<option value="${esc(v.plate)}" ${state.route.presetVehicle===v.plate?'selected':''}>${esc(vehicleOptionLabel(v.plate, outSet))}</option>`)}`}
           </select>
-          ${!vehicleOpts.length ? `<div style="color:var(--muted);font-size:var(--text-xs);margin-top:6px;">此單位尚未建立車輛資料，請至「基礎資料管理」新增</div>` : ""}
+          ${!vehicleOpts.length && !isCrossUnitVehiclePreset ? `<div style="color:var(--muted);font-size:var(--text-xs);margin-top:6px;">此單位尚未建立車輛資料，請至「基礎資料管理」新增</div>` : ""}
         </div>
         <div data-mode="external" style="display:none;"><input data-field-name="vehicle" placeholder="例如：遊覽車公司 XX-1234"></div>
       </div>
@@ -9563,10 +9573,18 @@ function viewErStandby(){
           <div class="emergency-slider-track"><span class="emergency-slider-text">🚨 右滑發送：${esc(loc.label)} 緊急動員通知</span></div>
           <div class="emergency-slider-handle">→</div>
         </div>` : ""}
+        <!-- 醫務所待命是全營共用資源，其他單位偶爾會支援代班（例如營部支援
+             成功北醫務所），續約按鈕不能只留給目前綁定任務的那個單位—— 跟
+             醫務所空著時「任何單位都能建立待命勤務」是同一套邏輯，所以就算
+             canViewTaskDetail 判斷是別單位的任務（看得到鎖住提示），只要
+             canDispatch 為真還是要放行續約按鈕；「查看／管理」進去看完整
+             任務內容（患者紀錄等）維持不變，只有同單位/主官管才看得到，
+             跟續約是兩件事，續約不需要先看得到前一班的詳細內容。 -->
         ${canViewTaskDetail(p, boundTask)
           ? `<button class="btn-primary" style="width:100%;" onclick="window.__nav({name:'task', id:'${boundTask.id}'})">查看／管理</button>
              ${canDispatch ? `<button class="btn-outline-blue" style="margin-top:8px;" onclick='window.__renewErStandbyTask(${JSON.stringify(loc.key)}, ${JSON.stringify(loc.label)})'>${icon('refresh',15)} 完成當前勤務，啟動新勤務</button>` : ""}`
-          : `<div class="task-card-locked-note" style="justify-content:center; padding:10px 0;">${icon('lock',13)} ${esc(unitLabel(boundTask.unit))}勤務・僅供掌握動態</div>`}
+          : `<div class="task-card-locked-note" style="justify-content:center; padding:10px 0;">${icon('lock',13)} ${esc(unitLabel(boundTask.unit))}勤務・僅供掌握動態</div>
+             ${canDispatch ? `<button class="btn-outline-blue" style="width:100%;margin-top:8px;" onclick='window.__renewErStandbyTask(${JSON.stringify(loc.key)}, ${JSON.stringify(loc.label)})'>${icon('refresh',15)} 完成當前勤務，啟動新勤務</button>` : ""}`}
         ` : `
         <div class="empty" style="padding:16px 0;">尚未建立待命勤務</div>
         ${canDispatch ? `<button class="btn-primary" style="width:100%;" onclick='window.__startErStandbyTask(${JSON.stringify(loc.key)}, ${JSON.stringify(loc.label)})'>建立待命勤務</button>` : ""}
@@ -12321,7 +12339,15 @@ window.__renewErStandbyTask = (key, locationLabel) => {
   }
   state.createTaskType = "duty";
   const loc = ER_STANDBY_LOCATIONS.find(x => x.key === key);
-  if (boundTask && boundTask.unit) state.createTaskUnit = boundTask.unit;
+  // 續約新任務預設所屬單位改成「按這顆按鈕的人自己的單位」，不是沿用舊
+  // 任務的單位——一般情況下同單位續勤，這兩個值本來就相同，不影響任何
+  // 既有行為；但換成別的單位代班時（例如營部支援成功北醫務所），新任務
+  // 就該歸在代班單位自己名下，不能因為代班就把任務算成被代班單位的
+  // （使用者的原話：「代班時就依照代辦是哪個單位，營部就是營部」）。
+  // 這裡只是預設值，送出前使用者在建立勤務表單上還是能自己改。
+  const actingUnit = myUnit(state.profile);
+  if (actingUnit) state.createTaskUnit = actingUnit;
+  else if (boundTask && boundTask.unit) state.createTaskUnit = boundTask.unit;
   else if (loc && loc.defaultUnit) state.createTaskUnit = loc.defaultUnit;
   nav({
     name: "createTask", erStandbyKey: key, presetLocation: locationLabel,
