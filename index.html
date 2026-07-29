@@ -2138,7 +2138,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-29-479-crossunit-pending-badge";
+const BUILD_TAG = "2026-07-29-480-createtask-error-handling";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3331,6 +3331,7 @@ const RELEASE_NOTES = [
     ] },
     { category: "任務管理", items: [
       "修正建立勤務「跨單位借車」「跨單位選人」開關對一般成員/主官管沒有作用的問題：這兩個功能原本受限於資料查詢範圍，只有管理員/高勤官看得到別單位資料，現在開放給所有在職帳號；成員列表、車號查詢、成員統計卡等日常查看畫面維持只顯示自己單位，不受影響",
+      "修正建立勤務時若剛好收訊不好、寫入失敗，畫面卻仍然清空表單並跳轉回任務列表、看起來像已經建立成功的問題：現在會保留已填寫的內容並顯示錯誤訊息，方便重新送出",
     ] },
   ] },
   { date: "2026/07/28", groups: [
@@ -13217,9 +13218,22 @@ window.__createTask = (ev, unit, type) => {
       }).then(() => { if (erStandbyPoll) erStandbyPoll.refreshNow(); }).catch(baseDataErr);
     });
   }
-  action.finally(() => { state.taskSubmitting = false; });
-  ev.target.reset();
-  nav({ name: erStandbyKey ? "erStandby" : "tasks" });
+  // 一定要等寫入真的成功才清表單、跳轉頁面——不能像舊版那樣不管
+  // createTask() 成不成功都直接同步 reset+nav，那樣收訊不好、寫入失敗時
+  // 畫面會表現得像已經建立好一樣，實際上這筆勤務/洽公根本沒被存進去，
+  // 現場人員會誤以為已經出勤回報成功。失敗時保留表單內容並跳出錯誤提示，
+  // 讓使用者能重新送出，跟其他所有寫入流程（編輯勤務、後台基礎資料、
+  // 洽公登記等）同一套 .then 成功才跳轉／.catch 顯示錯誤的慣例一致。
+  action
+    .then(() => {
+      ev.target.reset();
+      nav({ name: erStandbyKey ? "erStandby" : "tasks" });
+    })
+    .catch(err => {
+      showToast(`建立${type==='liaison'?'洽公':'勤務'}失敗：[${err.code||'?'}] ${err.message||err}`);
+      console.error("建立勤務失敗", err);
+    })
+    .finally(() => { state.taskSubmitting = false; });
 };
 window.__saveTaskEdit = (ev, taskId) => {
   ev.preventDefault();
