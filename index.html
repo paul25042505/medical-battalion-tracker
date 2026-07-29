@@ -2138,7 +2138,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-29-481-push-toggle-device-scope";
+const BUILD_TAG = "2026-07-29-482-vitals-rr-flag-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3335,6 +3335,9 @@ const RELEASE_NOTES = [
     ] },
     { category: "推播通知", items: [
       "修正「推播通知」開關誤判成整個帳號共用狀態的問題：如果同一帳號在另一台裝置已經開過推播，換一台新裝置打開系統時開關會顯示成「已開啟」，這時如果點下去關閉，會把帳號底下所有裝置（含真正在用的那支手機）的推播權杖一起清空；現在改成正確反映「這台裝置」自己的開關狀態，關閉時也只會移除這台裝置自己的權杖",
+    ] },
+    { category: "患者紀錄", items: [
+      "修正「數據正常/異常」判斷與「複製回報文字」都漏了呼吸速率的問題：血氧、心跳、血壓、體溫都有納入判斷，唯獨呼吸速率沒有，導致呼吸明顯異常（例如呼吸窘迫）但其他數值剛好正常時，會誤標示成「數據正常」，回報給連長的文字也完全沒有呼吸速率的數字，現在兩處都已補上",
     ] },
   ] },
   { date: "2026/07/28", groups: [
@@ -8548,6 +8551,12 @@ function vitalsNormalFlag(v){
   if (spo2Ok !== null) { known++; if (!spo2Ok) abnormal.push('血氧'); }
   const hrOk = vitalsNumOk(v.hr, 60, 100);
   if (hrOk !== null) { known++; if (!hrOk) abnormal.push('脈搏'); }
+  // 呼吸速率原本漏了沒檢查——五項核心生命徵象（血氧/心跳/血壓/體溫/呼吸）
+  // 只有這項完全沒被算進「數據正常/異常」的判斷，會導致呼吸速率明顯異常
+  // （例如呼吸窘迫）但其他數值剛好正常時，卡片跟複製回報文字都顯示「數據
+  // 正常」，讓真正危急的徵象被漏掉。
+  const rrOk = vitalsNumOk(v.rr, 12, 20);
+  if (rrOk !== null) { known++; if (!rrOk) abnormal.push('呼吸'); }
   const tempOk = vitalsNumOk(v.temp, 36, 37.5);
   if (tempOk !== null) { known++; if (!tempOk) abnormal.push('體溫'); }
   if (v.bp) {
@@ -8624,6 +8633,9 @@ function buildVitalsReportText(v, greeting){
   if (v.hr) vitalsParts.push(`脈搏 ${v.hr}`);
   if (v.bp) vitalsParts.push(`血壓 ${v.bp}`);
   if (v.temp) vitalsParts.push(`體溫 ${v.temp}℃`);
+  // 呼吸速率原本沒放進回報文字——跟血氧/脈搏/血壓/體溫同樣是核心生命徵象，
+  // 漏掉的話呼吸窘迫這類危急異常就完全不會出現在傳給連長看的內容裡。
+  if (v.rr) vitalsParts.push(`呼吸 ${v.rr}`);
 
   const lines = [];
   lines.push(`報告${greeting || '連長'}：`);
