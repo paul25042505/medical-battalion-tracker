@@ -2138,7 +2138,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-29-487-duplicate-name-warning";
+const BUILD_TAG = "2026-07-29-488-earthquake-report";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3347,6 +3347,9 @@ const RELEASE_NOTES = [
       "修正後台「推播控制台」的「總訂閱率」把「瀏覽器允許通知」跟「實際還收得到推播」混為一談的問題：改成用「裝置權杖仍然有效」的人數當分子計算，跟每一列卡片自己顯示的「🟢 有效／❌ 已過期失效」一致，不會再高估實際涵蓋率",
       "修正「尚未回報」統計會把「裝置不支援通知」的人也算進去的問題：新增獨立的「不支援裝置」篩選選項與統計數字，不再跟「根本還沒回報過」混在一起",
     ] },
+    { category: "天氣資訊", items: [
+      "任務頁「天氣」子選單新增「顯著有感地震報告」：本單位所在縣市 24 小時內如果有觸及的地震報告，會顯示規模、震央、震度與報告原文，平常沒有近期地震不會顯示",
+    ] },
   ] },
   { date: "2026/07/28", groups: [
     { category: "介面優化", items: [
@@ -4017,6 +4020,7 @@ const state = {
   weatherRisk: null, // Header 天氣危險係數徽章（依單位對應鄉鎮，見 ensureWeatherRiskLoaded），null 代表還沒讀到資料
   weeklyForecast: null, // 任務頁「天氣」子選單的一週天氣預報（依單位對應縣市，見 ensureWeeklyForecastLoaded）
   typhoon: null, // 任務頁「天氣」子選單的颱風警報（全國一份，不分單位，見 ensureTyphoonLoaded）
+  earthquakes: null, // 任務頁「天氣」子選單的顯著有感地震報告（全國一份，不分單位，見 ensureEarthquakesLoaded）
   typhoonExpanded: false, // 颱風警報卡片預設只顯示數據小卡，點「展開」才顯示位置示意圖跟警報原文段落
   myLat: null, // 醫院資訊頁：手機 GPS 定位的原始緯度，null 代表尚未定位；有登記座標的醫院直接拿這個算實際距離
   myLng: null, // 醫院資訊頁：手機 GPS 定位的原始經度
@@ -7262,6 +7266,88 @@ function renderTyphoonBanner(unit){
         </div>`).join("")}
     </div>`;
 }
+
+// 顯著有感地震報告（E-A0015-001）：跟天氣特報／颱風警報一樣全國一份，
+// 不分單位。這份資料集不支援用查詢參數依縣市篩選（實測過 AreaName
+// 參數對回應結果沒有作用，回傳的還是全部地區歷史地震報告），所以整批
+// 抓回來，畫面上再依單位對應縣市自己篩選要顯示哪一筆；schema 是透過
+// 使用者自己的授權碼在 Swagger 頁面 Try it out，對照真實回應才確定的
+// （同 F-D0047-093／W-C0034-001 的查證方式，不是用猜的）。
+// Intensity.ShakingArea[] 除了各縣市的實際測站資料，最後幾筆 AreaDesc
+// 開頭是「最大震度N級地區」的彙整列（CountyName 是逗號分隔的縣市清單、
+// 沒有 EqStation），這幾筆不是單一縣市的實際震度，要排除。
+const earthquakeCache = { data: null, fetchedAt: 0, error: false, message: "" };
+let earthquakeLoading = false;
+async function fetchEarthquakes(){
+  const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/E-A0015-001?Authorization=${CWA_API_KEY}&format=JSON`;
+  const res = await fetchCwa(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  return (json?.records?.Earthquake || []).map(eq => ({
+    earthquakeNo: eq.EarthquakeNo,
+    issueTime: eq.IssueTime || null,
+    reportContent: eq.ReportContent || "",
+    magnitude: eq.EarthquakeInfo?.EarthquakeMagnitude?.MagnitudeValue ?? null,
+    location: eq.EarthquakeInfo?.Epicenter?.Location || "",
+    areas: (eq.Intensity?.ShakingArea || [])
+      .filter(a => !/^最大震度/.test(a.AreaDesc || ""))
+      .map(a => ({ county: a.CountyName, intensity: a.AreaIntensity }))
+  }));
+}
+function ensureEarthquakesLoaded(unit){
+  const freshFor = earthquakeCache.error ? 2*60*1000 : 15*60*1000;
+  if (earthquakeCache.fetchedAt && Date.now() - earthquakeCache.fetchedAt < freshFor) {
+    state.earthquakes = earthquakeCache.error ? { error: true, message: earthquakeCache.message } : { list: earthquakeCache.data };
+    return;
+  }
+  if (earthquakeLoading) return;
+  earthquakeLoading = true;
+  fetchEarthquakes().then(data => {
+    earthquakeCache.data = data; earthquakeCache.fetchedAt = Date.now(); earthquakeCache.error = false;
+    state.earthquakes = { list: data };
+    earthquakeLoading = false;
+    safeRender();
+  }).catch(err => {
+    console.error("地震報告載入失敗", err);
+    const message = err.message || String(err);
+    earthquakeCache.fetchedAt = Date.now(); earthquakeCache.error = true; earthquakeCache.message = message;
+    state.earthquakes = { error: true, message };
+    earthquakeLoading = false;
+    safeRender();
+  });
+}
+// 地震報告清單本身是陸續累積的歷史紀錄，不是「目前生效中」的警報，所以
+// 只顯示「最近一筆、而且時間夠新（24 小時內）、又觸及本單位所在縣市」
+// 的那一筆；沒有符合條件時安靜略過，跟天氣特報／颱風警報卡片一致，平常
+// 沒有近期地震不會在天氣頁一直掛著過期資訊。
+const EARTHQUAKE_RECENT_MS = 24*60*60*1000;
+function renderEarthquakeBanner(unit){
+  const e = state.earthquakes;
+  if (!e || e.error || !e.list || !e.list.length) return "";
+  const county = UNIT_WEATHER_LOCATION[unit] || UNIT_WEATHER_LOCATION.hq;
+  const latest = e.list[0];
+  if (!latest || !latest.issueTime) return "";
+  if (Date.now() - new Date(latest.issueTime).getTime() > EARTHQUAKE_RECENT_MS) return "";
+  const areaHit = latest.areas.find(a => a.county === county);
+  if (!areaHit) return "";
+  return `
+    <div class="hazard-banner">
+      <div class="hazard-card">
+        <div class="hazard-card-top">
+          <div class="hazard-card-live"><span class="pulse-dot"><span class="ping"></span><span class="dot"></span></span>地震報告</div>
+          <span class="hazard-card-badge">${esc(county)} ${esc(areaHit.intensity)}</span>
+        </div>
+        <div class="hazard-card-name">規模 ${latest.magnitude}・${esc(latest.location)}</div>
+        <div class="hazard-card-panel">
+          <div class="hazard-card-tips">
+            <div class="hazard-tip-item">${esc(latest.reportContent)}</div>
+          </div>
+        </div>
+        <div class="hazard-card-time">發布時間 ${fmtTime(new Date(latest.issueTime).getTime())}</div>
+      </div>
+    </div>`;
+}
+
 // 勤務／洽公清單標題的雙語 eyebrow（英文縮寫／中文），首頁跟任務頁的
 // 「勤務」頁籤共用同一份清單樣式，這裡集中產生，兩處才不會各自維護
 // 一份看起來一樣、卻各自硬寫死的標籤文字。
@@ -7378,6 +7464,7 @@ function viewTasks(){
   ensureApparentTempLoaded(unit);
   ensureWeeklyForecastLoaded(unit);
   ensureTyphoonLoaded();
+  ensureEarthquakesLoaded(unit);
   const mainTabs = `
     <div class="icon-subtabs">
       ${TASKS_MAIN_TABS.map(tb => `
@@ -7397,6 +7484,7 @@ function viewTasks(){
   if (state.tasksMainTab === "weather") {
     return `
       ${mainTabs}
+      ${renderEarthquakeBanner(unit)}
       ${renderTyphoonBanner(unit)}
       ${renderHazardBanner(unit)}
       ${renderWeatherMainCard(unit)}
