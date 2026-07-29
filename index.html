@@ -1235,20 +1235,20 @@
   .step-meta .muted-suffix{font-size:inherit;}
   .step-note{font-size:var(--text-sm); color:var(--text); margin-top:5px;}
 
-  /* ---- Sticky Bottom Action Bar：主要回報按鈕固定在畫面底部，方便單手操作 ---- */
+  /* ---- Sticky Bottom Action Bar：主要回報按鈕固定在畫面底部，方便單手操作 ----
+     曾經用 position:sticky; bottom:0 畫在 <main><div class="main-content">
+     裡面，靠 main-content 撐滿高度來讓按鈕貼齊視窗底部；但 main-content 是
+     auto 高度（隨內容多寡撐開，不保證撐滿 main 的可視高度），內容較短的
+     任務（例如洽公任務）就會在按鈕跟底部導覽列之間卡一段空白——跟
+     .bottomnav 當年 position:fixed/sticky 版本「內容較短的頁面貼在畫面
+     中間留白」是同一種病灶（見 .bottomnav 的說明）。現在改成比照
+     .bottomnav 的做法：這個元素改由 render() 畫在 <main> 外面（見
+     currentTaskActionBar 的說明），當成 #app 這個 flex 版面裡不捲動的
+     固定兄弟元素，天生就會一直貼在畫面最下面、正好接在 .bottomnav 上緣，
+     不受 main 內容長短影響，也不需要再用負 margin 抵消 main-content 的
+     左右 padding（本來就不在 main-content 裡面了）。 */
   .sticky-action-bar{
-    /* main 現在是 App Shell 裡真正的捲動容器（見 #app 的說明），.bottomnav
-       是 main 外面的固定 flex 兄弟元素、不會再疊在 main 的內容上面，所以
-       這裡用 position:sticky; bottom:0（相對 main 自己），貼齊的剛好就是
-       main 可視範圍的最下緣，正好接在 .bottomnav 上緣，不用再額外加
-       --bottomnav-h 的偏移量去閃避重疊（那是以前 bottomnav 蓋在內容上面
-       時才需要的算法）。
-       這個元素畫在 <main> 裡面，main 本身左右各有 16px padding，直接用
-       sticky 會被夾在內容欄寬裡兩側露出留白，不再是滿版——用左右各 -16px
-       的負 margin 把 main 自己的 padding 抵消掉，還原成貼齊 main 本身版面
-       寬度的滿版（手機版面下 main 本身就是滿版寬度，視覺上等同貼齊螢幕
-       左右邊）。 */
-    position:sticky; bottom:0; margin:0 -16px; z-index:26;
+    flex-shrink:0; z-index:26;
     background:var(--navbar-bg); backdrop-filter:blur(14px);
     box-shadow:0 -1px 0 var(--border), 0 -8px 20px rgba(15,15,20,0.05);
     padding:12px 16px; display:flex; gap:10px;
@@ -1257,7 +1257,6 @@
     flex:1; margin-top:0;
   }
   .btn-primary.green{background:var(--green); box-shadow:0 4px 14px color-mix(in srgb, var(--green) 25%, transparent);}
-  .sticky-bar-spacer{height:78px;}
   .btn-ghost{
     background:none; border:1.5px solid var(--border); color:var(--text); font-weight:600;
     border-radius:var(--radius-btn); min-height:var(--btn-height); padding:0 20px; font-size:var(--text-base); font-family:var(--sans);
@@ -2150,7 +2149,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-29-492-fix-standby-renewal-crossunit";
+const BUILD_TAG = "2026-07-29-493-fix-task-action-bar-gap";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3367,6 +3366,9 @@ const RELEASE_NOTES = [
     ] },
     { category: "個人資料", items: [
       "新增「個人資料補齊提醒」：階級／電話還沒填的話，登入後會跳出提醒視窗列出缺少的項目，可以按「稍後再說」下次登入再提醒、或「前往補齊」直接跳到編輯頁面；底部「更多」頁籤圖示也會一直顯示紅點，直到補齊為止，不用等下次登入才看得到",
+    ] },
+    { category: "介面優化", items: [
+      "修正勤務詳情頁底部的回報按鈕（例如「抵達目的地」「抵達營區」）在內容較短的任務（例如洽公任務）下方會多出一段空白、沒有貼齊底部導覽列的問題：改成跟底部導覽列同一套做法固定在畫面最下面，不受頁面內容長短影響",
     ] },
   ] },
   { date: "2026/07/28", groups: [
@@ -6622,6 +6624,18 @@ function rankTagHtml(rank, extraClass){
 // backBtn() 的畫面（例如首頁）滑動手勢就不會有作用，這是刻意的——這些
 // 畫面本來就沒有「上一頁」可以返回。
 let currentBackTarget = null;
+// 任務詳情頁的回報 Sticky Bottom Action Bar：跟 currentBackTarget 同一套
+// 「畫面函式渲染當下順便設一個模組變數、render() 事後讀取」的做法，見下面
+// render() 怎麼用。這個按鈕列本來是直接內嵌在 viewTaskDetail() 回傳的內容
+// 字串裡、畫在 <main><div class="main-content"> 裡面，用 position:sticky
+// 貼齊 main 底部；但 main-content 本身是 auto 高度（隨內容多寡撐開，不會
+// 撐滿 main 的可視高度），內容較短的任務（例如洽公任務）就會出現按鈕跟
+// 底部導覽列之間卡一段空白——跟 .bottomnav 之前 position:fixed/sticky 版本
+// 「內容較短的頁面貼在畫面中間留白」是同一種病灶（見 .bottomnav 的說明）。
+// 改成比照 .bottomnav 的做法：畫在 <main> 外面，當成 #app 這個 flex 版面
+// 裡不捲動的固定兄弟元素，天生就會一直貼在畫面最下面，不受 main 內容
+// 長短影響。
+let currentTaskActionBar = "";
 // 全站共用的返回鍵：純圖示的液態玻璃圓圈＋chevron SVG（不接文字、右邊不接
 // 標題），不管目的地是哪裡都一樣，不要再依頁面各自寫「返回列表」「返回
 // 更多」等。onclick 屬性務必用單引號包起來，因為裡面的 JSON.stringify(route)
@@ -9113,8 +9127,7 @@ function viewTaskDetail(taskId){
       <div class="sticky-action-bar" style="flex-direction:column; align-items:stretch; gap:8px;">
         ${navRow}
         <button class="btn-primary" style="width:100%;" onclick="window.__startReport('${t.id}','${rTypes[0]}')">${icon(def.icon,20)} ${btnLabel}</button>
-      </div>
-      <div class="sticky-bar-spacer" style="${showNavAboveBtn ? 'height:128px;' : ''}"></div>`;
+      </div>`;
   } else if (canDoReport && !draft && rTypes.length === 2 && rTypes.includes("DEPART_SCENE")) {
     // 分岔點一（僅勤務類任務才會出現）：抵達現場之後，離開前往下一個地點
     // （這裡回報的是「離開現場」本身，抵達下一站要等真的到了才另外回報，
@@ -9123,8 +9136,7 @@ function viewTaskDetail(taskId){
       <div class="sticky-action-bar">
         <button class="btn-primary" onclick="window.__startReport('${t.id}','DEPART_SCENE')">${icon('depart',20)} 前往下一個地點</button>
         <button class="btn-primary green" onclick="window.__startReport('${t.id}','RETURNING')">${icon('home',20)} 返回營區</button>
-      </div>
-      <div class="sticky-bar-spacer"></div>`;
+      </div>`;
   } else if (canDoReport && !draft && rTypes.length === 2 && isLiaison) {
     // 分岔點二（僅洽公任務才會出現）：出發之後，短天期洽公可以照原本順序
     // 先回報抵達目的地；長期受訓／長期外派沒有單一固定的「現場」可以回報
@@ -9133,9 +9145,12 @@ function viewTaskDetail(taskId){
       <div class="sticky-action-bar">
         <button class="btn-primary" onclick="window.__startReport('${t.id}','ARRIVED_SCENE')">${icon('pin',20)} 抵達目的地</button>
         <button class="btn-primary green" onclick="window.__startReport('${t.id}','RETURNING')">${icon('home',20)} 抵達營區</button>
-      </div>
-      <div class="sticky-bar-spacer"></div>`;
+      </div>`;
   }
+  // stickyBar 不塞進這個函式回傳的內容字串裡（不進 <main>），改交給
+  // currentTaskActionBar，讓 render() 畫在 main 外面——原因見
+  // currentTaskActionBar 宣告處的說明。
+  currentTaskActionBar = stickyBar;
 
   // ---- 編輯既有回報（時間/里程有時候會填錯，需要能修正）----
   const editingEvent = canDoReport && state.eventEditId ? evs.find(e => e.id === state.eventEditId) : null;
@@ -9225,7 +9240,6 @@ function viewTaskDetail(taskId){
         <div class="k">任務耗時</div><div class="v">${duration!=null ? durationLabel(duration) : '—'}</div>
       </div>
     </div>`) : ""}
-    ${stickyBar}
     ${reportModal}
     ${eventEditModal}
   `;
@@ -11786,6 +11800,7 @@ function render(){
   // 清空上一次渲染留下的返回目的地，這個畫面如果沒有呼叫 backBtn()
   // （例如首頁），左滑返回手勢就應該沒有作用，不能沿用上一頁殘留的值。
   currentBackTarget = null;
+  currentTaskActionBar = "";
   const view = ROUTE_VIEWS[state.route.name] || viewHome;
   const body = view();
 
@@ -11827,6 +11842,7 @@ function render(){
       </div>
     </div>
     <main><div class="main-content">${body}</div></main>
+    ${currentTaskActionBar}
     <div class="bottomnav">
       ${NAV_ITEMS.map(n => `
         <button class="navbtn ${state.route.name===n.name?'active':''}" style="${state.route.name===n.name?`color:${n.accent};`:''}" onclick="window.__nav({name:'${n.name}'})">
