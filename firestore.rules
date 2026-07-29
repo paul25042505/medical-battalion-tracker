@@ -395,7 +395,15 @@ service cloud.firestore {
     // 當天有沒有排這筆登記；「已登記」是值日官謄寫進軍用電腦後勾選的狀態，
     // 跟登記內容本身（地點/車輛/事由/人員或單位）分開存取控制，值日官只能
     // 動這個狀態欄位，不能改別人送出的登記內容。
-    function isCampDutyOfficer() { return isSignedIn() && myUserDoc().isCampDutyOfficer == true; }
+    // 一定要是在職帳號才算值日官——原本只比對 isSignedIn()，跟 sameUnit() 是
+    // 同一類缺口：setUserRole()（index.html）只寫入 role/unit，不會清除
+    // isCampDutyOfficer 這個獨立旗標，帳號被停用（disabled）前如果曾經是
+    // 值日官，這個旗標會一直留著；campRegistrations 的讀取/更新規則有一條
+    // `isCampDutyOfficer() && unit in ['hq','co1']` 的放行條件，沒有另外
+    // 搭配角色檢查，等於單獨把關，停用後理論上仍然讀得到、還能繼續勾選/
+    // 取消成功嶺營區的洽公登記「已登記」狀態。這裡補上 isActive()，跟
+    // sameUnit() 的修法一致。
+    function isCampDutyOfficer() { return isActive() && myUserDoc().isCampDutyOfficer == true; }
     match /campRegistrations/{id} {
       // 讀取比照門禁登記：admin／高勤官不分單位；一般成員/主官管只看得到
       // 自己單位的登記；值日官（獨立旗標，不分原本角色）額外看得到成功嶺
