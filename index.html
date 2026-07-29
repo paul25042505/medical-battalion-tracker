@@ -2138,7 +2138,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-29-482-vitals-rr-flag-fix";
+const BUILD_TAG = "2026-07-29-483-pushconsole-stats-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3338,6 +3338,10 @@ const RELEASE_NOTES = [
     ] },
     { category: "患者紀錄", items: [
       "修正「數據正常/異常」判斷與「複製回報文字」都漏了呼吸速率的問題：血氧、心跳、血壓、體溫都有納入判斷，唯獨呼吸速率沒有，導致呼吸明顯異常（例如呼吸窘迫）但其他數值剛好正常時，會誤標示成「數據正常」，回報給連長的文字也完全沒有呼吸速率的數字，現在兩處都已補上",
+    ] },
+    { category: "管理後台", items: [
+      "修正後台「推播控制台」的「總訂閱率」把「瀏覽器允許通知」跟「實際還收得到推播」混為一談的問題：改成用「裝置權杖仍然有效」的人數當分子計算，跟每一列卡片自己顯示的「🟢 有效／❌ 已過期失效」一致，不會再高估實際涵蓋率",
+      "修正「尚未回報」統計會把「裝置不支援通知」的人也算進去的問題：新增獨立的「不支援裝置」篩選選項與統計數字，不再跟「根本還沒回報過」混在一起",
     ] },
   ] },
   { date: "2026/07/28", groups: [
@@ -11156,9 +11160,20 @@ function pushConsoleMetrics(){
   const granted = rows.filter(x => x.pushPermission === "granted").length;
   const dflt = rows.filter(x => x.pushPermission === "default").length;
   const denied = rows.filter(x => x.pushPermission === "denied").length;
-  const unknown = total - granted - dflt - denied;
-  const rate = total ? Math.round(granted / total * 100) : 0;
-  return { total, granted, dflt, denied, unknown, rate };
+  // 「裝置不支援」是使用者裝置主動回報過的一種狀態（見 reportPushPermissionStatus
+  // 對沒有 Notification API 的裝置回傳 "unsupported"），跟「根本還沒回報過」
+  // 是兩件不同的事，原本沒有獨立算出來，會被下面的 unknown 一起吃掉，讓
+  // 「尚未回報」的人數失真。
+  const unsupported = rows.filter(x => x.pushPermission === "unsupported").length;
+  const unknown = total - granted - dflt - denied - unsupported;
+  // 「總訂閱率」原本用 pushPermission==="granted"（瀏覽器允許通知）當分子，
+  // 但允許歸允許，token 可能早就過期失效（換裝置、清除瀏覽器資料等），
+  // 那樣的人實際上收不到任何推播——改成用「fcmTokens 還有有效權杖」的
+  // 人數當分子，才是真正「現在打得到」的涵蓋率，跟每一列卡片自己的
+  // 「🟢 有效／❌ 已過期失效」徽章邏輯一致。
+  const tokenValid = rows.filter(x => x.fcmTokens && x.fcmTokens.length > 0).length;
+  const rate = total ? Math.round(tokenValid / total * 100) : 0;
+  return { total, granted, dflt, denied, unsupported, unknown, tokenValid, rate };
 }
 function renderPushConsoleBody(){
   const rows = filteredPushConsoleRows();
@@ -11204,7 +11219,7 @@ function viewPushConsole(){
       <div class="push-metric-card">
         <div class="push-metric-label">目前總訂閱率</div>
         <div class="push-metric-value">${m.rate}%</div>
-        <div class="push-metric-sub">${m.granted} / ${m.total} 人已允許</div>
+        <div class="push-metric-sub">${m.tokenValid} / ${m.total} 人實際可收到推播</div>
       </div>
     </div>
     <button class="icon-btn" style="margin-bottom:14px;" onclick="window.__testDailyWeatherReport(this)">立即測試每日天氣摘要</button>
@@ -11222,6 +11237,7 @@ function viewPushConsole(){
           <option value="granted" ${f.status==='granted'?'selected':''}>🟢 已允許 (${m.granted})</option>
           <option value="default" ${f.status==='default'?'selected':''}>🟡 尚未開啟 (${m.dflt})</option>
           <option value="denied" ${f.status==='denied'?'selected':''}>🔴 已封鎖 (${m.denied})</option>
+          <option value="unsupported" ${f.status==='unsupported'?'selected':''}>⚪ 不支援裝置 (${m.unsupported})</option>
           <option value="unknown" ${f.status==='unknown'?'selected':''}>⚪ 尚未回報 (${m.unknown})</option>
         </select>
       </div>
