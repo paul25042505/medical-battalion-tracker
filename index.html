@@ -436,6 +436,14 @@
   .push-gatekeeper-close:active{transform:scale(0.92);}
   .push-gatekeeper-title{display:flex; align-items:center; gap:8px; font-weight:700; font-size:var(--text-lg); color:var(--red); padding-right:30px;}
   .push-gatekeeper-desc{color:var(--muted); font-size:var(--text-sm); line-height:1.6; margin-top:10px;}
+  /* 個人資料補齊提醒彈窗跟推播守門員共用同一個外殼（.push-gatekeeper-*），
+     只有標題色改用琥珀色（沒有推播守門員那麼緊急），另外補上缺漏欄位
+     清單跟雙按鈕列。 */
+  #profile-nag .push-gatekeeper-title{color:var(--amber-text);}
+  .profile-nag-list{list-style:none; margin:14px 0 0; padding:0; display:flex; flex-direction:column; gap:7px;}
+  .profile-nag-list li{display:flex; align-items:center; gap:8px; font-size:var(--text-sm); font-weight:600; color:var(--text);}
+  .profile-nag-list li svg{color:var(--red); flex-shrink:0;}
+  .profile-nag-actions{display:flex; gap:10px; margin-top:20px;}
 
   /* ---- 推播控制台：【後台】儀表板（Apple 極簡風格改版） ---- */
   /* 數據戰情：總註冊人數／目前總訂閱率單一橫列 50/50，狀態分流的統計數字
@@ -1910,7 +1918,11 @@
     display:flex; padding-bottom:env(safe-area-inset-bottom);
   }
   .navbtn{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:11px 4px 10px 4px; color:var(--muted); background:none; border:none; font-family:var(--sans);}
-  .navbtn .navicon{font-size:23px; transition:transform 0.15s ease;}
+  .navbtn .navicon{position:relative; font-size:23px; transition:transform 0.15s ease;}
+  /* 個人資料補齊提醒的常駐紅點（掛在底部「更多」圖示右上角）：跟鈴鐺
+     未讀徽章（.notif-badge）不同，這裡只是「還有事沒做」的存在提示，不用
+     顯示數字，資料補齊後這個點就會消失，不用使用者手動關閉。 */
+  .nav-dot{position:absolute; top:-2px; right:-3px; width:8px; height:8px; border-radius:50%; background:var(--red); box-shadow:0 0 0 2px var(--panel);}
   .navbtn .navlabel{font-size:var(--text-xs); font-weight:700;}
   .navbtn.active{color:var(--blue);}
   .navbtn.active .navicon{transform:translateY(-1px);}
@@ -2138,7 +2150,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-29-488-earthquake-report";
+const BUILD_TAG = "2026-07-29-489-profile-completion-reminder";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3350,6 +3362,9 @@ const RELEASE_NOTES = [
     { category: "天氣資訊", items: [
       "任務頁「天氣」子選單新增「顯著有感地震報告」：本單位所在縣市 24 小時內如果有觸及的地震報告，會顯示規模、震央、震度與報告原文，平常沒有近期地震不會顯示",
     ] },
+    { category: "個人資料", items: [
+      "新增「個人資料補齊提醒」：階級／電話還沒填的話，登入後會跳出提醒視窗列出缺少的項目，可以按「稍後再說」下次登入再提醒、或「前往補齊」直接跳到編輯頁面；底部「更多」頁籤圖示也會一直顯示紅點，直到補齊為止，不用等下次登入才看得到",
+    ] },
   ] },
   { date: "2026/07/28", groups: [
     { category: "介面優化", items: [
@@ -4051,6 +4066,7 @@ const state = {
   pushPermission: (typeof Notification !== "undefined" ? Notification.permission : "unsupported"), // "default"|"granted"|"denied"|"unsupported"
   pushEnabling: false, // 正在請求權限/註冊 token 中，避免重複點擊
   gatekeeperDismissed: false, // 【前台】推播守門員被使用者按 X 關掉——只在本次開啟期間生效，重新整理/下次開啟又會恢復判斷
+  profileNagDismissed: false, // 個人資料補齊提醒彈窗被按「稍後再說」/「前往補齊」關掉——同樣只在本次開啟期間生效，資料還沒補齊的話下次開啟會再次提示
   pushConsoleFilter: { keyword: "", unit: "", status: "" }, // 【後台】推播控制台的篩選條件
   mciEvents: [], mciPatients: [], // 大量傷患事件／傷患名冊
   mciEventModal: null, // 大量傷患事件頁：新增/編輯事件彈窗，{ id } | null（id 為 null 代表新增）
@@ -5359,6 +5375,75 @@ window.__dismissGatekeeper = () => {
   showToast("提醒：下次開啟本系統時，在完成加入主畫面／開啟通知前都會再次提示");
 };
 window.__enablePushFromGatekeeper = async () => { await enablePush(); reportPushPermissionStatus(); renderPushGatekeeper(); };
+
+// 個人資料補齊提醒：階級／電話沒有標「選填」，是希望大家都填的欄位
+// （性別／EMT 證照等級表單上明確寫「選填」，不算在內，不用被提醒）。
+// 只回傳缺少的欄位中文標籤陣列，沒有缺漏就回傳空陣列，呼叫端自己判斷
+// .length。
+function missingProfileFields(p){
+  if (!p) return [];
+  const missing = [];
+  if (!p.rank) missing.push("階級");
+  if (!p.phone) missing.push("電話");
+  return missing;
+}
+// 判斷現在該不該跳出「請完成個人資料」彈窗：待審核/已停用/尚未登入
+// 認領的帳號各自有自己的專屬流程，不重複判斷；推播守門員（加入主畫面／
+// 開啟通知）比這個更優先，兩個全螢幕彈窗不能同時疊在一起，等推播守門員
+// 過關後才輪到這個。跟推播守門員一樣，「稍後再說」只在本次開啟期間生效
+// （state.profileNagDismissed），沒有真的補齊欄位的話，下次登入還是會
+// 再跳出來。
+function profileNagMissing(){
+  if (!state.user || !state.profile) return null;
+  const role = state.profile.role;
+  if (role === "pending" || role === "disabled" || role === "unclaimed") return null;
+  if (pushGatekeeperState()) return null;
+  if (state.profileNagDismissed) return null;
+  const missing = missingProfileFields(state.profile);
+  return missing.length ? missing : null;
+}
+// 掛在 document.body 底下、獨立於 #app 之外，理由跟 renderPushGatekeeper
+// 完全一樣（蓋住整個畫面、不受 #app 整段重繪影響）；同樣用簽章比對跳過
+// 沒有變化的重繪，避免進場動畫被無謂打斷。
+let lastProfileNagSig = null;
+function renderProfileNag(){
+  const missing = profileNagMissing();
+  let el = document.getElementById("profile-nag");
+  if (!missing) { if (el) el.remove(); lastProfileNagSig = null; return; }
+  const isNew = !el;
+  if (isNew) {
+    el = document.createElement("div");
+    el.id = "profile-nag";
+    el.className = "push-gatekeeper-overlay";
+    document.body.appendChild(el);
+  }
+  const sig = missing.join(",");
+  if (isNew || sig !== lastProfileNagSig) {
+    el.innerHTML = `
+      <div class="push-gatekeeper-card">
+        <div class="push-gatekeeper-title">${icon('alert',20)} 請完成個人資料</div>
+        <div class="push-gatekeeper-desc">系統偵測到您還有下列資料尚未填寫，請盡快補齊，管理員才能正確聯繫您、安排勤務：</div>
+        <ul class="profile-nag-list">
+          ${missing.map(m => `<li>${icon('close',13)} ${esc(m)}</li>`).join("")}
+        </ul>
+        <div class="profile-nag-actions">
+          <button class="btn-ghost" type="button" style="flex:1; width:auto;" onclick="window.__dismissProfileNag()">稍後再說</button>
+          <button class="btn-primary" type="button" style="flex:1.4; width:auto;" onclick="window.__goCompleteProfile()">前往補齊</button>
+        </div>
+      </div>`;
+  }
+  lastProfileNagSig = sig;
+}
+window.__dismissProfileNag = () => {
+  state.profileNagDismissed = true;
+  renderProfileNag();
+};
+window.__goCompleteProfile = () => {
+  state.profileNagDismissed = true;
+  state.profileEditing = true;
+  state.vehicleEntrySeq = Math.max(1, (state.profile.vehicles || []).length);
+  nav({ name: "profile" });
+};
 
 onAuthStateChanged(auth, async (user) => {
   cleanupListeners();
@@ -11660,6 +11745,7 @@ function updateScreenWatermark(p){
 
 function render(){
   renderPushGatekeeper();
+  renderProfileNag();
   const app = document.getElementById("app");
   // app.innerHTML = ... 整段換掉，連 <main> 這個節點本身都是重新建立的，
   // 新節點的 scrollTop 永遠從 0 開始——單純狀態變化（例如卡片上的選單
@@ -11741,7 +11827,7 @@ function render(){
     <div class="bottomnav">
       ${NAV_ITEMS.map(n => `
         <button class="navbtn ${state.route.name===n.name?'active':''}" style="${state.route.name===n.name?`color:${n.accent};`:''}" onclick="window.__nav({name:'${n.name}'})">
-          <span class="navicon">${icon(n.iconName,24)}</span><span class="navlabel">${n.label}</span>
+          <span class="navicon">${icon(n.iconName,24)}${n.name==='profile' && missingProfileFields(p).length ? '<span class="nav-dot"></span>' : ''}</span><span class="navlabel">${n.label}</span>
         </button>`).join("")}
     </div>
     ${viewBaseDataModal()}
