@@ -2070,7 +2070,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-30-509-vitals-history-badge";
+const BUILD_TAG = "2026-07-30-510-vitals-history-label";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2989,6 +2989,7 @@ const RELEASE_NOTES = [
     ] },
     { category: "患者紀錄", items: [
       "修正患者狀況卡片沒有進行中患者、但先前已經有結案病例時，外觀跟「這筆任務從沒記錄過」長得一模一樣（都寫「尚未建立患者紀錄」＋「開始記錄」）的問題：現在會改標示「已有 N 筆歷史紀錄」（灰色徽章，跟進行中患者的紅色「患者紀錄中」區分開來），點進去原本就會先看到歷史清單，不會直接跳空白表單，只是外觀之前沒講清楚這件事",
+      "上面「已有 N 筆歷史紀錄」的按鈕文字再調整一次：原本寫「查看歷史紀錄」會讓人以為只能唯讀查看，其實點進去除了看歷史，也能繼續新增下一位患者的紀錄，改成「查看／新增紀錄」（沒有回報權限的角色維持「查看紀錄」，跟原本一樣）",
     ] },
     { category: "推播通知", items: [
       "登入頁新增「加入主畫面」檢查：用一般瀏覽器分頁（不是加入主畫面的獨立模式）開啟系統時，登入按鈕會先被「請先將本系統加入主畫面」的步驟教學取代，照著步驟加入主畫面、改從主畫面圖示重新開啟後才會出現登入按鈕；本系統推播通知本來就只有在加入主畫面的獨立模式下才會生效，之前是先讓人用瀏覽器登入、用過一輪才在裡面被提醒要補做，改成登入前就先擋下這一步，比較不會有人用著用著忘記回頭補",
@@ -8163,7 +8164,7 @@ function viewTaskDetail(taskId){
   const closedEpisodeCount = (!hasActivePatient && hasPatient) ? vitalsEpisodes(taskVitals).length : 0;
   const patientActionLabel = hasActivePatient
     ? (canDoReport ? '查看／更新紀錄' : '查看紀錄')
-    : hasPatient ? '查看歷史紀錄'
+    : hasPatient ? (canDoReport ? '查看／新增紀錄' : '查看紀錄')
     : (canDoReport ? '開始記錄' : '查看紀錄');
   const vitalsSection = !isLiaison && (hasPatient || (canDoReport && s !== "completed")) ? `
     <div class="section-label">患者狀況</div>
