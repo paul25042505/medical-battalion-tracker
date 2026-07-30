@@ -638,6 +638,9 @@
     display:inline-flex; align-items:center; gap:4px; padding:4px 9px; border-radius:999px;
     background:var(--red); color:#fff; font-size:var(--text-xs); font-weight:700; white-space:nowrap; flex-shrink:0;
   }
+  /* 已結案（無進行中患者）但仍有歷史紀錄：跟「患者紀錄中」的紅色警示徽章
+     區分開來，用中性灰階，避免讓人誤以為現在還有患者在處理中。 */
+  .patient-card-badge.neutral{background:color-mix(in srgb, var(--muted) 16%, transparent); color:var(--muted);}
   .patient-card-sub{font-size:var(--text-xs); font-weight:700; color:var(--muted); margin-top:3px;}
   .patient-card-desc{font-size:var(--text-sm); color:var(--muted); line-height:1.5; margin-top:5px;}
   .patient-card.has-record .patient-card-desc{color:#8a5450;}
@@ -2067,7 +2070,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-30-508-login-pwa-gate";
+const BUILD_TAG = "2026-07-30-509-vitals-history-badge";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2983,6 +2986,9 @@ const RELEASE_NOTES = [
     { category: "個人資料", items: [
       "民車登記新增「沒有民車」開關：之前完全沒有民車的人，欄位就是一直空著，跟「還沒填」沒兩樣，管理員無法分辨；現在勾了「沒有民車」也算表態過，個人資料補齊提醒會把「民車登記」列進尚未填寫的項目，直到登記至少一台車、或勾選「沒有民車」為止才會消失",
       "修正上面「沒有民車」開關上線後，一般成員／主官管儲存自己的個人資料反而全部失敗（跳出「[403] Missing or insufficient permissions」）的問題：新增的 noVehicle 欄位漏掉補進資料庫安全規則允許修改的欄位清單，導致這次存檔的整包資料被規則擋下，不是只有這個新欄位存不進去而已",
+    ] },
+    { category: "患者紀錄", items: [
+      "修正患者狀況卡片沒有進行中患者、但先前已經有結案病例時，外觀跟「這筆任務從沒記錄過」長得一模一樣（都寫「尚未建立患者紀錄」＋「開始記錄」）的問題：現在會改標示「已有 N 筆歷史紀錄」（灰色徽章，跟進行中患者的紅色「患者紀錄中」區分開來），點進去原本就會先看到歷史清單，不會直接跳空白表單，只是外觀之前沒講清楚這件事",
     ] },
     { category: "推播通知", items: [
       "登入頁新增「加入主畫面」檢查：用一般瀏覽器分頁（不是加入主畫面的獨立模式）開啟系統時，登入按鈕會先被「請先將本系統加入主畫面」的步驟教學取代，照著步驟加入主畫面、改從主畫面圖示重新開啟後才會出現登入按鈕；本系統推播通知本來就只有在加入主畫面的獨立模式下才會生效，之前是先讓人用瀏覽器登入、用過一輪才在裡面被提醒要補做，改成登入前就先擋下這一步，比較不會有人用著用著忘記回頭補",
@@ -8148,8 +8154,16 @@ function viewTaskDetail(taskId){
   const canOpenPatientCard = canDoReport || (canView && hasPatient);
   const patientCardTag = canOpenPatientCard ? "button" : "div";
   const patientCardClickAttr = canOpenPatientCard ? ` onclick="window.__startVitals('${taskId}')"` : "";
+  // 沒有進行中患者，但過去已經有結案案件（hasPatient 但非 hasActivePatient）
+  // 時，卡片外觀原本跟「這筆任務從頭到尾都沒記錄過」長得一模一樣（都寫「尚未
+  // 建立患者紀錄」＋「開始記錄」），會讓人誤以為完全沒有歷史、點進去也只是
+  // 開新的一筆——其實 __startVitals 進去之後 viewVitalsPage 本來就會先顯示
+  // 歷史清單（showHistory），不會直接跳表單，只是卡片本身沒有把這件事講
+  // 清楚。這裡外觀補上「已有 N 筆歷史紀錄」，點進去才知道是要看舊資料。
+  const closedEpisodeCount = (!hasActivePatient && hasPatient) ? vitalsEpisodes(taskVitals).length : 0;
   const patientActionLabel = hasActivePatient
     ? (canDoReport ? '查看／更新紀錄' : '查看紀錄')
+    : hasPatient ? '查看歷史紀錄'
     : (canDoReport ? '開始記錄' : '查看紀錄');
   const vitalsSection = !isLiaison && (hasPatient || (canDoReport && s !== "completed")) ? `
     <div class="section-label">患者狀況</div>
@@ -8160,15 +8174,19 @@ function viewTaskDetail(taskId){
           <div class="patient-card-body">
             <div class="patient-card-title-row">
               <div class="patient-card-title">患者狀況</div>
-              ${hasActivePatient ? `<span class="patient-card-badge">患者紀錄中</span>` : ""}
+              ${hasActivePatient ? `<span class="patient-card-badge">患者紀錄中</span>`
+                : closedEpisodeCount ? `<span class="patient-card-badge neutral">歷史紀錄 ${closedEpisodeCount} 筆</span>` : ""}
             </div>
-            ${hasActivePatient ? (patientLabel ? `<div class="patient-card-sub">${esc(patientLabel)}</div>` : "") : `<div class="patient-card-sub">尚未建立患者紀錄</div>`}
+            ${hasActivePatient ? (patientLabel ? `<div class="patient-card-sub">${esc(patientLabel)}</div>` : "")
+              : closedEpisodeCount ? `<div class="patient-card-sub">已有 ${closedEpisodeCount} 筆歷史紀錄</div>`
+              : `<div class="patient-card-sub">尚未建立患者紀錄</div>`}
             <div class="patient-card-desc">${hasActivePatient
               ? (latestComplaint ? `主訴：${esc(latestComplaint)}。請持續更新生命徵象及處置內容。` : "已建立患者紀錄。請持續更新主訴、生命徵象及處置內容。") + (markedNoTransport ? '<br>已標記不送醫，患者離開醫務所後請點選「離開醫務所」結案。' : '')
+              : closedEpisodeCount ? "此任務先前已記錄過患者狀況，點擊可查看歷史紀錄，或開始記錄新患者。"
               : "勤務過程中若發現患者需要救護，可點擊建立患者紀錄。"}</div>
           </div>
         </div>
-        ${canOpenPatientCard ? `<div class="patient-card-action">${hasActivePatient ? icon('heartbeat',16) : icon('plus',16)} ${patientActionLabel}</div>` : ""}
+        ${canOpenPatientCard ? `<div class="patient-card-action">${hasActivePatient || closedEpisodeCount ? icon('heartbeat',16) : icon('plus',16)} ${patientActionLabel}</div>` : ""}
       </${patientCardTag}>
       ${hasActivePatient && canDoReport ? `
       <div class="patient-card-episode-actions">
