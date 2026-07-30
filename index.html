@@ -2067,7 +2067,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-30-505-erstandby-crossunit-renew";
+const BUILD_TAG = "2026-07-30-506-novehicle-declare";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2979,6 +2979,9 @@ const RELEASE_NOTES = [
       "「結束勤務案件」現在會直接完成整筆勤務（同時要求填寫最終里程、剩餘油量），按下去之後不會再冒出「抵達營區」這個後續步驟——原本的用詞代表案件已經結束，卻還留了一步待完成的按鈕，容易讓人以為沒按完",
       "勤務類任務抵達現場之後，「離開」這一步改成分兩種選擇：「前往下一站」（跟原本一樣，還有後續行程）或「返回營區」（回報準備返程，這步不用填地點/里程）；抵達現場之後不再能直接按「結束勤務案件」結案，改成一定要先表態往下一站還是返營。選了「返回營區」之後，下一步只會剩一顆「結束勤務案件」按鈕，等真的抵達營區才按，同一個動作直接結案（要求填最終里程/油量），任務卡片在這段期間會顯示「返回營區中」",
       "急診待命開放跨單位代班：兩個醫務所的待命勤務目前如果是別的單位在跑（例如成功北醫務所平常是一連在顧，營部偶爾支援代班），現在也能看到「完成當前勤務，啟動新勤務」按鈕，不用等對方單位自己來結案續約；新開的勤務會歸在代班單位自己名下（營部代班就算營部的任務），車輛如果沿用原本駐點的車，系統會自動偵測並展開「跨單位借車」正確帶出車號，不用手動重選；查看前一班完整任務內容（含患者紀錄）維持只有同單位/主官管才看得到，跟續約是兩件事",
+    ] },
+    { category: "個人資料", items: [
+      "民車登記新增「沒有民車」開關：之前完全沒有民車的人，欄位就是一直空著，跟「還沒填」沒兩樣，管理員無法分辨；現在勾了「沒有民車」也算表態過，個人資料補齊提醒會把「民車登記」列進尚未填寫的項目，直到登記至少一台車、或勾選「沒有民車」為止才會消失",
     ] },
   ] },
   { date: "2026/07/29", groups: [
@@ -4246,8 +4249,8 @@ async function setCampRegistrationTranscribed(id, transcribed){
     : { transcribed: false, transcribedBy: "", transcribedByName: "", transcribedAt: null });
   if (campRegistrationsPoll) campRegistrationsPoll.refreshNow();
 }
-async function updateOwnProfile(displayName, rank, phone, emtLevel, vehicles, gender){
-  const fields = { displayName, rank, phone, emtLevel: emtLevel||"", vehicles: vehicles||[], gender: gender||"" };
+async function updateOwnProfile(displayName, rank, phone, emtLevel, vehicles, gender, noVehicle){
+  const fields = { displayName, rank, phone, emtLevel: emtLevel||"", vehicles: vehicles||[], gender: gender||"", noVehicle: !!noVehicle };
   await fsSetDoc(`users/${state.user.uid}`, fields);
   state.profile = { ...state.profile, ...fields };
   if (personnelPoll) personnelPoll.refreshNow();
@@ -4271,9 +4274,9 @@ async function updatePendingProfile(unit, displayName, rank, phone, emtLevel){
 // 見 functions/index.js）會自動比對、把這裡填好的單位/階級/電話/EMT 證照
 // 指派給他的新帳號、角色改成一般成員，不用再等管理員手動審核；比對前先
 // 轉小寫、去頭尾空白，避免大小寫或多打空格對不起來。
-async function addPersonnel(unit, name, title, phone, emtLevel, email, gender, vehicles){
+async function addPersonnel(unit, name, title, phone, emtLevel, email, gender, vehicles, noVehicle){
   await fsAddDoc("users", {
-    unit, displayName: name, rank: title||"", phone: phone||"", emtLevel: emtLevel||"", gender: gender||"", vehicles: vehicles||[],
+    unit, displayName: name, rank: title||"", phone: phone||"", emtLevel: emtLevel||"", gender: gender||"", vehicles: vehicles||[], noVehicle: !!noVehicle,
     email: email ? email.trim().toLowerCase() : "", role: "unclaimed", fcmTokens: [], createdAt: new Date()
   });
   showToast("已新增人員"); if (personnelPoll) personnelPoll.refreshNow();
@@ -4959,6 +4962,10 @@ window.__enablePushFromGatekeeper = async () => { await enablePush(); reportPush
 
 // 個人資料補齊提醒：階級／電話沒有標「選填」，是希望大家都填的欄位
 // （性別／EMT 證照等級表單上明確寫「選填」，不算在內，不用被提醒）。
+// 民車登記本身可以合法是「沒有」，不能直接拿「有沒有填車輛」當判斷依據
+// （很多人真的沒有車），但至少要表態過一次——沒有勾「沒有民車」、也沒
+// 登記任何一台車，代表這個人根本還沒處理過這個欄位，才需要提醒；勾了
+// 「沒有民車」或登記了至少一台車，兩種都算「已表態」，不再提醒。
 // 只回傳缺少的欄位中文標籤陣列，沒有缺漏就回傳空陣列，呼叫端自己判斷
 // .length。
 function missingProfileFields(p){
@@ -4966,6 +4973,7 @@ function missingProfileFields(p){
   const missing = [];
   if (!p.rank) missing.push("階級");
   if (!p.phone) missing.push("電話");
+  if (!p.noVehicle && !(p.vehicles && p.vehicles.length)) missing.push("民車登記");
   return missing;
 }
 // 判斷現在該不該跳出「請完成個人資料」彈窗：待審核/已停用/尚未登入
@@ -8687,11 +8695,11 @@ function viewProfileDetail(p){
       <div class="vehicle-section-header">
         <div>
           <div class="profile-section-title">民車登記</div>
-          <div class="vehicle-section-subtitle">選填，可新增多台車輛</div>
+          <div class="vehicle-section-subtitle">可新增多台車輛，沒有的話請勾選下方「沒有民車」</div>
         </div>
-        <span class="badge returning">已登記 ${vehicles.length} 輛</span>
+        <span class="badge returning">${p.noVehicle ? '無民車' : `已登記 ${vehicles.length} 輛`}</span>
       </div>
-      ${vehicles.length ? vehicles.map(vehicleDisplayCardHtml).join("") : `<div class="member-val member-val-empty">尚未登記車輛</div>`}
+      ${vehicles.length ? vehicles.map(vehicleDisplayCardHtml).join("") : `<div class="member-val${p.noVehicle?'':' member-val-empty'}">${p.noVehicle ? '本人已確認沒有民車' : '尚未登記車輛'}</div>`}
     </div>
     <div class="profile-section-card">
       <div class="profile-section-title">帳號資訊</div>
@@ -8737,15 +8745,18 @@ function viewProfile(){
           <div class="vehicle-section-header">
             <div>
               <div class="profile-section-title">民車登記</div>
-              <div class="vehicle-section-subtitle">選填，可新增多台車輛</div>
+              <div class="vehicle-section-subtitle">可新增多台車輛，沒有的話請勾選下方「沒有民車」</div>
             </div>
             <span class="badge returning">已登記 ${(p.vehicles||[]).length} 輛</span>
           </div>
-          <div id="vehicle-entries">
-            ${(p.vehicles && p.vehicles.length ? p.vehicles.map((v, i) => vehicleEntryRowHtml(v, i, true)) : [vehicleEntryRowHtml({type:'',brand:'',plate:''}, 0, false)]).join("")}
+          ${iosSwitchRow('沒有民車', !!p.noVehicle, "window.__toggleNoVehicleSwitch(this)", { attrs: 'name="noVehicle"', style: 'margin-bottom:12px;' })}
+          <div id="vehicle-section-body" style="${p.noVehicle?'display:none;':''}">
+            <div id="vehicle-entries">
+              ${(p.vehicles && p.vehicles.length ? p.vehicles.map((v, i) => vehicleEntryRowHtml(v, i, true)) : [vehicleEntryRowHtml({type:'',brand:'',plate:''}, 0, false)]).join("")}
+            </div>
+            <button type="button" class="vehicle-add-btn" style="margin-top:14px;" onclick="window.__addVehicleEntry()">${icon('plus',16)} 新增一台車輛</button>
+            <button type="button" class="btn-primary" style="margin-top:14px;" onclick="window.__confirmVehicleEntries()">新增車號</button>
           </div>
-          <button type="button" class="vehicle-add-btn" style="margin-top:14px;" onclick="window.__addVehicleEntry()">${icon('plus',16)} 新增一台車輛</button>
-          <button type="button" class="btn-primary" style="margin-top:14px;" onclick="window.__confirmVehicleEntries()">新增車號</button>
         </div>
         <div class="profile-section-card">
           <div class="profile-section-title">帳號資訊</div>
@@ -10049,15 +10060,18 @@ function viewBaseDataModal(){
       <div class="vehicle-section-header">
         <div>
           <div class="profile-section-title">民車登記</div>
-          <div class="vehicle-section-subtitle">選填，可新增多台車輛</div>
+          <div class="vehicle-section-subtitle">可新增多台車輛，沒有的話請勾選下方「沒有民車」</div>
         </div>
         <span class="badge returning">已登記 ${(editing?.vehicles||[]).length} 輛</span>
       </div>
-      <div id="vehicle-entries">
-        ${(editing?.vehicles && editing.vehicles.length ? editing.vehicles.map((v, i) => vehicleEntryRowHtml(v, i, true)) : [vehicleEntryRowHtml({type:'',brand:'',plate:''}, 0, false)]).join("")}
-      </div>
-      <button type="button" class="vehicle-add-btn" style="margin-top:14px;" onclick="window.__addVehicleEntry()">${icon('plus',16)} 新增一台車輛</button>
-      <button type="button" class="btn-ghost" style="width:100%;margin-top:14px;" onclick="window.__confirmVehicleEntries()">確認車輛資料</button>`;
+      ${iosSwitchRow('沒有民車', !!editing?.noVehicle, "window.__toggleNoVehicleSwitch(this)", { attrs: 'name="noVehicle"', style: 'margin-bottom:12px;' })}
+      <div id="vehicle-section-body" style="${editing?.noVehicle?'display:none;':''}">
+        <div id="vehicle-entries">
+          ${(editing?.vehicles && editing.vehicles.length ? editing.vehicles.map((v, i) => vehicleEntryRowHtml(v, i, true)) : [vehicleEntryRowHtml({type:'',brand:'',plate:''}, 0, false)]).join("")}
+        </div>
+        <button type="button" class="vehicle-add-btn" style="margin-top:14px;" onclick="window.__addVehicleEntry()">${icon('plus',16)} 新增一台車輛</button>
+        <button type="button" class="btn-ghost" style="width:100%;margin-top:14px;" onclick="window.__confirmVehicleEntries()">確認車輛資料</button>
+      </div>`;
   } else if (coll === "vehicles") {
     title = editing ? "編輯車輛" : "新增車輛";
     fields = `
@@ -11670,7 +11684,7 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
     if (dup && !confirm(`已有同名人員「${dup.name}」（${unitLabel(dup.unit)}），系統以姓名比對車長/駕駛等勤務指派，同名可能造成指派混淆，確定要繼續嗎？`)) return;
   }
   const action = id
-    ? (coll === "personnel" ? updateBaseData(coll, id, { displayName: f.get("name"), rank: f.get("title"), phone: f.get("phone")||"", emtLevel: f.get("emtLevel")||"", email: (f.get("email")||"").trim().toLowerCase(), gender: f.get("gender")||"", vehicles: readVehicleEntriesFromDom() })
+    ? (coll === "personnel" ? updateBaseData(coll, id, { displayName: f.get("name"), rank: f.get("title"), phone: f.get("phone")||"", emtLevel: f.get("emtLevel")||"", email: (f.get("email")||"").trim().toLowerCase(), gender: f.get("gender")||"", vehicles: readVehicleEntriesFromDom(), noVehicle: f.get("noVehicle")==="on" })
        : coll === "vehicles" ? updateBaseData(coll, id, { plate: f.get("plate"), type: f.get("type") })
        : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return updateBaseData(coll, id, { name: f.get("name"), tier: f.get("tier"), level: f.get("level"), phone: f.get("phone")||"", note: f.get("note")||"", address: f.get("address")||"", nhiCode: f.get("nhiCode")||"", frequent: f.get("frequent")==="on", lat: c ? c.lat : null, lng: c ? c.lng : null }); })()
        : coll === "doctors" ? updateBaseData(coll, id, { name: f.get("name"), title: f.get("title"), phone: f.get("phone")||"" })
@@ -11680,7 +11694,7 @@ window.__submitBaseDataModal = (ev, coll, unit, id) => {
        : coll === "militaryItems" ? updateBaseData(coll, id, { category: f.get("category"), name: f.get("name") })
        : coll === "policyNotices" ? (() => { const paras = readPolicyNoticeParasFromDom(); return updateBaseData(coll, id, { category: f.get("category"), title: f.get("title"), docNumber: f.get("docNumber")||"", publishDate: f.get("publishDate"), paragraphs: paras, content: paras.map(x => x.text).join("\n") }); })()
        : updateBaseData(coll, id, { code: f.get("code") }))
-    : (coll === "personnel" ? addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone"), f.get("emtLevel"), f.get("email"), f.get("gender"), readVehicleEntriesFromDom())
+    : (coll === "personnel" ? addPersonnel(unit, f.get("name"), f.get("title"), f.get("phone"), f.get("emtLevel"), f.get("email"), f.get("gender"), readVehicleEntriesFromDom(), f.get("noVehicle")==="on")
        : coll === "vehicles" ? addVehicle(unit, f.get("plate"), f.get("type"))
        : coll === "hospitals" ? (() => { const c = parseHospitalCoords(f.get("coords")); return addHospital(f.get("name"), f.get("tier"), f.get("level"), f.get("phone"), f.get("note"), f.get("address"), f.get("nhiCode"), c ? c.lat : null, c ? c.lng : null, f.get("frequent")==="on"); })()
        : coll === "doctors" ? addDoctor(f.get("name"), f.get("title"), f.get("phone"))
@@ -12035,6 +12049,16 @@ function withVehicleEntriesScrollAnchor(mutate){
   mutate();
   if (main) main.scrollTop = beforeScrollTop - (beforeHeight - main.scrollHeight);
 }
+// 「沒有民車」開關：純 DOM 切換車輛清單區塊的顯示/隱藏，不觸發整頁
+// render()，理由跟民車登記其他操作一樣（避免打字打到一半被背景輪詢的
+// 重繪蓋掉）。勾選後畫面上車輛列還在（只是隱藏），但送出時
+// readVehicleEntriesFromDom() 一看到這顆開關勾著就直接回傳空陣列，兩個
+// 欄位互斥、「沒有民車」贏，不會出現 noVehicle=true 又同時存了車輛的
+// 矛盾狀態。
+window.__toggleNoVehicleSwitch = (checkbox) => {
+  const body = document.getElementById("vehicle-section-body");
+  if (body) body.style.display = checkbox.checked ? "none" : "";
+};
 // 新增/移除一台車：純 DOM 操作（插入新的 .vehicle-entry 區塊／移除自己
 // 所在的區塊），不觸發整頁 render()，理由跟上面一樣。新增的車輛還沒填過
 // 資料，直接給編輯模式（locked=false）。
@@ -12128,7 +12152,11 @@ window.__toggleTestMode = (checked) => {
 // （__submitBaseDataModal 的 personnel 分支）共用同一套民車登記元件
 // （vehicleEntryRowHtml／__addVehicleEntry／__confirmVehicleEntries），
 // 讀值邏輯也共用這個函式，避免兩邊各寫一份、之後改一邊忘了改另一邊。
+// 勾了「沒有民車」時直接回傳空陣列，不管畫面上（隱藏起來的）車輛列還
+// 留著什麼舊資料——這兩個欄位是互斥的，「沒有民車」贏，避免送出後變成
+// noVehicle=true 但 vehicles 陣列裡還留著車輛這種矛盾狀態。
 function readVehicleEntriesFromDom(){
+  if (document.querySelector('input[name="noVehicle"]')?.checked) return [];
   return [...document.querySelectorAll(".vehicle-entry")].map(row => {
     if (row.classList.contains("vehicle-entry-locked")){
       return { type: row.dataset.vType || "", brand: row.dataset.vBrand || "", plate: row.dataset.vPlate || "" };
@@ -12212,9 +12240,10 @@ window.__saveProfile = (ev) => {
   ev.preventDefault();
   const f = new FormData(ev.target);
   const vehicles = readVehicleEntriesFromDom();
+  const noVehicle = f.get("noVehicle") === "on";
   const dup = findDuplicateNamePerson(f.get("displayName"), state.user.uid);
   if (dup && !confirm(`已有同名人員「${dup.name}」（${unitLabel(dup.unit)}），系統以姓名比對車長/駕駛等勤務指派，同名可能造成指派混淆，確定要繼續嗎？`)) return;
-  updateOwnProfile(f.get("displayName"), f.get("rank"), f.get("phone"), f.get("emtLevel"), vehicles, f.get("gender")).then(() => {
+  updateOwnProfile(f.get("displayName"), f.get("rank"), f.get("phone"), f.get("emtLevel"), vehicles, f.get("gender"), noVehicle).then(() => {
     state.profileEditing = false; render();
   }).catch(err => showToast(`個人資料儲存失敗：[${err.code||'?'}] ${err.message||err}`));
 };
