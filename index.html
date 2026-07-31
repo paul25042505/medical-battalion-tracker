@@ -2035,13 +2035,7 @@
   }
   .picker-option{
     display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:12px 10px; border-radius:var(--radius-sm);
-    font-size:var(--text-base); color:var(--text); cursor:pointer;
-    /* 沒有明確重設 background／appearance 的話，這顆 <button> 在 iOS 會
-       套用系統原生按鈕外觀（不跟著深色模式走的淺灰底），疊上跟著深色
-       模式變淺的文字顏色，就會變成淺字疊淺底、幾乎看不見（深色模式下
-       選人/選單位彈窗的姓名列表整排字看不清楚的成因）。 */
-    background:none; -webkit-appearance:none; appearance:none;
-    border:none; border-bottom:1px solid var(--border);
+    font-size:var(--text-base); color:var(--text); border-bottom:1px solid var(--border); cursor:pointer;
   }
   .picker-option input[type="checkbox"]{flex-shrink:0; width:19px; height:19px;}
   .picker-option:last-child{border-bottom:none;}
@@ -2076,7 +2070,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-30-511-fix-picker-darkmode";
+const BUILD_TAG = "2026-07-30-510-vitals-history-label";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2982,7 +2976,6 @@ const RELEASE_NOTES = [
       "修正勤務進度「編輯回報」「回報」彈窗最下面的按鈕（例如「刪除這筆回報」）在手機上會被畫面底部的「結束勤務案件」等固定按鈕列蓋住、點不到的問題：這兩個彈窗改成跟其他全螢幕彈窗一樣畫在捲動內容外面，不再受這個已知的 iOS Safari 定位問題影響",
       "修正勤務類任務出勤後「抵達現場」「結束勤務案件」兩顆按鈕下面的提示句：這兩顆按鈕其實都代表已經抵達現場了（例如車開到修車廠），差別只是接下來要繼續跑（選抵達現場）還是車留在原地不回來（選結束勤務案件），提示句原本寫「尚未抵達現場選抵達現場」容易讓人誤會抵達現場是指還沒到，改成「還有後續行程選抵達現場；車留原地選結束勤務案件」",
       "上面那句提示句再修正一次：「結束勤務案件」不代表車會留在原地不回來（下一次的勤務仍然可能是從修車廠把車開回營區，那是另一筆任務的事），改成「還有後續行程選抵達現場；沒有後續行程選結束勤務案件」，只講這筆案件本身有沒有下一步",
-      "修正深色模式下建立勤務「選擇車長／駕駛」快速選人彈窗，姓名整排看不清楚（淺色字疊在淺色底上）的問題：這顆按鈕沒有明確重設瀏覽器原生按鈕外觀，iOS 會套用系統原生的淺色底、不會跟著深色模式變深，疊上跟著深色模式變淺的文字顏色就變成淺字疊淺底、幾乎看不見",
     ] },
     { category: "任務管理", items: [
       "勤務類任務出勤後，不用再強制先回報「抵達現場」才能結案：現在出勤當下就會同時顯示「抵達現場」「結束勤務案件」兩顆按鈕，任務臨時取消或出發沒多久就折返等情境可以直接結案，不用卡在「抵達現場」這一步；跟洽公任務出發後就能直接結案是同一套邏輯",
