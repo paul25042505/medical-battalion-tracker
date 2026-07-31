@@ -949,6 +949,11 @@
   }
   .hazard-card-tips{display:grid; grid-template-columns:1fr 1fr; gap:6px 10px;}
   .hazard-tip-item{font-size:var(--text-xs); font-weight:600; line-height:1.4; color:var(--amber-text);}
+  /* 地震報告原文是一整段完整敘述，不是像天氣特報那樣兩三則各自獨立的
+     短提醒——如果沿用 .hazard-card-tips 的兩欄 grid 包一整段文字，內容
+     會被塞進左半欄（右半欄留白），文字被迫在半個卡片寬度內換行、看起來
+     像跑版，所以另外用這個滿版單欄的樣式，不要跟 .hazard-card-tips 共用。 */
+  .hazard-card-report{font-size:var(--text-xs); font-weight:600; line-height:1.6; color:var(--amber-text);}
   /* 颱風警報跟天氣特報共用同一套卡片結構，只是換成紅色（比琥珀色警戒
      層級更高）；內文段落直接照 CWA 原文逐字顯示（見 fetchTyphoonInfo
      註解），不重組句子。 */
@@ -2070,7 +2075,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-07-31-511-login-popup-blocked-fallback";
+const BUILD_TAG = "2026-07-31-512-fix-earthquake-report-width";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2971,6 +2976,9 @@ const RELEASE_NOTES = [
   { date: "2026/07/31", groups: [
     { category: "登入", items: [
       "修正部分裝置（已加入主畫面、獨立模式開啟）點「使用 Google 帳號登入」跳出「auth/popup-blocked」登入失敗的問題：這是瀏覽器真的擋下跳出視窗，不是先前那個被過濾掉的無害錯誤代碼；登入頁遇到這個情況會多顯示一顆「改用其他方式登入」按鈕，改走轉址流程登入，平常 popup 就能正常登入的裝置不受影響",
+    ] },
+    { category: "介面優化", items: [
+      "修正任務頁「天氣」子選單的地震報告卡片，說明文字跑版（整段文字被擠在卡片左半邊、右半邊空白）的問題：這段完整說明原本誤用了天氣特報兩則短提醒並排的兩欄版型，改成獨立的滿版單欄樣式，文字才能吃滿卡片寬度正常換行",
     ] },
   ] },
   { date: "2026/07/30", groups: [
@@ -7104,9 +7112,7 @@ function renderEarthquakeBanner(unit){
         </div>
         <div class="hazard-card-name">規模 ${latest.magnitude}・${esc(latest.location)}</div>
         <div class="hazard-card-panel">
-          <div class="hazard-card-tips">
-            <div class="hazard-tip-item">${esc(latest.reportContent)}</div>
-          </div>
+          <div class="hazard-card-report">${esc(latest.reportContent)}</div>
         </div>
         <div class="hazard-card-time">發布時間 ${fmtTime(new Date(latest.issueTime).getTime())}</div>
       </div>
