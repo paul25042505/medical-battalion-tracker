@@ -2104,7 +2104,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-02-517-forward-support-today-crew";
+const BUILD_TAG = "2026-08-02-518-forward-support-crew-field-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3008,6 +3008,7 @@ const RELEASE_NOTES = [
       "前支任務派遣系統的單位稱呼已經跟這邊統一（營部／第一連／第二連），移除這邊原本自己維護的單位名稱對照表，直接比對兩邊的單位名稱即可，往後兩邊單位名稱異動也不用再各自維護一份對照表",
       "再次修正「前支任務案件」串接：實際確認過對方系統的 assignedUnit 欄位存的其實是單位代碼（hq／co1／co2），不是中文名稱，改成直接比對代碼；另外案件狀態是「已核定」（assigned）或「已派遣」（filled）都能在這邊挑選，不是只有「已核定」，送出建立勤務後一律把狀態寫成「已派遣」",
       "「前支任務案件」挑選清單改成只顯示當天的案件，不會再選到明天以後或已經過期的案件；每張案件卡片如果對方系統已經先排定車長／駕駛，會直接顯示出來供對照確認",
+      "修正案件卡片顯示不出車長的問題：車長／駕駛／車號其實是直接存在案件文件本身，不是另一個獨立的資料表，確認建立勤務後也改成直接把這些資訊寫回同一筆案件，前支系統那邊的畫面才會正確顯示車長",
     ] },
   ] },
   { date: "2026/07/31", groups: [
@@ -3705,10 +3706,6 @@ const state = {
   // collection）；建立勤務頁「選案件」功能用這份清單顯示可選案件，見
   // viewCreateTask／__openForwardSupportPicker。
   forwardSupportRequests: [],
-  // 前支系統已經回填的指派結果（車長／駕駛／車號），依 requestId 對應到
-  // 上面 forwardSupportRequests 的某一筆，用來在選取彈窗裡標出「這筆案件
-  // 已經有沒有排定的車長駕駛」，見 forwardSupportRequestRows。
-  forwardSupportAssignments: [],
   campRegistrations: [], // 洽公／廠商入營登記：獨立於任務系統之外的門禁登記表
   campRegMonth: null, // 行事曆目前顯示的月份 "YYYY-MM"，null 代表預設顯示本月
   campRegSelectedDate: null, // 從行事曆點選的日期 "YYYY-MM-DD"，列表檢視依此篩選；null 代表不篩選（顯示全部）
@@ -3788,7 +3785,7 @@ const state = {
 applyThemeMode(state.themeMode); // 在第一次 render() 之前就套用，避免畫面先閃一次錯的模式再跳回正確的
 let tasksPoll = null, eventsPoll = null, profilePoll = null;
 let personnelPoll = null, vehiclesPoll = null, recordersPoll = null;
-let hospitalsPoll = null, vitalsPoll = null, erStandbyPoll = null, doctorsPoll = null, taskTitleTemplatesPoll = null, webLinksPoll = null, militaryItemsPoll = null, policyNoticesPoll = null, forwardSupportRequestsPoll = null, forwardSupportAssignmentsPoll = null;
+let hospitalsPoll = null, vitalsPoll = null, erStandbyPoll = null, doctorsPoll = null, taskTitleTemplatesPoll = null, webLinksPoll = null, militaryItemsPoll = null, policyNoticesPoll = null, forwardSupportRequestsPoll = null;
 let notificationsPoll = null;
 let pushLogPoll = null;
 let erRealtimePoll = null;
@@ -5408,12 +5405,6 @@ function startDataListeners(){
     state.forwardSupportRequests = docs;
     if (changed) safeRender();
   });
-  forwardSupportAssignmentsPoll = poll(async () => {
-    const docs = await fsListCollection("forward_support_assignments");
-    const changed = changedSince("forwardSupportAssignments", docs);
-    state.forwardSupportAssignments = docs;
-    if (changed) safeRender();
-  });
   militaryItemsPoll = poll(async () => {
     const docs = await fsListCollection("militaryItems");
     const changed = changedSince("militaryItems", docs);
@@ -5475,12 +5466,12 @@ function startDataListeners(){
   ensureMilitaryItemsSeeded();
 }
 function cleanupListeners(){
-  [tasksPoll, eventsPoll, profilePoll, personnelPoll, vehiclesPoll, recordersPoll, hospitalsPoll, vitalsPoll, erStandbyPoll, doctorsPoll, taskTitleTemplatesPoll, webLinksPoll, militaryItemsPoll, policyNoticesPoll, notificationsPoll, pushLogPoll, campRegistrationsPoll, forwardSupportRequestsPoll, forwardSupportAssignmentsPoll].forEach(p => p && p.stop());
+  [tasksPoll, eventsPoll, profilePoll, personnelPoll, vehiclesPoll, recordersPoll, hospitalsPoll, vitalsPoll, erStandbyPoll, doctorsPoll, taskTitleTemplatesPoll, webLinksPoll, militaryItemsPoll, policyNoticesPoll, notificationsPoll, pushLogPoll, campRegistrationsPoll, forwardSupportRequestsPoll].forEach(p => p && p.stop());
   for (const k in lastJson) delete lastJson[k];
-  tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = hospitalsPoll = vitalsPoll = erStandbyPoll = doctorsPoll = taskTitleTemplatesPoll = webLinksPoll = militaryItemsPoll = policyNoticesPoll = notificationsPoll = pushLogPoll = erRealtimePoll = campRegistrationsPoll = forwardSupportRequestsPoll = forwardSupportAssignmentsPoll = null;
+  tasksPoll = eventsPoll = profilePoll = personnelPoll = vehiclesPoll = recordersPoll = hospitalsPoll = vitalsPoll = erStandbyPoll = doctorsPoll = taskTitleTemplatesPoll = webLinksPoll = militaryItemsPoll = policyNoticesPoll = notificationsPoll = pushLogPoll = erRealtimePoll = campRegistrationsPoll = forwardSupportRequestsPoll = null;
   state.tasks = []; state.events = []; state.personnel = []; state.vehicles = []; state.recorders = [];
   state.hospitals = []; state.vitals = []; state.erStandby = []; state.doctors = []; state.taskTitleTemplates = []; state.webLinks = []; state.militaryItems = []; state.policyNotices = []; state.notifications = []; state.pushLog = [];
-  state.campRegistrations = []; state.forwardSupportRequests = []; state.forwardSupportAssignments = [];
+  state.campRegistrations = []; state.forwardSupportRequests = [];
   state.deepTasks = []; state.deepEvents = []; state.deepVitals = []; state.recordsDeepQuery = null;
   state.previewActive = false; state.realProfileSnapshot = null;
 }
@@ -6115,7 +6106,7 @@ const ROUTE_REFRESH = {
   task: ['tasks','events','vitals'],
   vitals: ['tasks','events','vitals'],
   editTask: ['tasks','events','personnel','vehicles','recorders','doctors','militaryItems'],
-  createTask: ['personnel','vehicles','recorders','doctors','taskTitleTemplates','militaryItems','forwardSupportRequests','forwardSupportAssignments'],
+  createTask: ['personnel','vehicles','recorders','doctors','taskTitleTemplates','militaryItems','forwardSupportRequests'],
   stats: ['tasks','events'],
   hospitals: ['hospitals','erRealtime'],
   // vitals 是給「完成當前勤務，啟動新勤務」按鈕的進行中患者紀錄檢查用
@@ -6162,7 +6153,7 @@ function nav(route){
   if (route.name === "adminFeedback") state._feedbackCache = null;
   if (route.name === "adminSettings") state._testModeCache = null;
   render(); scrollContentToTop();
-  const polls = { tasks: tasksPoll, events: eventsPoll, personnel: personnelPoll, vehicles: vehiclesPoll, recorders: recordersPoll, hospitals: hospitalsPoll, vitals: vitalsPoll, erStandby: erStandbyPoll, doctors: doctorsPoll, taskTitleTemplates: taskTitleTemplatesPoll, webLinks: webLinksPoll, militaryItems: militaryItemsPoll, notifications: notificationsPoll, pushLog: pushLogPoll, erRealtime: erRealtimePoll, campRegistrations: campRegistrationsPoll, forwardSupportRequests: forwardSupportRequestsPoll, forwardSupportAssignments: forwardSupportAssignmentsPoll };
+  const polls = { tasks: tasksPoll, events: eventsPoll, personnel: personnelPoll, vehicles: vehiclesPoll, recorders: recordersPoll, hospitals: hospitalsPoll, vitals: vitalsPoll, erStandby: erStandbyPoll, doctors: doctorsPoll, taskTitleTemplates: taskTitleTemplatesPoll, webLinks: webLinksPoll, militaryItems: militaryItemsPoll, notifications: notificationsPoll, pushLog: pushLogPoll, erRealtime: erRealtimePoll, campRegistrations: campRegistrationsPoll, forwardSupportRequests: forwardSupportRequestsPoll };
   (ROUTE_REFRESH[route.name] || []).forEach(key => { if (polls[key]) polls[key].refreshNow(); });
   // 保險機制：換頁時強制重新校正一次 #app 高度／window 捲動值，不依賴
   // 前一頁鍵盤關閉時是否有確實觸發 visualViewport 事件或輸入框 focusout
@@ -11658,13 +11649,13 @@ function forwardSupportRequestRows(query){
     .sort((a,b) => new Date(a.taskStartTime||a.createdAt||0) - new Date(b.taskStartTime||b.createdAt||0));
   if (!rows.length) return `<div class="empty" style="padding:28px 0;">找不到待指派的案件</div>`;
   return rows.map(x => {
-    // 對方系統可能已經先派好車長／駕駛（forward_support_assignments 裡
-    // 這筆案件對應的紀錄），這裡秀出來給使用者對照，確認沒問題再選取。
-    const assign = state.forwardSupportAssignments.find(a => a.requestId === x.id);
-    const crewHtml = assign && (assign.commanderName || assign.driverName) ? `
+    // 對方系統可能已經先派好車長／駕駛：這些欄位是直接存在案件文件本身
+    // 上（commanderName／driverName…），不是另一個獨立的 collection——
+    // 這裡秀出來給使用者對照，確認沒問題再選取。
+    const crewHtml = (x.commanderName || x.driverName) ? `
       <div class="fs-request-crew">
-        ${assign.commanderName ? `<span class="fs-request-crew-item">車長　${esc([assign.commanderRank, assign.commanderName].filter(Boolean).join(' '))}</span>` : ""}
-        ${assign.driverName ? `<span class="fs-request-crew-item">駕駛　${esc([assign.driverRank, assign.driverName].filter(Boolean).join(' '))}</span>` : ""}
+        ${x.commanderName ? `<span class="fs-request-crew-item">車長　${esc([x.commanderRank, x.commanderName].filter(Boolean).join(' '))}</span>` : ""}
+        ${x.driverName ? `<span class="fs-request-crew-item">駕駛　${esc([x.driverRank, x.driverName].filter(Boolean).join(' '))}</span>` : ""}
       </div>` : "";
     return `
     <div class="fs-request-card">
@@ -12752,32 +12743,27 @@ window.__createTask = (ev, unit, type) => {
       // 續約下一筆待命勤務（見 renewStandbyTask）。
       ...(erStandbyKey ? { erStandbyKey } : {})
     }, { skipDispatch }).then(async created => {
-      // 這筆勤務是挑了前支任務案件帶入資料建立的：把指派結果（車號/車長/
-      // 駕駛）寫回 forward_support_assignments，並把該案件 status 從
-      // assigned 推進到 filled（對方系統「已派遣」的定義：車輛人員都確認
-      // 好了），讓前支系統那邊看得到已經有人接。這筆寫回失敗不影響勤務
-      // 本身已經建立成功這件事——車輛/人員實際上已經出勤，不能因為對方
-      // 系統這筆記錄寫失敗就讓使用者以為勤務也沒建立成功，只用 toast 提醒
-      // 需要自行通知對方。
+      // 這筆勤務是挑了前支任務案件帶入資料建立的：車長/駕駛/車號直接寫回
+      // forward_support_requests 這筆案件文件本身（不是另一個獨立的
+      // collection——查過 Firebase Console 的真實文件內容，對方系統自己的
+      // 畫面就是直接讀這份文件顯示車長駕駛，寫到別的 collection 對方根本
+      // 看不到），同時把 status 從 assigned 推進到 filled（對方系統「已
+      // 派遣」的定義：車輛人員都確認好了）。這筆寫回失敗不影響勤務本身
+      // 已經建立成功這件事——車輛/人員實際上已經出勤，不能因為對方系統
+      // 這筆記錄寫失敗就讓使用者以為勤務也沒建立成功，只用 toast 提醒需要
+      // 自行通知對方。
       if (selectedForwardSupportRequest) {
         const reqId = selectedForwardSupportRequest.id;
         const crewLeaderInfo = state.personnel.find(x => x.name === created.crewLeader) || {};
         const driverInfo = state.personnel.find(x => x.name === created.driver) || {};
-        Promise.all([
-          fsAddDoc("forward_support_assignments", {
-            requestId: reqId, unit,
-            vehicleNumber: created.vehicle || "",
-            commanderRank: crewLeaderInfo.title || "", commanderName: created.crewLeader || "",
-            commanderUid: crewLeaderInfo.id || "", commanderPhone: crewLeaderInfo.phone || "", commanderEmtLevel: crewLeaderInfo.emtLevel || "",
-            driverRank: driverInfo.title || "", driverName: created.driver || "",
-            driverUid: driverInfo.id || "", driverPhone: driverInfo.phone || "", driverEmtLevel: driverInfo.emtLevel || "",
-          }),
-          fsSetDoc(`forward_support_requests/${reqId}`, { status: "filled" })
-        ]).then(() => {
+        fsSetDoc(`forward_support_requests/${reqId}`, {
+          status: "filled",
+          vehicleNumber: created.vehicle || "",
+          commanderRank: crewLeaderInfo.title || "", commanderName: created.crewLeader || "", commanderPhone: crewLeaderInfo.phone || "", commanderEmtLevel: crewLeaderInfo.emtLevel || "",
+          driverRank: driverInfo.title || "", driverName: created.driver || "", driverPhone: driverInfo.phone || "", driverEmtLevel: driverInfo.emtLevel || "",
+        }).then(() => {
           if (forwardSupportRequestsPoll) forwardSupportRequestsPoll.refreshNow();
-          if (forwardSupportAssignmentsPoll) forwardSupportAssignmentsPoll.refreshNow();
-        })
-          .catch(err => { console.error("回寫前支任務指派結果失敗", err); showToast("勤務已建立，但回報前支系統指派結果失敗，請自行通知對方"); });
+        }).catch(err => { console.error("回寫前支任務指派結果失敗", err); showToast("勤務已建立，但回報前支系統指派結果失敗，請自行通知對方"); });
         selectedForwardSupportRequest = null;
       }
       if (!erStandbyKey) return;
