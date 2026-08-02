@@ -482,11 +482,24 @@ service cloud.firestore {
     // 也不能把其他欄位（申請單位/任務內容/assignedUnit 等）跟著一起改掉，
     // 更不能把 status 改成其他值（例如惡意把別人的案件改回 pending 或直接
     // rejected）。
+    //
+    // claimedTaskId：同一個單位同時有多個人在用這個系統，都可能挑到同一筆
+    // 案件（挑選清單本身沒有「這筆是誰在處理」的區隔，見 index.html 的
+    // forwardSupportPickableList）——沒有這個欄位把關的話，兩個人都能各自
+    // 建立一筆勤務、都寫回同一份案件文件，車長/駕駛/車號會被後送出的那筆
+    // 覆蓋掉，兩邊都以為自己那筆勤務才是數。這裡加一個「只能佔用一次」的
+    // 鎖：只要 claimedTaskId 還沒被設定過，才允許這次更新順便寫入它（帶
+    // 建立出來的本地勤務 id）；已經有 claimedTaskId 的文件，這條 update
+    // 規則直接不成立，第二個人送出時會被 Firestore 擋下來（伺服器端比對
+    // 的是當下最新的 resource.data，不是使用者送出當下畫面上看到的舊值，
+    // 兩人幾乎同時送出時，晚到的那筆一定會撞到這個條件被拒絕）——這是在
+    // 資料庫規則層面擋住重複佔用，不是只在前端隱藏按鈕、擋不住競爭寫入。
     match /forward_support_requests/{id} {
       allow read: if isActive();
       allow update: if isActive() && (resource.data.status == 'assigned' || resource.data.status == 'filled')
+                    && !('claimedTaskId' in resource.data)
                     && onlyChanged(['status', 'commanderRank', 'commanderName', 'commanderPhone', 'commanderEmtLevel',
-                                    'driverRank', 'driverName', 'driverPhone', 'driverEmtLevel', 'vehicleNumber'])
+                                    'driverRank', 'driverName', 'driverPhone', 'driverEmtLevel', 'vehicleNumber', 'claimedTaskId'])
                     && request.resource.data.status == 'filled';
       allow create, delete: if false;
     }

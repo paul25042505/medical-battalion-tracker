@@ -2108,7 +2108,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-02-521-forward-support-cancel-selection";
+const BUILD_TAG = "2026-08-02-522-forward-support-claim-lock";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3016,6 +3016,7 @@ const RELEASE_NOTES = [
       "選取前支任務案件後，如果案件本身已經排定車長／駕駛，會直接預先帶入建立勤務頁的車長／駕駛欄位；這兩個欄位還是原本的選人按鈕，帶入的人選如果不對，可以直接點開重新選擇，不會被鎖死",
       "上面的預先帶入功能加上車號：案件本身如果已經排定車輛，會一併帶入車號欄位——是自己單位的車直接選中；是別單位的車自動展開「跨單位借車」；車輛名冊裡完全查不到的車號則自動展開「外部車輛」填入原始車號文字，一樣都能重新選擇或修改",
       "選取前支任務案件後多一顆「取消選取」，發現選錯案件可以整個取消，提示卡恢復成還沒選取的樣子重新挑一筆；已經帶入的任務名稱／地點／車長／駕駛／車號不會被清空，這些欄位本來就能自己直接改",
+      "前支任務案件加上防止同單位多人搶同一筆的機制：一旦有人選這筆案件建立勤務，這筆案件就會從所有人的挑選清單裡消失，不會再被別人選到；如果兩個人幾乎同時搶同一筆，晚送出的那筆勤務仍會正常建立成功，但會另外提示這筆案件剛好被搶走，請互相確認車輛人員沒有重複派遣",
     ] },
   ] },
   { date: "2026/07/31", groups: [
@@ -11639,14 +11640,21 @@ window.__togglePersonPickerCrossUnit = (checkbox) => {
    ========================================================= */
 let selectedForwardSupportRequest = null; // 目前表單帶入的前支案件（挑選後直到送出或離開頁面前有效）｜null
 let forwardSupportPickerUnit = null; // 目前開著的選取彈窗是哪個單位的（見 __openForwardSupportPicker）
-// 「指派給這個單位、狀態是 assigned 或 filled、且 taskStartTime 落在今天」
-// 這條篩選條件，建立勤務頁的提示卡計數、選取彈窗清單、取消選取後重新算
-// 一次計數，三個地方都要用到同一套邏輯，抽出來共用，避免各自維護一份
-// 篩選條件、日後改規則漏改其中一處。
+// 「指派給這個單位、狀態是 assigned 或 filled、且 taskStartTime 落在今天、
+// 還沒被同單位其他人挑走（claimedTaskId 還沒設定）」這條篩選條件，建立
+// 勤務頁的提示卡計數、選取彈窗清單、取消選取後重新算一次計數，三個地方
+// 都要用到同一套邏輯，抽出來共用，避免各自維護一份篩選條件、日後改規則
+// 漏改其中一處。同單位可能同時有好幾個人在用這個系統，都看得到同一份
+// 案件清單（這裡沒有依登入者個人身分再篩選，見使用者原話「大家都看得到
+// 今天所有任務」的疑問）——排除 claimedTaskId 就是為了同一筆案件不會
+// 被兩個人各自建立勤務、各自回寫，後送出的那筆把先送出的車長/駕駛/車號
+// 覆蓋掉；真正擋住兩人幾乎同時搶同一筆的競爭情況，靠的是
+// firestore.rules 對 claimedTaskId 的寫入限制（伺服器端判斷，不是這裡
+// 前端篩選這一層能單獨保證的）。
 function forwardSupportPickableList(unit){
   const today = new Date();
   return state.forwardSupportRequests
-    .filter(x => (x.status === 'assigned' || x.status === 'filled') && x.assignedUnit === unit && x.taskStartTime && isSameDay(new Date(x.taskStartTime).getTime(), today));
+    .filter(x => (x.status === 'assigned' || x.status === 'filled') && x.assignedUnit === unit && !x.claimedTaskId && x.taskStartTime && isSameDay(new Date(x.taskStartTime).getTime(), today));
 }
 function forwardSupportRequestRows(query){
   const q = (query||"").trim().toLowerCase();
@@ -12828,22 +12836,32 @@ window.__createTask = (ev, unit, type) => {
       // collection——查過 Firebase Console 的真實文件內容，對方系統自己的
       // 畫面就是直接讀這份文件顯示車長駕駛，寫到別的 collection 對方根本
       // 看不到），同時把 status 從 assigned 推進到 filled（對方系統「已
-      // 派遣」的定義：車輛人員都確認好了）。這筆寫回失敗不影響勤務本身
-      // 已經建立成功這件事——車輛/人員實際上已經出勤，不能因為對方系統
-      // 這筆記錄寫失敗就讓使用者以為勤務也沒建立成功，只用 toast 提醒需要
-      // 自行通知對方。
+      // 派遣」的定義：車輛人員都確認好了），並且帶上 claimedTaskId（這筆
+      // 本地勤務的 id）——同單位可能同時有別人也開著同一個案件的挑選畫面，
+      // 寫入 claimedTaskId 之後這筆案件就會從所有人的挑選清單裡消失（見
+      // forwardSupportPickableList），避免兩個人各自建好勤務、都回寫同一
+      // 份案件文件，後送出的把先送出的車長/駕駛/車號蓋掉。
+      // firestore.rules 只允許在 claimedTaskId 還沒被設定過的情況下寫入
+      // 這個欄位，兩人幾乎同時送出時，晚到的那筆會被 Firestore 用 403 拒絕
+      // ——這種情況下本地勤務其實已經建立成功（車輛人員也確實出勤了），
+      // 只是沒能佔到這筆前支案件，用專屬的提示文字告知使用者去跟對方
+      // 確認，不能靜默吞掉當成一般性的回寫失敗。
       if (selectedForwardSupportRequest) {
         const reqId = selectedForwardSupportRequest.id;
         const crewLeaderInfo = state.personnel.find(x => x.name === created.crewLeader) || {};
         const driverInfo = state.personnel.find(x => x.name === created.driver) || {};
         fsSetDoc(`forward_support_requests/${reqId}`, {
-          status: "filled",
+          status: "filled", claimedTaskId: created.id,
           vehicleNumber: created.vehicle || "",
           commanderRank: crewLeaderInfo.title || "", commanderName: created.crewLeader || "", commanderPhone: crewLeaderInfo.phone || "", commanderEmtLevel: crewLeaderInfo.emtLevel || "",
           driverRank: driverInfo.title || "", driverName: created.driver || "", driverPhone: driverInfo.phone || "", driverEmtLevel: driverInfo.emtLevel || "",
         }).then(() => {
           if (forwardSupportRequestsPoll) forwardSupportRequestsPoll.refreshNow();
-        }).catch(err => { console.error("回寫前支任務指派結果失敗", err); showToast("勤務已建立，但回報前支系統指派結果失敗，請自行通知對方"); });
+        }).catch(err => {
+          console.error("回寫前支任務指派結果失敗", err);
+          if (err.code === 403) showToast("勤務已建立，但這筆前支案件剛好被同單位其他人先選走了，請互相確認車輛/人員沒有重複派遣");
+          else showToast("勤務已建立，但回報前支系統指派結果失敗，請自行通知對方");
+        });
         selectedForwardSupportRequest = null;
       }
       if (!erStandbyKey) return;
