@@ -2104,7 +2104,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-02-519-forward-support-crew-prefill";
+const BUILD_TAG = "2026-08-02-520-forward-support-vehicle-prefill";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3010,6 +3010,7 @@ const RELEASE_NOTES = [
       "「前支任務案件」挑選清單改成只顯示當天的案件，不會再選到明天以後或已經過期的案件；每張案件卡片如果對方系統已經先排定車長／駕駛，會直接顯示出來供對照確認",
       "修正案件卡片顯示不出車長的問題：車長／駕駛／車號其實是直接存在案件文件本身，不是另一個獨立的資料表，確認建立勤務後也改成直接把這些資訊寫回同一筆案件，前支系統那邊的畫面才會正確顯示車長",
       "選取前支任務案件後，如果案件本身已經排定車長／駕駛，會直接預先帶入建立勤務頁的車長／駕駛欄位；這兩個欄位還是原本的選人按鈕，帶入的人選如果不對，可以直接點開重新選擇，不會被鎖死",
+      "上面的預先帶入功能加上車號：案件本身如果已經排定車輛，會一併帶入車號欄位——是自己單位的車直接選中；是別單位的車自動展開「跨單位借車」；車輛名冊裡完全查不到的車號則自動展開「外部車輛」填入原始車號文字，一樣都能重新選擇或修改",
     ] },
   ] },
   { date: "2026/07/31", groups: [
@@ -11711,6 +11712,35 @@ function fillForwardSupportPerson(fieldName, name, unit){
     if (textEl) { textEl.textContent = crewDisplayLabel(name, unit); textEl.classList.remove("placeholder"); }
   }
 }
+// 案件文件本身如果已經帶有 vehicleNumber（對方系統已經先派車），選取這筆
+// 案件時直接預先帶入車號欄位：那台車如果登記在別的單位名下，自動展開
+// 「跨單位借車」讓選單能選到（比照 isCrossUnitVehiclePreset 的邏輯）；
+// 車輛名冊裡完全查不到這個車號時，改成展開「外部車輛」欄位填入純文字，
+// 至少資訊不會憑空消失——三種情況使用者事後都能自己再改掉。
+function fillForwardSupportVehicle(vehicleNumber, unit){
+  if (!vehicleNumber) return;
+  const select = document.querySelector('select[name="vehicle"]');
+  if (!select) return; // 洽公任務沒有車號欄位
+  const field = select.closest(".field");
+  const normalMode = field.querySelector('[data-mode="normal"]');
+  const externalMode = field.querySelector('[data-mode="external"]');
+  const match = state.vehicles.find(v => v.plate === vehicleNumber && v.active !== false);
+  if (match && match.unit !== unit) {
+    const crossBtn = field.querySelector('.field-toggle-btn[onclick*="__toggleCrossUnitVehicle"]');
+    if (crossBtn) crossBtn.classList.add("active");
+    select.innerHTML = vehicleSelectOptionsAllUnits(vehicleNumber);
+  } else if (match) {
+    select.value = vehicleNumber;
+  } else {
+    const extBtn = field.querySelector(".field-toggle-btn[onclick*=\"'vehicle'\"]");
+    if (extBtn) extBtn.classList.add("active");
+    normalMode.style.display = "none";
+    externalMode.style.display = "";
+    select.removeAttribute("name");
+    const extInput = externalMode.querySelector('[data-field-name="vehicle"]');
+    if (extInput) { extInput.setAttribute("name", "vehicle"); extInput.value = vehicleNumber; }
+  }
+}
 window.__selectForwardSupportRequest = (id) => {
   const x = state.forwardSupportRequests.find(r => r.id === id);
   if (!x) return;
@@ -11721,6 +11751,7 @@ window.__selectForwardSupportRequest = (id) => {
   if (locationInput) locationInput.value = x.location || "";
   fillForwardSupportPerson('crewLeader', x.commanderName, forwardSupportPickerUnit);
   fillForwardSupportPerson('driver', x.driverName, forwardSupportPickerUnit);
+  fillForwardSupportVehicle(x.vehicleNumber, forwardSupportPickerUnit);
   const banner = document.getElementById("fs-banner");
   if (banner) {
     banner.classList.add("confirmed");
