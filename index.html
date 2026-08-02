@@ -2078,6 +2078,15 @@
     margin-top:9px; width:100%; text-align:center; background:var(--blue); color:#fff;
     border-radius:var(--radius-sm); font-size:var(--text-sm); font-weight:700; padding:9px 0;
   }
+  .fs-request-card-claimed{opacity:0.6;}
+  .fs-request-claimed-badge{
+    font-size:var(--text-xs); font-weight:700; color:var(--green-text); flex-shrink:0;
+    background:color-mix(in srgb, var(--green) 16%, transparent); padding:2px 9px; border-radius:999px;
+  }
+  .fs-request-claimed-note{
+    margin-top:9px; width:100%; text-align:center; color:var(--muted);
+    font-size:var(--text-xs); font-weight:600; padding:9px 0;
+  }
 </style>
 </head>
 <body>
@@ -2108,7 +2117,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-02-522-forward-support-claim-lock";
+const BUILD_TAG = "2026-08-02-523-forward-support-claimed-badge";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3016,7 +3025,8 @@ const RELEASE_NOTES = [
       "選取前支任務案件後，如果案件本身已經排定車長／駕駛，會直接預先帶入建立勤務頁的車長／駕駛欄位；這兩個欄位還是原本的選人按鈕，帶入的人選如果不對，可以直接點開重新選擇，不會被鎖死",
       "上面的預先帶入功能加上車號：案件本身如果已經排定車輛，會一併帶入車號欄位——是自己單位的車直接選中；是別單位的車自動展開「跨單位借車」；車輛名冊裡完全查不到的車號則自動展開「外部車輛」填入原始車號文字，一樣都能重新選擇或修改",
       "選取前支任務案件後多一顆「取消選取」，發現選錯案件可以整個取消，提示卡恢復成還沒選取的樣子重新挑一筆；已經帶入的任務名稱／地點／車長／駕駛／車號不會被清空，這些欄位本來就能自己直接改",
-      "前支任務案件加上防止同單位多人搶同一筆的機制：一旦有人選這筆案件建立勤務，這筆案件就會從所有人的挑選清單裡消失，不會再被別人選到；如果兩個人幾乎同時搶同一筆，晚送出的那筆勤務仍會正常建立成功，但會另外提示這筆案件剛好被搶走，請互相確認車輛人員沒有重複派遣",
+      "前支任務案件加上防止同單位多人搶同一筆的機制：一旦有人選這筆案件建立勤務，其他人就不能再選取同一筆；如果兩個人幾乎同時搶同一筆，晚送出的那筆勤務仍會正常建立成功，但會另外提示這筆案件剛好被搶走，請互相確認車輛人員沒有重複派遣",
+      "上面的機制調整：已經被選走的案件不再從清單裡整個消失，改成清單裡仍然看得到、標示「已派遣」（不能再選取），「N 筆待指派」的數字只算還沒被選走的",
     ] },
   ] },
   { date: "2026/07/31", groups: [
@@ -7496,11 +7506,14 @@ function viewCreateTask(){
   // 變數本身一樣），不是中文名稱，直接比對 unit 就好，不用經過
   // unitLabel() 轉換。使用者要求只能挑「當天」的案件（taskStartTime 落在
   // 今天），避免選到還沒到、或已經過期好幾天的案件。這條篩選邏輯抽成
-  // forwardSupportPickableList()共用，取消選取後要重新算一次數字時
+  // forwardSupportUnitCases()共用，取消選取後要重新算一次數字時
   // （見 window.__cancelForwardSupportSelection）也是呼叫同一個函式，
-  // 避免兩邊各自維護一份篩選條件、日後改規則漏改其中一邊。
-  const fsPickableList = (!isLiaison && !isStandbyDispatch) ? forwardSupportPickableList(unit) : [];
-  const fsPickableCount = fsPickableList.length;
+  // 避免兩邊各自維護一份篩選條件、日後改規則漏改其中一邊。提示卡只要
+  // 今天這個單位「有案件」就顯示（不管還能不能選）——已經被選走的案件
+  // 使用者要求不要整個藏起來，點進去仍然看得到、標示「已派遣」，只是
+  // fsPickableCount（頁面上顯示的「N 筆待指派」）只算還能選的那些。
+  const fsCaseList = (!isLiaison && !isStandbyDispatch) ? forwardSupportUnitCases(unit) : [];
+  const fsPickableCount = fsCaseList.filter(x => !x.claimedTaskId).length;
 
   return `
     <div class="section-label">建立勤務</div>
@@ -7514,7 +7527,7 @@ function viewCreateTask(){
     <div class="field"><label>營內／營外 *</label>
       ${chipGroup('scope', TASK_SCOPE_OPTIONS, '營內', false, null, 'scope-toggle')}
     </div>` : ""}
-    ${fsPickableCount ? `
+    ${fsCaseList.length ? `
     <div id="fs-banner" class="fs-banner" onclick="window.__openForwardSupportPicker('${unit}')">${forwardSupportBannerInnerHtml(fsPickableCount)}</div>` : ""}
     <form onsubmit="window.__createTask(event, '${unit}', '${taskType}')">
       ${isStandbyDispatch ? `<input type="hidden" name="scope" value="營外">` : ""}
@@ -11640,28 +11653,36 @@ window.__togglePersonPickerCrossUnit = (checkbox) => {
    ========================================================= */
 let selectedForwardSupportRequest = null; // 目前表單帶入的前支案件（挑選後直到送出或離開頁面前有效）｜null
 let forwardSupportPickerUnit = null; // 目前開著的選取彈窗是哪個單位的（見 __openForwardSupportPicker）
-// 「指派給這個單位、狀態是 assigned 或 filled、且 taskStartTime 落在今天、
-// 還沒被同單位其他人挑走（claimedTaskId 還沒設定）」這條篩選條件，建立
-// 勤務頁的提示卡計數、選取彈窗清單、取消選取後重新算一次計數，三個地方
-// 都要用到同一套邏輯，抽出來共用，避免各自維護一份篩選條件、日後改規則
-// 漏改其中一處。同單位可能同時有好幾個人在用這個系統，都看得到同一份
-// 案件清單（這裡沒有依登入者個人身分再篩選，見使用者原話「大家都看得到
-// 今天所有任務」的疑問）——排除 claimedTaskId 就是為了同一筆案件不會
-// 被兩個人各自建立勤務、各自回寫，後送出的那筆把先送出的車長/駕駛/車號
-// 覆蓋掉；真正擋住兩人幾乎同時搶同一筆的競爭情況，靠的是
-// firestore.rules 對 claimedTaskId 的寫入限制（伺服器端判斷，不是這裡
-// 前端篩選這一層能單獨保證的）。
-function forwardSupportPickableList(unit){
+// 「指派給這個單位、狀態是 assigned 或 filled、且 taskStartTime 落在今天」
+// 這條篩選條件，建立勤務頁的提示卡計數、選取彈窗清單、取消選取後重新算
+// 一次計數，都要用到同一套邏輯，抽出來共用，避免各自維護一份篩選條件、
+// 日後改規則漏改其中一處。同單位可能同時有好幾個人在用這個系統，都看得
+// 到同一份案件清單（這裡沒有依登入者個人身分再篩選，見使用者原話「大家
+// 都看得到今天所有任務」的疑問）。
+//
+// 已經被同單位其他人選走（claimedTaskId 已設定）的案件故意不從這份清單
+// 拿掉——使用者明確要求「不要隱藏，改成已派遣」：清單裡還是看得到這筆
+// 案件，只是改標示「已派遣」、不能再選取，讓使用者知道這筆已經有人
+// 處理過了，不是資料憑空消失。真正擋住兩人幾乎同時搶同一筆的競爭情況，
+// 靠的是 firestore.rules 對 claimedTaskId 的寫入限制（伺服器端判斷），
+// 不是靠這裡把它從清單裡藏起來。
+function forwardSupportUnitCases(unit){
   const today = new Date();
   return state.forwardSupportRequests
-    .filter(x => (x.status === 'assigned' || x.status === 'filled') && x.assignedUnit === unit && !x.claimedTaskId && x.taskStartTime && isSameDay(new Date(x.taskStartTime).getTime(), today));
+    .filter(x => (x.status === 'assigned' || x.status === 'filled') && x.assignedUnit === unit && x.taskStartTime && isSameDay(new Date(x.taskStartTime).getTime(), today));
+}
+// 提示卡「N 筆待指派」的 N：只算還沒被選走的，已經是「已派遣」狀態的
+// 不算在「待指派」裡面（但仍然會出現在上面那份清單／彈窗裡）。
+function forwardSupportPickableCount(unit){
+  return forwardSupportUnitCases(unit).filter(x => !x.claimedTaskId).length;
 }
 function forwardSupportRequestRows(query){
   const q = (query||"").trim().toLowerCase();
-  const rows = forwardSupportPickableList(forwardSupportPickerUnit)
+  const rows = forwardSupportUnitCases(forwardSupportPickerUnit)
     .filter(x => !q || (x.taskName||"").toLowerCase().includes(q) || (x.applicantUnit||"").toLowerCase().includes(q) || (x.location||"").toLowerCase().includes(q))
-    .sort((a,b) => new Date(a.taskStartTime||a.createdAt||0) - new Date(b.taskStartTime||b.createdAt||0));
-  if (!rows.length) return `<div class="empty" style="padding:28px 0;">找不到待指派的案件</div>`;
+    // 還沒被選走的排前面，已經是「已派遣」的排後面，同一組內再依時間排序。
+    .sort((a,b) => (!!a.claimedTaskId - !!b.claimedTaskId) || (new Date(a.taskStartTime||a.createdAt||0) - new Date(b.taskStartTime||b.createdAt||0)));
+  if (!rows.length) return `<div class="empty" style="padding:28px 0;">找不到符合條件的案件</div>`;
   return rows.map(x => {
     // 對方系統可能已經先派好車長／駕駛：這些欄位是直接存在案件文件本身
     // 上（commanderName／driverName…），不是另一個獨立的 collection——
@@ -11672,17 +11693,17 @@ function forwardSupportRequestRows(query){
         ${x.driverName ? `<span class="fs-request-crew-item">駕駛　${esc([x.driverRank, x.driverName].filter(Boolean).join(' '))}</span>` : ""}
       </div>` : "";
     return `
-    <div class="fs-request-card">
+    <div class="fs-request-card${x.claimedTaskId ? ' fs-request-card-claimed' : ''}">
       <div class="fs-request-top">
         <span class="fs-request-title">${esc(x.taskName||'（未命名案件）')}</span>
-        ${x.tagName ? `<span class="fs-request-tag" style="background:${esc(x.tagColor||'#0066FF')};">${esc(x.tagName)}</span>` : ""}
+        ${x.claimedTaskId ? `<span class="fs-request-claimed-badge">已派遣</span>` : (x.tagName ? `<span class="fs-request-tag" style="background:${esc(x.tagColor||'#0066FF')};">${esc(x.tagName)}</span>` : "")}
       </div>
       <div class="fs-request-meta">
         申請單位：${esc([x.applicantUnit, x.applicantRank, x.applicantName].filter(Boolean).join('　') || '—')}<br>
         地點：${esc(x.location||'—')}${x.taskStartTime ? `　${fmtTime(new Date(x.taskStartTime).getTime())}${x.taskEndTime ? '–' + fmtTime(new Date(x.taskEndTime).getTime()) : ''}` : ''}
       </div>
       ${crewHtml}
-      <button type="button" class="fs-request-pick-btn" onclick="window.__selectForwardSupportRequest('${esc(x.id)}')">選取這筆</button>
+      ${x.claimedTaskId ? `<div class="fs-request-claimed-note">已經被同單位其他人選取建立勤務</div>` : `<button type="button" class="fs-request-pick-btn" onclick="window.__selectForwardSupportRequest('${esc(x.id)}')">選取這筆</button>`}
     </div>`;
   }).join("");
 }
@@ -11783,14 +11804,18 @@ window.__selectForwardSupportRequest = (id) => {
 // 又能打開挑選彈窗）；已經自動帶入表單的任務名稱/地點/車長/駕駛/車號故意
 // 不清空——這些欄位本來就是使用者可以自由編輯的一般欄位，取消選取只是
 // 解除「送出後要回寫這筆案件」的綁定，不等於要使用者連已經填好的內容都
-// 重新填一次。如果取消當下這個單位已經沒有其他待指派案件了，直接把整張
-// 提示卡拿掉，不留一個點了沒反應的空卡片。
+// 重新填一次。如果取消當下這個單位今天完全沒有任何案件了（不是「沒有
+// 還能選的」，是這個單位今天根本一筆都沒有），才把整張提示卡拿掉，不留
+// 一個點了沒反應的空卡片；已經有案件、只是全部都被選走了，仍然顯示提示
+// 卡（可以點進去看那些「已派遣」的案件），理由跟 viewCreateTask 的
+// fsCaseList／fsPickableCount 是同一套。
 window.__cancelForwardSupportSelection = (unit) => {
   selectedForwardSupportRequest = null;
   const banner = document.getElementById("fs-banner");
   if (!banner) return;
-  const count = forwardSupportPickableList(unit).length;
-  if (!count) { banner.remove(); return; }
+  const cases = forwardSupportUnitCases(unit);
+  if (!cases.length) { banner.remove(); return; }
+  const count = cases.filter(x => !x.claimedTaskId).length;
   banner.classList.remove("confirmed");
   banner.onclick = () => window.__openForwardSupportPicker(unit);
   banner.innerHTML = forwardSupportBannerInnerHtml(count);
