@@ -2102,7 +2102,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-02-514-fix-forward-support-status";
+const BUILD_TAG = "2026-08-02-515-forward-support-unit-label";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -2626,12 +2626,6 @@ const UNITS = [
   { code: "co1", label: "第一連" },
   { code: "co2", label: "第二連" }
 ];
-// 前支任務派遣系統對單位的稱呼跟這邊不一樣（它是「一連」「二連」，沒有
-// 「第」字；這邊是「第一連」「第二連」），forward_support_requests 的
-// assignedUnit 欄位存的是對方的稱呼，比對案件是不是指派給「這個單位」時
-// 要用這份對照表轉換，不能直接拿 unitLabel() 的結果去比對，兩邊字串對
-// 不起來（見 forwardSupportRequestRows／viewCreateTask 的 fsPickableCount）。
-const FS_ASSIGNED_UNIT_LABEL = { hq: "營部", co1: "一連", co2: "二連" };
 function unitLabel(code){ return (UNITS.find(u => u.code === code) || {}).label || code || "未設定"; }
 function unitWeight(code){ const i = UNITS.findIndex(u => u.code === code); return i === -1 ? UNITS.length : i; }
 
@@ -3009,6 +3003,7 @@ const RELEASE_NOTES = [
   { date: "2026/08/02", groups: [
     { category: "任務管理", items: [
       "修正「前支任務案件」串接誤判對方系統狀態流程的問題：昨天上線時把「案件已核定、等待前支派遣中心指派承辦單位」（approved）誤認為是「可以挑選」的狀態，實際上要等對方指派給某個單位（assigned，且指派到的單位要是自己單位）才輪到這邊接手；建立勤務送出後回寫的狀態也從原本誤寫的「assigned」修正成「filled」（對方系統定義的「已派遣」，車輛人員都確認好了）。修正前這個功能形同看不到任何案件、完全沒作用",
+      "前支任務派遣系統的單位稱呼已經跟這邊統一（營部／第一連／第二連），移除這邊原本自己維護的單位名稱對照表，直接比對兩邊的單位名稱即可，往後兩邊單位名稱異動也不用再各自維護一份對照表",
     ] },
   ] },
   { date: "2026/07/31", groups: [
@@ -7485,9 +7480,10 @@ function viewCreateTask(){
   // （見 window.__createTask），不是繼續停在 assigned。
   // 洽公類型沒有車輛/車長/駕駛的概念，跟前支案件（車輛派遣）的資料形狀
   // 對不上，只在勤務類型顯示這個功能。急診待命的待命勤務走固定流程，
-  // 也不適用。
+  // 也不適用。assignedUnit 現在跟這邊的 unitLabel() 用同一套中文名稱
+  // （營部／第一連／第二連），直接比對就好，不用再另外轉換。
   const fsPickableList = (!isLiaison && !isStandbyDispatch)
-    ? state.forwardSupportRequests.filter(x => x.status === 'assigned' && x.assignedUnit === FS_ASSIGNED_UNIT_LABEL[unit]) : [];
+    ? state.forwardSupportRequests.filter(x => x.status === 'assigned' && x.assignedUnit === unitLabel(unit)) : [];
   const fsPickableCount = fsPickableList.length;
 
   return `
@@ -11626,7 +11622,7 @@ window.__togglePersonPickerCrossUnit = (checkbox) => {
    同一個 Firestore 專案）：建立勤務頁點「前支任務案件」提示卡，叫出這個
    彈窗挑一筆已經指派給這個單位、但對方還沒填實際車輛人員的案件
    （forward_support_requests，status===assigned 且 assignedUnit 是這個
-   單位——見 FS_ASSIGNED_UNIT_LABEL／viewCreateTask 的說明），直接把任務
+   單位的 unitLabel()——見 viewCreateTask 的說明），直接把任務
    名稱／地點帶進表單欄位；選定的案件記在 selectedForwardSupportRequest
    （不是 state，避免選取當下觸發整頁重繪、把使用者已經填的其他欄位洗
    掉——跟車長/駕駛選擇器直接操作 DOM、不呼叫 render() 是同一個考量）。
@@ -11638,7 +11634,7 @@ let forwardSupportPickerUnit = null; // 目前開著的選取彈窗是哪個單�
 function forwardSupportRequestRows(query){
   const q = (query||"").trim().toLowerCase();
   const rows = state.forwardSupportRequests
-    .filter(x => x.status === 'assigned' && x.assignedUnit === FS_ASSIGNED_UNIT_LABEL[forwardSupportPickerUnit])
+    .filter(x => x.status === 'assigned' && x.assignedUnit === unitLabel(forwardSupportPickerUnit))
     .filter(x => !q || (x.taskName||"").toLowerCase().includes(q) || (x.applicantUnit||"").toLowerCase().includes(q) || (x.location||"").toLowerCase().includes(q))
     .sort((a,b) => new Date(a.taskStartTime||a.createdAt||0) - new Date(b.taskStartTime||b.createdAt||0));
   if (!rows.length) return `<div class="empty" style="padding:28px 0;">找不到待指派的案件</div>`;
