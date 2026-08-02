@@ -2063,6 +2063,10 @@
   .fs-banner-title{font-size:var(--text-sm); font-weight:800; color:var(--text);}
   .fs-banner-sub{font-size:var(--text-xs); color:var(--muted); margin-top:2px;}
   .fs-banner-chev{color:var(--blue); flex-shrink:0; display:flex;}
+  .fs-banner-cancel-btn{
+    flex-shrink:0; font-size:var(--text-xs); font-weight:600; color:var(--muted);
+    border:1px solid var(--border); background:var(--panel); border-radius:999px; padding:5px 12px;
+  }
   .fs-request-card{background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; margin-bottom:10px;}
   .fs-request-top{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:5px;}
   .fs-request-title{font-size:var(--text-sm); font-weight:800; color:var(--text);}
@@ -2104,7 +2108,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-02-520-forward-support-vehicle-prefill";
+const BUILD_TAG = "2026-08-02-521-forward-support-cancel-selection";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3011,6 +3015,7 @@ const RELEASE_NOTES = [
       "修正案件卡片顯示不出車長的問題：車長／駕駛／車號其實是直接存在案件文件本身，不是另一個獨立的資料表，確認建立勤務後也改成直接把這些資訊寫回同一筆案件，前支系統那邊的畫面才會正確顯示車長",
       "選取前支任務案件後，如果案件本身已經排定車長／駕駛，會直接預先帶入建立勤務頁的車長／駕駛欄位；這兩個欄位還是原本的選人按鈕，帶入的人選如果不對，可以直接點開重新選擇，不會被鎖死",
       "上面的預先帶入功能加上車號：案件本身如果已經排定車輛，會一併帶入車號欄位——是自己單位的車直接選中；是別單位的車自動展開「跨單位借車」；車輛名冊裡完全查不到的車號則自動展開「外部車輛」填入原始車號文字，一樣都能重新選擇或修改",
+      "選取前支任務案件後多一顆「取消選取」，發現選錯案件可以整個取消，提示卡恢復成還沒選取的樣子重新挑一筆；已經帶入的任務名稱／地點／車長／駕駛／車號不會被清空，這些欄位本來就能自己直接改",
     ] },
   ] },
   { date: "2026/07/31", groups: [
@@ -7489,9 +7494,11 @@ function viewCreateTask(){
   // 也不適用。assignedUnit 存的是單位代碼（hq/co1/co2，跟這邊的 unit
   // 變數本身一樣），不是中文名稱，直接比對 unit 就好，不用經過
   // unitLabel() 轉換。使用者要求只能挑「當天」的案件（taskStartTime 落在
-  // 今天），避免選到還沒到、或已經過期好幾天的案件。
-  const fsPickableList = (!isLiaison && !isStandbyDispatch)
-    ? state.forwardSupportRequests.filter(x => (x.status === 'assigned' || x.status === 'filled') && x.assignedUnit === unit && x.taskStartTime && isSameDay(new Date(x.taskStartTime).getTime(), new Date())) : [];
+  // 今天），避免選到還沒到、或已經過期好幾天的案件。這條篩選邏輯抽成
+  // forwardSupportPickableList()共用，取消選取後要重新算一次數字時
+  // （見 window.__cancelForwardSupportSelection）也是呼叫同一個函式，
+  // 避免兩邊各自維護一份篩選條件、日後改規則漏改其中一邊。
+  const fsPickableList = (!isLiaison && !isStandbyDispatch) ? forwardSupportPickableList(unit) : [];
   const fsPickableCount = fsPickableList.length;
 
   return `
@@ -7507,14 +7514,7 @@ function viewCreateTask(){
       ${chipGroup('scope', TASK_SCOPE_OPTIONS, '營內', false, null, 'scope-toggle')}
     </div>` : ""}
     ${fsPickableCount ? `
-    <div id="fs-banner" class="fs-banner" onclick="window.__openForwardSupportPicker('${unit}')">
-      <div class="fs-banner-icon">${icon('records',18)}</div>
-      <div class="fs-banner-text">
-        <div class="fs-banner-title">前支任務案件（${fsPickableCount} 筆待指派）</div>
-        <div class="fs-banner-sub">點擊選取案件，自動帶入任務資訊</div>
-      </div>
-      <div class="fs-banner-chev">${icon('chevronDown',14).replace('<svg ', '<svg style="transform:rotate(-90deg);" ')}</div>
-    </div>` : ""}
+    <div id="fs-banner" class="fs-banner" onclick="window.__openForwardSupportPicker('${unit}')">${forwardSupportBannerInnerHtml(fsPickableCount)}</div>` : ""}
     <form onsubmit="window.__createTask(event, '${unit}', '${taskType}')">
       ${isStandbyDispatch ? `<input type="hidden" name="scope" value="營外">` : ""}
       ${canSwitch ? `
@@ -11639,14 +11639,18 @@ window.__togglePersonPickerCrossUnit = (checkbox) => {
    ========================================================= */
 let selectedForwardSupportRequest = null; // 目前表單帶入的前支案件（挑選後直到送出或離開頁面前有效）｜null
 let forwardSupportPickerUnit = null; // 目前開著的選取彈窗是哪個單位的（見 __openForwardSupportPicker）
+// 「指派給這個單位、狀態是 assigned 或 filled、且 taskStartTime 落在今天」
+// 這條篩選條件，建立勤務頁的提示卡計數、選取彈窗清單、取消選取後重新算
+// 一次計數，三個地方都要用到同一套邏輯，抽出來共用，避免各自維護一份
+// 篩選條件、日後改規則漏改其中一處。
+function forwardSupportPickableList(unit){
+  const today = new Date();
+  return state.forwardSupportRequests
+    .filter(x => (x.status === 'assigned' || x.status === 'filled') && x.assignedUnit === unit && x.taskStartTime && isSameDay(new Date(x.taskStartTime).getTime(), today));
+}
 function forwardSupportRequestRows(query){
   const q = (query||"").trim().toLowerCase();
-  const today = new Date();
-  const rows = state.forwardSupportRequests
-    .filter(x => (x.status === 'assigned' || x.status === 'filled') && x.assignedUnit === forwardSupportPickerUnit)
-    // 使用者要求只能挑當天的案件，跟 viewCreateTask 的提示卡計數同一套
-    // 篩選條件，不然卡片數字跟彈窗清單內容會對不上。
-    .filter(x => x.taskStartTime && isSameDay(new Date(x.taskStartTime).getTime(), today))
+  const rows = forwardSupportPickableList(forwardSupportPickerUnit)
     .filter(x => !q || (x.taskName||"").toLowerCase().includes(q) || (x.applicantUnit||"").toLowerCase().includes(q) || (x.location||"").toLowerCase().includes(q))
     .sort((a,b) => new Date(a.taskStartTime||a.createdAt||0) - new Date(b.taskStartTime||b.createdAt||0));
   if (!rows.length) return `<div class="empty" style="padding:28px 0;">找不到待指派的案件</div>`;
@@ -11761,11 +11765,38 @@ window.__selectForwardSupportRequest = (id) => {
       <div class="fs-banner-text">
         <div class="fs-banner-title">已帶入前支案件</div>
         <div class="fs-banner-sub">${esc(x.taskName||'')}</div>
-      </div>`;
+      </div>
+      <button type="button" class="fs-banner-cancel-btn" onclick="event.stopPropagation(); window.__cancelForwardSupportSelection('${esc(forwardSupportPickerUnit)}')">取消選取</button>`;
   }
   closeForwardSupportPicker();
   showToast("已帶入案件資訊，請確認車長／駕駛後送出");
 };
+// 選錯案件時能整個取消掉，回到還沒選取的狀態（重新顯示待指派筆數，點擊
+// 又能打開挑選彈窗）；已經自動帶入表單的任務名稱/地點/車長/駕駛/車號故意
+// 不清空——這些欄位本來就是使用者可以自由編輯的一般欄位，取消選取只是
+// 解除「送出後要回寫這筆案件」的綁定，不等於要使用者連已經填好的內容都
+// 重新填一次。如果取消當下這個單位已經沒有其他待指派案件了，直接把整張
+// 提示卡拿掉，不留一個點了沒反應的空卡片。
+window.__cancelForwardSupportSelection = (unit) => {
+  selectedForwardSupportRequest = null;
+  const banner = document.getElementById("fs-banner");
+  if (!banner) return;
+  const count = forwardSupportPickableList(unit).length;
+  if (!count) { banner.remove(); return; }
+  banner.classList.remove("confirmed");
+  banner.onclick = () => window.__openForwardSupportPicker(unit);
+  banner.innerHTML = forwardSupportBannerInnerHtml(count);
+  showToast("已取消選取前支案件");
+};
+function forwardSupportBannerInnerHtml(count){
+  return `
+    <div class="fs-banner-icon">${icon('records',18)}</div>
+    <div class="fs-banner-text">
+      <div class="fs-banner-title">前支任務案件（${count} 筆待指派）</div>
+      <div class="fs-banner-sub">點擊選取案件，自動帶入任務資訊</div>
+    </div>
+    <div class="fs-banner-chev">${icon('chevronDown',14).replace('<svg ', '<svg style="transform:rotate(-90deg);" ')}</div>`;
+}
 /* =========================================================
    洽公人員選擇器：跟車長／駕駛選擇器同一套彈窗邏輯，但可複選。洽公不常
    跨單位選人，預設只列自己單位的人（比照「跨單位借車」預設不勾選同一個
