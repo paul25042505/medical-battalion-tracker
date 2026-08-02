@@ -459,5 +459,33 @@ service cloud.firestore {
       // 刪除：admin 或登記人本人（限在職帳號）。
       allow delete: if isAdmin() || (isActive() && request.auth.uid == resource.data.createdBy);
     }
+
+    // 前支任務派遣系統（forward-support-dispatch，見「網網相連」）跟本系統
+    // 共用同一個 Firestore 專案：對方負責建立/審核案件
+    // （forward_support_requests），這邊在「建立勤務」頁挑選待指派案件、
+    // 確認車長駕駛後，把指派結果寫回 forward_support_assignments、並把
+    // 該案件 status 改成 assigned（見 index.html 的
+    // __openForwardSupportPicker／window.__createTask）。
+    // 案件本身的新增/審核（status 從 pending 走到 approved 的過程）完全由
+    // 對方系統維護，這裡只放行「把已核准的案件改成 assigned」這一種變更：
+    // 只能改 status 這一個欄位、而且新值只能是 assigned——不開放建立/刪除
+    // 案件，也不能把其他欄位（申請單位/任務內容等）跟著一起改掉，更不能
+    // 把 status 改成其他值（例如惡意把別人的案件改回 pending 或直接
+    // rejected）。
+    match /forward_support_requests/{id} {
+      allow read: if isActive();
+      allow update: if isActive() && resource.data.status == 'approved'
+                    && onlyChanged(['status']) && request.resource.data.status == 'assigned';
+      allow create, delete: if false;
+    }
+    // 車輛/人員指派結果，寫入後不可再變更或刪除（跟其他「送出去就送出去
+    // 了」的紀錄一致，例如 notifications 的全體公告）；任何在職帳號都能
+    // 建立一筆（信任範圍等同這個系統內部其他建立動作，不做更細的欄位
+    // 驗證）。
+    match /forward_support_assignments/{id} {
+      allow read: if isActive();
+      allow create: if isActive();
+      allow update, delete: if false;
+    }
   }
 }
