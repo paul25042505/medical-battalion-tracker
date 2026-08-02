@@ -465,20 +465,21 @@ service cloud.firestore {
     // reviewing（審核中）→ approved（已核定，等待前支派遣中心指派承辦
     // 單位）→ assigned（已核定並指派給某個單位、連同 assignedUnit 欄位一起
     // 寫入，等這個單位實際派車派人）→ filled（已派遣，車輛/人員都確認
-    // 好了）。這邊在「建立勤務」頁挑選 status===assigned 且指派給自己單位
-    // 的案件、確認車長駕駛後，把指派結果寫回 forward_support_assignments、
-    // 並把該案件 status 推進到 filled（見 index.html 的
-    // __openForwardSupportPicker／window.__createTask）。
+    // 好了）。這邊在「建立勤務」頁挑選 status 是 assigned 或 filled、且
+    // assignedUnit 是自己單位的案件（使用者確認過兩種狀態都要能挑選），
+    // 確認車長駕駛後把指派結果寫回 forward_support_assignments、並把該
+    // 案件 status 統一寫成 filled（見 index.html 的
+    // __openForwardSupportPicker／window.__createTask）——如果原本就已經
+    // 是 filled，這筆更新等於原值不變，只是再次確認。
     // 案件本身的新增/審核/指派承辦單位（pending 一路走到 assigned 的
-    // 過程）完全由對方系統維護，這裡只放行「把已經指派給某單位、還沒填
-    // 實際車輛人員的案件改成 filled」這一種變更：只能改 status 這一個
-    // 欄位、且只能從 assigned 改成 filled——不開放建立/刪除案件，也不能
-    // 把其他欄位（申請單位/任務內容/assignedUnit 等）跟著一起改掉，更
-    // 不能把 status 改成其他值（例如惡意把別人的案件改回 pending 或直接
-    // rejected）。
+    // 過程）完全由對方系統維護，這裡只放行「已經指派給某單位（assigned
+    // 或 filled）的案件改成 filled」這一種變更：只能改 status 這一個
+    // 欄位、且只能改成 filled——不開放建立/刪除案件，也不能把其他欄位
+    // （申請單位/任務內容/assignedUnit 等）跟著一起改掉，更不能把 status
+    // 改成其他值（例如惡意把別人的案件改回 pending 或直接 rejected）。
     match /forward_support_requests/{id} {
       allow read: if isActive();
-      allow update: if isActive() && resource.data.status == 'assigned'
+      allow update: if isActive() && (resource.data.status == 'assigned' || resource.data.status == 'filled')
                     && onlyChanged(['status']) && request.resource.data.status == 'filled';
       allow create, delete: if false;
     }
