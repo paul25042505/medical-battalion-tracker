@@ -2104,7 +2104,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-02-518-forward-support-crew-field-fix";
+const BUILD_TAG = "2026-08-02-519-forward-support-crew-prefill";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3009,6 +3009,7 @@ const RELEASE_NOTES = [
       "再次修正「前支任務案件」串接：實際確認過對方系統的 assignedUnit 欄位存的其實是單位代碼（hq／co1／co2），不是中文名稱，改成直接比對代碼；另外案件狀態是「已核定」（assigned）或「已派遣」（filled）都能在這邊挑選，不是只有「已核定」，送出建立勤務後一律把狀態寫成「已派遣」",
       "「前支任務案件」挑選清單改成只顯示當天的案件，不會再選到明天以後或已經過期的案件；每張案件卡片如果對方系統已經先排定車長／駕駛，會直接顯示出來供對照確認",
       "修正案件卡片顯示不出車長的問題：車長／駕駛／車號其實是直接存在案件文件本身，不是另一個獨立的資料表，確認建立勤務後也改成直接把這些資訊寫回同一筆案件，前支系統那邊的畫面才會正確顯示車長",
+      "選取前支任務案件後，如果案件本身已經排定車長／駕駛，會直接預先帶入建立勤務頁的車長／駕駛欄位；這兩個欄位還是原本的選人按鈕，帶入的人選如果不對，可以直接點開重新選擇，不會被鎖死",
     ] },
   ] },
   { date: "2026/07/31", groups: [
@@ -11695,6 +11696,21 @@ window.__filterForwardSupportPicker = (query) => {
   const list = document.getElementById("fs-picker-list");
   if (list) list.innerHTML = forwardSupportRequestRows(query);
 };
+// 案件文件本身如果已經帶有車長／駕駛（對方系統已經先排定），選取這筆案件
+// 時直接預先填入車長／駕駛欄位，省得使用者自己重選一次；但欄位本身還是
+// 原本的人員選擇器（按鈕點下去會開啟選人彈窗），預先填入的人選有可能跟
+// 現場實際出勤的人不一樣，使用者仍然可以點開重新選擇，不會被鎖死。
+function fillForwardSupportPerson(fieldName, name, unit){
+  if (!name) return;
+  const input = document.querySelector(`[name="${fieldName}"]`);
+  if (!input) return;
+  input.value = name;
+  if (input.type === "hidden") {
+    const btn = input.previousElementSibling;
+    const textEl = btn && btn.querySelector(".picker-field-text");
+    if (textEl) { textEl.textContent = crewDisplayLabel(name, unit); textEl.classList.remove("placeholder"); }
+  }
+}
 window.__selectForwardSupportRequest = (id) => {
   const x = state.forwardSupportRequests.find(r => r.id === id);
   if (!x) return;
@@ -11703,6 +11719,8 @@ window.__selectForwardSupportRequest = (id) => {
   const locationInput = document.getElementById("tf-location");
   if (titleInput) titleInput.value = x.taskName || "";
   if (locationInput) locationInput.value = x.location || "";
+  fillForwardSupportPerson('crewLeader', x.commanderName, forwardSupportPickerUnit);
+  fillForwardSupportPerson('driver', x.driverName, forwardSupportPickerUnit);
   const banner = document.getElementById("fs-banner");
   if (banner) {
     banner.classList.add("confirmed");
