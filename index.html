@@ -2119,7 +2119,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-03-527-login-loading-state";
+const BUILD_TAG = "2026-08-03-528-liaison-vitals-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3027,6 +3027,9 @@ const RELEASE_NOTES = [
     ] },
     { category: "登入", items: [
       "修正網路較慢時登入按鈕看起來沒反應、容易讓人連續狂點的問題：點下去到跳出視窗這段等待期間，按鈕會立即鎖住並顯示「登入中…」，避免每點一次就重新觸發一次登入請求（反而讓前一個還沒完成的登入被取消掉、更難成功登入）；登入失敗時按鈕會恢復可以再點一次",
+    ] },
+    { category: "患者紀錄", items: [
+      "修正洽公類型任務（例如教召人員接送）看不到「患者狀況」卡片的問題：只要任務還沒結案，不論是勤務還是洽公類型都能記錄患者狀況，這才符合原本的設計本意（任何進行中的任務遇到突發狀況都能記錄），先前多加了一個限制條件把洽公類型擋掉了",
     ] },
   ] },
   { date: "2026/08/02", groups: [
@@ -8337,7 +8340,12 @@ function viewTaskDetail(taskId){
     ? (canDoReport ? '查看／更新紀錄' : '查看紀錄')
     : hasPatient ? (canDoReport ? '查看／新增紀錄' : '查看紀錄')
     : (canDoReport ? '開始記錄' : '查看紀錄');
-  const vitalsSection = !isLiaison && (hasPatient || (canDoReport && s !== "completed")) ? `
+  // 患者狀況卡片本身跟任務類型無關（見上面「患者狀況」區塊開頭的說明：
+  // 任何進行中的任務，遇到突發狀況都能記錄）——教召接送、待命車都可能
+  // 臨時需要記錄患者狀況，之前這裡誤加了 !isLiaison，導致洽公類型的
+  // 任務（例如教召接送）完全看不到這張卡片，跟原本的設計意圖不一致，
+  // 這裡拿掉這個限制，只看任務是否已經結案（s !== "completed"）。
+  const vitalsSection = (hasPatient || (canDoReport && s !== "completed")) ? `
     <div class="section-label">患者狀況</div>
     <div class="patient-card${hasActivePatient ? ' has-record' : ''}">
       <${patientCardTag} class="patient-card-main"${patientCardClickAttr}>
