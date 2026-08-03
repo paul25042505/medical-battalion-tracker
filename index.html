@@ -2117,7 +2117,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-02-523-forward-support-claimed-badge";
+const BUILD_TAG = "2026-08-03-524-patient-badge-order";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3015,6 +3015,11 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/08/03", groups: [
+    { category: "介面優化", items: [
+      "任務卡片上「有患者」「不送醫」兩個徽章的順序調整為「有患者」在前、「不送醫」在後",
+    ] },
+  ] },
   { date: "2026/08/02", groups: [
     { category: "任務管理", items: [
       "修正「前支任務案件」串接誤判對方系統狀態流程的問題：昨天上線時把「案件已核定、等待前支派遣中心指派承辦單位」（approved）誤認為是「可以挑選」的狀態，實際上要等對方指派給某個單位（assigned，且指派到的單位要是自己單位）才輪到這邊接手；建立勤務送出後回寫的狀態也從原本誤寫的「assigned」修正成「filled」（對方系統定義的「已派遣」，車輛人員都確認好了）。修正前這個功能形同看不到任何案件、完全沒作用",
@@ -6686,8 +6691,8 @@ function taskCard(t){
     <div class="task-top">
       <p class="task-title">${esc(t.title)}</p>
       <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
-        ${noTransportMarked ? `<span class="patient-badge no-transport">${icon('check',13)} 不送醫</span>` : ""}
         ${hasPatient ? `<span class="patient-badge">${icon('alert',13)} 有患者</span>` : ""}
+        ${noTransportMarked ? `<span class="patient-badge no-transport">${icon('check',13)} 不送醫</span>` : ""}
         ${statusBadge(s)}
       </div>
     </div>
