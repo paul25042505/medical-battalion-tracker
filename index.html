@@ -2117,7 +2117,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-03-524-patient-badge-order";
+const BUILD_TAG = "2026-08-03-525-patient-badge-vertical";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3018,6 +3018,7 @@ const RELEASE_NOTES = [
   { date: "2026/08/03", groups: [
     { category: "介面優化", items: [
       "任務卡片上「有患者」「不送醫」兩個徽章的順序調整為「有患者」在前、「不送醫」在後",
+      "上面兩個徽章（含狀態徽章）改成垂直排列，不是原本並排在同一列",
     ] },
   ] },
   { date: "2026/08/02", groups: [
@@ -6690,7 +6691,7 @@ function taskCard(t){
   <div class="task-card spatial-card ${taskCardClass(s)}${hasPatient ? ' has-patient' : ''}" onclick="if(!event.target.closest('a')) window.__nav({name:'task', id:'${t.id}'})">
     <div class="task-top">
       <p class="task-title">${esc(t.title)}</p>
-      <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0;">
         ${hasPatient ? `<span class="patient-badge">${icon('alert',13)} 有患者</span>` : ""}
         ${noTransportMarked ? `<span class="patient-badge no-transport">${icon('check',13)} 不送醫</span>` : ""}
         ${statusBadge(s)}
