@@ -2117,7 +2117,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-03-525-patient-badge-vertical";
+const BUILD_TAG = "2026-08-03-526-hide-foreign-system-accounts";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3019,6 +3019,9 @@ const RELEASE_NOTES = [
     { category: "介面優化", items: [
       "任務卡片上「有患者」「不送醫」兩個徽章的順序調整為「有患者」在前、「不送醫」在後",
       "上面兩個徽章（含狀態徽章）改成垂直排列，不是原本並排在同一列",
+    ] },
+    { category: "人員與帳號", items: [
+      "「人員與帳號」的「待指派單位」「待審核」清單不再顯示前支任務派遣系統（跟這邊共用同一個 Firebase 專案）用手機號碼登入產生的假信箱帳號（信箱網域 @fsr.local），這種帳號不是要給這邊系統用的，混進來只會讓管理員誤以為要幫忙審核",
     ] },
   ] },
   { date: "2026/08/02", groups: [
@@ -10442,6 +10445,16 @@ function viewEmergencyBroadcastModal(){
 // onlyChanged 寫入限制一致）。
 // 還沒被指派單位的帳號（剛登入的 pending、或忘記選單位的舊資料）不會
 // 出現在任何單位頁籤裡，另外獨立列在「待指派單位」，確保不會被漏掉。
+//
+// 前支任務派遣系統（forward-support-dispatch）跟這邊共用同一個 Firebase
+// 專案（同一個 Authentication／users 集合），對方系統用手機號碼登入時
+// 會自動產生一個假信箱（例如 38734@fsr.local）寫進共用的 users 集合，
+// 這筆帳號並不是要給這邊系統用的，只是剛好觸發了同一支 onUserCreated
+// 雲端函式、進了同一份名冊資料——不應該出現在這邊的「待指派單位」／
+// 「待審核」清單，混進來只會讓管理員誤以為要幫這個人審核/指派單位。
+// 用信箱網域判斷（@fsr.local 是對方系統這種假信箱固定使用的網域），
+// 這邊的頁面整個篩掉，不影響 Firestore 裡實際存的資料本身。
+function isOtherSystemAccount(x){ return (x.email||"").trim().toLowerCase().endsWith("@fsr.local"); }
 function viewAdminUsers(){
   const p = state.profile;
   const canAssignRole = canManageUsers(p);
@@ -10483,21 +10496,22 @@ function viewAdminUsers(){
       ${x.role==='unclaimed' ? `<div class="personnel-card-controls"><button class="icon-btn danger" type="button" onclick="window.__deleteBaseData('personnel','${x.id}')">${icon('trash',14)} 刪除</button></div>` : ''}
     </div>`;
   };
-  const unassigned = canAssignRole ? state.personnel.filter(x => !x.unit) : [];
+  const managedPersonnel = state.personnel.filter(x => !isOtherSystemAccount(x));
+  const unassigned = canAssignRole ? managedPersonnel.filter(x => !x.unit) : [];
   const unit = canSwitch ? (state.baseDataUnit || UNITS[0].code) : myUnit(p);
   // 待審核彙整區塊：不管目前分頁切到哪個單位，都要能一眼看到「還有誰沒
   // 審核」，不然要一個個切單位分頁才找得到，見使用者回報「待審核的人會
   // 跟已審核的人混在一起」。admin／高勤官（canSwitch）不分單位列出全部；
   // 主官管（!canSwitch）本來就只看得到自己單位，這裡也只篩自己單位，
   // 不要因為加了這個彙整區塊反而看到別單位的待審核名單。
-  const pendingScope = canSwitch ? state.personnel : state.personnel.filter(x => x.unit === unit);
+  const pendingScope = canSwitch ? managedPersonnel : managedPersonnel.filter(x => x.unit === unit);
   const pendingAccounts = pendingScope.filter(x => x.role === 'pending')
     .slice().sort((a,b) => unitWeight(a.unit) - unitWeight(b.unit) || rankWeight(a.title) - rankWeight(b.title));
   const unitTabs = canSwitch ? `
     <div class="tabs2">
       ${UNITS.map(u => `<div class="tab2 ${unit===u.code?'active':''}" onclick="window.__setBaseDataUnit('${u.code}')">${u.label}</div>`).join("")}
     </div>` : `<div class="section-label">${unitLabel(unit)}</div>`;
-  const rows = unit ? state.personnel.filter(x => x.unit === unit).slice().sort((a,b) => rankWeight(a.title) - rankWeight(b.title)) : [];
+  const rows = unit ? managedPersonnel.filter(x => x.unit === unit).slice().sort((a,b) => rankWeight(a.title) - rankWeight(b.title)) : [];
   return `
     <div class="section-label">人員與帳號</div>
     ${unassigned.length ? `
