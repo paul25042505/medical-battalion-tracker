@@ -873,12 +873,17 @@ exports.sendEmergencyBroadcast = onRequest({ cors: true }, async (req, res) => {
       Firebase 自訂權杖，前端用 signInWithCustomToken 直接登入這個帳號，
       驗證碼同時標記為已使用（單次有效，符合使用者要求）。
 
-   信件寄送用 nodemailer 走 Gmail SMTP，寄件帳號的應用程式密碼存在
-   Cloud Functions 密鑰 GMAIL_APP_PASSWORD（見 firebase functions:secrets:set），
-   不會出現在原始碼或 Git 版本紀錄裡；寄件信箱本身（RECOVERY_SENDER_EMAIL）
-   不是密鑰，直接寫在原始碼沒有安全疑慮。
+   信件寄送用 nodemailer 走 SendGrid 的 SMTP relay（不是 Gmail SMTP：
+   寄件帳號 paul25042505@gmail.com 本身停用了應用程式密碼——帳號開了
+   進階保護計畫或類似的組織限制，Google 帳戶設定裡完全不會顯示「應用
+   程式密碼」這個選項，這條路走不通），改用 SendGrid 的「Single Sender
+   Verification」驗證這個信箱當寄件者，不需要自己的網域、不用設定
+   DNS。API Key 存在 Cloud Functions 密鑰 SENDGRID_API_KEY（見
+   firebase functions:secrets:set），不會出現在原始碼或 Git 版本紀錄
+   裡；寄件信箱本身（RECOVERY_SENDER_EMAIL）不是密鑰，直接寫在原始碼
+   沒有安全疑慮。
    ========================================================= */
-const GMAIL_APP_PASSWORD = defineSecret("GMAIL_APP_PASSWORD");
+const SENDGRID_API_KEY = defineSecret("SENDGRID_API_KEY");
 const RECOVERY_SENDER_EMAIL = "paul25042505@gmail.com";
 const RECOVERY_CODE_TTL_MS = 10 * 60 * 1000; // 10 分鐘
 const RECOVERY_CODE_COOLDOWN_MS = 60 * 1000; // 同一個帳號 60 秒內不重複寄信
@@ -890,9 +895,14 @@ function hashRecoveryCode(code) {
 let mailTransporter = null;
 function getMailTransporter() {
   if (!mailTransporter) {
+    // SendGrid SMTP relay：帳號固定是字面上的 "apikey" 這個字串，密碼
+    // 才是真正的 API Key，跟一般 SMTP 帳密的用法不太一樣，是 SendGrid
+    // 自己的慣例。
     mailTransporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: { user: RECOVERY_SENDER_EMAIL, pass: GMAIL_APP_PASSWORD.value() },
+      host: "smtp.sendgrid.net",
+      port: 587,
+      secure: false,
+      auth: { user: "apikey", pass: SENDGRID_API_KEY.value() },
     });
   }
   return mailTransporter;
@@ -908,7 +918,7 @@ async function findActiveUserByPhone(phone) {
   if (candidates.length !== 1) return null;
   return candidates[0];
 }
-exports.requestLoginRecoveryCode = onRequest({ cors: true, secrets: [GMAIL_APP_PASSWORD] }, async (req, res) => {
+exports.requestLoginRecoveryCode = onRequest({ cors: true, secrets: [SENDGRID_API_KEY] }, async (req, res) => {
   // 回應內容故意不透露「這支電話有沒有查到帳號」，一律回同一句話——
   // 不然這支端點會變成拿電話號碼反查誰的資料有登記在系統裡的管道，
   // 包含寄信本身失敗的情況也一樣（見下面 catch）。
