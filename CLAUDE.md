@@ -42,6 +42,18 @@
      出來。
 6. commit → rebase origin/main → push → 開 PR → squash merge
 
+## `firestore.rules` 裡跟前支系統有關的規則絕對不能刪
+
+前支任務派遣系統（forward-support-dispatch）跟本系統共用同一個 Firebase
+專案／Firestore 資料庫，`firestore.rules` 裡任何跟這個整合有關的規則區塊
+——不管是現有的 `forward_support_requests`，還是未來可能加的
+`forward_support_units`、`forward_support_assignments` 或其他任何名稱裡
+帶 `forward`／`forward_support` 的 collection——修改 `firestore.rules`
+時都只能新增或調整條件，絕對不能整段刪除或漏掉，即使看起來跟當次改動
+無關。這些規則被刪掉，對方系統會直接讀不到/寫不到共用的資料，而且錯誤
+不會在本系統這邊出現，很容易漏掉沒發現。改 `firestore.rules` 前後都要
+`grep -n "forward" firestore.rules` 確認這些區塊還在。
+
 ## 主/次版號怎麼判斷（`APP_MAJOR_MINOR`）
 
 修訂號（第三碼）全自動，不用管。主／次版號（前兩碼）出貨時照下面判斷，
