@@ -503,5 +503,15 @@ service cloud.firestore {
                     && request.resource.data.status == 'filled';
       allow create, delete: if false;
     }
+
+    // 登入救援（見 functions/index.js 的 requestLoginRecoveryCode／
+    // verifyLoginRecoveryCode）：電話號碼＋信箱驗證碼換臨時通行權杖用的
+    // 一次性驗證碼，只有這兩支 Cloud Function（Admin SDK，不受這份規則
+    // 限制）會讀寫。使用者請求驗證碼的當下還沒登入（這就是這個功能存在
+    // 的理由），不可能有 request.auth，前端完全不能也不需要直接存取這個
+    // collection，一律拒絕。
+    match /loginRecoveryCodes/{uid} {
+      allow read, write: if false;
+    }
   }
 }

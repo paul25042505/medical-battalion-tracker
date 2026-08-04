@@ -33,11 +33,14 @@ const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onRequest } = require("firebase-functions/v2/https");
 const { setGlobalOptions } = require("firebase-functions/v2");
+const { defineSecret } = require("firebase-functions/params");
 const { getAuth } = require("firebase-admin/auth");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 const logger = require("firebase-functions/logger");
+const crypto = require("crypto");
+const nodemailer = require("nodemailer");
 
 initializeApp();
 const db = getFirestore();
@@ -846,7 +849,138 @@ exports.sendEmergencyBroadcast = onRequest({ cors: true }, async (req, res) => {
   }
 });
 
+/* =========================================================
+   13) 登入救援：Google 帳號登入卡住/失效時（見「登入」相關的 BUILD_TAG
+   歷史紀錄，有時候彈出視窗會整個卡住進不去），用登記的電話號碼＋信箱
+   驗證碼換一次性的臨時通行權杖直接登入該帳號，不需要管理員介入，也
+   不用發簡訊（不需要額外的付費簡訊服務或 Firebase Phone Auth 設定）。
+
+   流程：
+   1) requestLoginRecoveryCode：前端還沒登入，只帶電話號碼呼叫。比對
+      users 集合裡 phone 完全相符、且帳號是在職狀態（不是 pending／
+      disabled／unclaimed）的帳號——剛好一筆才繼續，找不到或超過一筆都
+      當作查無帳號處理（電話號碼理論上不該重複，這裡防呆，寧可不寄信
+      也不要寄錯人）。產生 6 位數驗證碼，只存雜湊值（不存明碼），寫入
+      loginRecoveryCodes/{uid}，10 分鐘後過期；寄一封信到該帳號登記的
+      Google 信箱——不是輸入電話號碼的人看得到。這就是這個機制安全性的
+      關鍵：光憑「知道同事的電話號碼」沒辦法冒充登入，驗證碼一定要進
+      得去本人的信箱才拿得到。回應內容故意不透露「這支電話有沒有查到
+      帳號」，一律回同一句話，避免這支端點被拿來反查誰的電話號碼有登記
+      在系統裡。60 秒內同一個帳號不重複寄信，避免被拿來洗爆某人的信箱。
+   2) verifyLoginRecoveryCode：帶電話號碼＋驗證碼呼叫。重新比對一次
+      電話號碼找到 uid，比對 loginRecoveryCodes/{uid} 的雜湊值、是否
+      過期、是否已使用過、錯誤次數是否超過上限（5 次）；通過就核發
+      Firebase 自訂權杖，前端用 signInWithCustomToken 直接登入這個帳號，
+      驗證碼同時標記為已使用（單次有效，符合使用者要求）。
+
+   信件寄送用 nodemailer 走 Gmail SMTP，寄件帳號的應用程式密碼存在
+   Cloud Functions 密鑰 GMAIL_APP_PASSWORD（見 firebase functions:secrets:set），
+   不會出現在原始碼或 Git 版本紀錄裡；寄件信箱本身（RECOVERY_SENDER_EMAIL）
+   不是密鑰，直接寫在原始碼沒有安全疑慮。
+   ========================================================= */
+const GMAIL_APP_PASSWORD = defineSecret("GMAIL_APP_PASSWORD");
+const RECOVERY_SENDER_EMAIL = "paul25042505@gmail.com";
+const RECOVERY_CODE_TTL_MS = 10 * 60 * 1000; // 10 分鐘
+const RECOVERY_CODE_COOLDOWN_MS = 60 * 1000; // 同一個帳號 60 秒內不重複寄信
+const RECOVERY_MAX_ATTEMPTS = 5;
+
+function hashRecoveryCode(code) {
+  return crypto.createHash("sha256").update(code).digest("hex");
+}
+let mailTransporter = null;
+function getMailTransporter() {
+  if (!mailTransporter) {
+    mailTransporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: RECOVERY_SENDER_EMAIL, pass: GMAIL_APP_PASSWORD.value() },
+    });
+  }
+  return mailTransporter;
+}
+// 依電話號碼找在職帳號：剛好一筆才算找到，找不到或不只一筆都當作查無
+// 帳號（見上面說明）。
+async function findActiveUserByPhone(phone) {
+  const snap = await db.collection("users").where("phone", "==", phone).get();
+  const candidates = snap.docs.filter((doc) => {
+    const role = normalizeRole(doc.data().role);
+    return role !== "pending" && role !== "disabled" && role !== "unclaimed";
+  });
+  if (candidates.length !== 1) return null;
+  return candidates[0];
+}
+exports.requestLoginRecoveryCode = onRequest({ cors: true, secrets: [GMAIL_APP_PASSWORD] }, async (req, res) => {
+  // 回應內容故意不透露「這支電話有沒有查到帳號」，一律回同一句話——
+  // 不然這支端點會變成拿電話號碼反查誰的資料有登記在系統裡的管道，
+  // 包含寄信本身失敗的情況也一樣（見下面 catch）。
+  const genericResponse = { ok: true, message: "如果這支電話號碼有對應的帳號，驗證碼已經寄到該帳號登記的信箱" };
+  try {
+    const phone = String((req.body && req.body.phone) || "").trim();
+    if (!phone) { res.status(200).json(genericResponse); return; }
+    const userDoc = await findActiveUserByPhone(phone);
+    if (!userDoc) { res.status(200).json(genericResponse); return; }
+    const uid = userDoc.id;
+    const email = userDoc.data().email;
+    if (!email) { res.status(200).json(genericResponse); return; }
+    const existing = await db.collection("loginRecoveryCodes").doc(uid).get();
+    if (existing.exists) {
+      const d = existing.data();
+      const createdAtMs = d.createdAt && d.createdAt.toMillis ? d.createdAt.toMillis() : 0;
+      if (Date.now() - createdAtMs < RECOVERY_CODE_COOLDOWN_MS) { res.status(200).json(genericResponse); return; }
+    }
+    const code = String(crypto.randomInt(0, 1000000)).padStart(6, "0");
+    const now = new Date();
+    await db.collection("loginRecoveryCodes").doc(uid).set({
+      codeHash: hashRecoveryCode(code),
+      createdAt: now,
+      expiresAt: new Date(now.getTime() + RECOVERY_CODE_TTL_MS),
+      used: false,
+      attempts: 0,
+    });
+    const displayName = userDoc.data().displayName || "";
+    await getMailTransporter().sendMail({
+      from: `衛生營車輛人員動態管制系統 <${RECOVERY_SENDER_EMAIL}>`,
+      to: email,
+      subject: "登入驗證碼",
+      text: `${displayName ? displayName + "，" : ""}您的登入驗證碼是：${code}\n\n10 分鐘內有效，用於在登入頁「無法登入？」流程直接登入您的帳號。\n\n如果不是您本人操作，請忽略這封信件；有疑慮請聯繫系統管理員。`,
+    });
+    logger.info(`登入救援驗證碼已寄出：帳號 ${uid}（電話比對成功）`);
+    res.status(200).json(genericResponse);
+  } catch (e) {
+    logger.error("登入救援驗證碼寄送失敗", e);
+    res.status(200).json(genericResponse);
+  }
+});
+exports.verifyLoginRecoveryCode = onRequest({ cors: true }, async (req, res) => {
+  try {
+    const phone = String((req.body && req.body.phone) || "").trim();
+    const code = String((req.body && req.body.code) || "").trim();
+    if (!phone || !code) { res.status(400).json({ ok: false, reason: "missing phone or code" }); return; }
+    const userDoc = await findActiveUserByPhone(phone);
+    if (!userDoc) { res.status(400).json({ ok: false, reason: "invalid-code" }); return; }
+    const uid = userDoc.id;
+    const codeRef = db.collection("loginRecoveryCodes").doc(uid);
+    const codeSnap = await codeRef.get();
+    if (!codeSnap.exists) { res.status(400).json({ ok: false, reason: "invalid-code" }); return; }
+    const d = codeSnap.data();
+    const expiresAtMs = d.expiresAt && d.expiresAt.toMillis ? d.expiresAt.toMillis() : 0;
+    if (d.used || Date.now() > expiresAtMs) { res.status(400).json({ ok: false, reason: "invalid-code" }); return; }
+    if ((d.attempts || 0) >= RECOVERY_MAX_ATTEMPTS) { res.status(400).json({ ok: false, reason: "too-many-attempts" }); return; }
+    if (hashRecoveryCode(code) !== d.codeHash) {
+      await codeRef.update({ attempts: (d.attempts || 0) + 1 });
+      res.status(400).json({ ok: false, reason: "invalid-code" });
+      return;
+    }
+    await codeRef.update({ used: true });
+    const token = await getAuth().createCustomToken(uid);
+    logger.info(`登入救援驗證成功：帳號 ${uid} 核發臨時通行權杖`);
+    res.status(200).json({ ok: true, token });
+  } catch (e) {
+    logger.error("登入救援驗證失敗", e);
+    res.status(500).json({ ok: false, reason: String(e && e.message || e) });
+  }
+});
+
 // 純函式/資料存取邏輯額外匯出一份，方便寫單元測試直接呼叫驗證（不會
 // 影響部署——firebase deploy 只認得用 onDocumentCreated 等 v2 trigger
 // builder 包起來的 exports，這個純物件會被忽略，不會變成多一個雲端函式）。
-exports._internal = { normalizeRole, resolveRecipients, resolveAllTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce, standbyShiftCutoff, resolveEmergencyBroadcastRecipients, isCurrentDutyMember, writePushLog, notifyRecipients, isTestModeActive, buildDailyWeatherBody, runDailyWeatherReport };
+exports._internal = { normalizeRole, resolveRecipients, resolveAllTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce, standbyShiftCutoff, resolveEmergencyBroadcastRecipients, isCurrentDutyMember, writePushLog, notifyRecipients, isTestModeActive, buildDailyWeatherBody, runDailyWeatherReport, hashRecoveryCode, findActiveUserByPhone };
