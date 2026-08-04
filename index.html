@@ -2119,7 +2119,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-03-528-liaison-vitals-fix";
+const BUILD_TAG = "2026-08-03-529-crew-line-wrap-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3021,6 +3021,7 @@ const RELEASE_NOTES = [
     { category: "介面優化", items: [
       "任務卡片上「有患者」「不送醫」兩個徽章的順序調整為「有患者」在前、「不送醫」在後",
       "上面兩個徽章（含狀態徽章）改成垂直排列，不是原本並排在同一列",
+      "修正任務卡片車長／駕駛那一行，遇到三個字階級（上等兵／一等兵／二等兵）時電話號碼會被擠到下一行的問題",
     ] },
     { category: "人員與帳號", items: [
       "「人員與帳號」的「待指派單位」「待審核」清單不再顯示前支任務派遣系統（跟這邊共用同一個 Firebase 專案）用手機號碼登入產生的假信箱帳號（信箱網域 @fsr.local），這種帳號不是要給這邊系統用的，混進來只會讓管理員誤以為要幫忙審核",
@@ -6651,7 +6652,14 @@ function crewLabel(name, unit){
   const match = findPersonnel(name, unit);
   const phone = (match && match.phone) || "";
   const emtLevel = (match && match.emtLevel) || "";
-  return `${nameWithRank(name, unit)}${emtLevel ? ` ${emtBadgeHtml(emtLevel)}` : ''}${phone ? ` <a href="tel:${esc(phone)}" class="phone-link" style="text-decoration:none;">${esc(phone)}</a>` : ''}`;
+  // 電話號碼緊接在 EMT 徽章後面時，中間故意不留空白字元（徽章本身的紅框
+  // 已經提供足夠的視覺區隔）：階級是三個字的（上等兵／一等兵／二等兵）
+  // 比兩個字的階級多佔一個中文字的寬度，手機版面剛好會讓電話號碼被擠到
+  // 下一行，省下這一個空白的寬度就足以讓整行留在同一行，不用整行改小
+  // 字體或加大卡片寬度這種影響範圍更大的改法。沒有 EMT 徽章時（電話號碼
+  // 緊接在階級文字後面）還是要留空白，不然階級文字會直接黏住電話號碼。
+  const phoneHtml = phone ? `${emtLevel ? '' : ' '}<a href="tel:${esc(phone)}" class="phone-link" style="text-decoration:none;">${esc(phone)}</a>` : '';
+  return `${nameWithRank(name, unit)}${emtLevel ? ` ${emtBadgeHtml(emtLevel)}` : ''}${phoneHtml}`;
 }
 // 跟 crewLabel 同樣的資料來源，但拆成「姓名＋階級」「EMT等級＋電話」兩段，
 // 給急診待命卡片這種要把姓名階級跟聯絡方式分兩行顯示的版面用。
