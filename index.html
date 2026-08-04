@@ -397,6 +397,10 @@
   .login-recovery-box{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; max-width:340px; width:100%; margin-top:18px; box-shadow:var(--shadow-sm); text-align:left;}
   .login-recovery-title{font-size:var(--text-base); font-weight:800; color:var(--text); margin-bottom:8px;}
   .login-recovery-desc{color:var(--muted); font-size:var(--text-xs); line-height:1.6; margin:0 0 14px;}
+  .temp-password-display{
+    margin-top:14px; padding:14px; text-align:center; background:var(--panel-2); border:1.5px dashed var(--blue);
+    border-radius:var(--radius-sm); font-family:var(--mono); font-size:22px; font-weight:800; letter-spacing:0.08em; color:var(--text);
+  }
   /* LINE 內建瀏覽器引導：數字圓圈＋箭頭排成一條直的流程，登入頁跟推播
      設定頁共用（見 lineOpenGuideHtml）。 */
   .line-guide{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; max-width:360px; width:100%; margin-top:22px; box-shadow:var(--shadow-sm); text-align:left;}
@@ -2123,7 +2127,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-04-532-login-recovery-sendgrid";
+const BUILD_TAG = "2026-08-04-533-login-recovery-admin-password";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3024,8 +3028,7 @@ const RELEASE_NOTES = [
   { date: "2026/08/04", groups: [
     { category: "登入", items: [
       "登入按鈕加上 15 秒逾時保險：極少數情況下彈出視窗可能整個卡住（被瀏覽器或裝置環境靜默攔截，卻沒有明確報錯），先前的「登入中…」鎖定沒有逾時機制，會讓按鈕永遠卡住點不動；現在逾時後會自動解除鎖定並顯示備援登入按鈕，不用整個卡在登入頁進不去",
-      "新增「電話號碼救援登入」：Google 帳號登入卡住或失效時，登入頁可以輸入登記的電話號碼，系統比對到帳號後會寄一組驗證碼到該帳號登入用的信箱（不是傳給輸入電話號碼的人），輸入驗證碼即可直接登入，不需要管理員介入；驗證碼 10 分鐘內有效、單次使用",
-      "上面的驗證碼信件寄送改走 SendGrid（原本規劃用 Gmail 應用程式密碼，但寄件帳號的 Google 帳戶設定停用了這個選項，改用不需要應用程式密碼的寄信服務）",
+      "新增「臨時密碼登入」救援機制：Google 帳號登入卡住或失效時，管理員在「人員與帳號」頁對該帳號按「產生臨時登入密碼」，選好效期（1 小時～7 天）即可產生一組 8 碼密碼（畫面只顯示這一次，需自行口頭或其他管道轉告本人），本人在登入頁點「無法登入？點此使用臨時密碼登入」，輸入登記的電話號碼＋這組密碼即可直接登入自己的帳號；密碼在效期內可以重複使用，不是登入一次就失效",
     ] },
   ] },
   { date: "2026/08/03", groups: [
@@ -3786,14 +3789,12 @@ const state = {
   // 觸發一次 signInWithPopup（見 doLogin 的說明——重複觸發不會讓登入變快，
   // 只會讓前一個彈出視窗被新的請求取消掉，反而更難成功登入）。
   loginInProgress: false,
-  // 登入救援（見 functions/index.js 的 requestLoginRecoveryCode／
-  // verifyLoginRecoveryCode）：Google 帳號登入卡住/失效時，用登記的電話
-  // 號碼比對帳號、驗證碼寄到本人信箱確認身分，換一次性通行權杖直接登入，
-  // 不用管理員介入。loginRecoveryStep：null（未開啟）｜'phone'（輸入電話
-  // 號碼）｜'code'（輸入收到的驗證碼）。loginRecoveryPhone 記住上一步
-  // 送出的電話號碼，驗證碼那一步要一起帶回去給後端重新比對。
-  loginRecoveryStep: null,
-  loginRecoveryPhone: "",
+  // 登入救援（見 functions/index.js 的 generateTempLoginPassword／
+  // loginWithTempPassword）：Google 帳號登入卡住/失效時，管理員在
+  // 「人員與帳號」頁幫該帳號產生一組有效期限內可重複使用的臨時密碼，
+  // 本人在登入頁用登記的電話號碼＋這組密碼即可直接登入，不用自己操作
+  // 任何驗證流程。loginRecoveryOpen 只是單純開關這個表單的顯示。
+  loginRecoveryOpen: false,
   loginRecoverySending: false,
 
   baseDataUnit: "", baseDataModal: null, // 基礎資料管理目前選的單位；baseDataModal: {coll, id, unit} | null
@@ -4793,57 +4794,27 @@ function doLoginRedirect(){
 function doLogout(){ signOut(auth); }
 /* =========================================================
    登入救援：Google 帳號登入卡住/失效時的備援管道（見 functions/index.js
-   的 requestLoginRecoveryCode／verifyLoginRecoveryCode）。這兩支後端
-   HTTP function 刻意不需要帶 ID token（使用者這時候根本還沒登入，也就
-   是這個功能存在的理由），直接 fetch 呼叫即可，跟其餘既有 HTTP
-   function 呼叫慣例（見 window.__testPushToUser）唯一的差別就是不帶
-   Authorization 標頭。
+   的 loginWithTempPassword）。這支後端 HTTP function 刻意不需要帶 ID
+   token（使用者這時候根本還沒登入，也就是這個功能存在的理由），直接
+   fetch 呼叫即可，跟其餘既有 HTTP function 呼叫慣例（見
+   window.__testPushToUser）唯一的差別就是不帶 Authorization 標頭。
+   臨時密碼本身是管理員在「人員與帳號」頁核發的（見
+   window.__generateTempPassword），這裡只負責用電話號碼＋密碼換登入。
    ========================================================= */
-window.__openLoginRecovery = () => { state.loginRecoveryStep = "phone"; safeRender(); };
-window.__closeLoginRecovery = () => { state.loginRecoveryStep = null; state.loginRecoveryPhone = ""; safeRender(); };
-async function sendLoginRecoveryCodeRequest(phone){
-  state.loginRecoverySending = true;
-  safeRender();
-  try {
-    const res = await fetch(`${CLOUD_FUNCTIONS_BASE}/requestLoginRecoveryCode`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone }),
-    });
-    const data = await res.json().catch(() => ({}));
-    state.loginRecoveryPhone = phone;
-    state.loginRecoveryStep = "code";
-    // 後端回應內容故意不透露這支電話有沒有查到帳號（見後端說明），這裡
-    // 一律照後端回傳的文字顯示，不用自己另外組一句可能洩漏帳號存在與否
-    // 的訊息。
-    showToast(data.message || "如果這支電話號碼有對應的帳號，驗證碼已經寄到該帳號登記的信箱");
-  } catch (e) {
-    showToast("發送失敗，請檢查網路連線後再試一次");
-  } finally {
-    state.loginRecoverySending = false;
-    safeRender();
-  }
-}
-window.__requestLoginRecoveryCode = (event) => {
-  if (event) {
-    event.preventDefault();
-    const phone = (new FormData(event.target).get("phone") || "").trim();
-    if (!phone) return;
-    sendLoginRecoveryCodeRequest(phone);
-  } else {
-    // 「重新寄送驗證碼」：沿用上一步輸入過的電話號碼，不用使用者重新輸入。
-    if (!state.loginRecoveryPhone) return;
-    sendLoginRecoveryCodeRequest(state.loginRecoveryPhone);
-  }
-};
-window.__submitLoginRecoveryCode = async (event) => {
+window.__openLoginRecovery = () => { state.loginRecoveryOpen = true; safeRender(); };
+window.__closeLoginRecovery = () => { state.loginRecoveryOpen = false; safeRender(); };
+window.__submitTempPasswordLogin = async (event) => {
   event.preventDefault();
-  const code = (new FormData(event.target).get("code") || "").trim();
-  if (!code || !state.loginRecoveryPhone) return;
+  const fd = new FormData(event.target);
+  const phone = (fd.get("phone") || "").trim();
+  const password = (fd.get("password") || "").trim();
+  if (!phone || !password) return;
   state.loginRecoverySending = true;
   safeRender();
   try {
-    const res = await fetch(`${CLOUD_FUNCTIONS_BASE}/verifyLoginRecoveryCode`, {
+    const res = await fetch(`${CLOUD_FUNCTIONS_BASE}/loginWithTempPassword`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone: state.loginRecoveryPhone, code }),
+      body: JSON.stringify({ phone, password }),
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok && data.ok && data.token) {
@@ -4854,15 +4825,16 @@ window.__submitLoginRecoveryCode = async (event) => {
       // 不用在這裡自己 safeRender() 切換畫面：signInWithCustomToken 成功後
       // onAuthStateChanged 會自動接手，跟一般 Google 登入成功的收尾方式
       // 一致，不需要另外處理。
-      state.loginRecoveryStep = null;
-      state.loginRecoveryPhone = "";
+      state.loginRecoveryOpen = false;
+    } else if (data.reason === "expired") {
+      showToast("這組臨時密碼已經過期，請洽詢管理員重新產生一組");
     } else if (data.reason === "too-many-attempts") {
-      showToast("驗證碼錯誤次數過多，請重新寄送一組新的驗證碼");
+      showToast("密碼錯誤次數過多，請洽詢管理員重新產生一組臨時密碼");
     } else {
-      showToast("驗證碼錯誤或已過期，請確認後重新輸入，或重新寄送");
+      showToast("電話號碼或臨時密碼不正確");
     }
   } catch (e) {
-    showToast("驗證失敗，請檢查網路連線後再試一次");
+    showToast("登入失敗，請檢查網路連線後再試一次");
   } finally {
     state.loginRecoverySending = false;
     safeRender();
@@ -6647,37 +6619,23 @@ function viewLogin(){
     <div style="margin-top:24px;color:var(--muted);font-size:var(--text-xs);font-family:var(--mono);">build ${BUILD_TAG}</div>
   </div>`;
 }
-// 登入救援：Google 帳號登入卡住/失效時的備援管道，不用管理員介入
-// （見 functions/index.js 的 requestLoginRecoveryCode／verifyLoginRecoveryCode
-// 說明）。三個步驟用 state.loginRecoveryStep 切換：null（純連結）→
-// 'phone'（輸入電話號碼）→ 'code'（輸入信箱收到的驗證碼）。
+// 登入救援：Google 帳號登入卡住/失效時的備援管道，密碼是管理員在
+// 「人員與帳號」頁事先核發的（見 window.__generateTempPassword），這裡
+// 只是單純開關表單顯示（state.loginRecoveryOpen）。
 function loginRecoveryHtml(){
-  if (!state.loginRecoveryStep) {
-    return `<button type="button" class="login-recovery-link" onclick="window.__openLoginRecovery()">無法登入？點此使用電話號碼救援登入</button>`;
+  if (!state.loginRecoveryOpen) {
+    return `<button type="button" class="login-recovery-link" onclick="window.__openLoginRecovery()">無法登入？點此使用臨時密碼登入</button>`;
   }
-  if (state.loginRecoveryStep === "phone") {
-    return `
-    <div class="login-recovery-box">
-      <div class="login-recovery-title">電話號碼救援登入</div>
-      <p class="login-recovery-desc">輸入您登記在系統裡的電話號碼，驗證碼會寄到您登入用的信箱（不是傳給輸入電話號碼的人），確認是您本人操作後即可直接登入。</p>
-      <form onsubmit="window.__requestLoginRecoveryCode(event)">
-        <div class="field"><input type="tel" name="phone" placeholder="例如：0912345678" required autofocus></div>
-        <button type="submit" class="btn-primary" ${state.loginRecoverySending ? 'disabled' : ''}>${state.loginRecoverySending ? '寄送中…' : '發送驗證碼'}</button>
-      </form>
-      <button type="button" class="login-recovery-link" style="margin-top:10px;" onclick="window.__closeLoginRecovery()">取消</button>
-    </div>`;
-  }
-  // 'code'
   return `
   <div class="login-recovery-box">
-    <div class="login-recovery-title">輸入驗證碼</div>
-    <p class="login-recovery-desc">驗證碼已經寄到這支電話號碼登記帳號的信箱（10 分鐘內有效），請查看信箱後輸入。</p>
-    <form onsubmit="window.__submitLoginRecoveryCode(event)">
-      <div class="field"><input type="text" inputmode="numeric" name="code" placeholder="6 位數驗證碼" maxlength="6" required autofocus></div>
-      <button type="submit" class="btn-primary" ${state.loginRecoverySending ? 'disabled' : ''}>${state.loginRecoverySending ? '驗證中…' : '驗證並登入'}</button>
+    <div class="login-recovery-title">臨時密碼登入</div>
+    <p class="login-recovery-desc">請洽詢管理員取得臨時登入密碼，輸入您登記的電話號碼與臨時密碼即可登入您自己的帳號。</p>
+    <form onsubmit="window.__submitTempPasswordLogin(event)">
+      <div class="field"><input type="tel" name="phone" placeholder="電話號碼，例如：0912345678" required autofocus></div>
+      <div class="field"><input type="text" name="password" placeholder="臨時密碼" required></div>
+      <button type="submit" class="btn-primary" ${state.loginRecoverySending ? 'disabled' : ''}>${state.loginRecoverySending ? '登入中…' : '登入'}</button>
     </form>
-    <button type="button" class="login-recovery-link" style="margin-top:10px;" onclick="window.__requestLoginRecoveryCode(null)">重新寄送驗證碼</button>
-    <button type="button" class="login-recovery-link" onclick="window.__closeLoginRecovery()">取消，換一支電話號碼</button>
+    <button type="button" class="login-recovery-link" style="margin-top:10px;" onclick="window.__closeLoginRecovery()">取消</button>
   </div>`;
 }
 function viewPending(){
@@ -10687,6 +10645,10 @@ function viewAdminUsers(){
         </select>
         ${iosSwitchRow('值日官', !!x.isCampDutyOfficer, `window.__setCampDutyOfficerFlag('${x.id}', this.checked)`)}
       </div>` : ''}
+      ${canAssignRole && !['unclaimed','pending','disabled'].includes(x.role) ? `
+      <div class="personnel-card-controls">
+        <button type="button" class="btn-ghost" style="width:100%;" onclick="window.__openTempPasswordModal('${x.id}','${esc(x.name)}')">${icon('lock',14)} 產生臨時登入密碼</button>
+      </div>` : ''}
       ${x.role==='unclaimed' ? `<div class="personnel-card-controls"><button class="icon-btn danger" type="button" onclick="window.__deleteBaseData('personnel','${x.id}')">${icon('trash',14)} 刪除</button></div>` : ''}
     </div>`;
   };
@@ -12255,6 +12217,71 @@ window.__setRole = (uid) => {
   setUserRole(uid, role, unit).catch(baseDataErr);
 };
 window.__setCampDutyOfficerFlag = (uid, checked) => setCampDutyOfficerFlag(uid, checked).catch(baseDataErr);
+/* =========================================================
+   登入救援：管理員在「人員與帳號」頁幫某個帳號核發臨時登入密碼（見
+   functions/index.js 的 generateTempLoginPassword）。跟既有的
+   window.__testPushToUser 同一套 admin-only HTTP function 呼叫慣例
+   （帶 Authorization: Bearer <ID token>，後端自己驗證呼叫者是不是
+   admin），這裡另外多一個「選有效期限」的小彈窗。
+   ========================================================= */
+function closeTempPasswordModal(){
+  const overlay = document.querySelector(".temp-password-overlay");
+  if (overlay) overlay.remove();
+}
+window.__openTempPasswordModal = (uid, name) => {
+  closeTempPasswordModal();
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay temp-password-overlay";
+  overlay.onclick = (e) => { if (e.target === overlay) closeTempPasswordModal(); };
+  overlay.innerHTML = `
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-title">產生臨時登入密碼：${esc(name)}</div>
+      <p style="color:var(--muted); font-size:var(--text-xs); margin:-8px 0 14px;">本人可以用登記的電話號碼＋這組密碼直接登入自己的帳號，取代 Google 登入卡住時的救援方式；請自行以口頭或其他管道告知本人，這組密碼只會顯示這一次，重新產生會讓舊的立刻失效。</p>
+      <div class="field"><label>有效期限</label>
+        <select id="temp-password-expiry">
+          <option value="1">1 小時</option>
+          <option value="6">6 小時</option>
+          <option value="24" selected>24 小時</option>
+          <option value="72">3 天</option>
+          <option value="168">7 天</option>
+        </select>
+      </div>
+      <button type="button" class="btn-primary" id="temp-password-generate-btn" onclick="window.__generateTempPassword('${uid}', this)">產生密碼</button>
+      <div id="temp-password-result"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+};
+window.__generateTempPassword = async (uid, btn) => {
+  const expiryHours = Number(document.getElementById("temp-password-expiry").value);
+  const originalLabel = btn.textContent;
+  btn.disabled = true; btn.textContent = "產生中…";
+  try {
+    const idToken = await state.user.getIdToken();
+    const res = await fetch(`${CLOUD_FUNCTIONS_BASE}/generateTempLoginPassword`, {
+      method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${idToken}` },
+      body: JSON.stringify({ uid, expiryHours }),
+    });
+    const data = await res.json().catch(() => ({}));
+    const resultEl = document.getElementById("temp-password-result");
+    if (res.ok && data.ok) {
+      const expiresLabel = new Date(data.expiresAt).toLocaleString("zh-TW", { hour12: false });
+      resultEl.innerHTML = `
+        <div class="temp-password-display">${esc(data.password)}</div>
+        <div style="color:var(--muted); font-size:var(--text-xs); margin-top:6px;">效期至：${esc(expiresLabel)}，期限內可重複使用</div>`;
+      btn.textContent = "重新產生（會讓上面這組立刻失效）";
+      btn.disabled = false;
+    } else {
+      showToast(`產生失敗：${data.reason || res.status}`);
+      btn.textContent = originalLabel;
+      btn.disabled = false;
+    }
+  } catch (e) {
+    showToast(`產生失敗：${e.message || e}`);
+    btn.textContent = originalLabel;
+    btn.disabled = false;
+  }
+};
 window.__setBaseDataUnit = (code) => { state.baseDataUnit = code; state.baseDataModal = null; render(); scrollContentToTop(); };
 window.__setMemberStatsUnitFilter = (code) => { state.memberStatsUnitFilter = code; render(); };
 function baseDataErr(err){ showToast(`操作失敗：[${err.code||'?'}] ${err.message||err}`); console.error("基礎資料操作失敗", err); }
