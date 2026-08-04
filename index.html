@@ -2119,7 +2119,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-03-529-crew-line-wrap-fix";
+const BUILD_TAG = "2026-08-04-530-login-timeout-safety";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3017,6 +3017,11 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/08/04", groups: [
+    { category: "登入", items: [
+      "登入按鈕加上 15 秒逾時保險：極少數情況下彈出視窗可能整個卡住（被瀏覽器或裝置環境靜默攔截，卻沒有明確報錯），先前的「登入中…」鎖定沒有逾時機制，會讓按鈕永遠卡住點不動；現在逾時後會自動解除鎖定並顯示備援登入按鈕，不用整個卡在登入頁進不去",
+    ] },
+  ] },
   { date: "2026/08/03", groups: [
     { category: "介面優化", items: [
       "任務卡片上「有患者」「不送醫」兩個徽章的順序調整為「有患者」在前、「不送醫」在後",
@@ -4720,7 +4725,30 @@ function doLogin(){
   // 所以改回全部情境都用 signInWithPopup，只把這個已知無害的錯誤代碼
   // 特別過濾掉，不跳出誤導人的「登入失敗」提示，其餘真正的錯誤（例如
   // 使用者自己取消、網路問題）維持照常顯示。
-  signInWithPopup(auth, googleProvider).catch(e => {
+  // 逾時保險：極少數情況下彈出視窗可能整個卡住（例如被公司網路設備／
+  // 瀏覽器擴充功能靜默攔截，卻沒有觸發 Firebase 明確的錯誤，Promise 既
+  // 不 resolve 也不 reject），加上這個防呆之前，這種情況下按鈕會永遠卡在
+  // 「登入中…」動彈不得，比新增這個防呆之前使用者還能連續點擊碰運氣更
+  // 糟——這正是「高勤官一直卡在登入中都進不去」回報的成因。逾時後解除
+  // 鎖定、順便顯示備援登入按鈕讓使用者能立刻換一種方式，不用再賭一次
+  // 同樣會卡住的彈出視窗；如果原本那個請求後來真的成功了，
+  // onAuthStateChanged 一樣會正常接手離開登入頁，不會有副作用。
+  let settled = false;
+  const timeoutId = setTimeout(() => {
+    if (settled) return;
+    settled = true;
+    state.loginInProgress = false;
+    state.loginPopupBlocked = true;
+    showToast("登入逾時，可改用下方按鈕切換登入方式，或檢查網路連線後再試一次");
+    safeRender();
+  }, 15000);
+  signInWithPopup(auth, googleProvider).then(() => {
+    settled = true;
+    clearTimeout(timeoutId);
+  }).catch(e => {
+    if (settled) return; // 已經逾時處理過，不要重複處理同一次請求的結果
+    settled = true;
+    clearTimeout(timeoutId);
     // 不管哪一種失敗結果，都要解除「登入中」鎖定狀態，按鈕才能再被點——
     // 忘記重置的話，使用者會卡在一顆永遠顯示「登入中…」、點了沒反應的
     // 按鈕，比原本沒有防呆前更糟。
