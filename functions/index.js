@@ -33,14 +33,12 @@ const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onRequest } = require("firebase-functions/v2/https");
 const { setGlobalOptions } = require("firebase-functions/v2");
-const { defineSecret } = require("firebase-functions/params");
 const { getAuth } = require("firebase-admin/auth");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 const logger = require("firebase-functions/logger");
 const crypto = require("crypto");
-const nodemailer = require("nodemailer");
 
 initializeApp();
 const db = getFirestore();
@@ -851,64 +849,48 @@ exports.sendEmergencyBroadcast = onRequest({ cors: true }, async (req, res) => {
 
 /* =========================================================
    13) 登入救援：Google 帳號登入卡住/失效時（見「登入」相關的 BUILD_TAG
-   歷史紀錄，有時候彈出視窗會整個卡住進不去），用登記的電話號碼＋信箱
-   驗證碼換一次性的臨時通行權杖直接登入該帳號，不需要管理員介入，也
-   不用發簡訊（不需要額外的付費簡訊服務或 Firebase Phone Auth 設定）。
+   歷史紀錄，有時候彈出視窗會整個卡住進不去），管理員在後台幫該帳號
+   產生一組有效期限內可重複使用的臨時密碼，本人用登記的電話號碼＋這組
+   密碼就能直接登入自己的帳號，不需要對方自己操作任何驗證流程。
+
+   （原本規劃走「電話號碼→自動寄驗證碼到信箱」的自助式流程，寄信需要
+   額外的付費/第三方服務，這裡改成管理員主動核發，更貼近實際的小單位
+   使用情境——需要救援登入的人數不多，讓管理員手動確認、核發，同時
+   避免了寄信服務的額外相依性與費用。）
 
    流程：
-   1) requestLoginRecoveryCode：前端還沒登入，只帶電話號碼呼叫。比對
-      users 集合裡 phone 完全相符、且帳號是在職狀態（不是 pending／
-      disabled／unclaimed）的帳號——剛好一筆才繼續，找不到或超過一筆都
-      當作查無帳號處理（電話號碼理論上不該重複，這裡防呆，寧可不寄信
-      也不要寄錯人）。產生 6 位數驗證碼，只存雜湊值（不存明碼），寫入
-      loginRecoveryCodes/{uid}，10 分鐘後過期；寄一封信到該帳號登記的
-      Google 信箱——不是輸入電話號碼的人看得到。這就是這個機制安全性的
-      關鍵：光憑「知道同事的電話號碼」沒辦法冒充登入，驗證碼一定要進
-      得去本人的信箱才拿得到。回應內容故意不透露「這支電話有沒有查到
-      帳號」，一律回同一句話，避免這支端點被拿來反查誰的電話號碼有登記
-      在系統裡。60 秒內同一個帳號不重複寄信，避免被拿來洗爆某人的信箱。
-   2) verifyLoginRecoveryCode：帶電話號碼＋驗證碼呼叫。重新比對一次
-      電話號碼找到 uid，比對 loginRecoveryCodes/{uid} 的雜湊值、是否
-      過期、是否已使用過、錯誤次數是否超過上限（5 次）；通過就核發
-      Firebase 自訂權杖，前端用 signInWithCustomToken 直接登入這個帳號，
-      驗證碼同時標記為已使用（單次有效，符合使用者要求）。
-
-   信件寄送用 nodemailer 走 SendGrid 的 SMTP relay（不是 Gmail SMTP：
-   寄件帳號 paul25042505@gmail.com 本身停用了應用程式密碼——帳號開了
-   進階保護計畫或類似的組織限制，Google 帳戶設定裡完全不會顯示「應用
-   程式密碼」這個選項，這條路走不通），改用 SendGrid 的「Single Sender
-   Verification」驗證這個信箱當寄件者，不需要自己的網域、不用設定
-   DNS。API Key 存在 Cloud Functions 密鑰 SENDGRID_API_KEY（見
-   firebase functions:secrets:set），不會出現在原始碼或 Git 版本紀錄
-   裡；寄件信箱本身（RECOVERY_SENDER_EMAIL）不是密鑰，直接寫在原始碼
-   沒有安全疑慮。
+   1) generateTempLoginPassword：管理員在「人員與帳號」頁對某個帳號按
+      「產生臨時登入密碼」，選一個有效期限（1 小時～7 天），呼叫這支
+      函式。驗證呼叫者是 admin（跟 sendTestPush 等既有 admin-only 端點
+      同一套 Bearer ID token 驗證慣例）；目標帳號要是在職狀態（不是
+      pending／disabled／unclaimed）才能核發。產生 8 碼隨機密碼（排除
+      0/O/1/l/I 這幾個容易看錯的字元），只存雜湊值（不存明碼）＋到期
+      時間到 tempLoginPasswords/{uid}，同一個帳號重新產生會直接覆蓋
+      舊的（舊密碼立刻失效）；明碼只在這次回應裡回傳一次給管理員畫面
+      顯示，之後就查不到明碼了，管理員要自己口頭或其他管道轉告本人。
+   2) loginWithTempPassword：前端還沒登入，帶電話號碼＋密碼呼叫。比對
+      users 集合裡 phone 完全相符、且帳號在職的帳號（剛好一筆才算找到，
+      理由跟其他比對電話號碼的地方一致：電話號碼理論上不該重複，防呆
+      寧可拒絕也不要登入到錯的帳號），比對 tempLoginPasswords/{uid} 的
+      雜湊值、是否過期、錯誤次數是否超過上限（10 次）；通過就核發
+      Firebase 自訂權杖，前端用 signInWithCustomToken 直接登入。使用者
+      確認過這組密碼在效期內可以重複使用（不是登入一次就失效），方便
+      同一個人短期內可能要登入好幾次的情境。
    ========================================================= */
-const SENDGRID_API_KEY = defineSecret("SENDGRID_API_KEY");
-const RECOVERY_SENDER_EMAIL = "paul25042505@gmail.com";
-const RECOVERY_CODE_TTL_MS = 10 * 60 * 1000; // 10 分鐘
-const RECOVERY_CODE_COOLDOWN_MS = 60 * 1000; // 同一個帳號 60 秒內不重複寄信
-const RECOVERY_MAX_ATTEMPTS = 5;
-
-function hashRecoveryCode(code) {
-  return crypto.createHash("sha256").update(code).digest("hex");
+const TEMP_PASSWORD_TTL_HOURS_DEFAULT = 24;
+const TEMP_PASSWORD_MAX_ATTEMPTS = 10;
+// 排除 0/O、1/l/I 這幾組容易看錯或唸錯的字元，管理員口頭轉告時比較不會出錯。
+const TEMP_PASSWORD_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+function generateTempPassword(length = 8) {
+  let out = "";
+  for (let i = 0; i < length; i++) out += TEMP_PASSWORD_CHARS[crypto.randomInt(0, TEMP_PASSWORD_CHARS.length)];
+  return out;
 }
-let mailTransporter = null;
-function getMailTransporter() {
-  if (!mailTransporter) {
-    // SendGrid SMTP relay：帳號固定是字面上的 "apikey" 這個字串，密碼
-    // 才是真正的 API Key，跟一般 SMTP 帳密的用法不太一樣，是 SendGrid
-    // 自己的慣例。
-    mailTransporter = nodemailer.createTransport({
-      host: "smtp.sendgrid.net",
-      port: 587,
-      secure: false,
-      auth: { user: "apikey", pass: SENDGRID_API_KEY.value() },
-    });
-  }
-  return mailTransporter;
+function hashSecret(secret) {
+  return crypto.createHash("sha256").update(secret).digest("hex");
 }
 // 依電話號碼找在職帳號：剛好一筆才算找到，找不到或不只一筆都當作查無
-// 帳號（見上面說明）。
+// 帳號（電話號碼理論上不該重複，這裡防呆，寧可拒絕也不要用到錯的帳號）。
 async function findActiveUserByPhone(phone) {
   const snap = await db.collection("users").where("phone", "==", phone).get();
   const candidates = snap.docs.filter((doc) => {
@@ -918,74 +900,67 @@ async function findActiveUserByPhone(phone) {
   if (candidates.length !== 1) return null;
   return candidates[0];
 }
-exports.requestLoginRecoveryCode = onRequest({ cors: true, secrets: [SENDGRID_API_KEY] }, async (req, res) => {
-  // 回應內容故意不透露「這支電話有沒有查到帳號」，一律回同一句話——
-  // 不然這支端點會變成拿電話號碼反查誰的資料有登記在系統裡的管道，
-  // 包含寄信本身失敗的情況也一樣（見下面 catch）。
-  const genericResponse = { ok: true, message: "如果這支電話號碼有對應的帳號，驗證碼已經寄到該帳號登記的信箱" };
+exports.generateTempLoginPassword = onRequest({ cors: true }, async (req, res) => {
   try {
-    const phone = String((req.body && req.body.phone) || "").trim();
-    if (!phone) { res.status(200).json(genericResponse); return; }
-    const userDoc = await findActiveUserByPhone(phone);
-    if (!userDoc) { res.status(200).json(genericResponse); return; }
-    const uid = userDoc.id;
-    const email = userDoc.data().email;
-    if (!email) { res.status(200).json(genericResponse); return; }
-    const existing = await db.collection("loginRecoveryCodes").doc(uid).get();
-    if (existing.exists) {
-      const d = existing.data();
-      const createdAtMs = d.createdAt && d.createdAt.toMillis ? d.createdAt.toMillis() : 0;
-      if (Date.now() - createdAtMs < RECOVERY_CODE_COOLDOWN_MS) { res.status(200).json(genericResponse); return; }
-    }
-    const code = String(crypto.randomInt(0, 1000000)).padStart(6, "0");
-    const now = new Date();
-    await db.collection("loginRecoveryCodes").doc(uid).set({
-      codeHash: hashRecoveryCode(code),
-      createdAt: now,
-      expiresAt: new Date(now.getTime() + RECOVERY_CODE_TTL_MS),
-      used: false,
-      attempts: 0,
-    });
-    const displayName = userDoc.data().displayName || "";
-    await getMailTransporter().sendMail({
-      from: `衛生營車輛人員動態管制系統 <${RECOVERY_SENDER_EMAIL}>`,
-      to: email,
-      subject: "登入驗證碼",
-      text: `${displayName ? displayName + "，" : ""}您的登入驗證碼是：${code}\n\n10 分鐘內有效，用於在登入頁「無法登入？」流程直接登入您的帳號。\n\n如果不是您本人操作，請忽略這封信件；有疑慮請聯繫系統管理員。`,
-    });
-    logger.info(`登入救援驗證碼已寄出：帳號 ${uid}（電話比對成功）`);
-    res.status(200).json(genericResponse);
-  } catch (e) {
-    logger.error("登入救援驗證碼寄送失敗", e);
-    res.status(200).json(genericResponse);
-  }
-});
-exports.verifyLoginRecoveryCode = onRequest({ cors: true }, async (req, res) => {
-  try {
-    const phone = String((req.body && req.body.phone) || "").trim();
-    const code = String((req.body && req.body.code) || "").trim();
-    if (!phone || !code) { res.status(400).json({ ok: false, reason: "missing phone or code" }); return; }
-    const userDoc = await findActiveUserByPhone(phone);
-    if (!userDoc) { res.status(400).json({ ok: false, reason: "invalid-code" }); return; }
-    const uid = userDoc.id;
-    const codeRef = db.collection("loginRecoveryCodes").doc(uid);
-    const codeSnap = await codeRef.get();
-    if (!codeSnap.exists) { res.status(400).json({ ok: false, reason: "invalid-code" }); return; }
-    const d = codeSnap.data();
-    const expiresAtMs = d.expiresAt && d.expiresAt.toMillis ? d.expiresAt.toMillis() : 0;
-    if (d.used || Date.now() > expiresAtMs) { res.status(400).json({ ok: false, reason: "invalid-code" }); return; }
-    if ((d.attempts || 0) >= RECOVERY_MAX_ATTEMPTS) { res.status(400).json({ ok: false, reason: "too-many-attempts" }); return; }
-    if (hashRecoveryCode(code) !== d.codeHash) {
-      await codeRef.update({ attempts: (d.attempts || 0) + 1 });
-      res.status(400).json({ ok: false, reason: "invalid-code" });
+    const authHeader = req.get("Authorization") || "";
+    const m = /^Bearer (.+)$/.exec(authHeader);
+    if (!m) { res.status(401).json({ ok: false, reason: "missing bearer token" }); return; }
+    const decoded = await getAuth().verifyIdToken(m[1]);
+    const callerDoc = await db.collection("users").doc(decoded.uid).get();
+    if (!callerDoc.exists || callerDoc.data().role !== "admin") { res.status(403).json({ ok: false, reason: "admin only" }); return; }
+    const targetUid = (req.body && req.body.uid) || "";
+    const expiryHours = Number(req.body && req.body.expiryHours) || TEMP_PASSWORD_TTL_HOURS_DEFAULT;
+    if (!targetUid) { res.status(400).json({ ok: false, reason: "missing uid" }); return; }
+    const targetDoc = await db.collection("users").doc(targetUid).get();
+    if (!targetDoc.exists) { res.status(404).json({ ok: false, reason: "user not found" }); return; }
+    const targetRole = normalizeRole(targetDoc.data().role);
+    if (targetRole === "pending" || targetRole === "disabled" || targetRole === "unclaimed") {
+      res.status(400).json({ ok: false, reason: "account not active" });
       return;
     }
-    await codeRef.update({ used: true });
+    const password = generateTempPassword();
+    const expiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000);
+    await db.collection("tempLoginPasswords").doc(targetUid).set({
+      passwordHash: hashSecret(password),
+      expiresAt,
+      createdAt: new Date(),
+      createdBy: decoded.uid,
+      attempts: 0,
+    });
+    logger.info(`管理員 ${decoded.uid} 為帳號 ${targetUid} 產生臨時登入密碼，效期至 ${expiresAt.toISOString()}`);
+    res.status(200).json({ ok: true, password, expiresAt: expiresAt.toISOString() });
+  } catch (e) {
+    logger.error("產生臨時登入密碼失敗", e);
+    res.status(500).json({ ok: false, reason: String(e && e.message || e) });
+  }
+});
+exports.loginWithTempPassword = onRequest({ cors: true }, async (req, res) => {
+  try {
+    const phone = String((req.body && req.body.phone) || "").trim();
+    const password = String((req.body && req.body.password) || "").trim();
+    if (!phone || !password) { res.status(400).json({ ok: false, reason: "missing phone or password" }); return; }
+    const userDoc = await findActiveUserByPhone(phone);
+    if (!userDoc) { res.status(400).json({ ok: false, reason: "invalid" }); return; }
+    const uid = userDoc.id;
+    const pwRef = db.collection("tempLoginPasswords").doc(uid);
+    const pwSnap = await pwRef.get();
+    if (!pwSnap.exists) { res.status(400).json({ ok: false, reason: "invalid" }); return; }
+    const d = pwSnap.data();
+    const expiresAtMs = d.expiresAt && d.expiresAt.toMillis ? d.expiresAt.toMillis() : 0;
+    if (Date.now() > expiresAtMs) { res.status(400).json({ ok: false, reason: "expired" }); return; }
+    if ((d.attempts || 0) >= TEMP_PASSWORD_MAX_ATTEMPTS) { res.status(400).json({ ok: false, reason: "too-many-attempts" }); return; }
+    if (hashSecret(password) !== d.passwordHash) {
+      await pwRef.update({ attempts: (d.attempts || 0) + 1 });
+      res.status(400).json({ ok: false, reason: "invalid" });
+      return;
+    }
+    // 驗證成功不清掉/標記已使用——效期內可以重複使用，這是使用者明確
+    // 要求的行為（跟單次即失效的驗證碼不同）。
     const token = await getAuth().createCustomToken(uid);
-    logger.info(`登入救援驗證成功：帳號 ${uid} 核發臨時通行權杖`);
+    logger.info(`臨時密碼登入成功：帳號 ${uid}`);
     res.status(200).json({ ok: true, token });
   } catch (e) {
-    logger.error("登入救援驗證失敗", e);
+    logger.error("臨時密碼登入失敗", e);
     res.status(500).json({ ok: false, reason: String(e && e.message || e) });
   }
 });
@@ -993,4 +968,4 @@ exports.verifyLoginRecoveryCode = onRequest({ cors: true }, async (req, res) => 
 // 純函式/資料存取邏輯額外匯出一份，方便寫單元測試直接呼叫驗證（不會
 // 影響部署——firebase deploy 只認得用 onDocumentCreated 等 v2 trigger
 // builder 包起來的 exports，這個純物件會被忽略，不會變成多一個雲端函式）。
-exports._internal = { normalizeRole, resolveRecipients, resolveAllTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce, standbyShiftCutoff, resolveEmergencyBroadcastRecipients, isCurrentDutyMember, writePushLog, notifyRecipients, isTestModeActive, buildDailyWeatherBody, runDailyWeatherReport, hashRecoveryCode, findActiveUserByPhone };
+exports._internal = { normalizeRole, resolveRecipients, resolveAllTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce, standbyShiftCutoff, resolveEmergencyBroadcastRecipients, isCurrentDutyMember, writePushLog, notifyRecipients, isTestModeActive, buildDailyWeatherBody, runDailyWeatherReport, hashSecret, findActiveUserByPhone, generateTempPassword };

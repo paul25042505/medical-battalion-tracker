@@ -504,13 +504,15 @@ service cloud.firestore {
       allow create, delete: if false;
     }
 
-    // 登入救援（見 functions/index.js 的 requestLoginRecoveryCode／
-    // verifyLoginRecoveryCode）：電話號碼＋信箱驗證碼換臨時通行權杖用的
-    // 一次性驗證碼，只有這兩支 Cloud Function（Admin SDK，不受這份規則
-    // 限制）會讀寫。使用者請求驗證碼的當下還沒登入（這就是這個功能存在
-    // 的理由），不可能有 request.auth，前端完全不能也不需要直接存取這個
-    // collection，一律拒絕。
-    match /loginRecoveryCodes/{uid} {
+    // 登入救援（見 functions/index.js 的 generateTempLoginPassword／
+    // loginWithTempPassword）：管理員在後台幫某個帳號產生一組有效期限
+    // 內可重複使用的臨時密碼（電話號碼＋這組密碼即可登入），只有這兩支
+    // Cloud Function（Admin SDK，不受這份規則限制）會讀寫。產生密碼要
+    // 驗證呼叫者是 admin（在函式內部檢查，不是靠這份規則），使用臨時
+    // 密碼登入的當下還沒登入（這就是這個功能存在的理由），不可能有
+    // request.auth，前端完全不能也不需要直接存取這個 collection，
+    // 一律拒絕。
+    match /tempLoginPasswords/{uid} {
       allow read, write: if false;
     }
   }
