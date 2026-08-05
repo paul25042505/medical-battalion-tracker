@@ -2055,6 +2055,11 @@
   .picker-option input[type="checkbox"]{flex-shrink:0; width:19px; height:19px;}
   .picker-option:last-child{border-bottom:none;}
   .picker-option-sub{color:var(--muted); font-size:var(--text-sm); margin-left:6px;}
+  /* 「選擇單位」「選擇人員」兩個彈窗的小方框 checkbox 改成大顆可切換
+     chip 按鈕後（見 unitPickerRows／personMultiPickerRows），選取狀態變成
+     整顆藍底白字，picker-option-sub 原本設計給白底列表用的灰階文字這時候
+     對比會不夠，選取時要跟著轉成半透明白字才看得清楚。 */
+  .chip-option:has(input:checked) .picker-option-sub{color:rgba(255,255,255,0.85);}
   /* 前支任務案件挑選（跟前支任務派遣系統共用 Firestore 專案，見
      forwardSupportRequestRows／__openForwardSupportPicker 的說明）：
      建立勤務頁的提示卡＋彈窗裡的案件卡片。 */
@@ -2127,7 +2132,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-04-533-login-recovery-admin-password";
+const BUILD_TAG = "2026-08-05-534-picker-chip-buttons";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3025,6 +3030,11 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/08/05", groups: [
+    { category: "介面優化", items: [
+      "患者紀錄「單位」快速選擇、洽公登記「選擇人員（可複選）」這兩個彈窗的小方框 checkbox 改成跟過去病史／處置項目一樣的大顆可切換按鈕，整顆點選、選取時整顆變實心藍色，比小方框更好點、也更看得出目前選了哪些",
+    ] },
+  ] },
   { date: "2026/08/04", groups: [
     { category: "登入", items: [
       "登入按鈕加上 15 秒逾時保險：極少數情況下彈出視窗可能整個卡住（被瀏覽器或裝置環境靜默攔截，卻沒有明確報錯），先前的「登入中…」鎖定沒有逾時機制，會讓按鈕永遠卡住點不動；現在逾時後會自動解除鎖定並顯示備援登入按鈕，不用整個卡在登入頁進不去",
@@ -11646,9 +11656,13 @@ function unitPickerRows(query, selected){
   PATIENT_UNIT_GROUPS.forEach(g => {
     const filtered = q ? g.options.filter(o => o.toLowerCase().includes(q)) : g.options;
     if (!filtered.length) return;
-    html += `<div class="picker-group"><div class="picker-group-label">${esc(g.label)}</div>`;
+    // 小方框 checkbox 點擊熱區太小，改用跟過去病史/處置項目同一套「大顆
+    // 可切換按鈕」（.chip-select／.chip-option，見 chipGroup()）：整顆
+    // 按鈕都能點、選取時整顆變實心藍色，比小方框更不容易點不到/看不出
+    // 選取狀態。
+    html += `<div class="chip-category-label">${esc(g.label)}</div><div class="chip-select">`;
     filtered.forEach(o => {
-      html += `<label class="picker-option">
+      html += `<label class="chip-option">
         <input type="checkbox" data-name="${esc(o)}" ${selected.has(o)?'checked':''}>
         <span>${esc(o)}</span>
       </label>`;
@@ -12023,14 +12037,18 @@ function personMultiPickerRows(pool, unit, crossUnit, query, selected){
     x.name.toLowerCase().includes(q) || (x.title||"").toLowerCase().includes(q) || unitLabel(x.unit).toLowerCase().includes(q)
   ) : scoped;
   if (!filtered.length) return `<div class="empty" style="padding:28px 0;">找不到符合的人員</div>`;
+  // 小方框 checkbox 點擊熱區太小，改用跟過去病史/處置項目同一套「大顆
+  // 可切換按鈕」（.chip-select／.chip-option，見 chipGroup()）：整顆
+  // 按鈕都能點、選取時整顆變實心藍色，比小方框更不容易點不到/看不出
+  // 選取狀態，跟「選擇單位」（unitPickerRows）改用同一套樣式。
   let html = "", curUnit = null;
   for (const x of filtered) {
     if (x.unit !== curUnit) {
       if (curUnit !== null) html += `</div>`;
-      html += `<div class="picker-group"><div class="picker-group-label">${esc(unitLabel(x.unit))}</div>`;
+      html += `<div class="chip-category-label">${esc(unitLabel(x.unit))}</div><div class="chip-select">`;
       curUnit = x.unit;
     }
-    html += `<label class="picker-option">
+    html += `<label class="chip-option">
       <input type="checkbox" data-name="${esc(x.name)}" ${selected.has(x.name)?'checked':''}>
       <span>${esc(x.name)}${x.title ? `<span class="picker-option-sub">${esc(x.title)}</span>` : ""}</span>
     </label>`;
