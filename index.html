@@ -1404,12 +1404,27 @@
   .chip-category-label:first-child{margin-top:0;}
   .chip-option{cursor:pointer;}
   .chip-option input{position:absolute; opacity:0; width:0; height:0; pointer-events:none;}
-  .chip-option span{
+  /* 只套用在直接子層的 span（每顆按鈕外層那顆），不要用會連內層 span 都
+     選到的後代選擇器——選擇人員彈窗姓名後面帶階級子文字（.picker-option-sub）
+     時，之前寫成 .chip-option span 會讓內層階級文字也被畫成一顆完整的圓角
+     徽章，變成「大圓角按鈕裡面又包一顆小圓角徽章」，看起來很亂。 */
+  .chip-option > span{
     display:inline-block; padding:9px 16px; border-radius:999px; border:1.5px solid var(--border);
     font-size:var(--text-xs); font-weight:600; color:var(--text); background:var(--panel-2); transition:all .15s ease;
   }
-  .chip-option:active span{transform:scale(0.93);}
-  .chip-option:has(input:checked) span{background:var(--blue); border-color:var(--blue); color:#fff;}
+  .chip-option:active > span{transform:scale(0.93);}
+  .chip-option:has(input:checked) > span{background:var(--blue); border-color:var(--blue); color:#fff;}
+  /* 選擇人員彈窗：跟單位那種短標籤不一樣，姓名＋階級整行資訊比較長，
+     改成一人一行（不是好幾人並排的短標籤），按鈕也改成一般圓角矩形
+     （不是頭尾全圓的膠囊形狀，整行文字撐開會被拉得很奇怪），階級純文字
+     跟在姓名後面，不用另外包一層徽章。 */
+  .chip-select.person-picker-list{flex-direction:column;}
+  .chip-select.person-picker-list .chip-option{width:100%;}
+  .chip-select.person-picker-list .chip-option > span{
+    display:flex; align-items:center; gap:8px; width:100%; box-sizing:border-box;
+    border-radius:var(--radius-sm); padding:13px 14px; font-size:var(--text-base);
+  }
+  .chip-select.person-picker-list .picker-option-sub{margin-left:0;}
   /* 建立勤務的營內／營外：比照上面任務類型的 seg-toggle 樣式放大、佔滿整行，
      不要跟其他小顆 chip 一樣不明顯——這欄會影響車輛動態統計，要讓人一眼看到。 */
   .chip-select.scope-toggle{flex-wrap:nowrap;}
@@ -2132,7 +2147,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-05-534-picker-chip-buttons";
+const BUILD_TAG = "2026-08-05-535-person-picker-oneline";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3033,6 +3048,7 @@ const RELEASE_NOTES = [
   { date: "2026/08/05", groups: [
     { category: "介面優化", items: [
       "患者紀錄「單位」快速選擇、洽公登記「選擇人員（可複選）」這兩個彈窗的小方框 checkbox 改成跟過去病史／處置項目一樣的大顆可切換按鈕，整顆點選、選取時整顆變實心藍色，比小方框更好點、也更看得出目前選了哪些",
+      "修正上面「選擇人員（可複選）」按鈕的排版：姓名後面的階級原本被誤畫成另一顆包起來的小徽章（大按鈕裡面又包一顆小圓角，看起來很亂），改成純文字接在姓名後面；並改成一人一行（不是像單位那樣好幾人並排的短標籤），選取時整行變實心藍色更清楚",
     ] },
   ] },
   { date: "2026/08/04", groups: [
@@ -12045,7 +12061,7 @@ function personMultiPickerRows(pool, unit, crossUnit, query, selected){
   for (const x of filtered) {
     if (x.unit !== curUnit) {
       if (curUnit !== null) html += `</div>`;
-      html += `<div class="chip-category-label">${esc(unitLabel(x.unit))}</div><div class="chip-select">`;
+      html += `<div class="chip-category-label">${esc(unitLabel(x.unit))}</div><div class="chip-select person-picker-list">`;
       curUnit = x.unit;
     }
     html += `<label class="chip-option">
