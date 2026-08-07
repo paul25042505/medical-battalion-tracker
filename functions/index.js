@@ -19,6 +19,9 @@
    8) 排程（每 15 分鐘）→ 颱風警報有新發布/解除就推播（checkTyphoonAlerts，
       見該函式說明），跟每日天氣摘要是兩件事：後者只在每天 07:00 提一次，
       警報本身隨時可能發布/解除，等不到隔天早上才通知
+   9) 排程（每 15 分鐘）→ 天氣特報（大雨/強風/低溫/高溫等所有現象類型）
+      有新發布/解除就推播（checkHazardAlerts），比照颱風警報的精神，但
+      分縣市查詢、分縣市通知，見該函式說明
 
    收件人規則：前三個觸發＋待命車換班提醒依單位隔離，跟前端 RBAC 一致——
    高勤官／admin 收全單位的通知，主官管／一般成員只收自己單位的；公告是
@@ -810,6 +813,92 @@ exports.checkTyphoonAlerts = onSchedule("every 15 minutes", async () => {
 });
 
 /* =========================================================
+   10d) 天氣特報推播（排程，每 15 分鐘，跟颱風警報同一套精神，但資料
+   來源／比對粒度不一樣，所以另外開一支函式，不是共用同一支）
+
+   颱風警報（W-C0034-001）全國一份，天氣特報（W-C0033-001）是分縣市
+   查詢，同一個縣市一次可能同時有好幾種現象生效中（大雨/強風/低溫/
+   高溫...）。沒有像颱風那樣的「颱風名稱」可以當識別依據，這裡直接用
+   phenomena+significance 組出來的文字當一則特報的 id——跟前端
+   fetchDailyHazards／hazardTips 顯示用的文字是同一份組法（例如
+   「大雨特報」「強風特報」），同一縣市不會同時有兩則現象+等級完全
+   相同的特報，足夠當識別依據，不用另外設計一套 id。
+
+   通知範圍比照「每日天氣摘要」（10）用單位對應縣市分眾
+   （UNIT_WEATHER_LOCATION），不是像颱風警報一樣全營都收——某個縣市
+   發布的特報，通常只有那個縣市對應的單位需要提高警覺，其他縣市的
+   單位收到反而是噪音。
+   ========================================================= */
+async function fetchCountyHazardEntries(county) {
+  const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0033-001?Authorization=${CWA_API_KEY}&locationName=${encodeURIComponent(county)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  const locs = json?.records?.location || [];
+  const loc = locs.find((l) => l.locationName === county) || locs[0];
+  const hazards = loc?.hazardConditions?.hazards || [];
+  return hazards.map((h) => `${h.info?.phenomena || "天氣特報"}${h.info?.significance || ""}`);
+}
+async function runHazardAlertCheck() {
+  if (await isTestModeActive()) {
+    logger.info("測試模式開啟中，略過天氣特報推播檢查");
+    return { skipped: true, testMode: true };
+  }
+  const counties = [...new Set(Object.values(UNIT_WEATHER_LOCATION))];
+  const stateRef = db.collection("settings").doc("hazardAlertState");
+  const stateSnap = await stateRef.get();
+  const prevByCounty = (stateSnap.exists && stateSnap.data().byCounty) || {};
+
+  const currentByCounty = {};
+  const changesByCounty = {};
+  for (const county of counties) {
+    try {
+      const current = await fetchCountyHazardEntries(county);
+      currentByCounty[county] = current;
+      const prev = prevByCounty[county] || [];
+      const newTexts = current.filter((t) => !prev.includes(t));
+      const liftedTexts = prev.filter((t) => !current.includes(t));
+      if (newTexts.length || liftedTexts.length) changesByCounty[county] = { newTexts, liftedTexts };
+    } catch (e) {
+      logger.error(`天氣特報推播檢查：${county} 載入失敗，這次略過這個縣市`, e);
+      // 載入失敗時保留上次已知的狀態，不要把「查不到資料」誤判成「全部
+      // 特報都解除了」，害使用者收到一堆假的解除通知。
+      currentByCounty[county] = prevByCounty[county] || [];
+    }
+  }
+
+  await stateRef.set({ byCounty: currentByCounty, updatedAt: new Date() });
+  if (!Object.keys(changesByCounty).length) return { skipped: false, changed: false };
+
+  const snap = await db.collection("users").get();
+  const activeRoles = ["admin", "duty_officer", "commander", "member"];
+  const recipientsByCounty = {};
+  snap.forEach((doc) => {
+    const u = doc.data();
+    if (!activeRoles.includes(normalizeRole(u.role))) return;
+    const county = UNIT_WEATHER_LOCATION[u.unit] || UNIT_WEATHER_LOCATION.hq;
+    (recipientsByCounty[county] = recipientsByCounty[county] || []).push({
+      uid: doc.id,
+      tokens: Array.isArray(u.fcmTokens) ? u.fcmTokens : [],
+    });
+  });
+
+  for (const [county, { newTexts, liftedTexts }] of Object.entries(changesByCounty)) {
+    const recipients = recipientsByCounty[county] || [];
+    for (const text of newTexts) {
+      await notifyRecipients(recipients, "天氣特報", `${county}發布${text}，請留意，出車勤務請提高警覺`);
+    }
+    for (const text of liftedTexts) {
+      await notifyRecipients(recipients, "天氣特報解除", `${county}${text}已解除，請留意最新氣象資訊`);
+    }
+  }
+  return { skipped: false, changed: true, changedCounties: Object.keys(changesByCounty) };
+}
+exports.checkHazardAlerts = onSchedule("every 15 minutes", async () => {
+  await runHazardAlertCheck();
+});
+
+/* =========================================================
    11) 推播控制台：管理員手動測試推播
    前端「推播控制台」名冊每一列的「測試推播」按鈕呼叫這支函式，直接對
    指定的單一使用者送一則真的推播（跟 sendPush() 共用同一套發送/清除
@@ -1053,4 +1142,4 @@ exports.loginWithTempPassword = onRequest({ cors: true }, async (req, res) => {
 // 純函式/資料存取邏輯額外匯出一份，方便寫單元測試直接呼叫驗證（不會
 // 影響部署——firebase deploy 只認得用 onDocumentCreated 等 v2 trigger
 // builder 包起來的 exports，這個純物件會被忽略，不會變成多一個雲端函式）。
-exports._internal = { normalizeRole, resolveRecipients, resolveAllTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce, standbyShiftCutoff, resolveEmergencyBroadcastRecipients, isCurrentDutyMember, writePushLog, notifyRecipients, isTestModeActive, buildDailyWeatherBody, runDailyWeatherReport, hashSecret, findActiveUserByPhone, generateTempPassword, fetchTyphoonAlertEntries, runTyphoonAlertCheck };
+exports._internal = { normalizeRole, resolveRecipients, resolveAllTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce, standbyShiftCutoff, resolveEmergencyBroadcastRecipients, isCurrentDutyMember, writePushLog, notifyRecipients, isTestModeActive, buildDailyWeatherBody, runDailyWeatherReport, hashSecret, findActiveUserByPhone, generateTempPassword, fetchTyphoonAlertEntries, runTyphoonAlertCheck, fetchCountyHazardEntries, runHazardAlertCheck };
