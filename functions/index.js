@@ -16,6 +16,9 @@
       （checkStaleErStandby）
    7) 排程（每天一次，07:00）→ 每日天氣摘要，依各單位所在縣市附上當天
       天氣與生效中的強風/大雨等特報、颱風警報（sendDailyWeatherReport）
+   8) 排程（每 15 分鐘）→ 颱風警報有新發布/解除就推播（checkTyphoonAlerts，
+      見該函式說明），跟每日天氣摘要是兩件事：後者只在每天 07:00 提一次，
+      警報本身隨時可能發布/解除，等不到隔天早上才通知
 
    收件人規則：前三個觸發＋待命車換班提醒依單位隔離，跟前端 RBAC 一致——
    高勤官／admin 收全單位的通知，主官管／一般成員只收自己單位的；公告是
@@ -725,6 +728,88 @@ exports.sendDailyWeatherReportNow = onRequest({ cors: true }, async (req, res) =
 });
 
 /* =========================================================
+   10c) 颱風警報推播（排程，每 15 分鐘）
+   每日天氣摘要（10）只有每天 07:00 那一次會提到颱風警報，警報是任何
+   時間點都可能發布/解除，不能等到隔天早上才通知——這裡另外開一支排程，
+   每 15 分鐘查一次 W-C0034-001，發現有「之前沒有、現在生效中」的警報
+   就推播通知；反過來「之前生效中、現在不在生效清單裡了」（警報解除）
+   也推播一次，讓大家不用自己進 App 確認警報還在不在。
+
+   用「颱風名稱」（typhoonName，跟前端 fetchTyphoonInfo 同一套解析邏輯，
+   從 description["typhoon-info"][0].section[].analysis 底下的
+   cwa_typhoon_name／typhoon_name 組出來）當識別一場颱風的 id，不是直接
+   拿 headline 全文比對——headline 文字本身可能隨警報升級/降級（例如
+   「海上警報」變成「海上陸上警報」）跟著改變用詞，拿全文比對會誤判成
+   「舊警報消失、冒出一個新警報」，重複推播兩次。少數情況下 typhoonName
+   解析不出來（detailRow 找不到）才退回用 headline 當 id。
+
+   上一次已知的生效中警報清單存在 settings/typhoonAlertState，跟每次
+   查到的最新結果做差集比對：
+   - 現在有、上次沒有 → 新警報，推播
+   - 上次有、現在沒有 → 警報解除，推播（沒有解除一定會在 records.info
+     裡多一則「XX警報解除」的獨立公告可以比對，警報從生效清單裡消失就
+     視為解除，比另外去抓那則解除公告本身更穩定）
+   ========================================================= */
+async function fetchTyphoonAlertEntries() {
+  const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0034-001?Authorization=${CWA_API_KEY}&format=JSON`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  const infos = json?.records?.info || [];
+  return infos.map((info) => {
+    const headline = info.headline || "颱風警報";
+    const detailRow = (info.description?.["typhoon-info"]?.[0]?.section || []).find((s) => s.analysis);
+    const typhoonName = detailRow ? `${detailRow.cwa_typhoon_name || ""}${detailRow.typhoon_name ? `（${detailRow.typhoon_name}）` : ""}` : "";
+    return { id: typhoonName || headline, headline, lifted: headline.includes("解除") };
+  });
+}
+async function runTyphoonAlertCheck() {
+  if (await isTestModeActive()) {
+    logger.info("測試模式開啟中，略過颱風警報推播檢查");
+    return { skipped: true, testMode: true };
+  }
+  const entries = await fetchTyphoonAlertEntries();
+  const currentActive = new Map(entries.filter((e) => !e.lifted).map((e) => [e.id, e.headline]));
+
+  const stateRef = db.collection("settings").doc("typhoonAlertState");
+  const stateSnap = await stateRef.get();
+  const prevList = (stateSnap.exists && Array.isArray(stateSnap.data().activeWarnings)) ? stateSnap.data().activeWarnings : [];
+  const prevActive = new Map(prevList.map((w) => [w.id, w.headline]));
+
+  const newWarnings = [...currentActive.entries()].filter(([id]) => !prevActive.has(id));
+  const liftedWarnings = [...prevActive.entries()].filter(([id]) => !currentActive.has(id));
+
+  // 每次都寫回最新的生效中清單（不管有沒有變化），順便當「上次成功檢查
+  // 時間」的心跳，方便之後排查排程是不是正常在跑。
+  await stateRef.set({
+    activeWarnings: [...currentActive.entries()].map(([id, headline]) => ({ id, headline })),
+    updatedAt: new Date(),
+  });
+
+  if (!newWarnings.length && !liftedWarnings.length) return { skipped: false, changed: false };
+
+  const snap = await db.collection("users").get();
+  const activeRoles = ["admin", "duty_officer", "commander", "member"];
+  const recipients = [];
+  snap.forEach((doc) => {
+    const u = doc.data();
+    if (!activeRoles.includes(normalizeRole(u.role))) return;
+    recipients.push({ uid: doc.id, tokens: Array.isArray(u.fcmTokens) ? u.fcmTokens : [] });
+  });
+
+  for (const [, headline] of newWarnings) {
+    await notifyRecipients(recipients, "颱風警報", `${headline}，請留意後續動態，出車勤務請特別注意`);
+  }
+  for (const [, headline] of liftedWarnings) {
+    await notifyRecipients(recipients, "颱風警報解除", `${headline}已解除，請留意最新氣象資訊`);
+  }
+  return { skipped: false, changed: true, newCount: newWarnings.length, liftedCount: liftedWarnings.length };
+}
+exports.checkTyphoonAlerts = onSchedule("every 15 minutes", async () => {
+  await runTyphoonAlertCheck();
+});
+
+/* =========================================================
    11) 推播控制台：管理員手動測試推播
    前端「推播控制台」名冊每一列的「測試推播」按鈕呼叫這支函式，直接對
    指定的單一使用者送一則真的推播（跟 sendPush() 共用同一套發送/清除
@@ -968,4 +1053,4 @@ exports.loginWithTempPassword = onRequest({ cors: true }, async (req, res) => {
 // 純函式/資料存取邏輯額外匯出一份，方便寫單元測試直接呼叫驗證（不會
 // 影響部署——firebase deploy 只認得用 onDocumentCreated 等 v2 trigger
 // builder 包起來的 exports，這個純物件會被忽略，不會變成多一個雲端函式）。
-exports._internal = { normalizeRole, resolveRecipients, resolveAllTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce, standbyShiftCutoff, resolveEmergencyBroadcastRecipients, isCurrentDutyMember, writePushLog, notifyRecipients, isTestModeActive, buildDailyWeatherBody, runDailyWeatherReport, hashSecret, findActiveUserByPhone, generateTempPassword };
+exports._internal = { normalizeRole, resolveRecipients, resolveAllTokens, isVitalsDanger, gcsTotalFromString, claimEventOnce, standbyShiftCutoff, resolveEmergencyBroadcastRecipients, isCurrentDutyMember, writePushLog, notifyRecipients, isTestModeActive, buildDailyWeatherBody, runDailyWeatherReport, hashSecret, findActiveUserByPhone, generateTempPassword, fetchTyphoonAlertEntries, runTyphoonAlertCheck };
