@@ -1420,9 +1420,19 @@
      跟在姓名後面，不用另外包一層徽章。 */
   .chip-select.person-picker-list{flex-direction:column;}
   .chip-select.person-picker-list .chip-option{width:100%;}
+  /* 背景一樣固定寫死淺灰底（不用 var(--panel-2)），理由見上面
+     .picker-option 那段說明。這條規則的 selector 比全站共用的
+     .chip-option:has(input:checked) > span（選取變藍底白字）specificity
+     還高（多兩層 class），會蓋掉選取狀態的藍底，所以下面另外補一條
+     專門給 person-picker-list 用、specificity 更高的選取樣式，順序才
+     不會顛倒。 */
   .chip-select.person-picker-list .chip-option > span{
     display:flex; align-items:center; gap:8px; width:100%; box-sizing:border-box;
     border-radius:var(--radius-sm); padding:13px 14px; font-size:var(--text-base);
+    background:#F3F4F7; border-color:#E7E8EE;
+  }
+  .chip-select.person-picker-list .chip-option:has(input:checked) > span{
+    background:var(--blue); border-color:var(--blue);
   }
   .chip-select.person-picker-list .picker-option-sub{margin-left:0;}
   /* 建立勤務的營內／營外：比照上面任務類型的 seg-toggle 樣式放大、佔滿整行，
@@ -2063,19 +2073,22 @@
     font-size:var(--text-xs); color:var(--muted); font-weight:700; text-transform:uppercase;
     letter-spacing:0.04em; margin-bottom:6px; padding:0 2px;
   }
+  /* 車長／駕駛選人清單（.picker-option）、選單位/選人員的大顆按鈕
+     （.picker-option-name／.picker-option-sub，見下面 person-picker-list）
+     文字顏色不管淺色/深色模式一律固定用淺色底配深色字——這幾個地方在
+     部分裝置上曾回報深色模式文字顏色跟著系統變數跑掉、變成看不見（懷疑
+     是特定裝置對這種清單結構的深色模式變數解析有問題，且已經改過一次
+     用明確 span 包姓名還是沒解決，見文字紀錄），固定寫死顏色不再跟著
+     var(--text)/var(--panel-2) 切換，兩種模式看起來都一樣（不是深色
+     模式該有的樣子，但至少保證看得到字），用固定色是目前最可靠的解法。 */
   .picker-option{
     display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:12px 10px; border-radius:var(--radius-sm);
-    font-size:var(--text-base); color:var(--text); border-bottom:1px solid var(--border); cursor:pointer;
+    font-size:var(--text-base); color:#15161B; background:#F3F4F7; border-bottom:1px solid #E7E8EE; cursor:pointer;
   }
   .picker-option input[type="checkbox"]{flex-shrink:0; width:19px; height:19px;}
   .picker-option:last-child{border-bottom:none;}
-  .picker-option-sub{color:var(--muted); font-size:var(--text-sm); margin-left:6px;}
-  /* 姓名獨立包成 span（見 personMultiPickerRows 的說明），明確指定文字色，
-     不要只靠繼承——外層 .chip-option > span 的 color:var(--text) 理論上會
-     繼承下來，但姓名這裡改成明確的元素節點就順便明確指定一次顏色，兩個
-     子節點（姓名／階級）都各自宣告好自己的顏色，不要有任何一個是靠隱含
-     繼承這種比較容易在部分裝置出狀況的路徑。 */
-  .picker-option-name{color:var(--text);}
+  .picker-option-sub{color:#5B5E6B; font-size:var(--text-sm); margin-left:6px;}
+  .picker-option-name{color:#15161B;}
   .chip-option:has(input:checked) .picker-option-name{color:#fff;}
   /* 「選擇單位」「選擇人員」兩個彈窗的小方框 checkbox 改成大顆可切換
      chip 按鈕後（見 unitPickerRows／personMultiPickerRows），選取狀態變成
@@ -2154,7 +2167,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-08-538-person-picker-dark-fix";
+const BUILD_TAG = "2026-08-08-539-person-picker-fixed-colors";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3059,6 +3072,7 @@ const RELEASE_NOTES = [
   { date: "2026/08/08", groups: [
     { category: "介面優化", items: [
       "修正深色模式下「選擇人員（可複選）」彈窗姓名文字顏色顯示異常的問題：部分裝置上姓名文字沒有正確套用深色模式的文字色，看起來像看不見；改成姓名也包成獨立的元素節點（跟旁邊的階級文字結構一致），不再是跟階級混在一起的裸文字",
+      "上面的修正在部分裝置上仍未解決，改成「選擇駕駛／車長」「選擇人員（可複選）」這兩個選人清單不管淺色/深色模式一律固定顯示淺灰底配深色文字，不再跟著系統深色模式變數切換，避免同樣的顯示異常在不同裝置上持續發生",
     ] },
   ] },
   { date: "2026/08/05", groups: [
