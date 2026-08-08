@@ -2070,6 +2070,13 @@
   .picker-option input[type="checkbox"]{flex-shrink:0; width:19px; height:19px;}
   .picker-option:last-child{border-bottom:none;}
   .picker-option-sub{color:var(--muted); font-size:var(--text-sm); margin-left:6px;}
+  /* 姓名獨立包成 span（見 personMultiPickerRows 的說明），明確指定文字色，
+     不要只靠繼承——外層 .chip-option > span 的 color:var(--text) 理論上會
+     繼承下來，但姓名這裡改成明確的元素節點就順便明確指定一次顏色，兩個
+     子節點（姓名／階級）都各自宣告好自己的顏色，不要有任何一個是靠隱含
+     繼承這種比較容易在部分裝置出狀況的路徑。 */
+  .picker-option-name{color:var(--text);}
+  .chip-option:has(input:checked) .picker-option-name{color:#fff;}
   /* 「選擇單位」「選擇人員」兩個彈窗的小方框 checkbox 改成大顆可切換
      chip 按鈕後（見 unitPickerRows／personMultiPickerRows），選取狀態變成
      整顆藍底白字，picker-option-sub 原本設計給白底列表用的灰階文字這時候
@@ -2147,7 +2154,7 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-05-537-hazard-alert-push";
+const BUILD_TAG = "2026-08-08-538-person-picker-dark-fix";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3049,6 +3056,11 @@ const FEEDBACK_CATEGORY_LABEL = Object.fromEntries(FEEDBACK_CATEGORIES.map(c => 
 // category 分組（例如「患者紀錄」「急診待命」），同一天有多個類別的異動時
 // 才不會變成一長串沒有結構的清單。
 const RELEASE_NOTES = [
+  { date: "2026/08/08", groups: [
+    { category: "介面優化", items: [
+      "修正深色模式下「選擇人員（可複選）」彈窗姓名文字顏色顯示異常的問題：部分裝置上姓名文字沒有正確套用深色模式的文字色，看起來像看不見；改成姓名也包成獨立的元素節點（跟旁邊的階級文字結構一致），不再是跟階級混在一起的裸文字",
+    ] },
+  ] },
   { date: "2026/08/05", groups: [
     { category: "介面優化", items: [
       "患者紀錄「單位」快速選擇、洽公登記「選擇人員（可複選）」這兩個彈窗的小方框 checkbox 改成跟過去病史／處置項目一樣的大顆可切換按鈕，整顆點選、選取時整顆變實心藍色，比小方框更好點、也更看得出目前選了哪些",
@@ -12072,9 +12084,16 @@ function personMultiPickerRows(pool, unit, crossUnit, query, selected){
       html += `<div class="chip-category-label">${esc(unitLabel(x.unit))}</div><div class="chip-select person-picker-list">`;
       curUnit = x.unit;
     }
+    // 外層 span 改 display:flex 排版之後（見 .chip-select.person-picker-list），
+    // 姓名如果直接是這個 flex 容器的裸文字節點（跟旁邊 .picker-option-sub
+    // 這個 span 子元素混在一起），部分裝置的瀏覽器對「flex 容器裡文字節點
+    // 跟元素子節點混雜」這種結構的顏色繼承處理不一致，會讓姓名文字顏色
+    // 沒有正確套用深色模式的文字色，看起來像變成看不見的顏色；姓名也包
+    // 成獨立的 span（跟 .picker-option-sub 一樣是明確的元素節點，不是裸
+    // 文字），兩個子節點結構對稱，才能穩定套用樣式。
     html += `<label class="chip-option">
       <input type="checkbox" data-name="${esc(x.name)}" ${selected.has(x.name)?'checked':''}>
-      <span>${esc(x.name)}${x.title ? `<span class="picker-option-sub">${esc(x.title)}</span>` : ""}</span>
+      <span><span class="picker-option-name">${esc(x.name)}</span>${x.title ? `<span class="picker-option-sub">${esc(x.title)}</span>` : ""}</span>
     </label>`;
   }
   if (curUnit !== null) html += `</div>`;
