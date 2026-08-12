@@ -2167,7 +2167,13 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-08-539-person-picker-fixed-colors";
+const BUILD_TAG = "2026-08-08-540-feature-tour-link";
+// 「關於系統 → 支援 → 功能介紹」連到的獨立網頁（十大功能圖文導覽，手機
+// mockup 截圖），跟這個 App 本身的部署完全分開，不是站內頁面，所以用
+// 外部連結（target="_blank"）處理，不是 window.__nav()。這個網址目前
+// 掛在 Claude Artifact 平台上，管理員要記得把該頁面的分享權限開成「任何
+// 知道連結的人都能看」，不然一般使用者點進去會看到沒有權限的畫面。
+const FEATURE_TOUR_URL = "https://claude.ai/code/artifact/3cbceeb4-b01a-4eac-a9de-1bd91af276e1";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3073,6 +3079,9 @@ const RELEASE_NOTES = [
     { category: "介面優化", items: [
       "修正深色模式下「選擇人員（可複選）」彈窗姓名文字顏色顯示異常的問題：部分裝置上姓名文字沒有正確套用深色模式的文字色，看起來像看不見；改成姓名也包成獨立的元素節點（跟旁邊的階級文字結構一致），不再是跟階級混在一起的裸文字",
       "上面的修正在部分裝置上仍未解決，改成「選擇駕駛／車長」「選擇人員（可複選）」這兩個選人清單不管淺色/深色模式一律固定顯示淺灰底配深色文字，不再跟著系統深色模式變數切換，避免同樣的顯示異常在不同裝置上持續發生",
+    ] },
+    { category: "關於系統", items: [
+      "「關於系統 → 支援」新增「功能介紹」連結，圖文並茂介紹十大功能模組（任務管理、患者紀錄、急診待命、洽公登記、天氣示警、政令宣導、人員與帳號管理、訊息管理、統計、登入救援），點開會另開分頁到獨立的介紹網頁",
     ] },
   ] },
   { date: "2026/08/05", groups: [
@@ -9673,6 +9682,7 @@ function viewAbout(){
     <div class="section-label">支援</div>
     <div class="detail-head" style="padding-top:2px; padding-bottom:2px;">
       <div class="about-list-row" onclick="window.__nav({name:'aboutReleaseNotes'})">更新紀錄（Release Notes）<span class="chev">›</span></div>
+      <a class="about-list-row" href="${FEATURE_TOUR_URL}" target="_blank" rel="noopener" style="text-decoration:none;">功能介紹（Feature Tour）<span class="chev">›</span></a>
     </div>
     <div class="about-copyright">
       Copyright © 2026 MEDTRACK. All Rights Reserved.<br><br>
