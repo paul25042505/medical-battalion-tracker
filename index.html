@@ -2167,13 +2167,14 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-08-540-feature-tour-link";
+const BUILD_TAG = "2026-08-08-541-feature-tour-self-hosted";
 // 「關於系統 → 支援 → 功能介紹」連到的獨立網頁（十大功能圖文導覽，手機
-// mockup 截圖），跟這個 App 本身的部署完全分開，不是站內頁面，所以用
-// 外部連結（target="_blank"）處理，不是 window.__nav()。這個網址目前
-// 掛在 Claude Artifact 平台上，管理員要記得把該頁面的分享權限開成「任何
-// 知道連結的人都能看」，不然一般使用者點進去會看到沒有權限的畫面。
-const FEATURE_TOUR_URL = "https://claude.ai/code/artifact/3cbceeb4-b01a-4eac-a9de-1bd91af276e1";
+// mockup 截圖）：原本掛在 Claude Artifact 平台上，改成 feature-tour.html
+// 這個純靜態檔案，跟 index.html 放在同一層，一起透過 firebase.json 的
+// hosting.public（"."，整個 repo 根目錄）部署，不用再管外部平台的分享
+// 權限設定。純靜態頁面、沒有站內路由狀態，維持用外部連結
+// （target="_blank"）開新分頁，不是 window.__nav()。
+const FEATURE_TOUR_URL = "feature-tour.html";
 // 版本號採 主.次.修訂 架構：修訂號直接從 BUILD_TAG 的流水號
 // （"YYYY-MM-DD-NN-描述" 裡的 NN）解析，每次出貨 bump BUILD_TAG 就會自動
 // 往上加，不用再回頭手動改「關於系統」頁的版本號。Build／發布日期／
@@ -3082,6 +3083,7 @@ const RELEASE_NOTES = [
     ] },
     { category: "關於系統", items: [
       "「關於系統 → 支援」新增「功能介紹」連結，圖文並茂介紹十大功能模組（任務管理、患者紀錄、急診待命、洽公登記、天氣示警、政令宣導、人員與帳號管理、訊息管理、統計、登入救援），點開會另開分頁到獨立的介紹網頁",
+      "上面的功能介紹網頁改成跟 App 一起部署（原本掛在外部平台，需要另外設定分享權限），現在網址是自己的網域，不用再管外部平台那邊的權限設定",
     ] },
   ] },
   { date: "2026/08/05", groups: [
