@@ -2167,7 +2167,12 @@ import {
    1) Firebase 設定 — 請填入你自己的專案設定
    Firebase Console → 專案設定 → 一般 → 你的應用程式
    ========================================================= */
-const BUILD_TAG = "2026-08-08-541-feature-tour-self-hosted";
+const BUILD_TAG = "2026-08-08-542-system-disabled-screen";
+// 全系統停用開關：改成 true 就整個系統對所有人（不管有沒有登入、原本
+// 是不是已經在使用中）一律只顯示「本系統已停用」畫面，不會再讀寫任何
+// Firestore 資料、也不會建立任何資料監聽器；已經登入的人會被強制登出。
+// 之後要恢復服務，把這裡改回 false 重新出貨即可，不用動其他程式碼。
+const SYSTEM_DISABLED = true;
 // 「關於系統 → 支援 → 功能介紹」連到的獨立網頁（十大功能圖文導覽，手機
 // mockup 截圖）：原本掛在 Claude Artifact 平台上，改成 feature-tour.html
 // 這個純靜態檔案，跟 index.html 放在同一層，一起透過 firebase.json 的
@@ -3084,6 +3089,9 @@ const RELEASE_NOTES = [
     { category: "關於系統", items: [
       "「關於系統 → 支援」新增「功能介紹」連結，圖文並茂介紹十大功能模組（任務管理、患者紀錄、急診待命、洽公登記、天氣示警、政令宣導、人員與帳號管理、訊息管理、統計、登入救援），點開會另開分頁到獨立的介紹網頁",
       "上面的功能介紹網頁改成跟 App 一起部署（原本掛在外部平台，需要另外設定分享權限），現在網址是自己的網域，不用再管外部平台那邊的權限設定",
+    ] },
+    { category: "系統維護", items: [
+      "系統暫停服務：不論是否已經登入，一律只顯示「本系統已停用」畫面，已登入的帳號會被強制登出，期間不會讀寫任何資料",
     ] },
   ] },
   { date: "2026/08/05", groups: [
@@ -5382,6 +5390,16 @@ window.__goCompleteProfile = () => {
 
 onAuthStateChanged(auth, async (user) => {
   cleanupListeners();
+  // 全系統停用：不讀寫任何 Firestore 資料、不建立任何監聽器，原本已經
+  // 登入的人直接強制登出（下次打開一律只看得到停用畫面，不會留著背景
+  // 還在跑的監聽器持續消耗額度）。render() 本身也有同一個開關的判斷，
+  // 這裡提早 return 是為了避免這支函式底下的 Firestore 讀寫真的執行到。
+  if (SYSTEM_DISABLED) {
+    state.user = null; state.profile = null;
+    render();
+    if (user) signOut(auth);
+    return;
+  }
   if (user && isIdleTimedOut()) {
     state.user = null; state.profile = null; render();
     signOut(auth);
@@ -6758,6 +6776,20 @@ function viewDisabled(){
     </div>
     <button class="icon-btn" style="margin-top:20px;" onclick="window.__refreshProfile()">重新整理</button>
     <button class="icon-btn" style="margin-top:10px;" onclick="window.__logout()">登出</button>
+  </div>`;
+}
+// 全系統停用（見 SYSTEM_DISABLED）：不管有沒有登入都看到這個畫面，跟
+// viewDisabled() 是兩件不同的事——那個是單一帳號被停用，這個是整個系統
+// 停用，所以不放「登出」按鈕（不需要，也不假設一定有 state.user）。
+function viewSystemDisabled(){
+  return `
+  <div class="login-wrap">
+    <img class="login-logo" src="icons/icon-192.png" alt="單位徽章">
+    <div class="login-mark">MEDTRACK</div>
+    <h1 class="login-title" style="font-size:var(--text-lg);">本系統已停用</h1>
+    <div class="pending-box">
+      <p>本系統目前已停用，暫不提供服務。</p>
+    </div>
   </div>`;
 }
 
@@ -11286,6 +11318,13 @@ function updateScreenWatermark(p){
 }
 
 function render(){
+  // 全系統停用（SYSTEM_DISABLED）擺在最前面、比登入檢查還早：不管有沒有
+  // 登入、原本在看哪一頁，一律蓋掉顯示停用畫面，連 renderPushGatekeeper／
+  // renderProfileNag 這些跟推播/個人資料提醒有關的畫面也不用跑。
+  if (SYSTEM_DISABLED) {
+    document.getElementById("app").innerHTML = `<main><div class="main-content">${viewSystemDisabled()}</div></main>`;
+    return;
+  }
   renderPushGatekeeper();
   renderProfileNag();
   const app = document.getElementById("app");
